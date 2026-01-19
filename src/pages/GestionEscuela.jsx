@@ -1,0 +1,365 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { motion } from 'framer-motion';
+import PageHeader from '@/components/ui/PageHeader';
+import EmptyState from '@/components/ui/EmptyState';
+import LoadingScreen from '@/components/ui/LoadingScreen';
+import { School, Users, Plus, ChevronRight, User, Loader2 } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { createPageUrl } from '@/utils';
+import { useNavigate } from 'react-router-dom';
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+export default function GestionEscuela() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('classrooms');
+  const [showClassroomForm, setShowClassroomForm] = useState(false);
+  const [showStudentForm, setShowStudentForm] = useState(false);
+  const [classroomForm, setClassroomForm] = useState({ name: '', grade: '' });
+  const [studentForm, setStudentForm] = useState({ 
+    first_name: '', 
+    last_name: '', 
+    classroom_id: '',
+    birth_date: '' 
+  });
+
+  const { data: user } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => base44.auth.me(),
+  });
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile', user?.id],
+    queryFn: async () => {
+      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
+      return profiles[0];
+    },
+    enabled: !!user,
+  });
+
+  const { data: classrooms = [], isLoading: loadingClassrooms } = useQuery({
+    queryKey: ['allClassrooms', userProfile?.school_id],
+    queryFn: () => base44.entities.Classroom.filter({ 
+      school_id: userProfile.school_id 
+    }),
+    enabled: !!userProfile,
+  });
+
+  const { data: students = [], isLoading: loadingStudents } = useQuery({
+    queryKey: ['allStudents', userProfile?.school_id],
+    queryFn: () => base44.entities.Student.filter({ 
+      school_id: userProfile.school_id 
+    }),
+    enabled: !!userProfile,
+  });
+
+  const createClassroomMutation = useMutation({
+    mutationFn: async (data) => {
+      const classroom = await base44.entities.Classroom.create(data);
+      await base44.entities.AuditLog.create({
+        school_id: userProfile.school_id,
+        user_id: user.id,
+        user_email: user.email,
+        action: 'CLASSROOM_CREATED',
+        target_type: 'Classroom',
+        target_id: classroom.id,
+      });
+      return classroom;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['allClassrooms']);
+      toast.success('Salón creado correctamente');
+      setShowClassroomForm(false);
+      setClassroomForm({ name: '', grade: '' });
+    },
+    onError: () => {
+      toast.error('Error al crear salón');
+    }
+  });
+
+  const createStudentMutation = useMutation({
+    mutationFn: async (data) => {
+      const student = await base44.entities.Student.create(data);
+      await base44.entities.AuditLog.create({
+        school_id: userProfile.school_id,
+        user_id: user.id,
+        user_email: user.email,
+        action: 'STUDENT_CREATED',
+        target_type: 'Student',
+        target_id: student.id,
+      });
+      return student;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['allStudents']);
+      toast.success('Alumno agregado correctamente');
+      setShowStudentForm(false);
+      setStudentForm({ first_name: '', last_name: '', classroom_id: '', birth_date: '' });
+    },
+    onError: () => {
+      toast.error('Error al agregar alumno');
+    }
+  });
+
+  const handleCreateClassroom = (e) => {
+    e.preventDefault();
+    createClassroomMutation.mutate({
+      ...classroomForm,
+      school_id: userProfile.school_id,
+      is_active: true,
+    });
+  };
+
+  const handleCreateStudent = (e) => {
+    e.preventDefault();
+    createStudentMutation.mutate({
+      ...studentForm,
+      school_id: userProfile.school_id,
+      is_active: true,
+    });
+  };
+
+  const getStudentCount = (classroomId) => {
+    return students.filter(s => s.classroom_id === classroomId && s.is_active).length;
+  };
+
+  const getClassroomName = (classroomId) => {
+    const classroom = classrooms.find(c => c.id === classroomId);
+    return classroom?.name || 'Sin asignar';
+  };
+
+  const isLoading = loadingClassrooms || loadingStudents;
+
+  if (isLoading) return <LoadingScreen message="Cargando..." />;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+      <PageHeader
+        title="Escuela"
+        showBack
+        backTo={createPageUrl('Home')}
+      />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full mb-6">
+          <TabsTrigger value="classrooms" className="flex-1">Salones</TabsTrigger>
+          <TabsTrigger value="students" className="flex-1">Alumnos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="classrooms">
+          <div className="flex justify-end mb-4">
+            <Button onClick={() => setShowClassroomForm(true)} className="bg-blue-600 hover:bg-blue-700 gap-1">
+              <Plus className="w-4 h-4" /> Nuevo salón
+            </Button>
+          </div>
+
+          {classrooms.length === 0 ? (
+            <EmptyState
+              icon={School}
+              title="Sin salones"
+              description="Crea el primer salón de tu escuela."
+            />
+          ) : (
+            <div className="space-y-3">
+              {classrooms.filter(c => c.is_active).map((classroom, index) => (
+                <motion.div
+                  key={classroom.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  onClick={() => navigate(createPageUrl(`GestionSalon?classroomId=${classroom.id}`))}
+                  className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 cursor-pointer flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <School className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-slate-800">{classroom.name}</h3>
+                      <p className="text-sm text-slate-500">
+                        {getStudentCount(classroom.id)} alumnos
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="students">
+          <div className="flex justify-end mb-4">
+            <Button onClick={() => setShowStudentForm(true)} className="bg-green-600 hover:bg-green-700 gap-1">
+              <Plus className="w-4 h-4" /> Nuevo alumno
+            </Button>
+          </div>
+
+          {students.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="Sin alumnos"
+              description="Agrega el primer alumno a tu escuela."
+            />
+          ) : (
+            <div className="space-y-3">
+              {students.filter(s => s.is_active).map((student, index) => (
+                <motion.div
+                  key={student.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  onClick={() => navigate(createPageUrl(`GestionAlumno?studentId=${student.id}`))}
+                  className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 cursor-pointer flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                      <User className="w-5 h-5 text-slate-500" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-slate-800">
+                        {student.first_name} {student.last_name}
+                      </h3>
+                      <Badge variant="secondary" className="mt-1">
+                        {getClassroomName(student.classroom_id)}
+                      </Badge>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Create Classroom Modal */}
+      <Dialog open={showClassroomForm} onOpenChange={setShowClassroomForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuevo salón</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateClassroom} className="space-y-4">
+            <div>
+              <Label>Nombre del salón *</Label>
+              <Input
+                value={classroomForm.name}
+                onChange={(e) => setClassroomForm({ ...classroomForm, name: e.target.value })}
+                placeholder="Ej: 1-A, Preescolar Azul..."
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Grado (opcional)</Label>
+              <Input
+                value={classroomForm.grade}
+                onChange={(e) => setClassroomForm({ ...classroomForm, grade: e.target.value })}
+                placeholder="Ej: 1°, 2°, Preescolar..."
+                className="mt-1"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowClassroomForm(false)} className="flex-1">
+                Cancelar
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={!classroomForm.name || createClassroomMutation.isPending}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                {createClassroomMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Student Modal */}
+      <Dialog open={showStudentForm} onOpenChange={setShowStudentForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuevo alumno</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateStudent} className="space-y-4">
+            <div>
+              <Label>Nombre *</Label>
+              <Input
+                value={studentForm.first_name}
+                onChange={(e) => setStudentForm({ ...studentForm, first_name: e.target.value })}
+                placeholder="Nombre"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Apellidos *</Label>
+              <Input
+                value={studentForm.last_name}
+                onChange={(e) => setStudentForm({ ...studentForm, last_name: e.target.value })}
+                placeholder="Apellidos"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Salón *</Label>
+              <Select
+                value={studentForm.classroom_id}
+                onValueChange={(value) => setStudentForm({ ...studentForm, classroom_id: value })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Seleccionar salón" />
+                </SelectTrigger>
+                <SelectContent>
+                  {classrooms.filter(c => c.is_active).map((classroom) => (
+                    <SelectItem key={classroom.id} value={classroom.id}>
+                      {classroom.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Fecha de nacimiento</Label>
+              <Input
+                type="date"
+                value={studentForm.birth_date}
+                onChange={(e) => setStudentForm({ ...studentForm, birth_date: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowStudentForm(false)} className="flex-1">
+                Cancelar
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={!studentForm.first_name || !studentForm.last_name || !studentForm.classroom_id || createStudentMutation.isPending}
+                className="flex-1 bg-green-600 hover:bg-green-700"
+              >
+                {createStudentMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Agregar'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

@@ -8,6 +8,11 @@ import BitacorasMaestro from './pages/BitacorasMaestro';
 import CrearBitacora from './pages/CrearBitacora';
 import TareaMaestro from './pages/TareaMaestro';
 import AvisosMaestro from './pages/AvisosMaestro';
+import Aprobaciones from './pages/Aprobaciones';
+import GestionEscuela from './pages/GestionEscuela';
+import AvisosAdmin from './pages/AvisosAdmin';
+import PagosAdmin from './pages/PagosAdmin';
+import AlertaEmergencia from './pages/AlertaEmergencia';
 
 
 export const PAGES = {
@@ -21,6 +26,11 @@ export const PAGES = {
     "CrearBitacora": CrearBitacora,
     "TareaMaestro": TareaMaestro,
     "AvisosMaestro": AvisosMaestro,
+    "Aprobaciones": Aprobaciones,
+    "GestionEscuela": GestionEscuela,
+    "AvisosAdmin": AvisosAdmin,
+    "PagosAdmin": PagosAdmin,
+    "AlertaEmergencia": AlertaEmergencia,
 }
 
 export const pagesConfig = {

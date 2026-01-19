@@ -13,6 +13,10 @@ import GestionEscuela from './pages/GestionEscuela';
 import AvisosAdmin from './pages/AvisosAdmin';
 import PagosAdmin from './pages/PagosAdmin';
 import AlertaEmergencia from './pages/AlertaEmergencia';
+import GestionAlumno from './pages/GestionAlumno';
+import ContactosEmergencia from './pages/ContactosEmergencia';
+import Reportes from './pages/Reportes';
+import GestionSalon from './pages/GestionSalon';
 
 
 export const PAGES = {
@@ -31,6 +35,10 @@ export const PAGES = {
     "AvisosAdmin": AvisosAdmin,
     "PagosAdmin": PagosAdmin,
     "AlertaEmergencia": AlertaEmergencia,
+    "GestionAlumno": GestionAlumno,
+    "ContactosEmergencia": ContactosEmergencia,
+    "Reportes": Reportes,
+    "GestionSalon": GestionSalon,
 }
 
 export const pagesConfig = {

@@ -17,6 +17,7 @@ import GestionAlumno from './pages/GestionAlumno';
 import ContactosEmergencia from './pages/ContactosEmergencia';
 import Reportes from './pages/Reportes';
 import GestionSalon from './pages/GestionSalon';
+import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
@@ -44,4 +45,5 @@ export const PAGES = {
 export const pagesConfig = {
     mainPage: "Home",
     Pages: PAGES,
+    Layout: __Layout,
 };

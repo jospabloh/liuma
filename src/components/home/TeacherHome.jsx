@@ -131,8 +131,6 @@ export default function TeacherHome({ user, userProfile, subscription }) {
 
       {/* Main Content */}
       <div className="px-6 mt-6 pb-24">
-        <PaymentReminderBanner subscription={subscription} />
-        
         {/* Main Tiles */}
         <div className="space-y-3">
           <BigTile

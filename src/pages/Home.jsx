@@ -101,7 +101,7 @@ export default function Home() {
   return (
     <>
       <SuspendedAccountModal subscription={subscription} />
-      {showWelcome && subscription && (
+      {showWelcome && subscription && userProfile.app_role === 'ADMIN' && (
         <WelcomeTrialModal subscription={subscription} onClose={handleCloseWelcome} />
       )}
       <HomeComponent />

@@ -88,8 +88,6 @@ export default function ParentHome({ user, userProfile, subscription }) {
 
       {/* Main Content */}
       <div className="px-6 -mt-4 pb-24">
-        <PaymentReminderBanner subscription={subscription} />
-        
         {/* Main Tiles */}
         <div className="space-y-3">
           <BigTile

@@ -35,6 +35,7 @@ export default function CrearBitacora() {
   const [sendToParents, setSendToParents] = useState(true);
   const [formData, setFormData] = useState({
     notes_text: '',
+    teacher_message: '',
     behavior: '',
     learning: '',
     mood: '',
@@ -143,6 +144,7 @@ export default function CrearBitacora() {
       teacher_id: user.id,
       teacher_name: user.full_name,
       notes_text: formData.notes_text,
+      teacher_message: formData.teacher_message || undefined,
       behavior: formData.behavior || undefined,
       learning: formData.learning || undefined,
       mood: formData.mood || undefined,
@@ -344,6 +346,16 @@ export default function CrearBitacora() {
             </div>
 
             <div>
+              <Label>Mensajito especial para el alumno (opcional)</Label>
+              <Textarea
+                value={formData.teacher_message}
+                onChange={(e) => setFormData({ ...formData, teacher_message: e.target.value })}
+                placeholder="Ej: ¡Eres muy atento y creativo, te queremos mucho!"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
               <Label>Incidentes (opcional)</Label>
               <Textarea
                 value={formData.incidents}
@@ -390,6 +402,13 @@ export default function CrearBitacora() {
               <div className="bg-slate-50 rounded-xl p-4">
                 <p className="text-slate-700 whitespace-pre-wrap">{formData.notes_text}</p>
               </div>
+
+              {formData.teacher_message && (
+                <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-4 border border-pink-200">
+                  <p className="text-xs font-semibold text-pink-800 mb-1">💌 Mensajito especial</p>
+                  <p className="text-sm text-purple-700">{formData.teacher_message}</p>
+                </div>
+              )}
 
               {(formData.behavior || formData.mood || formData.food || formData.learning) && (
                 <div className="grid grid-cols-2 gap-2 text-sm">

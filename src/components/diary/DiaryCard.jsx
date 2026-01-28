@@ -47,6 +47,13 @@ export default function DiaryCard({ entry, studentName, onClick }) {
       
       <p className="text-slate-700 text-sm mb-3 line-clamp-3">{entry.notes_text}</p>
       
+      {entry.teacher_message && (
+        <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-2 mb-2 border border-pink-200">
+          <p className="text-xs font-semibold text-pink-800">💌 Mensajito especial</p>
+          <p className="text-xs text-purple-700 line-clamp-2">{entry.teacher_message}</p>
+        </div>
+      )}
+      
       <div className="flex flex-wrap gap-2">
         {entry.behavior && (
           <Badge className={behaviorLabels[entry.behavior]?.color || 'bg-slate-100'}>

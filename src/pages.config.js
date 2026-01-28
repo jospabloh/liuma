@@ -1,45 +1,94 @@
+/**
+ * pages.config.js - Page routing configuration
+ * 
+ * This file is AUTO-GENERATED. Do not add imports or modify PAGES manually.
+ * Pages are auto-registered when you create files in the ./pages/ folder.
+ * 
+ * THE ONLY EDITABLE VALUE: mainPage
+ * This controls which page is the landing page (shown when users visit the app).
+ * 
+ * Example file structure:
+ * 
+ *   import HomePage from './pages/HomePage';
+ *   import Dashboard from './pages/Dashboard';
+ *   import Settings from './pages/Settings';
+ *   
+ *   export const PAGES = {
+ *       "HomePage": HomePage,
+ *       "Dashboard": Dashboard,
+ *       "Settings": Settings,
+ *   }
+ *   
+ *   export const pagesConfig = {
+ *       mainPage: "HomePage",
+ *       Pages: PAGES,
+ *   };
+ * 
+ * Example with Layout (wraps all pages):
+ *
+ *   import Home from './pages/Home';
+ *   import Settings from './pages/Settings';
+ *   import __Layout from './Layout.jsx';
+ *
+ *   export const PAGES = {
+ *       "Home": Home,
+ *       "Settings": Settings,
+ *   }
+ *
+ *   export const pagesConfig = {
+ *       mainPage: "Home",
+ *       Pages: PAGES,
+ *       Layout: __Layout,
+ *   };
+ *
+ * To change the main page from HomePage to Dashboard, use find_replace:
+ *   Old: mainPage: "HomePage",
+ *   New: mainPage: "Dashboard",
+ *
+ * The mainPage value must match a key in the PAGES object exactly.
+ */
+import AlertaEmergencia from './pages/AlertaEmergencia';
+import Aprobaciones from './pages/Aprobaciones';
+import Avisos from './pages/Avisos';
+import AvisosAdmin from './pages/AvisosAdmin';
+import AvisosMaestro from './pages/AvisosMaestro';
+import Bitacora from './pages/Bitacora';
+import BitacorasMaestro from './pages/BitacorasMaestro';
+import ContactosEmergencia from './pages/ContactosEmergencia';
+import CrearBitacora from './pages/CrearBitacora';
+import GestionAlumno from './pages/GestionAlumno';
+import GestionEscuela from './pages/GestionEscuela';
+import GestionSalon from './pages/GestionSalon';
 import Home from './pages/Home';
 import MisHijos from './pages/MisHijos';
-import Bitacora from './pages/Bitacora';
-import Tarea from './pages/Tarea';
-import Avisos from './pages/Avisos';
 import Pagos from './pages/Pagos';
-import BitacorasMaestro from './pages/BitacorasMaestro';
-import CrearBitacora from './pages/CrearBitacora';
-import TareaMaestro from './pages/TareaMaestro';
-import AvisosMaestro from './pages/AvisosMaestro';
-import Aprobaciones from './pages/Aprobaciones';
-import GestionEscuela from './pages/GestionEscuela';
-import AvisosAdmin from './pages/AvisosAdmin';
 import PagosAdmin from './pages/PagosAdmin';
-import AlertaEmergencia from './pages/AlertaEmergencia';
-import GestionAlumno from './pages/GestionAlumno';
-import ContactosEmergencia from './pages/ContactosEmergencia';
 import Reportes from './pages/Reportes';
-import GestionSalon from './pages/GestionSalon';
+import Tarea from './pages/Tarea';
+import TareaMaestro from './pages/TareaMaestro';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
+    "AlertaEmergencia": AlertaEmergencia,
+    "Aprobaciones": Aprobaciones,
+    "Avisos": Avisos,
+    "AvisosAdmin": AvisosAdmin,
+    "AvisosMaestro": AvisosMaestro,
+    "Bitacora": Bitacora,
+    "BitacorasMaestro": BitacorasMaestro,
+    "ContactosEmergencia": ContactosEmergencia,
+    "CrearBitacora": CrearBitacora,
+    "GestionAlumno": GestionAlumno,
+    "GestionEscuela": GestionEscuela,
+    "GestionSalon": GestionSalon,
     "Home": Home,
     "MisHijos": MisHijos,
-    "Bitacora": Bitacora,
-    "Tarea": Tarea,
-    "Avisos": Avisos,
     "Pagos": Pagos,
-    "BitacorasMaestro": BitacorasMaestro,
-    "CrearBitacora": CrearBitacora,
-    "TareaMaestro": TareaMaestro,
-    "AvisosMaestro": AvisosMaestro,
-    "Aprobaciones": Aprobaciones,
-    "GestionEscuela": GestionEscuela,
-    "AvisosAdmin": AvisosAdmin,
     "PagosAdmin": PagosAdmin,
-    "AlertaEmergencia": AlertaEmergencia,
-    "GestionAlumno": GestionAlumno,
-    "ContactosEmergencia": ContactosEmergencia,
     "Reportes": Reportes,
-    "GestionSalon": GestionSalon,
+    "Tarea": Tarea,
+    "TareaMaestro": TareaMaestro,
 }
 
 export const pagesConfig = {

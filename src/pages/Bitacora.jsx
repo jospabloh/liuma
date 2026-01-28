@@ -162,6 +162,13 @@ export default function Bitacora() {
                 <p className="text-slate-700 whitespace-pre-wrap">{selectedEntry.notes_text}</p>
               </div>
 
+              {selectedEntry.teacher_message && (
+                <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-4 border border-pink-200">
+                  <p className="text-xs font-semibold text-pink-800 mb-2">💌 Mensajito especial</p>
+                  <p className="text-sm text-purple-700">{selectedEntry.teacher_message}</p>
+                </div>
+              )}
+
               {selectedEntry.behavior && (
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-slate-500">Comportamiento</span>

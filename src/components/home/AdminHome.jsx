@@ -6,13 +6,14 @@ import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle } from 'l
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
+import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 
-export default function AdminHome({ user, userProfile }) {
+export default function AdminHome({ user, userProfile, subscription }) {
   const [showLumi, setShowLumi] = useState(false);
   const navigate = useNavigate();
 
@@ -106,6 +107,8 @@ export default function AdminHome({ user, userProfile }) {
 
       {/* Main Content */}
       <div className="px-6 mt-6 pb-24">
+        <PaymentReminderBanner subscription={subscription} />
+        
         {/* Main Tiles */}
         <div className="space-y-3">
           <BigTile

@@ -8,10 +8,11 @@ import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
 import NoticeCard from '@/components/notices/NoticeCard';
 import EventCard from '@/components/events/EventCard';
+import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-export default function ParentHome({ user, userProfile }) {
+export default function ParentHome({ user, userProfile, subscription }) {
   const [showLumi, setShowLumi] = useState(false);
   const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -87,6 +88,8 @@ export default function ParentHome({ user, userProfile }) {
 
       {/* Main Content */}
       <div className="px-6 -mt-4 pb-24">
+        <PaymentReminderBanner subscription={subscription} />
+        
         {/* Main Tiles */}
         <div className="space-y-3">
           <BigTile

@@ -123,12 +123,14 @@ export default function Asistencia() {
             status: 'ACTIVE'
           });
 
+          const allUsers = await base44.entities.User.list();
+          
           for (const link of parentLinks) {
-            const parents = await base44.entities.User.filter({ _id: link.parent_id });
-            if (parents.length > 0) {
+            const parent = allUsers.find(u => u.id === link.parent_id);
+            if (parent) {
               await base44.integrations.Core.SendEmail({
                 from_name: 'LIUMA - Sistema Escolar',
-                to: parents[0].email,
+                to: parent.email,
                 subject: `Ausencia de ${student.first_name} ${student.last_name}`,
                 body: `
                   <h2>Notificación de Ausencia</h2>

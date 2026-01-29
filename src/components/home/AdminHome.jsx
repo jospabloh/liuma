@@ -174,8 +174,8 @@ export default function AdminHome({ user, userProfile, subscription }) {
             title="Calendario"
             subtitle="Eventos escolares"
             href={createPageUrl('CalendarioEscolar')}
-            color="from-blue-50 to-white"
-            iconColor="text-blue-600"
+            color="from-sky-50 to-white"
+            iconColor="text-sky-600"
             delay={0.4}
           />
         </div>

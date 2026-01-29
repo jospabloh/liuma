@@ -72,6 +72,8 @@ import CalendarioEscolar from './pages/CalendarioEscolar';
 import GestionDocumentos from './pages/GestionDocumentos';
 import PedidosUniformes from './pages/PedidosUniformes';
 import GestionPedidosAdmin from './pages/GestionPedidosAdmin';
+import SolicitarAusencia from './pages/SolicitarAusencia';
+import GestionDescuentos from './pages/GestionDescuentos';
 import __Layout from './Layout.jsx';
 
 
@@ -101,6 +103,8 @@ export const PAGES = {
     "GestionDocumentos": GestionDocumentos,
     "PedidosUniformes": PedidosUniformes,
     "GestionPedidosAdmin": GestionPedidosAdmin,
+    "SolicitarAusencia": SolicitarAusencia,
+    "GestionDescuentos": GestionDescuentos,
 }
 
 export const pagesConfig = {

@@ -49,66 +49,68 @@
  */
 import AlertaEmergencia from './pages/AlertaEmergencia';
 import Aprobaciones from './pages/Aprobaciones';
+import Asistencia from './pages/Asistencia';
 import Avisos from './pages/Avisos';
 import AvisosAdmin from './pages/AvisosAdmin';
 import AvisosMaestro from './pages/AvisosMaestro';
 import Bitacora from './pages/Bitacora';
 import BitacorasMaestro from './pages/BitacorasMaestro';
+import CalendarioEscolar from './pages/CalendarioEscolar';
 import ContactosEmergencia from './pages/ContactosEmergencia';
 import CrearBitacora from './pages/CrearBitacora';
+import EventosParaPadres from './pages/EventosParaPadres';
 import GestionAlumno from './pages/GestionAlumno';
+import GestionAusencias from './pages/GestionAusencias';
+import GestionDescuentos from './pages/GestionDescuentos';
+import GestionDocumentos from './pages/GestionDocumentos';
 import GestionEscuela from './pages/GestionEscuela';
+import GestionPedidosAdmin from './pages/GestionPedidosAdmin';
 import GestionSalon from './pages/GestionSalon';
 import Home from './pages/Home';
 import MisHijos from './pages/MisHijos';
 import Pagos from './pages/Pagos';
 import PagosAdmin from './pages/PagosAdmin';
+import PedidosUniformes from './pages/PedidosUniformes';
 import Reportes from './pages/Reportes';
+import ResumenAsistencia from './pages/ResumenAsistencia';
+import SolicitarAusencia from './pages/SolicitarAusencia';
 import Tarea from './pages/Tarea';
 import TareaMaestro from './pages/TareaMaestro';
-import Asistencia from './pages/Asistencia';
-import ResumenAsistencia from './pages/ResumenAsistencia';
-import CalendarioEscolar from './pages/CalendarioEscolar';
-import GestionDocumentos from './pages/GestionDocumentos';
-import PedidosUniformes from './pages/PedidosUniformes';
-import GestionPedidosAdmin from './pages/GestionPedidosAdmin';
-import SolicitarAusencia from './pages/SolicitarAusencia';
-import GestionDescuentos from './pages/GestionDescuentos';
-import EventosParaPadres from './pages/EventosParaPadres';
-import GestionAusencias from './pages/GestionAusencias';
+import ConfiguracionInicial from './pages/ConfiguracionInicial';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
     "AlertaEmergencia": AlertaEmergencia,
     "Aprobaciones": Aprobaciones,
+    "Asistencia": Asistencia,
     "Avisos": Avisos,
     "AvisosAdmin": AvisosAdmin,
     "AvisosMaestro": AvisosMaestro,
     "Bitacora": Bitacora,
     "BitacorasMaestro": BitacorasMaestro,
+    "CalendarioEscolar": CalendarioEscolar,
     "ContactosEmergencia": ContactosEmergencia,
     "CrearBitacora": CrearBitacora,
+    "EventosParaPadres": EventosParaPadres,
     "GestionAlumno": GestionAlumno,
+    "GestionAusencias": GestionAusencias,
+    "GestionDescuentos": GestionDescuentos,
+    "GestionDocumentos": GestionDocumentos,
     "GestionEscuela": GestionEscuela,
+    "GestionPedidosAdmin": GestionPedidosAdmin,
     "GestionSalon": GestionSalon,
     "Home": Home,
     "MisHijos": MisHijos,
     "Pagos": Pagos,
     "PagosAdmin": PagosAdmin,
+    "PedidosUniformes": PedidosUniformes,
     "Reportes": Reportes,
+    "ResumenAsistencia": ResumenAsistencia,
+    "SolicitarAusencia": SolicitarAusencia,
     "Tarea": Tarea,
     "TareaMaestro": TareaMaestro,
-    "Asistencia": Asistencia,
-    "ResumenAsistencia": ResumenAsistencia,
-    "CalendarioEscolar": CalendarioEscolar,
-    "GestionDocumentos": GestionDocumentos,
-    "PedidosUniformes": PedidosUniformes,
-    "GestionPedidosAdmin": GestionPedidosAdmin,
-    "SolicitarAusencia": SolicitarAusencia,
-    "GestionDescuentos": GestionDescuentos,
-    "EventosParaPadres": EventosParaPadres,
-    "GestionAusencias": GestionAusencias,
+    "ConfiguracionInicial": ConfiguracionInicial,
 }
 
 export const pagesConfig = {

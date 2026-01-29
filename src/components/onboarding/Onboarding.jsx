@@ -37,11 +37,15 @@ export default function Onboarding({ user, onComplete }) {
         const schools = await base44.entities.School.filter({ id: formData.schoolCode });
         if (schools.length > 0) {
           schoolId = schools[0].id;
+        } else {
+          alert('Código de escuela inválido. Verifica con tu administrador.');
+          setIsLoading(false);
+          return;
         }
       }
 
-      if (!schoolId && formData.role !== 'ADMIN') {
-        alert('No se encontró la escuela. Verifica el código.');
+      if (!schoolId) {
+        alert('Error: No se pudo determinar la escuela.');
         setIsLoading(false);
         return;
       }
@@ -173,17 +177,21 @@ export default function Onboarding({ user, onComplete }) {
                 ) : (
                   <div className="space-y-4">
                     <div>
-                      <Label>Código de escuela</Label>
+                      <Label>Código de escuela (requerido)</Label>
                       <Input
                         value={formData.schoolCode}
                         onChange={(e) => setFormData({ ...formData, schoolCode: e.target.value })}
-                        placeholder="Solicítalo al administrador"
+                        placeholder="Código proporcionado por tu escuela"
                         className="mt-1 h-12"
+                        required
                       />
                     </div>
-                    <p className="text-sm text-slate-500">
-                      El administrador de la escuela te proporcionará este código.
-                    </p>
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+                      <p className="text-sm text-indigo-800">
+                        💡 El administrador de tu escuela te debe proporcionar este código único. 
+                        Sin él no podrás continuar.
+                      </p>
+                    </div>
                   </div>
                 )}
                 

@@ -15,6 +15,7 @@ export default function Onboarding({ user, onComplete }) {
     schoolCode: '',
     newSchoolName: '',
     phone: '',
+    isDemo: false,
   });
 
   const handleRoleSelect = (role) => {
@@ -32,6 +33,19 @@ export default function Onboarding({ user, onComplete }) {
           name: formData.newSchoolName,
         });
         schoolId = school.id;
+        
+        // Create trial subscription for new schools
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 30); // 30 days trial
+        
+        await base44.entities.SchoolSubscription.create({
+          school_id: schoolId,
+          subscription_status: 'trial',
+          subscription_plan: 'trial',
+          trial_start_date: new Date().toISOString(),
+          trial_end_date: trialEndDate.toISOString(),
+          welcome_message_shown: false,
+        });
       } else if (formData.schoolCode) {
         // Find school by code (using school ID as code for simplicity)
         const schools = await base44.entities.School.filter({ id: formData.schoolCode });
@@ -105,9 +119,12 @@ export default function Onboarding({ user, onComplete }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <h2 className="text-lg font-semibold text-slate-800 mb-4">
+                <h2 className="text-lg font-semibold text-slate-800 mb-2">
                   ¿Cuál es tu rol?
                 </h2>
+                <p className="text-sm text-slate-500 mb-4">
+                  Si eres directivo, puedes crear tu escuela con 30 días de prueba gratis
+                </p>
                 <div className="space-y-3">
                   {[
                     { value: 'PARENT', label: 'Soy Padre/Madre', icon: Users, desc: 'Tengo hijos en la escuela' },
@@ -164,8 +181,16 @@ export default function Onboarding({ user, onComplete }) {
                 
                 {formData.role === 'ADMIN' ? (
                   <div className="space-y-4">
+                    <div className="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 rounded-xl p-4 mb-4">
+                      <p className="text-sm font-medium text-indigo-900 mb-1">
+                        🎉 Prueba LIUMA gratis por 30 días
+                      </p>
+                      <p className="text-xs text-indigo-700">
+                        Sin tarjeta de crédito. Acceso completo a todas las funciones.
+                      </p>
+                    </div>
                     <div>
-                      <Label>Nombre de la escuela</Label>
+                      <Label>Nombre de tu escuela</Label>
                       <Input
                         value={formData.newSchoolName}
                         onChange={(e) => setFormData({ ...formData, newSchoolName: e.target.value })}

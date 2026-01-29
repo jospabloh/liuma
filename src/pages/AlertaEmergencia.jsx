@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
+import LoadingScreen from '@/components/ui/LoadingScreen';
 import { AlertTriangle, Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,7 +48,7 @@ export default function AlertaEmergencia() {
       const schools = await base44.entities.School.filter({ id: userProfile.school_id });
       return schools[0];
     },
-    enabled: !!userProfile,
+    enabled: !!userProfile?.school_id,
   });
 
   const sendAlertMutation = useMutation({
@@ -89,6 +90,10 @@ export default function AlertaEmergencia() {
     setShowConfirm(false);
     sendAlertMutation.mutate();
   };
+
+  if (!user || !userProfile) {
+    return <LoadingScreen message="Cargando..." />;
+  }
 
   if (sent) {
     return (

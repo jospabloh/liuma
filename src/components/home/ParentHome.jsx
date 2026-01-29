@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar } from 'lucide-react';
+import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -148,6 +148,15 @@ export default function ParentHome({ user, userProfile, subscription }) {
             color="from-blue-50 to-white"
             iconColor="text-blue-600"
             delay={0.35}
+          />
+          <BigTile
+            icon={ShoppingBag}
+            title="Uniformes"
+            subtitle="Hacer pedidos de uniformes"
+            href={createPageUrl('PedidosUniformes')}
+            color="from-teal-50 to-white"
+            iconColor="text-teal-600"
+            delay={0.4}
           />
         </div>
 

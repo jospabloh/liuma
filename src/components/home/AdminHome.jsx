@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar } from 'lucide-react';
+import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -177,6 +177,24 @@ export default function AdminHome({ user, userProfile, subscription }) {
             color="from-sky-50 to-white"
             iconColor="text-sky-600"
             delay={0.4}
+          />
+          <BigTile
+            icon={FileText}
+            title="Documentos Oficiales"
+            subtitle="Menús, comunicaciones y minutas"
+            href={createPageUrl('GestionDocumentos')}
+            color="from-purple-50 to-white"
+            iconColor="text-purple-600"
+            delay={0.45}
+          />
+          <BigTile
+            icon={ShoppingBag}
+            title="Pedidos de Uniformes"
+            subtitle="Gestionar pedidos de padres"
+            href={createPageUrl('GestionPedidosAdmin')}
+            color="from-teal-50 to-white"
+            iconColor="text-teal-600"
+            delay={0.5}
           />
         </div>
 

@@ -110,7 +110,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
         <PaymentReminderBanner subscription={subscription} />
         
         {/* Main Tiles */}
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
           <BigTile
             icon={UserCheck}
             title="Aprobaciones"

@@ -69,6 +69,9 @@ import TareaMaestro from './pages/TareaMaestro';
 import Asistencia from './pages/Asistencia';
 import ResumenAsistencia from './pages/ResumenAsistencia';
 import CalendarioEscolar from './pages/CalendarioEscolar';
+import GestionDocumentos from './pages/GestionDocumentos';
+import PedidosUniformes from './pages/PedidosUniformes';
+import GestionPedidosAdmin from './pages/GestionPedidosAdmin';
 import __Layout from './Layout.jsx';
 
 
@@ -95,6 +98,9 @@ export const PAGES = {
     "Asistencia": Asistencia,
     "ResumenAsistencia": ResumenAsistencia,
     "CalendarioEscolar": CalendarioEscolar,
+    "GestionDocumentos": GestionDocumentos,
+    "PedidosUniformes": PedidosUniformes,
+    "GestionPedidosAdmin": GestionPedidosAdmin,
 }
 
 export const pagesConfig = {

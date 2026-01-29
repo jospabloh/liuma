@@ -69,7 +69,7 @@ export default function Onboarding({ user, onComplete }) {
         user_id: user.id,
         school_id: schoolId,
         app_role: formData.role,
-        status: formData.role === 'ADMIN' ? 'ACTIVE' : 'PENDING',
+        status: 'ACTIVE',
         phone: formData.phone,
         onboarding_completed: true,
       });
@@ -260,9 +260,7 @@ export default function Onboarding({ user, onComplete }) {
                 
                 <div className="bg-slate-50 rounded-xl p-4 mt-4">
                   <p className="text-sm text-slate-600">
-                    {formData.role === 'ADMIN' 
-                      ? 'Tu cuenta se activará inmediatamente.'
-                      : 'Tu cuenta quedará pendiente de aprobación por el administrador.'}
+                    Tu cuenta se activará inmediatamente y tendrás acceso completo.
                   </p>
                 </div>
                 

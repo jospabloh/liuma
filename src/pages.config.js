@@ -68,6 +68,7 @@ import Tarea from './pages/Tarea';
 import TareaMaestro from './pages/TareaMaestro';
 import Asistencia from './pages/Asistencia';
 import ResumenAsistencia from './pages/ResumenAsistencia';
+import CalendarioEscolar from './pages/CalendarioEscolar';
 import __Layout from './Layout.jsx';
 
 
@@ -93,6 +94,7 @@ export const PAGES = {
     "TareaMaestro": TareaMaestro,
     "Asistencia": Asistencia,
     "ResumenAsistencia": ResumenAsistencia,
+    "CalendarioEscolar": CalendarioEscolar,
 }
 
 export const pagesConfig = {

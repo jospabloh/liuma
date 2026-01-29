@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { ClipboardList, BookOpen, Bell, Sparkles, CheckCircle, AlertCircle, Users } from 'lucide-react';
+import { ClipboardList, BookOpen, Bell, Sparkles, CheckCircle, AlertCircle, Users, Calendar } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -11,6 +11,55 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
+import { Card } from "@/components/ui/card";
+
+function UpcomingEventsSection({ schoolId, classroomIds }) {
+  const { data: events = [] } = useQuery({
+    queryKey: ['upcomingEvents', schoolId, classroomIds],
+    queryFn: async () => {
+      const allEvents = await base44.entities.Event.filter({ 
+        school_id: schoolId 
+      }, 'date', 10);
+      const upcoming = allEvents.filter(e => new Date(e.date) >= new Date());
+      return upcoming.filter(e => 
+        e.scope === 'SCHOOL' || classroomIds.includes(e.classroom_id)
+      ).slice(0, 3);
+    },
+    enabled: !!schoolId
+  });
+
+  if (events.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.35 }}
+      className="mt-8"
+    >
+      <h2 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+        <Calendar className="w-5 h-5 text-blue-600" />
+        Próximos eventos
+      </h2>
+      <div className="space-y-2">
+        {events.map(event => (
+          <Card key={event.id} className="p-3 bg-blue-50 border-blue-200">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex flex-col items-center justify-center text-xs font-bold">
+                <span>{format(new Date(event.date), 'd')}</span>
+                <span className="text-[10px]">{format(new Date(event.date), 'MMM', { locale: es })}</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-slate-800">{event.title}</h4>
+                <p className="text-xs text-slate-600">{event.time || 'Todo el día'}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
 
 export default function TeacherHome({ user, userProfile, subscription }) {
   const [showLumi, setShowLumi] = useState(false);
@@ -172,7 +221,19 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             iconColor="text-green-600"
             delay={0.25}
           />
+          <BigTile
+            icon={Calendar}
+            title="Calendario"
+            subtitle="Ver eventos escolares"
+            href={createPageUrl('CalendarioEscolar')}
+            color="from-blue-50 to-white"
+            iconColor="text-blue-600"
+            delay={0.3}
+          />
         </div>
+
+        {/* Upcoming Events Section */}
+        <UpcomingEventsSection schoolId={userProfile.school_id} classroomIds={classroomIds} />
 
         {/* Classrooms Overview */}
         {classrooms.length > 0 && (

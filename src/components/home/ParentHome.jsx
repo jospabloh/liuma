@@ -140,6 +140,15 @@ export default function ParentHome({ user, userProfile, subscription }) {
             iconColor="text-rose-600"
             delay={0.3}
           />
+          <BigTile
+            icon={Calendar}
+            title="Calendario"
+            subtitle="Ver eventos escolares"
+            href={createPageUrl('CalendarioEscolar')}
+            color="from-blue-50 to-white"
+            iconColor="text-blue-600"
+            delay={0.35}
+          />
         </div>
 
         {/* Upcoming Events */}

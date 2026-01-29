@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag } from 'lucide-react';
+import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag, CheckSquare, CalendarX } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -157,6 +157,24 @@ export default function ParentHome({ user, userProfile, subscription }) {
             color="from-teal-50 to-white"
             iconColor="text-teal-600"
             delay={0.4}
+          />
+          <BigTile
+            icon={CheckSquare}
+            title="Eventos"
+            subtitle="Confirmar asistencia a eventos"
+            href={createPageUrl('EventosParaPadres')}
+            color="from-purple-50 to-white"
+            iconColor="text-purple-600"
+            delay={0.45}
+          />
+          <BigTile
+            icon={CalendarX}
+            title="Solicitar Ausencia"
+            subtitle="Avisar ausencias con anticipación"
+            href={createPageUrl('SolicitarAusencia')}
+            color="from-orange-50 to-white"
+            iconColor="text-orange-600"
+            delay={0.5}
           />
         </div>
 

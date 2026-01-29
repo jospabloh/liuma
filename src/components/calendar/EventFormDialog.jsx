@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { Switch } from "@/components/ui/switch";
 
 export default function EventFormDialog({ isOpen, onClose, event, schoolId, classrooms }) {
   const queryClient = useQueryClient();
@@ -20,7 +21,12 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
     end_time: '',
     location: '',
     scope: 'SCHOOL',
-    classroom_id: ''
+    classroom_id: '',
+    requires_confirmation: false,
+    has_cost: false,
+    cost_amount: '',
+    cost_concept: '',
+    confirmation_deadline: ''
   });
 
   useEffect(() => {
@@ -33,7 +39,12 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
         end_time: event.end_time || '',
         location: event.location || '',
         scope: event.scope || 'SCHOOL',
-        classroom_id: event.classroom_id || ''
+        classroom_id: event.classroom_id || '',
+        requires_confirmation: event.requires_confirmation || false,
+        has_cost: event.has_cost || false,
+        cost_amount: event.cost_amount?.toString() || '',
+        cost_concept: event.cost_concept || '',
+        confirmation_deadline: event.confirmation_deadline || ''
       });
     } else {
       setFormData({
@@ -44,7 +55,12 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
         end_time: '',
         location: '',
         scope: 'SCHOOL',
-        classroom_id: ''
+        classroom_id: '',
+        requires_confirmation: false,
+        has_cost: false,
+        cost_amount: '',
+        cost_concept: '',
+        confirmation_deadline: ''
       });
     }
   }, [event, isOpen]);
@@ -70,7 +86,13 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
       toast.error('El título y la fecha son obligatorios');
       return;
     }
-    saveEventMutation.mutate(formData);
+    
+    const data = {
+      ...formData,
+      cost_amount: formData.has_cost && formData.cost_amount ? parseFloat(formData.cost_amount) : null,
+    };
+    
+    saveEventMutation.mutate(data);
   };
 
   return (
@@ -169,6 +191,58 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
               </Select>
             </div>
           )}
+
+          <div className="border-t pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>¿Requiere confirmación de asistencia?</Label>
+              <Switch
+                checked={formData.requires_confirmation}
+                onCheckedChange={(checked) => setFormData({ ...formData, requires_confirmation: checked })}
+              />
+            </div>
+
+            {formData.requires_confirmation && (
+              <div>
+                <Label>Fecha límite de confirmación</Label>
+                <Input
+                  type="date"
+                  value={formData.confirmation_deadline}
+                  onChange={(e) => setFormData({ ...formData, confirmation_deadline: e.target.value })}
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <Label>¿Tiene costo?</Label>
+              <Switch
+                checked={formData.has_cost}
+                onCheckedChange={(checked) => setFormData({ ...formData, has_cost: checked })}
+              />
+            </div>
+
+            {formData.has_cost && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Monto</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.cost_amount}
+                    onChange={(e) => setFormData({ ...formData, cost_amount: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label>Concepto</Label>
+                  <Input
+                    value={formData.cost_concept}
+                    onChange={(e) => setFormData({ ...formData, cost_concept: e.target.value })}
+                    placeholder="Ej: Entrada"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>

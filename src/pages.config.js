@@ -74,6 +74,8 @@ import PedidosUniformes from './pages/PedidosUniformes';
 import GestionPedidosAdmin from './pages/GestionPedidosAdmin';
 import SolicitarAusencia from './pages/SolicitarAusencia';
 import GestionDescuentos from './pages/GestionDescuentos';
+import EventosParaPadres from './pages/EventosParaPadres';
+import GestionAusencias from './pages/GestionAusencias';
 import __Layout from './Layout.jsx';
 
 
@@ -105,6 +107,8 @@ export const PAGES = {
     "GestionPedidosAdmin": GestionPedidosAdmin,
     "SolicitarAusencia": SolicitarAusencia,
     "GestionDescuentos": GestionDescuentos,
+    "EventosParaPadres": EventosParaPadres,
+    "GestionAusencias": GestionAusencias,
 }
 
 export const pagesConfig = {

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag } from 'lucide-react';
+import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -195,6 +195,24 @@ export default function AdminHome({ user, userProfile, subscription }) {
             color="from-teal-50 to-white"
             iconColor="text-teal-600"
             delay={0.5}
+          />
+          <BigTile
+            icon={Percent}
+            title="Descuentos"
+            subtitle="Configurar descuentos"
+            href={createPageUrl('GestionDescuentos')}
+            color="from-orange-50 to-white"
+            iconColor="text-orange-600"
+            delay={0.55}
+          />
+          <BigTile
+            icon={ClipboardCheck}
+            title="Solicitudes de Ausencias"
+            subtitle="Aprobar o rechazar"
+            href={createPageUrl('GestionAusencias')}
+            color="from-cyan-50 to-white"
+            iconColor="text-cyan-600"
+            delay={0.6}
           />
         </div>
 

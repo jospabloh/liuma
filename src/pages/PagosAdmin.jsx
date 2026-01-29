@@ -145,13 +145,47 @@ export default function PagosAdmin() {
     });
   };
 
-  const handleCreateCharge = (e) => {
+  const handleCreateCharge = async (e) => {
     e.preventDefault();
     const concept = concepts.find(c => c.id === chargeForm.concept_id);
+    
+    // Buscar descuentos aplicables
+    const discounts = await base44.entities.Discount.filter({
+      school_id: userProfile.school_id,
+      is_active: true
+    });
+    
+    const originalAmount = parseFloat(chargeForm.amount);
+    let discountAmount = 0;
+    let applicableDiscount = null;
+    
+    // Buscar descuento aplicable al concepto
+    for (const discount of discounts) {
+      if (discount.applicable_to_concepts?.includes(concept?.concept_type)) {
+        // Validar fechas de vigencia
+        const now = new Date();
+        if (discount.valid_from && new Date(discount.valid_from) > now) continue;
+        if (discount.valid_until && new Date(discount.valid_until) < now) continue;
+        
+        // Calcular descuento
+        if (discount.discount_type === 'PERCENTAGE') {
+          discountAmount = originalAmount * (discount.discount_value / 100);
+        } else {
+          discountAmount = discount.discount_value;
+        }
+        applicableDiscount = discount;
+        break;
+      }
+    }
+    
     createChargeMutation.mutate({
       ...chargeForm,
       concept_name: concept?.name || '',
-      amount: parseFloat(chargeForm.amount),
+      concept_type: concept?.concept_type || 'OTRO',
+      original_amount: originalAmount,
+      discount_id: applicableDiscount?.id || null,
+      discount_amount: discountAmount,
+      amount: originalAmount - discountAmount,
       school_id: userProfile.school_id,
       status: 'PENDING',
     });

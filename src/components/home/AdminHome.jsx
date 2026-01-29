@@ -117,7 +117,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             subtitle="Usuarios pendientes"
             badge={pendingUsers.length}
             badgeColor="bg-amber-500"
-            href="Aprobaciones"
+            href={createPageUrl('Aprobaciones')}
             color="from-amber-50 to-white"
             iconColor="text-amber-600"
             delay={0.1}
@@ -126,7 +126,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             icon={School}
             title="Escuela"
             subtitle="Salones y alumnos"
-            href="GestionEscuela"
+            href={createPageUrl('GestionEscuela')}
             color="from-blue-50 to-white"
             iconColor="text-blue-600"
             delay={0.15}
@@ -135,7 +135,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             icon={Bell}
             title="Avisos"
             subtitle="Enviar comunicados"
-            href="AvisosAdmin"
+            href={createPageUrl('AvisosAdmin')}
             color="from-violet-50 to-white"
             iconColor="text-violet-600"
             delay={0.2}
@@ -146,7 +146,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             subtitle={overdueCharges.length > 0 ? `${overdueCharges.length} vencidos` : 'Gestionar pagos'}
             badge={overdueCharges.length}
             badgeColor="bg-red-500"
-            href="PagosAdmin"
+            href={createPageUrl('PagosAdmin')}
             color="from-rose-50 to-white"
             iconColor="text-rose-600"
             delay={0.25}
@@ -155,7 +155,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             icon={BarChart3}
             title="Reportes"
             subtitle="Ver resúmenes"
-            href="Reportes"
+            href={createPageUrl('Reportes')}
             color="from-slate-100 to-white"
             iconColor="text-slate-600"
             delay={0.3}
@@ -164,7 +164,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             icon={Users}
             title="Asistencia"
             subtitle="Control y resumen"
-            href="ResumenAsistencia"
+            href={createPageUrl('ResumenAsistencia')}
             color="from-green-50 to-white"
             iconColor="text-green-600"
             delay={0.35}

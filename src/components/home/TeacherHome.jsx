@@ -10,6 +10,7 @@ import PaymentReminderBanner from '@/components/subscription/PaymentReminderBann
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
+import { createPageUrl } from '@/utils';
 
 export default function TeacherHome({ user, userProfile, subscription }) {
   const [showLumi, setShowLumi] = useState(false);
@@ -139,7 +140,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             subtitle={`${classrooms.length} salón${classrooms.length !== 1 ? 'es' : ''}`}
             badge={studentsMissingDiary.length}
             badgeColor="bg-amber-500"
-            href="BitacorasMaestro"
+            href={createPageUrl('BitacorasMaestro')}
             color="from-emerald-50 to-white"
             iconColor="text-emerald-600"
             delay={0.1}
@@ -148,7 +149,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             icon={BookOpen}
             title="Tarea"
             subtitle="Asignar tarea"
-            href="TareaMaestro"
+            href={createPageUrl('TareaMaestro')}
             color="from-blue-50 to-white"
             iconColor="text-blue-600"
             delay={0.15}
@@ -157,7 +158,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             icon={Bell}
             title="Avisos"
             subtitle="Enviar comunicado"
-            href="AvisosMaestro"
+            href={createPageUrl('AvisosMaestro')}
             color="from-violet-50 to-white"
             iconColor="text-violet-600"
             delay={0.2}
@@ -166,7 +167,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             icon={Users}
             title="Asistencia"
             subtitle="Registrar hoy"
-            href="Asistencia"
+            href={createPageUrl('Asistencia')}
             color="from-green-50 to-white"
             iconColor="text-green-600"
             delay={0.25}

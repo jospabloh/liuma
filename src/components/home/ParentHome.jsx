@@ -11,6 +11,7 @@ import EventCard from '@/components/events/EventCard';
 import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { createPageUrl } from '@/utils';
 
 export default function ParentHome({ user, userProfile, subscription }) {
   const [showLumi, setShowLumi] = useState(false);
@@ -94,7 +95,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
             icon={Users}
             title="Mis hijos"
             subtitle={`${parentLinks.length} vinculado${parentLinks.length !== 1 ? 's' : ''}`}
-            href="MisHijos"
+            href={createPageUrl('MisHijos')}
             color="from-blue-50 to-white"
             iconColor="text-blue-600"
             delay={0.1}
@@ -103,7 +104,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
             icon={ClipboardList}
             title="Bitácora"
             subtitle="Ver el día de hoy"
-            href="Bitacora"
+            href={createPageUrl('Bitacora')}
             color="from-green-50 to-white"
             iconColor="text-green-600"
             delay={0.15}
@@ -112,7 +113,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
             icon={BookOpen}
             title="Tarea"
             subtitle="Ver tareas pendientes"
-            href="Tarea"
+            href={createPageUrl('Tarea')}
             color="from-amber-50 to-white"
             iconColor="text-amber-600"
             delay={0.2}
@@ -121,7 +122,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
             icon={Bell}
             title="Avisos"
             subtitle="Ver comunicados"
-            href="Avisos"
+            href={createPageUrl('Avisos')}
             badge={notices.filter(n => n.priority === 'URGENT').length}
             badgeColor="bg-red-500"
             color="from-violet-50 to-white"
@@ -132,7 +133,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
             icon={CreditCard}
             title="Pagos"
             subtitle={overdueCharges.length > 0 ? 'Tienes pagos vencidos' : 'Ver estado de cuenta'}
-            href="Pagos"
+            href={createPageUrl('Pagos')}
             badge={overdueCharges.length}
             badgeColor="bg-red-500"
             color="from-rose-50 to-white"

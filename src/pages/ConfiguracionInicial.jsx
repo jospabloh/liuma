@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
-import { CheckCircle2, Circle, Upload, FileText, Plus, X, Loader2 } from 'lucide-react';
+import { CheckCircle2, Circle, Upload, FileText, Plus, X, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -23,7 +23,8 @@ export default function ConfiguracionInicial() {
     step_name: '',
     description: '',
     category: 'GENERAL',
-    step_number: 1
+    step_number: 1,
+    is_annual: false
   });
   const [stepNotes, setStepNotes] = useState('');
   const [stepDocuments, setStepDocuments] = useState([]);
@@ -117,6 +118,18 @@ export default function ConfiguracionInicial() {
     });
   };
 
+  const handleConfirmStep = async (step) => {
+    await updateStepMutation.mutateAsync({
+      id: step.id,
+      data: {
+        ...step,
+        last_confirmed_at: new Date().toISOString(),
+        confirmed_by: user.id
+      }
+    });
+    toast.success('Información confirmada como vigente');
+  };
+
   const handleAddNotes = async (step) => {
     await updateStepMutation.mutateAsync({
       id: step.id,
@@ -142,31 +155,31 @@ export default function ConfiguracionInicial() {
 
   const initializeDefaultSteps = async () => {
     const defaultSteps = [
-      // GENERAL
-      { step_number: 1, step_name: 'Crear salones/grupos', description: 'Configurar los salones y grupos de la escuela', category: 'GENERAL' },
-      { step_number: 2, step_name: 'Invitar maestros', description: 'Enviar invitaciones a los maestros y asignarlos a salones', category: 'GENERAL' },
-      { step_number: 3, step_name: 'Registrar alumnos', description: 'Dar de alta a todos los alumnos en el sistema', category: 'GENERAL' },
-      { step_number: 4, step_name: 'Invitar padres', description: 'Enviar invitaciones a padres y vincularlos con sus hijos', category: 'GENERAL' },
-      { step_number: 5, step_name: 'Configurar conceptos de pago', description: 'Definir inscripciones, colegiaturas y otros conceptos', category: 'GENERAL' },
-      { step_number: 6, step_name: 'Subir documentos oficiales', description: 'Cargar menús, comunicaciones y documentos importantes', category: 'GENERAL' },
+      // GENERAL - Anual
+      { step_number: 1, step_name: 'Crear salones/grupos', description: 'Configurar los salones y grupos de la escuela', category: 'GENERAL', is_annual: true },
+      { step_number: 2, step_name: 'Invitar maestros', description: 'Enviar invitaciones a los maestros y asignarlos a salones', category: 'GENERAL', is_annual: true },
+      { step_number: 3, step_name: 'Registrar alumnos', description: 'Dar de alta a todos los alumnos en el sistema', category: 'GENERAL', is_annual: true },
+      { step_number: 4, step_name: 'Invitar padres', description: 'Enviar invitaciones a padres y vincularlos con sus hijos', category: 'GENERAL', is_annual: true },
+      { step_number: 5, step_name: 'Configurar conceptos de pago', description: 'Definir inscripciones, colegiaturas y otros conceptos', category: 'GENERAL', is_annual: true },
+      { step_number: 6, step_name: 'Subir documentos oficiales', description: 'Cargar menús, comunicaciones y documentos importantes', category: 'GENERAL', is_annual: false },
       
       // GUARDERÍA
-      { step_number: 7, step_name: 'Configurar horarios de alimentación', description: 'Definir horarios de desayuno, comida y snacks', category: 'GUARDERIA' },
-      { step_number: 8, step_name: 'Protocolo de cambio de pañal', description: 'Documentar procedimientos de higiene y cambio', category: 'GUARDERIA' },
-      { step_number: 9, step_name: 'Lista de alergias alimentarias', description: 'Registrar alergias de cada alumno', category: 'GUARDERIA' },
-      { step_number: 10, step_name: 'Horarios de siesta', description: 'Establecer horarios de descanso', category: 'GUARDERIA' },
+      { step_number: 7, step_name: 'Configurar horarios de alimentación', description: 'Definir horarios de desayuno, comida y snacks', category: 'GUARDERIA', is_annual: false },
+      { step_number: 8, step_name: 'Protocolo de cambio de pañal', description: 'Documentar procedimientos de higiene y cambio', category: 'GUARDERIA', is_annual: false },
+      { step_number: 9, step_name: 'Lista de alergias alimentarias', description: 'Registrar alergias de cada alumno', category: 'GUARDERIA', is_annual: true },
+      { step_number: 10, step_name: 'Horarios de siesta', description: 'Establecer horarios de descanso', category: 'GUARDERIA', is_annual: false },
       
       // ESCUELA
-      { step_number: 11, step_name: 'Subir plan de estudios', description: 'Cargar el programa educativo y materias', category: 'ESCUELA' },
-      { step_number: 12, step_name: 'Calendario escolar', description: 'Definir días festivos, vacaciones y eventos importantes', category: 'ESCUELA' },
-      { step_number: 13, step_name: 'Horarios de clase', description: 'Establecer horarios por materia y salón', category: 'ESCUELA' },
-      { step_number: 14, step_name: 'Sistema de calificaciones', description: 'Configurar escalas y períodos de evaluación', category: 'ESCUELA' },
+      { step_number: 11, step_name: 'Subir plan de estudios', description: 'Cargar el programa educativo y materias', category: 'ESCUELA', is_annual: false },
+      { step_number: 12, step_name: 'Calendario escolar', description: 'Definir días festivos, vacaciones y eventos importantes', category: 'ESCUELA', is_annual: true },
+      { step_number: 13, step_name: 'Horarios de clase', description: 'Establecer horarios por materia y salón', category: 'ESCUELA', is_annual: true },
+      { step_number: 14, step_name: 'Sistema de calificaciones', description: 'Configurar escalas y períodos de evaluación', category: 'ESCUELA', is_annual: false },
       
       // COLEGIO
-      { step_number: 15, step_name: 'Reglamento interno', description: 'Subir reglamento escolar y código de conducta', category: 'COLEGIO' },
-      { step_number: 16, step_name: 'Protocolo de seguridad', description: 'Documentar procedimientos de emergencia', category: 'COLEGIO' },
-      { step_number: 17, step_name: 'Actividades extracurriculares', description: 'Configurar talleres y actividades opcionales', category: 'COLEGIO' },
-      { step_number: 18, step_name: 'Uniformes y material', description: 'Subir catálogo de uniformes y lista de útiles', category: 'COLEGIO' },
+      { step_number: 15, step_name: 'Reglamento interno', description: 'Subir reglamento escolar y código de conducta', category: 'COLEGIO', is_annual: false },
+      { step_number: 16, step_name: 'Protocolo de seguridad', description: 'Documentar procedimientos de emergencia', category: 'COLEGIO', is_annual: false },
+      { step_number: 17, step_name: 'Actividades extracurriculares', description: 'Configurar talleres y actividades opcionales', category: 'COLEGIO', is_annual: true },
+      { step_number: 18, step_name: 'Uniformes y material', description: 'Subir catálogo de uniformes y lista de útiles', category: 'COLEGIO', is_annual: true },
     ];
 
     for (const step of defaultSteps) {
@@ -265,6 +278,18 @@ export default function ConfiguracionInicial() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_annual"
+                  checked={newStep.is_annual}
+                  onChange={(e) => setNewStep({ ...newStep, is_annual: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="is_annual" className="cursor-pointer">
+                  Requiere revisión anual
+                </Label>
+              </div>
               <Button
                 onClick={() => createStepMutation.mutate({
                   ...newStep,
@@ -319,16 +344,24 @@ export default function ConfiguracionInicial() {
                           )}
                         </button>
                         <div className="flex-1">
-                          <CardTitle className="text-base flex items-center gap-2">
+                          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
                             {step.step_number}. {step.step_name}
                             {step.is_completed && (
                               <Badge className="bg-green-600">Completado</Badge>
+                            )}
+                            {step.is_annual && (
+                              <Badge variant="outline" className="text-xs">Revisar anualmente</Badge>
                             )}
                           </CardTitle>
                           <p className="text-sm text-slate-600 mt-1">{step.description}</p>
                           {step.notes && (
                             <div className="mt-2 p-2 bg-slate-100 rounded text-xs text-slate-700">
                               📝 {step.notes}
+                            </div>
+                          )}
+                          {step.last_confirmed_at && (
+                            <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-700">
+                              ✓ Confirmado vigente el {new Date(step.last_confirmed_at).toLocaleDateString('es-MX')}
                             </div>
                           )}
                         </div>
@@ -343,6 +376,16 @@ export default function ConfiguracionInicial() {
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-wrap gap-2">
+                        {step.is_completed && !step.is_annual && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleConfirmStep(step)}
+                          >
+                            <Check className="w-4 h-4 mr-2" />
+                            Confirmar Vigencia
+                          </Button>
+                        )}
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button variant="outline" size="sm" onClick={() => {

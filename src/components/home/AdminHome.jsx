@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle } from 'lucide-react';
+import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -159,6 +159,15 @@ export default function AdminHome({ user, userProfile, subscription }) {
             color="from-slate-100 to-white"
             iconColor="text-slate-600"
             delay={0.3}
+          />
+          <BigTile
+            icon={Users}
+            title="Asistencia"
+            subtitle="Control y resumen"
+            href="ResumenAsistencia"
+            color="from-green-50 to-white"
+            iconColor="text-green-600"
+            delay={0.35}
           />
         </div>
 

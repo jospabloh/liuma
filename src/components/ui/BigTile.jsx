@@ -49,7 +49,7 @@ export default function BigTile({
   );
 
   if (href) {
-    return <Link to={createPageUrl(href)}>{content}</Link>;
+    return <Link to={href}>{content}</Link>;
   }
   
   return <div onClick={onClick}>{content}</div>;

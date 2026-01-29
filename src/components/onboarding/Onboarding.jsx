@@ -64,15 +64,64 @@ export default function Onboarding({ user, onComplete }) {
         return;
       }
 
+      // Determine status: ACTIVE for ADMIN, PENDING for others
+      const userStatus = formData.role === 'ADMIN' ? 'ACTIVE' : 'PENDING';
+
       // Create user profile
-      await base44.entities.UserProfile.create({
+      const newProfile = await base44.entities.UserProfile.create({
         user_id: user.id,
         school_id: schoolId,
         app_role: formData.role,
-        status: 'ACTIVE',
+        status: userStatus,
         phone: formData.phone,
         onboarding_completed: true,
       });
+
+      // If user is pending, notify school admins
+      if (userStatus === 'PENDING') {
+        // Get all admin users for this school
+        const adminProfiles = await base44.entities.UserProfile.filter({
+          school_id: schoolId,
+          app_role: 'ADMIN',
+          status: 'ACTIVE'
+        });
+
+        // Get admin user details
+        const allUsers = await base44.entities.User.list();
+        const adminEmails = adminProfiles
+          .map(profile => {
+            const adminUser = allUsers.find(u => u.id === profile.user_id);
+            return adminUser?.email;
+          })
+          .filter(email => email);
+
+        // Send email to each admin
+        const roleNames = {
+          TEACHER: 'Maestro/a',
+          PARENT: 'Padre/Madre'
+        };
+
+        for (const adminEmail of adminEmails) {
+          try {
+            await base44.integrations.Core.SendEmail({
+              to: adminEmail,
+              subject: `Nuevo usuario pendiente de aprobación - ${school?.name || 'LIUMA'}`,
+              body: `
+                <h2>Nuevo registro pendiente de aprobación</h2>
+                <p>Un nuevo usuario se ha registrado y necesita tu aprobación:</p>
+                <ul>
+                  <li><strong>Nombre:</strong> ${user.full_name}</li>
+                  <li><strong>Email:</strong> ${user.email}</li>
+                  <li><strong>Rol:</strong> ${roleNames[formData.role]}</li>
+                </ul>
+                <p>Por favor, ingresa a la aplicación para aprobar o rechazar esta solicitud.</p>
+              `
+            });
+          } catch (error) {
+            console.error('Error sending notification email:', error);
+          }
+        }
+      }
 
       onComplete();
     } catch (error) {
@@ -260,7 +309,9 @@ export default function Onboarding({ user, onComplete }) {
                 
                 <div className="bg-slate-50 rounded-xl p-4 mt-4">
                   <p className="text-sm text-slate-600">
-                    Tu cuenta se activará inmediatamente y tendrás acceso completo.
+                    {formData.role === 'ADMIN' 
+                      ? 'Tu cuenta se activará inmediatamente y tendrás acceso completo.'
+                      : 'Tu solicitud será enviada al administrador de la escuela para aprobación. Recibirás un correo cuando sea aprobada.'}
                   </p>
                 </div>
                 

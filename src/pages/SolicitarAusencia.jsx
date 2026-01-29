@@ -68,9 +68,13 @@ export default function SolicitarAusencia() {
       return;
     }
 
-    // Validar que la fecha sea futura
-    if (new Date(absenceDate) < new Date()) {
-      toast.error('La fecha debe ser futura');
+    // Validar que la fecha sea futura o de hoy
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDate = new Date(absenceDate);
+    
+    if (selectedDate < today) {
+      toast.error('La fecha debe ser hoy o futura');
       return;
     }
 

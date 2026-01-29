@@ -6,7 +6,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { CreditCard, Plus, DollarSign, Receipt, Loader2, CheckCircle, AlertTriangle, Clock, User, Calendar } from 'lucide-react';
-import { format, isPast } from 'date-fns';
+import { format, isPast, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,9 +75,26 @@ export default function PagosAdmin() {
 
   const { data: charges = [], isLoading } = useQuery({
     queryKey: ['allCharges', userProfile?.school_id],
-    queryFn: () => base44.entities.ChargeItem.filter({ 
-      school_id: userProfile.school_id 
-    }, '-due_date'),
+    queryFn: async () => {
+      const allCharges = await base44.entities.ChargeItem.filter({ 
+        school_id: userProfile.school_id 
+      }, '-due_date');
+      
+      // Actualizar automáticamente estados de cargos vencidos
+      const now = new Date();
+      for (const charge of allCharges) {
+        if (charge.status === 'PENDING' && isPast(new Date(charge.due_date))) {
+          try {
+            await base44.entities.ChargeItem.update(charge.id, { status: 'OVERDUE' });
+            charge.status = 'OVERDUE';
+          } catch (error) {
+            console.error('Error updating charge status:', error);
+          }
+        }
+      }
+      
+      return allCharges;
+    },
     enabled: !!userProfile,
   });
 
@@ -216,9 +233,66 @@ export default function PagosAdmin() {
     return student ? `${student.first_name} ${student.last_name}` : '';
   };
 
-  const pendingCharges = charges.filter(c => c.status !== 'PAID' && c.status !== 'CANCELLED');
-  const overdueCharges = pendingCharges.filter(c => isPast(new Date(c.due_date)));
+  const pendingCharges = charges.filter(c => c.status === 'PENDING');
+  const overdueCharges = charges.filter(c => c.status === 'OVERDUE');
   const paidCharges = charges.filter(c => c.status === 'PAID');
+  
+  // Enviar recordatorio automático para pagos próximos a vencer (7 días antes)
+  React.useEffect(() => {
+    const sendReminders = async () => {
+      for (const charge of pendingCharges) {
+        const daysUntilDue = differenceInDays(new Date(charge.due_date), new Date());
+        
+        if (daysUntilDue === 7 && !charge.reminder_sent) {
+          try {
+            const student = students.find(s => s.id === charge.student_id);
+            if (!student) continue;
+            
+            const parentLinks = await base44.entities.ParentStudent.filter({
+              student_id: student.id,
+              status: 'ACTIVE'
+            });
+            
+            const allUsers = await base44.entities.User.list();
+            
+            for (const link of parentLinks) {
+              const parent = allUsers.find(u => u.id === link.parent_id);
+              if (parent) {
+                await base44.integrations.Core.SendEmail({
+                  from_name: 'LIUMA - Recordatorio de Pago',
+                  to: parent.email,
+                  subject: `Recordatorio: Pago próximo a vencer - ${student.first_name}`,
+                  body: `
+                    <h2>Recordatorio de Pago</h2>
+                    <p>Estimado padre/madre de familia:</p>
+                    <p>Le recordamos que tiene un pago pendiente que vence pronto:</p>
+                    
+                    <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fbbf24; margin: 16px 0;">
+                      <p><strong>Estudiante:</strong> ${student.first_name} ${student.last_name}</p>
+                      <p><strong>Concepto:</strong> ${charge.concept_name}</p>
+                      <p><strong>Monto:</strong> $${charge.amount?.toLocaleString()}</p>
+                      <p><strong>Fecha de vencimiento:</strong> ${format(new Date(charge.due_date), "d 'de' MMMM, yyyy", { locale: es })}</p>
+                    </div>
+                    
+                    <p>Por favor, realice su pago antes de la fecha de vencimiento para evitar recargos.</p>
+                    <p>Atentamente,<br>Equipo LIUMA</p>
+                  `
+                });
+              }
+            }
+            
+            await base44.entities.ChargeItem.update(charge.id, { reminder_sent: true });
+          } catch (error) {
+            console.error('Error sending payment reminder:', error);
+          }
+        }
+      }
+    };
+    
+    if (pendingCharges.length > 0 && students.length > 0) {
+      sendReminders();
+    }
+  }, [pendingCharges, students]);
 
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 

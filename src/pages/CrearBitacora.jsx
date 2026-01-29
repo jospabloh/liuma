@@ -104,6 +104,50 @@ export default function CrearBitacora() {
         details: { student_id: data.student_id, sent_to_parents: data.sent_to_parents }
       });
       
+      // Si se marca para enviar a padres, notificar automáticamente
+      if (data.sent_to_parents) {
+        try {
+          const student = students.find(s => s.id === data.student_id);
+          const parentLinks = await base44.entities.ParentStudent.filter({
+            student_id: data.student_id,
+            status: 'ACTIVE'
+          });
+          
+          const allUsers = await base44.entities.User.list();
+          
+          for (const link of parentLinks) {
+            const parent = allUsers.find(u => u.id === link.parent_id);
+            if (parent) {
+              await base44.integrations.Core.SendEmail({
+                from_name: 'LIUMA - Bitácora Escolar',
+                to: parent.email,
+                subject: `Nueva bitácora de ${student.first_name} - ${format(new Date(), "d 'de' MMMM", { locale: es })}`,
+                body: `
+                  <h2>Bitácora de ${student.first_name} ${student.last_name}</h2>
+                  <p><strong>Fecha:</strong> ${format(new Date(), "d 'de' MMMM, yyyy", { locale: es })}</p>
+                  
+                  <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
+                    <p style="color: #334155; white-space: pre-wrap;">${data.notes_text}</p>
+                  </div>
+                  
+                  ${data.teacher_message ? `
+                    <div style="background: linear-gradient(to right, #fce7f3, #f3e8ff); padding: 16px; border-radius: 8px; border: 1px solid #f9a8d4; margin: 16px 0;">
+                      <p style="font-size: 12px; color: #9f1239; font-weight: bold; margin-bottom: 8px;">💌 Mensajito especial</p>
+                      <p style="color: #7c3aed;">${data.teacher_message}</p>
+                    </div>
+                  ` : ''}
+                  
+                  <p style="margin-top: 16px;">Registrado por: ${data.teacher_name}</p>
+                  <p style="color: #64748b; font-size: 12px; margin-top: 8px;">Este es un mensaje automático de LIUMA.</p>
+                `
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error sending diary notifications:', error);
+        }
+      }
+      
       return entry;
     },
     onSuccess: () => {

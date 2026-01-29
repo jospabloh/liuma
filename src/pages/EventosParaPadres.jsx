@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar, Clock, MapPin, DollarSign, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -48,6 +48,60 @@ export default function EventosParaPadres() {
         school_id: user.data.school_id,
         requires_confirmation: true
       }, 'date');
+      
+      // Enviar recordatorios automáticos 3 días antes del deadline
+      const now = new Date();
+      for (const event of allEvents) {
+        if (event.confirmation_deadline && !event.reminder_sent) {
+          const daysUntilDeadline = differenceInDays(new Date(event.confirmation_deadline), now);
+          
+          if (daysUntilDeadline === 3) {
+            try {
+              // Obtener todas las respuestas pendientes
+              const responses = await base44.entities.EventResponse.filter({
+                event_id: event.id,
+                response: 'PENDING'
+              });
+              
+              const allUsers = await base44.entities.User.list();
+              
+              for (const resp of responses) {
+                const parent = allUsers.find(u => u.id === resp.parent_id);
+                if (parent) {
+                  const studentResp = await base44.entities.Student.filter({ id: resp.student_id });
+                  const student = studentResp[0];
+                  
+                  await base44.integrations.Core.SendEmail({
+                    from_name: 'LIUMA - Recordatorio de Evento',
+                    to: parent.email,
+                    subject: `Recordatorio: Confirma asistencia a ${event.title}`,
+                    body: `
+                      <h2>Recordatorio de Confirmación</h2>
+                      <p>Estimado padre/madre de familia:</p>
+                      <p>Le recordamos confirmar la asistencia de <strong>${student.first_name} ${student.last_name}</strong> al siguiente evento:</p>
+                      
+                      <div style="background: #dbeafe; padding: 16px; border-radius: 8px; border: 1px solid #3b82f6; margin: 16px 0;">
+                        <p><strong>${event.title}</strong></p>
+                        <p><strong>Fecha:</strong> ${format(new Date(event.date), "d 'de' MMMM, yyyy", { locale: es })}</p>
+                        ${event.time ? `<p><strong>Hora:</strong> ${event.time}</p>` : ''}
+                        ${event.location ? `<p><strong>Lugar:</strong> ${event.location}</p>` : ''}
+                        <p><strong>Fecha límite:</strong> ${format(new Date(event.confirmation_deadline), "d 'de' MMMM", { locale: es })}</p>
+                      </div>
+                      
+                      <p>Por favor, confirme su asistencia lo antes posible.</p>
+                      <p>Atentamente,<br>Equipo LIUMA</p>
+                    `
+                  });
+                }
+              }
+              
+              await base44.entities.Event.update(event.id, { reminder_sent: true });
+            } catch (error) {
+              console.error('Error sending event reminder:', error);
+            }
+          }
+        }
+      }
       
       // Filtrar solo eventos futuros
       return allEvents.filter(e => new Date(e.date) >= new Date());

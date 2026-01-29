@@ -67,6 +67,20 @@ export default function Pagos() {
       const allCharges = await base44.entities.ChargeItem.filter({ 
         school_id: userProfile.school_id 
       }, '-due_date');
+      
+      // Actualizar automáticamente estados de cargos vencidos
+      const now = new Date();
+      for (const charge of allCharges) {
+        if (charge.status === 'PENDING' && isPast(new Date(charge.due_date))) {
+          try {
+            await base44.entities.ChargeItem.update(charge.id, { status: 'OVERDUE' });
+            charge.status = 'OVERDUE';
+          } catch (error) {
+            console.error('Error updating charge status:', error);
+          }
+        }
+      }
+      
       return allCharges.filter(c => studentIds.includes(c.student_id));
     },
     enabled: studentIds.length > 0 && !!userProfile,

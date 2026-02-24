@@ -56,6 +56,7 @@ import AvisosMaestro from './pages/AvisosMaestro';
 import Bitacora from './pages/Bitacora';
 import BitacorasMaestro from './pages/BitacorasMaestro';
 import CalendarioEscolar from './pages/CalendarioEscolar';
+import ConfiguracionInicial from './pages/ConfiguracionInicial';
 import ContactosEmergencia from './pages/ContactosEmergencia';
 import CrearBitacora from './pages/CrearBitacora';
 import EventosParaPadres from './pages/EventosParaPadres';
@@ -76,7 +77,6 @@ import ResumenAsistencia from './pages/ResumenAsistencia';
 import SolicitarAusencia from './pages/SolicitarAusencia';
 import Tarea from './pages/Tarea';
 import TareaMaestro from './pages/TareaMaestro';
-import ConfiguracionInicial from './pages/ConfiguracionInicial';
 import __Layout from './Layout.jsx';
 
 
@@ -90,6 +90,7 @@ export const PAGES = {
     "Bitacora": Bitacora,
     "BitacorasMaestro": BitacorasMaestro,
     "CalendarioEscolar": CalendarioEscolar,
+    "ConfiguracionInicial": ConfiguracionInicial,
     "ContactosEmergencia": ContactosEmergencia,
     "CrearBitacora": CrearBitacora,
     "EventosParaPadres": EventosParaPadres,
@@ -110,7 +111,6 @@ export const PAGES = {
     "SolicitarAusencia": SolicitarAusencia,
     "Tarea": Tarea,
     "TareaMaestro": TareaMaestro,
-    "ConfiguracionInicial": ConfiguracionInicial,
 }
 
 export const pagesConfig = {

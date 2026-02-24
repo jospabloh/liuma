@@ -60,7 +60,7 @@ export default function ConfiguracionInicial() {
       queryClient.invalidateQueries(['setupGuide']);
       toast.success('Paso agregado');
       setShowAddDialog(false);
-      setNewStep({ step_name: '', description: '', category: 'GENERAL', step_number: 1 });
+      setNewStep({ step_name: '', description: '', category: 'GENERAL', step_number: 1, is_annual: false });
     },
   });
 
@@ -376,7 +376,7 @@ export default function ConfiguracionInicial() {
                     </CardHeader>
                     <CardContent>
                       <div className="flex flex-wrap gap-2">
-                        {step.is_completed && !step.is_annual && (
+                        {step.is_completed && step.is_annual && (
                           <Button 
                             variant="outline" 
                             size="sm"

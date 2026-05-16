@@ -37,6 +37,7 @@ const RESOURCES = [
 const ACTIONS = ['view', 'add', 'edit', 'delete', 'approve', 'export', 'manage_permissions'];
 const POLICY_ACTIONS = ['read', 'write'];
 const PENDING_CHANGE_ENTITY = 'PendingChange';
+const ROLLBACK_MODULES = ['Notice', 'Attendance', 'Homework', 'DiaryEntry', 'ChargeItem', 'PaymentConcept', 'PaymentRecord'];
 const PENDING_CHANGE_STATUSES = {
   PENDING_ADMIN_APPROVAL: 'PENDING_ADMIN_APPROVAL',
   PENDING_SECOND_ADMIN_APPROVAL: 'PENDING_SECOND_ADMIN_APPROVAL',
@@ -84,6 +85,9 @@ export default function PermisosRoles() {
   const [editingOverrideId, setEditingOverrideId] = React.useState('');
   const [isSavingOverride, setIsSavingOverride] = React.useState(false);
   const [pendingDecisionByChangeId, setPendingDecisionByChangeId] = React.useState({});
+  const [rollbackModule, setRollbackModule] = React.useState('Notice');
+  const [rollbackOverrideId, setRollbackOverrideId] = React.useState('');
+  const [isApplyingRollback, setIsApplyingRollback] = React.useState(false);
 
   const { data: schoolProfiles = [], refetch: refetchSchoolProfiles } = useQuery({
     queryKey: ['schoolUserProfiles', userProfile?.school_id],
@@ -120,6 +124,8 @@ export default function PermisosRoles() {
     actorProfileId: userProfile?.id,
     targetProfileId: selectedProfile?.id,
   });
+  const rollbackCandidates = permissionOverrides.filter((entry) => entry.resource === rollbackModule);
+  const rollbackOverride = rollbackCandidates.find((entry) => entry.id === rollbackOverrideId) || null;
 
   if (userLoading || profileLoading) {
     return <LoadingScreen message="Validando permisos..." />;
@@ -288,6 +294,7 @@ export default function PermisosRoles() {
           after: { app_role: selectedRole },
           actorProfileId: userProfile.id,
           reason: reasonText.trim(),
+          snapshot: { applied_at: new Date().toISOString() },
         }),
       });
       await refetchPendingRoleChanges();
@@ -342,6 +349,7 @@ export default function PermisosRoles() {
           actorProfileId: change.requester_profile_id,
           reviewerProfileId: userProfile.id,
           reason: `ROLE_CHANGE_${decision.toUpperCase()}`,
+          snapshot: { applied_at: new Date().toISOString() },
         }),
       });
       await refetchPendingRoleChanges();
@@ -393,6 +401,7 @@ export default function PermisosRoles() {
             after: payload,
             actorProfileId: userProfile.id,
             reason: payload.reason,
+            snapshot: { applied_at: new Date().toISOString() },
           }),
         });
       } else {
@@ -410,6 +419,7 @@ export default function PermisosRoles() {
             after: payload,
             actorProfileId: userProfile.id,
             reason: payload.reason,
+            snapshot: { applied_at: new Date().toISOString() },
           }),
         });
       }
@@ -454,11 +464,66 @@ export default function PermisosRoles() {
         after: null,
         actorProfileId: userProfile.id,
         reason: reasonText.trim(),
+        snapshot: { applied_at: new Date().toISOString() },
       }),
     });
     await refetchOverrides();
     setReasonText('');
     toast.success('Override eliminado');
+  };
+
+  const handleApplyRollback = async () => {
+    if (!hasMutationReason(reasonText)) {
+      setErrorText('El motivo es obligatorio para cualquier cambio.');
+      return;
+    }
+    if (!rollbackOverride) {
+      setErrorText('Selecciona un override para rollback.');
+      return;
+    }
+    setErrorText('');
+    setIsApplyingRollback(true);
+    const isHighRiskRollback = rollbackOverride.action === 'manage_permissions';
+    try {
+      if (isHighRiskRollback) {
+        await base44.entities[PENDING_CHANGE_ENTITY].create({
+          school_id: userProfile.school_id,
+          type: 'PERMISSION_ROLLBACK',
+          status: PENDING_CHANGE_STATUSES.PENDING_SECOND_ADMIN_APPROVAL,
+          requester_profile_id: userProfile.id,
+          requester_user_id: user.id,
+          target_profile_id: rollbackOverride.user_profile_id,
+          payload: { override_id: rollbackOverride.id, module: rollbackOverride.resource, action: rollbackOverride.action, effect: rollbackOverride.effect, risk_level: 'HIGH' },
+        });
+      } else {
+        await deletePermissionOverride(rollbackOverride.id);
+      }
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.PERMISSION_CHANGE,
+        entityId: rollbackOverride.id,
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+        reason: reasonText.trim(),
+        context: buildPermissionChangeContext({
+          changeType: isHighRiskRollback ? 'PERMISSION_ROLLBACK_REQUESTED' : 'PERMISSION_ROLLBACK_APPLIED',
+          before: rollbackOverride,
+          after: null,
+          actorProfileId: userProfile.id,
+          reason: reasonText.trim(),
+          snapshot: { applied_at: new Date().toISOString(), target_profile_id: rollbackOverride.user_profile_id },
+        }),
+      });
+      await refetchOverrides();
+      await refetchPendingRoleChanges();
+      setRollbackOverrideId('');
+      setReasonText('');
+      toast.success(isHighRiskRollback ? 'Solicitud de rollback enviada' : 'Rollback aplicado');
+    } catch {
+      toast.error('No se pudo aplicar el rollback');
+    } finally {
+      setIsApplyingRollback(false);
+    }
   };
 
   return (
@@ -499,6 +564,23 @@ export default function PermisosRoles() {
           {isLastManagePermissionsAdminAtRisk ? <p className="text-sm text-red-700">Bloqueado: se requiere otro ADMIN activo para conservar manage_permissions.</p> : null}
           <Button variant={isAdminRoleChange ? 'destructive' : 'default'} onClick={handleRoleChange} disabled={isUpdatingRole}>
             {isUpdatingRole ? 'Guardando...' : 'Actualizar rol'}
+          </Button>
+        </div>
+        <div className="space-y-3 border rounded bg-white p-3">
+          <p className="font-medium text-slate-800">Rollback por módulo</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={rollbackModule} onChange={(event) => { setRollbackModule(event.target.value); setRollbackOverrideId(''); }}>
+              {ROLLBACK_MODULES.map((module) => <option key={module} value={module}>{module}</option>)}
+            </select>
+            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={rollbackOverrideId} onChange={(event) => setRollbackOverrideId(event.target.value)}>
+              <option value="">Selecciona override</option>
+              {rollbackCandidates.map((entry) => <option key={entry.id} value={entry.id}>{entry.action} / {entry.effect} / {entry.user_profile_id}</option>)}
+            </select>
+          </div>
+          {rollbackOverride ? <pre className="rounded bg-slate-50 p-2 text-xs">{JSON.stringify({ before: rollbackOverride, after: null }, null, 2)}</pre> : null}
+          {rollbackOverride?.action === 'manage_permissions' ? <p className="text-sm text-red-700">Alto riesgo: requiere maker-checker.</p> : null}
+          <Button variant={rollbackOverride?.action === 'manage_permissions' ? 'destructive' : 'outline'} onClick={handleApplyRollback} disabled={isApplyingRollback}>
+            {isApplyingRollback ? 'Aplicando...' : 'Aplicar rollback'}
           </Button>
         </div>
         <div className="space-y-3 border rounded bg-white p-3">

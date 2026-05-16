@@ -1,0 +1,13 @@
+{
+  "fmt": {
+    "include": ["deno/"]
+  },
+  "lint": {
+    "include": ["deno/"]
+  },
+  "tasks": {
+    "fmt": "deno fmt --check deno/",
+    "lint": "deno lint deno/",
+    "test": "deno test --no-prompt deno/"
+  }
+}

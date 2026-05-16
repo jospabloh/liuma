@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { loadClassroomsByIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 import {
   Dialog,
   DialogContent,
@@ -66,16 +67,8 @@ export default function AvisosMaestro() {
   const classroomIds = teacherClassrooms.map(tc => tc.classroom_id);
 
   const { data: classrooms = [] } = useQuery({
-    queryKey: ['classrooms', classroomIds],
-    queryFn: async () => {
-      if (classroomIds.length === 0) return [];
-      const results = [];
-      for (const id of classroomIds) {
-        const classroomList = await base44.entities.Classroom.filter({ id });
-        if (classroomList.length > 0) results.push(classroomList[0]);
-      }
-      return results;
-    },
+    queryKey: normalizedIdQueryKey('classrooms', classroomIds),
+    queryFn: async () => (await loadClassroomsByIds(classroomIds)).items,
     enabled: classroomIds.length > 0,
   });
 

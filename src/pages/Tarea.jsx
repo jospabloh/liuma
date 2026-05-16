@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { loadHomeworkByClassroomIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 import {
   Dialog,
   DialogContent,
@@ -50,18 +51,8 @@ export default function Tarea() {
   const classroomIds = [...new Set(students.map(s => s.classroom_id).filter(Boolean))];
 
   const { data: homework = [], isLoading } = useQuery({
-    queryKey: ['homework', classroomIds],
-    queryFn: async () => {
-      if (classroomIds.length === 0) return [];
-      const allHomework = [];
-      for (const id of classroomIds) {
-        const classHomework = await base44.entities.Homework.filter({ 
-          classroom_id: id 
-        }, '-due_date');
-        allHomework.push(...classHomework);
-      }
-      return allHomework;
-    },
+    queryKey: normalizedIdQueryKey('homework', classroomIds),
+    queryFn: async () => (await loadHomeworkByClassroomIds(classroomIds)).items,
     enabled: classroomIds.length > 0,
   });
 

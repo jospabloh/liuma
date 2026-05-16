@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
+import { loadClassroomsByIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 
 export default function MisHijos() {
   const navigate = useNavigate();
@@ -31,18 +32,11 @@ export default function MisHijos() {
   const students = linkedStudents.students;
   const studentIds = linkedStudents.studentIds;
 
+  const classroomIds = students.map(s => s.classroom_id);
+
   const { data: classrooms = [] } = useQuery({
-    queryKey: ['classrooms', students.map(s => s.classroom_id)],
-    queryFn: async () => {
-      const classroomIds = [...new Set(students.map(s => s.classroom_id).filter(Boolean))];
-      if (classroomIds.length === 0) return [];
-      const results = [];
-      for (const id of classroomIds) {
-        const classroomList = await base44.entities.Classroom.filter({ id });
-        if (classroomList.length > 0) results.push(classroomList[0]);
-      }
-      return results;
-    },
+    queryKey: normalizedIdQueryKey('classrooms', classroomIds),
+    queryFn: async () => (await loadClassroomsByIds(classroomIds)).items,
     enabled: students.length > 0,
   });
 

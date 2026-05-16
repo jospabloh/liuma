@@ -10,6 +10,10 @@ export const AUDIT_ENTITIES = {
   AI_INTERACTION: 'AiInteraction',
 };
 
+export const AUDIT_ACTIONS = {
+  POLICY_DECISION: 'POLICY_DECISION',
+};
+
 export async function logAuditEvent({
   user,
   userProfile,
@@ -36,6 +40,33 @@ export async function logAuditEvent({
     target_type: entity,
     target_id: entityId,
     details: context,
+  });
+}
+
+export async function logPolicyDecision({
+  user,
+  userProfile,
+  entity,
+  action,
+  decision,
+  reason,
+  context = {},
+}) {
+  if (!user || !userProfile || !entity || !action) return;
+
+  return logAuditEvent({
+    user,
+    userProfile,
+    entity,
+    entityId: `${entity}:${action}`,
+    action: AUDIT_ACTIONS.POLICY_DECISION,
+    reason: reason || `policy_${decision || 'unknown'}`,
+    context: {
+      ...context,
+      policy_entity: entity,
+      policy_action: action,
+      policy_decision: decision,
+    },
   });
 }
 

@@ -2,7 +2,12 @@ export type Role = "ADMIN" | "TEACHER" | "PARENT";
 
 export type PermissionAction = "read" | "write";
 
-const policy = {
+type EntityPolicy = {
+  read: readonly Role[];
+  write: readonly Role[];
+};
+
+const policy: Record<string, EntityPolicy> = {
   Notice: {
     read: ["ADMIN", "TEACHER", "PARENT"],
     write: ["ADMIN", "TEACHER"],
@@ -11,7 +16,7 @@ const policy = {
     read: ["ADMIN"],
     write: ["ADMIN"],
   },
-} as const;
+};
 
 export function canAccess(
   role: Role,

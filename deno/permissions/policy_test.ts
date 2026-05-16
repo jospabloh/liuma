@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert@1";
+import { assertEquals } from "@std/assert";
 import { canAccess } from "./policy.ts";
 
 Deno.test(

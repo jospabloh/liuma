@@ -8,11 +8,49 @@ export const AUDIT_ENTITIES = {
   NOTICE: 'Notice',
   DIARY_ENTRY: 'DiaryEntry',
   AI_INTERACTION: 'AiInteraction',
+  PERMISSION_CHANGE: 'PermissionChange',
 };
 
 export const AUDIT_ACTIONS = {
   POLICY_DECISION: 'POLICY_DECISION',
+  PERMISSION_CHANGE: 'PERMISSION_CHANGE',
 };
+
+export function buildPermissionChangeContext({
+  changeType,
+  before,
+  after,
+  actorProfileId,
+  reviewerProfileId,
+  reason,
+}) {
+  return {
+    change_type: changeType,
+    before,
+    after,
+    diff: { before, after },
+    actor_profile_id: actorProfileId || null,
+    reviewer_profile_id: reviewerProfileId || null,
+    reason: reason || null,
+    changed_at: new Date().toISOString(),
+    reviewed_at: reviewerProfileId ? new Date().toISOString() : null,
+  };
+}
+
+export function canReadPermissionChangeAudit({ row, user, userProfile }) {
+  if (!row || !user || !userProfile) return false;
+  if (row.entity !== AUDIT_ENTITIES.PERMISSION_CHANGE && row.action !== AUDIT_ACTIONS.PERMISSION_CHANGE) {
+    return false;
+  }
+
+  const isTenantSuperAdmin = userProfile.app_role === 'ADMIN';
+  if (!isTenantSuperAdmin) return false;
+
+  const isCreatorAdmin = row.context?.actor_profile_id === userProfile.id;
+  const canViewAllTenantPermissionChanges = Boolean(userProfile.can_view_all_tenant_permission_changes);
+
+  return isCreatorAdmin || canViewAllTenantPermissionChanges;
+}
 
 export async function logAuditEvent({
   user,

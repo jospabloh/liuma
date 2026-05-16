@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { createPageUrl } from '@/utils';
 import { toast } from 'sonner';
-import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
+import { AUDIT_ACTIONS, AUDIT_ENTITIES, buildPermissionChangeContext, logAuditEvent } from '@/lib/audit';
 import {
   createPermissionOverride,
   deletePermissionOverride,
@@ -275,6 +275,21 @@ export default function PermisosRoles() {
           risk_level: isAdminRoleChange ? 'HIGH' : 'NORMAL',
         },
       });
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.PERMISSION_CHANGE,
+        entityId: selectedProfile.id,
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+        reason: reasonText.trim(),
+        context: buildPermissionChangeContext({
+          changeType: 'ROLE_CHANGE',
+          before: { app_role: selectedProfile.app_role },
+          after: { app_role: selectedRole },
+          actorProfileId: userProfile.id,
+          reason: reasonText.trim(),
+        }),
+      });
       await refetchPendingRoleChanges();
       await refetchSchoolProfiles();
       toast.success(isAppOwner ? 'Rol actualizado correctamente' : 'Solicitud de cambio enviada');
@@ -313,6 +328,22 @@ export default function PermisosRoles() {
       if (decision === 'approve') {
         await base44.entities.UserProfile.update(change.target_profile_id, { app_role: change.payload?.to_role });
       }
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.PERMISSION_CHANGE,
+        entityId: change.target_profile_id,
+        action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+        reason: `ROLE_CHANGE_${decision.toUpperCase()}`,
+        context: buildPermissionChangeContext({
+          changeType: 'ROLE_CHANGE_REVIEW',
+          before: { app_role: change.payload?.from_role, status: change.status },
+          after: { app_role: change.payload?.to_role, status: updateData.status },
+          actorProfileId: change.requester_profile_id,
+          reviewerProfileId: userProfile.id,
+          reason: `ROLE_CHANGE_${decision.toUpperCase()}`,
+        }),
+      });
       await refetchPendingRoleChanges();
       await refetchSchoolProfiles();
       toast.success(decision === 'approve' ? 'Cambio aprobado' : 'Cambio rechazado');
@@ -347,9 +378,40 @@ export default function PermisosRoles() {
     };
     try {
       if (editingOverrideId) {
+        const current = permissionOverrides.find((entry) => entry.id === editingOverrideId);
         await updatePermissionOverride(editingOverrideId, payload);
+        await logAuditEvent({
+          user,
+          userProfile,
+          entity: AUDIT_ENTITIES.PERMISSION_CHANGE,
+          entityId: editingOverrideId,
+          action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+          reason: payload.reason,
+          context: buildPermissionChangeContext({
+            changeType: 'PERMISSION_OVERRIDE_UPDATE',
+            before: current || null,
+            after: payload,
+            actorProfileId: userProfile.id,
+            reason: payload.reason,
+          }),
+        });
       } else {
-        await createPermissionOverride(payload);
+        const created = await createPermissionOverride(payload);
+        await logAuditEvent({
+          user,
+          userProfile,
+          entity: AUDIT_ENTITIES.PERMISSION_CHANGE,
+          entityId: created?.id || payload.user_profile_id,
+          action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+          reason: payload.reason,
+          context: buildPermissionChangeContext({
+            changeType: 'PERMISSION_OVERRIDE_CREATE',
+            before: null,
+            after: payload,
+            actorProfileId: userProfile.id,
+            reason: payload.reason,
+          }),
+        });
       }
       await refetchOverrides();
       setReasonText('');
@@ -377,7 +439,23 @@ export default function PermisosRoles() {
       setErrorText('El motivo es obligatorio para cualquier cambio.');
       return;
     }
+    const current = permissionOverrides.find((entry) => entry.id === overrideId);
     await deletePermissionOverride(overrideId);
+    await logAuditEvent({
+      user,
+      userProfile,
+      entity: AUDIT_ENTITIES.PERMISSION_CHANGE,
+      entityId: overrideId,
+      action: AUDIT_ACTIONS.PERMISSION_CHANGE,
+      reason: reasonText.trim(),
+      context: buildPermissionChangeContext({
+        changeType: 'PERMISSION_OVERRIDE_DELETE',
+        before: current || null,
+        after: null,
+        actorProfileId: userProfile.id,
+        reason: reasonText.trim(),
+      }),
+    });
     await refetchOverrides();
     setReasonText('');
     toast.success('Override eliminado');

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createPageUrl } from '@/utils';
-import { maskAuditContext } from '@/lib/audit';
+import { AUDIT_ACTIONS, AUDIT_ENTITIES, canReadPermissionChangeAudit, maskAuditContext } from '@/lib/audit';
 
 export default function AuditoriaAdmin() {
   const [entityFilter, setEntityFilter] = useState('ALL');
@@ -29,6 +29,10 @@ export default function AuditoriaAdmin() {
   });
 
   const filtered = useMemo(() => rows.filter((row) => {
+    const isPermissionChange = row.entity === AUDIT_ENTITIES.PERMISSION_CHANGE || row.action === AUDIT_ACTIONS.PERMISSION_CHANGE;
+    if (isPermissionChange && !canReadPermissionChangeAudit({ row, user, userProfile })) return false;
+
+    if (!isPermissionChange && row.entity === AUDIT_ENTITIES.PERMISSION_CHANGE) return false;
     if (entityFilter !== 'ALL' && row.entity !== entityFilter) return false;
     if (actionFilter !== 'ALL' && row.action !== actionFilter) return false;
     if (search && !`${row.actor || ''} ${row.entity_id || ''} ${row.reason || ''}`.toLowerCase().includes(search.toLowerCase())) return false;

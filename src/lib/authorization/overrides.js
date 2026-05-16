@@ -13,16 +13,25 @@ function buildOverridePayload(input) {
   };
 }
 
+function assertOverrideSafety(input) {
+  if (input.action !== 'manage_permissions') return;
+  if (input.actor_profile_id && input.user_profile_id && input.actor_profile_id === input.user_profile_id) {
+    throw new Error('SELF_MANAGE_PERMISSIONS_CHANGE_BLOCKED');
+  }
+}
+
 export async function listPermissionOverrides({ schoolId }) {
   if (!schoolId) return [];
   return base44.entities[ENTITY].filter({ school_id: schoolId });
 }
 
 export async function createPermissionOverride(input) {
+  assertOverrideSafety(input);
   return base44.entities[ENTITY].create(buildOverridePayload(input));
 }
 
 export async function updatePermissionOverride(id, input) {
+  assertOverrideSafety(input);
   return base44.entities[ENTITY].update(id, buildOverridePayload(input));
 }
 

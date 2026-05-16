@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 
 export default function CrearBitacora() {
   const navigate = useNavigate();
@@ -94,14 +95,14 @@ export default function CrearBitacora() {
       const entry = await base44.entities.DiaryEntry.create(data);
       
       // Log the action
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.DIARY_ENTRY,
+        entityId: entry.id,
         action: 'DIARY_CREATED',
-        target_type: 'DiaryEntry',
-        target_id: entry.id,
-        details: { student_id: data.student_id, sent_to_parents: data.sent_to_parents }
+        reason: 'Teacher diary submission',
+        context: { student_id: data.student_id, sent_to_parents: data.sent_to_parents }
       });
       
       // Si se marca para enviar a padres, notificar automáticamente

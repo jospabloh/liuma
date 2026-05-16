@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
+import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,13 +61,14 @@ export default function Aprobaciones() {
     mutationFn: async ({ profileId, status }) => {
       await base44.entities.UserProfile.update(profileId, { status });
       
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: currentUser.id,
-        user_email: currentUser.email,
+      await logAuditEvent({
+        user: currentUser,
+        userProfile,
+        entity: AUDIT_ENTITIES.USER_PROFILE,
+        entityId: profileId,
         action: status === 'ACTIVE' ? 'USER_APPROVED' : 'USER_SUSPENDED',
-        target_type: 'UserProfile',
-        target_id: profileId,
+        reason: status === 'ACTIVE' ? 'Admin approval flow' : 'Admin rejection flow',
+        context: { approved_status: status }
       });
     },
     onSuccess: () => {

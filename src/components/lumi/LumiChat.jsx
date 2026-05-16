@@ -11,6 +11,7 @@ import {
   evaluateCapabilityAccess,
   buildDeniedCapabilityResponse,
 } from '@/lib/lumi/capabilities';
+import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 
 export default function LumiChat({ isOpen, onClose, userProfile }) {
   const [messages, setMessages] = useState([]);
@@ -76,6 +77,15 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
     });
 
     if (!access.allowed) {
+      await logAuditEvent({
+        user: { id: userProfile?.user_id || 'unknown', email: null },
+        userProfile,
+        entity: AUDIT_ENTITIES.AI_INTERACTION,
+        entityId: conversationId || `denied-${Date.now()}` ,
+        action: 'AI_REQUEST_DENIED',
+        reason: access.denial?.reason || 'Capability policy denied',
+        context: { intent: capabilityRequest.intent, entities_touched: capabilityRequest.inputs?.entities || [], policy_decision: 'deny' }
+      });
       const denied = buildDeniedCapabilityResponse({
         intent: capabilityRequest.intent,
         denial: access.denial,
@@ -90,6 +100,15 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
 
     try {
       const conversation = await base44.agents.getConversation(conversationId);
+      await logAuditEvent({
+        user: { id: userProfile?.user_id || 'unknown', email: null },
+        userProfile,
+        entity: AUDIT_ENTITIES.AI_INTERACTION,
+        entityId: conversationId,
+        action: 'AI_REQUEST_ALLOWED',
+        reason: 'Capability policy allowed',
+        context: { intent: capabilityRequest.intent, entities_touched: capabilityRequest.inputs?.entities || [], policy_decision: 'allow' }
+      });
       await base44.agents.addMessage(conversation, {
         role: 'user',
         content: JSON.stringify(capabilityRequest)

@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
-import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { loadClassroomsByIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 import {
   Dialog,
@@ -108,14 +108,14 @@ export default function AvisosMaestro() {
         }))
       );
       
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.NOTICE,
+        entityId: notice.id,
         action: 'NOTICE_SENT',
-        target_type: 'Notice',
-        target_id: notice.id,
-        details: { scope: data.scope, priority: data.priority, recipients: recipients.length }
+        reason: 'Notice publishing flow',
+        context: { scope: data.scope, priority: data.priority, recipients: recipients.length }
       });
       
       return notice;

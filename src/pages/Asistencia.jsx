@@ -15,6 +15,7 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { canWriteEntity } from '@/lib/authorization/policy';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
+import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 
 const statusConfig = {
   present: { label: 'Presente', icon: CheckCircle2, color: 'bg-green-500', textColor: 'text-green-700', bgColor: 'bg-green-50' },
@@ -367,6 +368,16 @@ export default function Asistencia() {
         }
       }
 
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.ATTENDANCE,
+        entityId: record.id,
+        action: existingRecord ? 'ATTENDANCE_UPDATED' : 'ATTENDANCE_CREATED',
+        reason: reason || 'Attendance status update',
+        context: { student_id: student.id, status, date: selectedDate }
+      });
+
       return record;
     },
     onSuccess: () => {
@@ -384,7 +395,18 @@ export default function Asistencia() {
         }
         return Promise.resolve();
       });
-      await Promise.all(promises);
+      const results = await Promise.all(promises);
+      for (const record of results.filter(Boolean)) {
+        await logAuditEvent({
+          user,
+          userProfile,
+          entity: AUDIT_ENTITIES.ATTENDANCE,
+          entityId: record.id,
+          action: 'ATTENDANCE_BULK_PRESENT',
+          reason: 'Bulk mark all students present',
+          context: { classroom_id: selectedClassroom, date: selectedDate }
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['attendance']);

@@ -35,6 +35,13 @@ const RESOURCES = [
 
 const ACTIONS = ['view', 'add', 'edit', 'delete', 'approve', 'export', 'manage_permissions'];
 const POLICY_ACTIONS = ['read', 'write'];
+const PENDING_CHANGE_ENTITY = 'PendingChange';
+const PENDING_CHANGE_STATUSES = {
+  PENDING_ADMIN_APPROVAL: 'PENDING_ADMIN_APPROVAL',
+  PENDING_SECOND_ADMIN_APPROVAL: 'PENDING_SECOND_ADMIN_APPROVAL',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+};
 
 const DEFAULT_TEMPLATE = {
   name: 'Plantilla Admin',
@@ -75,6 +82,7 @@ export default function PermisosRoles() {
   const [overrideForm, setOverrideForm] = React.useState({ user_profile_id: '', resource: 'Notice', action: 'read', effect: 'deny' });
   const [editingOverrideId, setEditingOverrideId] = React.useState('');
   const [isSavingOverride, setIsSavingOverride] = React.useState(false);
+  const [pendingDecisionByChangeId, setPendingDecisionByChangeId] = React.useState({});
 
   const { data: schoolProfiles = [], refetch: refetchSchoolProfiles } = useQuery({
     queryKey: ['schoolUserProfiles', userProfile?.school_id],
@@ -92,12 +100,18 @@ export default function PermisosRoles() {
     queryFn: () => listPermissionOverrides({ schoolId: userProfile.school_id }),
     enabled: !!userProfile?.school_id,
   });
+  const { data: pendingRoleChanges = [], refetch: refetchPendingRoleChanges } = useQuery({
+    queryKey: ['pendingRoleChanges', userProfile?.school_id],
+    queryFn: () => base44.entities[PENDING_CHANGE_ENTITY].filter({ school_id: userProfile.school_id, type: 'ROLE_CHANGE' }),
+    enabled: !!userProfile?.school_id,
+  });
 
   const activeTemplate = templates[activeTemplateIndex] || null;
   const selectedProfile = schoolProfiles.find((profile) => profile.id === selectedProfileId) || null;
   const isAdminRoleChange = selectedProfile && (selectedProfile.app_role === 'ADMIN' || selectedRole === 'ADMIN');
   const overrideTargetProfile = schoolProfiles.find((profile) => profile.id === overrideForm.user_profile_id) || null;
   const isOverrideTargetAdmin = overrideTargetProfile?.app_role === 'ADMIN';
+  const isAppOwner = selectedProfile?.user_id === userProfile?.user_id;
 
   if (userLoading || profileLoading) {
     return <LoadingScreen message="Validando permisos..." />;
@@ -203,16 +217,41 @@ export default function PermisosRoles() {
       return;
     }
 
+    const pendingOpenRequest = pendingRoleChanges.find((change) =>
+      change.target_profile_id === selectedProfile.id &&
+      [PENDING_CHANGE_STATUSES.PENDING_ADMIN_APPROVAL, PENDING_CHANGE_STATUSES.PENDING_SECOND_ADMIN_APPROVAL].includes(change.status),
+    );
+    if (pendingOpenRequest) {
+      setErrorText('Ya existe una solicitud pendiente para este usuario.');
+      return;
+    }
     setErrorText('');
     setIsUpdatingRole(true);
     try {
-      await base44.entities.UserProfile.update(selectedProfile.id, { app_role: selectedRole });
+      if (isAppOwner) {
+        await base44.entities.UserProfile.update(selectedProfile.id, { app_role: selectedRole });
+      } else {
+        const isHighRiskChange = selectedProfile.app_role === 'ADMIN' || selectedRole === 'ADMIN';
+        await base44.entities[PENDING_CHANGE_ENTITY].create({
+          school_id: userProfile.school_id,
+          type: 'ROLE_CHANGE',
+          status: isHighRiskChange ? PENDING_CHANGE_STATUSES.PENDING_SECOND_ADMIN_APPROVAL : PENDING_CHANGE_STATUSES.PENDING_ADMIN_APPROVAL,
+          requester_profile_id: userProfile.id,
+          requester_user_id: user.id,
+          target_profile_id: selectedProfile.id,
+          payload: {
+            from_role: selectedProfile.app_role,
+            to_role: selectedRole,
+            risk_level: isHighRiskChange ? 'HIGH' : 'NORMAL',
+          },
+        });
+      }
       await logAuditEvent({
         user,
         userProfile,
         entity: AUDIT_ENTITIES.USER_PROFILE,
         entityId: selectedProfile.id,
-        action: selectedRole === 'ADMIN' ? 'ROLE_ADMIN_GRANTED' : selectedProfile.app_role === 'ADMIN' ? 'ROLE_ADMIN_REVOKED' : 'ROLE_CHANGED',
+        action: isAppOwner ? 'ROLE_CHANGED_OWNER_BYPASS' : 'ROLE_CHANGE_REQUESTED',
         reason: reasonText.trim(),
         context: {
           from_role: selectedProfile.app_role,
@@ -220,13 +259,39 @@ export default function PermisosRoles() {
           risk_level: isAdminRoleChange ? 'HIGH' : 'NORMAL',
         },
       });
+      await refetchPendingRoleChanges();
       await refetchSchoolProfiles();
-      toast.success('Rol actualizado correctamente');
+      toast.success(isAppOwner ? 'Rol actualizado correctamente' : 'Solicitud de cambio enviada');
       setReasonText('');
     } catch (error) {
       toast.error('No se pudo actualizar el rol');
     } finally {
       setIsUpdatingRole(false);
+    }
+  };
+  const handlePendingRoleChangeDecision = async (change, decision) => {
+    const isRequester = change.requester_profile_id === userProfile.id;
+    if (isRequester) {
+      toast.error('El aprobador no puede ser el mismo solicitante.');
+      return;
+    }
+    setPendingDecisionByChangeId((prev) => ({ ...prev, [change.id]: true }));
+    try {
+      const updateData = {
+        status: decision === 'approve' ? PENDING_CHANGE_STATUSES.APPROVED : PENDING_CHANGE_STATUSES.REJECTED,
+        approver_profile_id: userProfile.id,
+        approver_user_id: user.id,
+        approved_at: new Date().toISOString(),
+      };
+      await base44.entities[PENDING_CHANGE_ENTITY].update(change.id, updateData);
+      if (decision === 'approve') {
+        await base44.entities.UserProfile.update(change.target_profile_id, { app_role: change.payload?.to_role });
+      }
+      await refetchPendingRoleChanges();
+      await refetchSchoolProfiles();
+      toast.success(decision === 'approve' ? 'Cambio aprobado' : 'Cambio rechazado');
+    } finally {
+      setPendingDecisionByChangeId((prev) => ({ ...prev, [change.id]: false }));
     }
   };
   const handleSaveOverride = async () => {
@@ -291,6 +356,7 @@ export default function PermisosRoles() {
 
         <div className="space-y-3 border rounded bg-white p-3">
           <p className="font-medium text-slate-800">Cambio de rol de usuario</p>
+          <p className="text-xs text-slate-500">El dueño de la app está exento del maker-checker y aplica el cambio directo.</p>
           <div className="grid gap-3 md:grid-cols-2">
             <select
               className="h-10 rounded-md border border-slate-200 px-3 text-sm"
@@ -319,6 +385,32 @@ export default function PermisosRoles() {
           <Button variant={isAdminRoleChange ? 'destructive' : 'default'} onClick={handleRoleChange} disabled={isUpdatingRole}>
             {isUpdatingRole ? 'Guardando...' : 'Actualizar rol'}
           </Button>
+        </div>
+        <div className="space-y-3 border rounded bg-white p-3">
+          <p className="font-medium text-slate-800">Solicitudes pendientes de cambio de rol</p>
+          <div className="overflow-auto border rounded">
+            <table className="min-w-full text-sm">
+              <thead><tr className="bg-slate-100"><th className="p-2 text-left">Usuario objetivo</th><th className="p-2 text-left">Desde</th><th className="p-2 text-left">Hacia</th><th className="p-2 text-left">Estado</th><th className="p-2 text-left">Acciones</th></tr></thead>
+              <tbody>
+                {pendingRoleChanges.map((change) => {
+                  const targetProfile = schoolProfiles.find((profile) => profile.id === change.target_profile_id);
+                  const disabledByRequesterRule = change.requester_profile_id === userProfile.id;
+                  return (
+                    <tr key={change.id} className="border-t">
+                      <td className="p-2">{targetProfile ? `${getUserName(targetProfile.user_id)} (${targetProfile.app_role})` : change.target_profile_id}</td>
+                      <td className="p-2">{change.payload?.from_role}</td>
+                      <td className="p-2">{change.payload?.to_role}</td>
+                      <td className="p-2">{change.status}</td>
+                      <td className="p-2 space-x-2">
+                        <Button variant="outline" disabled={disabledByRequesterRule || pendingDecisionByChangeId[change.id]} onClick={() => handlePendingRoleChangeDecision(change, 'reject')}>Rechazar</Button>
+                        <Button disabled={disabledByRequesterRule || pendingDecisionByChangeId[change.id]} onClick={() => handlePendingRoleChangeDecision(change, 'approve')}>Aprobar</Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="space-y-2">

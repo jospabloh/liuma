@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck } from 'lucide-react';
+import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck, KeyRound } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -284,6 +284,15 @@ export default function AdminHome({ user, userProfile, subscription }) {
             color="from-emerald-50 to-white"
             iconColor="text-emerald-600"
             delay={0.72}
+          />
+          <BigTile
+            icon={KeyRound}
+            title="Permisos y Roles"
+            subtitle="Accesos administrativos"
+            href={createPageUrl('PermisosRoles')}
+            color="from-indigo-50 to-white"
+            iconColor="text-indigo-600"
+            delay={0.73}
           />
           <BigTile
             icon={ListChecks}

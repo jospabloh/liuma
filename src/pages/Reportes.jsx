@@ -1,255 +1,162 @@
-import React from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
-import { BarChart3, Users, ClipboardList, CreditCard, Bell, Calendar } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, isToday } from 'date-fns';
+import { BarChart3, Users, ClipboardList, CreditCard, Bell, Calendar, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { format, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
+import { Button } from '@/components/ui/button';
+import { canReadEntity } from '@/lib/authorization/policy';
+import { canExportReports, exportReportCSV, exportReportPDF } from '@/lib/report-export';
 
 export default function Reportes() {
+  const reportRef = useRef(null);
   const today = format(new Date(), 'yyyy-MM-dd');
+  const [filters, setFilters] = useState({ dateFrom: today, dateTo: today, classroomId: 'ALL', studentStatus: 'ACTIVE', roleScope: 'ALL' });
+  const [openPanel, setOpenPanel] = useState(null);
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => {
-      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
-      return profiles[0];
-    },
-    enabled: !!user,
-  });
+  const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
+  const { data: userProfile } = useQuery({ queryKey: ['userProfile', user?.id], queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0], enabled: !!user });
+  const role = userProfile?.role || 'PARENT';
 
   const { data: students = [] } = useQuery({
     queryKey: ['allStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({ 
-      school_id: userProfile.school_id,
-      is_active: true 
-    }),
+    queryFn: () => base44.entities.Student.filter({ school_id: userProfile.school_id }),
     enabled: !!userProfile,
   });
 
   const { data: classrooms = [] } = useQuery({
     queryKey: ['allClassrooms', userProfile?.school_id],
-    queryFn: () => base44.entities.Classroom.filter({ 
-      school_id: userProfile.school_id,
-      is_active: true 
-    }),
+    queryFn: () => base44.entities.Classroom.filter({ school_id: userProfile.school_id, is_active: true }),
     enabled: !!userProfile,
   });
 
-  const { data: todayDiaries = [] } = useQuery({
-    queryKey: ['todayDiaries', today, userProfile?.school_id],
-    queryFn: () => base44.entities.DiaryEntry.filter({ 
-      date: today,
-      school_id: userProfile.school_id
-    }),
-    enabled: !!userProfile,
+  const { data: attendances = [] } = useQuery({
+    queryKey: ['attendanceReport', filters.dateFrom, filters.dateTo, userProfile?.school_id],
+    queryFn: () => base44.entities.Attendance.filter({ school_id: userProfile.school_id }),
+    enabled: !!userProfile && canReadEntity(role, 'Attendance'),
+  });
+
+  const { data: diaries = [] } = useQuery({
+    queryKey: ['diaries', filters.dateFrom, filters.dateTo, userProfile?.school_id],
+    queryFn: () => base44.entities.DiaryEntry.filter({ school_id: userProfile.school_id }),
+    enabled: !!userProfile && canReadEntity(role, 'DiaryEntry'),
   });
 
   const { data: pendingCharges = [] } = useQuery({
     queryKey: ['pendingCharges', userProfile?.school_id],
-    queryFn: async () => {
-      const charges = await base44.entities.ChargeItem.filter({ 
-        school_id: userProfile.school_id,
-        status: 'PENDING'
-      });
-      return charges;
-    },
-    enabled: !!userProfile,
+    queryFn: () => base44.entities.ChargeItem.filter({ school_id: userProfile.school_id, status: 'PENDING' }),
+    enabled: !!userProfile && canReadEntity(role, 'ChargeItem'),
   });
 
-  const { data: weekNotices = [] } = useQuery({
-    queryKey: ['weekNotices', userProfile?.school_id],
-    queryFn: async () => {
-      const notices = await base44.entities.Notice.filter({ 
-        school_id: userProfile.school_id
-      }, '-created_date', 50);
-      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-      return notices.filter(n => new Date(n.created_date) >= weekStart);
-    },
-    enabled: !!userProfile,
+  const { data: notices = [] } = useQuery({
+    queryKey: ['notices', userProfile?.school_id],
+    queryFn: () => base44.entities.Notice.filter({ school_id: userProfile.school_id }, '-created_date', 100),
+    enabled: !!userProfile && canReadEntity(role, 'Notice'),
   });
 
   const { data: upcomingEvents = [], isLoading } = useQuery({
     queryKey: ['upcomingEvents', userProfile?.school_id],
-    queryFn: async () => {
-      const events = await base44.entities.Event.filter({ 
-        school_id: userProfile.school_id 
-      }, 'date', 10);
-      return events.filter(e => new Date(e.date) >= new Date());
-    },
+    queryFn: async () => (await base44.entities.Event.filter({ school_id: userProfile.school_id }, 'date', 10)).filter((e) => new Date(e.date) >= new Date()),
     enabled: !!userProfile,
   });
 
-  const diaryProgress = students.length > 0 
-    ? Math.round((todayDiaries.length / students.length) * 100) 
-    : 0;
+  const filteredStudents = useMemo(() => students.filter((s) => {
+    if (filters.classroomId !== 'ALL' && s.classroom_id !== filters.classroomId) return false;
+    if (filters.studentStatus === 'ACTIVE') return s.is_active !== false;
+    if (filters.studentStatus === 'INACTIVE') return s.is_active === false;
+    return true;
+  }), [students, filters.classroomId, filters.studentStatus]);
 
-  const overdueCharges = pendingCharges.filter(c => new Date(c.due_date) < new Date());
+  const withinRange = (value) => value >= filters.dateFrom && value <= filters.dateTo;
+  const filteredDiaries = diaries.filter((d) => withinRange(d.date || today) && (filters.classroomId === 'ALL' || d.classroom_id === filters.classroomId));
+  const filteredAttendance = attendances.filter((a) => withinRange(a.date || today) && (filters.classroomId === 'ALL' || a.classroom_id === filters.classroomId));
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekNotices = notices.filter((n) => new Date(n.created_date) >= weekStart).filter((n) => filters.roleScope === 'ALL' || (n.scope || 'SCHOOL') === filters.roleScope);
+
+  const attendanceRate = filteredAttendance.length ? Math.round((filteredAttendance.filter((a) => a.status === 'PRESENT').length / filteredAttendance.length) * 100) : 0;
+  const diaryProgress = filteredStudents.length ? Math.round((filteredDiaries.length / filteredStudents.length) * 100) : 0;
+  const overdueCharges = pendingCharges.filter((c) => new Date(c.due_date) < new Date());
   const totalPending = pendingCharges.reduce((sum, c) => sum + (c.amount || 0), 0);
+  const urgentNotices = weekNotices.filter((n) => n.priority === 'URGENT').length;
+  const freshnessLabel = format(new Date(), "d MMM yyyy, HH:mm", { locale: es });
 
-  const urgentNotices = weekNotices.filter(n => n.priority === 'URGENT').length;
+  const canExport = canExportReports(role);
+  const togglePanel = (key) => setOpenPanel(openPanel === key ? null : key);
+
+  const exportRows = [
+    { kpi: 'Asistencia', valor: `${attendanceRate}%`, periodo: `${filters.dateFrom} a ${filters.dateTo}` },
+    { kpi: 'Bitácoras', valor: `${filteredDiaries.length}/${filteredStudents.length}`, periodo: `${filters.dateFrom} a ${filters.dateTo}` },
+    { kpi: 'Pagos pendientes', valor: totalPending, periodo: 'Actual' },
+    { kpi: 'Avisos urgentes', valor: urgentNotices, periodo: 'Semana actual' },
+  ];
 
   if (isLoading) return <LoadingScreen message="Cargando reportes..." />;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
-      <PageHeader
-        title="Reportes"
-        subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
-        showBack
-        backTo={createPageUrl('Home')}
-      />
+      <PageHeader title="Reportes" subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })} showBack backTo={createPageUrl('Home')} />
 
-      <div className="space-y-4">
-        {/* Diary Progress */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-              <ClipboardList className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-800">Bitácoras de hoy</h3>
-              <p className="text-sm text-slate-500">{todayDiaries.length} de {students.length} alumnos</p>
-            </div>
-            <div className={`ml-auto text-2xl font-bold ${diaryProgress === 100 ? 'text-green-600' : 'text-amber-600'}`}>
-              {diaryProgress}%
-            </div>
+      <div className="bg-white border rounded-2xl p-4 mb-4">
+        <p className="text-xs text-slate-500 mb-2">Filtros</p>
+        <div className="grid md:grid-cols-4 gap-3">
+          <input className="border rounded-lg px-3 py-2 text-sm" type="date" value={filters.dateFrom} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
+          <input className="border rounded-lg px-3 py-2 text-sm" type="date" value={filters.dateTo} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
+          <select className="border rounded-lg px-3 py-2 text-sm" value={filters.classroomId} onChange={(e) => setFilters((f) => ({ ...f, classroomId: e.target.value }))}>
+            <option value="ALL">Todos los salones</option>
+            {classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select className="border rounded-lg px-3 py-2 text-sm" value={filters.studentStatus} onChange={(e) => setFilters((f) => ({ ...f, studentStatus: e.target.value }))}>
+            <option value="ALL">Todos los estados</option><option value="ACTIVE">Activos</option><option value="INACTIVE">Inactivos</option>
+          </select>
+        </div>
+        <div className="grid md:grid-cols-2 gap-3 mt-3">
+          <select className="border rounded-lg px-3 py-2 text-sm" value={filters.roleScope} onChange={(e) => setFilters((f) => ({ ...f, roleScope: e.target.value }))}>
+            <option value="ALL">Alcance: todos</option><option value="SCHOOL">Escuela</option><option value="CLASSROOM">Salón</option><option value="STUDENT">Alumno</option>
+          </select>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" disabled={!canExport} onClick={() => canExport && exportReportCSV({ fileName: `reportes-${today}.csv`, rows: exportRows })}><Download className="w-4 h-4 mr-2" />CSV</Button>
+            <Button variant="outline" disabled={!canExport} onClick={() => canExport && exportReportPDF({ element: reportRef.current, fileName: `reportes-${today}.pdf` })}><Download className="w-4 h-4 mr-2" />PDF</Button>
           </div>
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${diaryProgress === 100 ? 'bg-green-500' : 'bg-amber-500'}`}
-              style={{ width: `${diaryProgress}%` }}
-            />
-          </div>
-          {classrooms.map((classroom) => {
-            const classStudents = students.filter(s => s.classroom_id === classroom.id);
-            const classDiaries = todayDiaries.filter(d => d.classroom_id === classroom.id);
-            return (
-              <div key={classroom.id} className="flex justify-between items-center mt-3 text-sm">
-                <span className="text-slate-600">{classroom.name}</span>
-                <span className={classDiaries.length === classStudents.length ? 'text-green-600' : 'text-amber-600'}>
-                  {classDiaries.length}/{classStudents.length}
-                </span>
-              </div>
-            );
-          })}
+        </div>
+        <p className="text-xs text-slate-500 mt-3">Datos actualizados: {freshnessLabel}</p>
+        {!canExport && <p className="text-xs text-red-600 mt-1">No tienes permisos para exportar reportes.</p>}
+      </div>
+
+      <div className="space-y-4" ref={reportRef}>
+        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><Users className="w-5 h-5 text-blue-600" /></div><div><h3 className="font-semibold text-slate-800">Asistencia</h3><p className="text-sm text-slate-500">{filteredAttendance.length} registros</p></div><div className="ml-auto text-2xl font-bold text-blue-600">{attendanceRate}%</div></div>
+          <button className="text-sm text-blue-700 flex items-center gap-1" onClick={() => togglePanel('attendance')}>Ver detalle {openPanel === 'attendance' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          {openPanel === 'attendance' && <div className="mt-3 text-sm text-slate-600">Presentes: {filteredAttendance.filter((a) => a.status === 'PRESENT').length} · Ausentes: {filteredAttendance.filter((a) => a.status === 'ABSENT').length}</div>}
         </motion.div>
 
-        {/* Payments Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-              <CreditCard className="w-5 h-5 text-rose-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-800">Pagos pendientes</h3>
-              <p className="text-sm text-slate-500">{pendingCharges.length} cargos</p>
-            </div>
-            <div className="ml-auto text-right">
-              <p className="text-xl font-bold text-slate-800">${totalPending.toLocaleString()}</p>
-              <p className="text-xs text-red-600">{overdueCharges.length} vencidos</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="bg-amber-50 rounded-xl p-3 text-center">
-              <p className="text-2xl font-bold text-amber-600">{pendingCharges.length - overdueCharges.length}</p>
-              <p className="text-xs text-amber-800">Por vencer</p>
-            </div>
-            <div className="bg-red-50 rounded-xl p-3 text-center">
-              <p className="text-2xl font-bold text-red-600">{overdueCharges.length}</p>
-              <p className="text-xs text-red-800">Vencidos</p>
-            </div>
-          </div>
+        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><ClipboardList className="w-5 h-5 text-emerald-600" /></div><div><h3 className="font-semibold text-slate-800">Bitácoras</h3><p className="text-sm text-slate-500">{filteredDiaries.length} de {filteredStudents.length}</p></div><div className="ml-auto text-2xl font-bold text-emerald-600">{diaryProgress}%</div></div>
+          <button className="text-sm text-emerald-700 flex items-center gap-1" onClick={() => togglePanel('diary')}>Ver detalle {openPanel === 'diary' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          {openPanel === 'diary' && classrooms.map((classroom) => <div key={classroom.id} className="flex justify-between text-sm mt-2"><span>{classroom.name}</span><span>{filteredDiaries.filter((d) => d.classroom_id === classroom.id).length}</span></div>)}
         </motion.div>
 
-        {/* Notices Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
-              <Bell className="w-5 h-5 text-violet-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-800">Avisos esta semana</h3>
-              <p className="text-sm text-slate-500">{weekNotices.length} enviados</p>
-            </div>
-            {urgentNotices > 0 && (
-              <div className="ml-auto bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
-                {urgentNotices} urgente{urgentNotices > 1 ? 's' : ''}
-              </div>
-            )}
-          </div>
+        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600" /></div><div><h3 className="font-semibold text-slate-800">Pagos pendientes</h3><p className="text-sm text-slate-500">{pendingCharges.length} cargos</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-slate-800">${totalPending.toLocaleString()}</p><p className="text-xs text-red-600">{overdueCharges.length} vencidos</p></div></div>
+          <button className="text-sm text-rose-700 flex items-center gap-1" onClick={() => togglePanel('payments')}>Ver detalle {openPanel === 'payments' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          {openPanel === 'payments' && <div className="mt-3 text-sm text-slate-600">Por vencer: {pendingCharges.length - overdueCharges.length} · Vencidos: {overdueCharges.length}</div>}
         </motion.div>
 
-        {/* Upcoming Events */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-800">Próximos eventos</h3>
-              <p className="text-sm text-slate-500">{upcomingEvents.length} programados</p>
-            </div>
-          </div>
-          {upcomingEvents.slice(0, 3).map((event) => (
-            <div key={event.id} className="flex items-center gap-3 py-2 border-t border-slate-100">
-              <div className="w-10 h-10 rounded-lg bg-slate-100 flex flex-col items-center justify-center text-xs">
-                <span className="font-bold">{format(new Date(event.date), 'd')}</span>
-                <span className="text-slate-500">{format(new Date(event.date), 'MMM', { locale: es })}</span>
-              </div>
-              <div>
-                <p className="font-medium text-slate-800">{event.title}</p>
-                {event.time && <p className="text-xs text-slate-500">{event.time}</p>}
-              </div>
-            </div>
-          ))}
+        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center"><Bell className="w-5 h-5 text-violet-600" /></div><div><h3 className="font-semibold text-slate-800">Avisos</h3><p className="text-sm text-slate-500">{weekNotices.length} enviados</p></div><div className="ml-auto bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">{urgentNotices} urgentes</div></div>
+          <button className="text-sm text-violet-700 flex items-center gap-1" onClick={() => togglePanel('notices')}>Ver detalle {openPanel === 'notices' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          {openPanel === 'notices' && weekNotices.slice(0, 5).map((n) => <div key={n.id} className="text-sm border-t pt-2 mt-2">{n.title}</div>)}
         </motion.div>
 
-        {/* Quick Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="grid grid-cols-2 gap-3"
-        >
-          <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl p-4 text-white">
-            <Users className="w-6 h-6 mb-2 opacity-80" />
-            <p className="text-3xl font-bold">{students.length}</p>
-            <p className="text-sm opacity-80">Alumnos activos</p>
-          </div>
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white">
-            <BarChart3 className="w-6 h-6 mb-2 opacity-80" />
-            <p className="text-3xl font-bold">{classrooms.length}</p>
-            <p className="text-sm opacity-80">Salones</p>
-          </div>
+        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
+          <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><Calendar className="w-5 h-5 text-blue-600" /></div><div><h3 className="font-semibold text-slate-800">Próximos eventos</h3><p className="text-sm text-slate-500">{upcomingEvents.length} programados</p></div></div>
+          {upcomingEvents.slice(0, 3).map((event) => <div key={event.id} className="flex items-center gap-3 py-2 border-t border-slate-100"><div className="w-10 h-10 rounded-lg bg-slate-100 flex flex-col items-center justify-center text-xs"><span className="font-bold">{format(new Date(event.date), 'd')}</span><span className="text-slate-500">{format(new Date(event.date), 'MMM', { locale: es })}</span></div><div><p className="font-medium text-slate-800">{event.title}</p>{event.time && <p className="text-xs text-slate-500">{event.time}</p>}</div></div>)}
         </motion.div>
+
+        <motion.div className="grid grid-cols-2 gap-3"><div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl p-4 text-white"><Users className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{filteredStudents.length}</p><p className="text-sm opacity-80">Alumnos filtrados</p></div><div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white"><BarChart3 className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{classrooms.length}</p><p className="text-sm opacity-80">Salones</p></div></motion.div>
       </div>
     </div>
   );

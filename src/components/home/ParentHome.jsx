@@ -41,6 +41,20 @@ export default function ParentHome({ user, userProfile, subscription }) {
     },
   });
 
+
+  const { data: unreadUrgentDeliveries = [] } = useQuery({
+    queryKey: ['unreadUrgentDeliveries', user.id, userProfile.school_id],
+    queryFn: async () => {
+      const rows = await base44.entities.NoticeDelivery.filter({
+        school_id: userProfile.school_id,
+        recipient_user_id: user.id,
+        status: 'SENT',
+      }, '-created_date', 50);
+      const urgentNotices = new Set(notices.filter((n) => n.priority === 'URGENT').map((n) => n.id));
+      return rows.filter((row) => urgentNotices.has(row.notice_id));
+    },
+  });
+
   // Get upcoming events
   const { data: events = [] } = useQuery({
     queryKey: ['upcomingEvents', userProfile.school_id],
@@ -123,7 +137,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
             title="Avisos"
             subtitle="Ver comunicados"
             href={createPageUrl('Avisos')}
-            badge={notices.filter(n => n.priority === 'URGENT').length}
+            badge={unreadUrgentDeliveries.length}
             badgeColor="bg-red-500"
             color="from-violet-50 to-white"
             iconColor="text-violet-600"

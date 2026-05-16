@@ -123,6 +123,24 @@ export default function TeacherHome({ user, userProfile, subscription }) {
     enabled: classroomIds.length > 0,
   });
 
+
+  const { data: unreadUrgentNotices = [] } = useQuery({
+    queryKey: ['teacherUnreadUrgentNotices', user.id, userProfile.school_id],
+    queryFn: async () => {
+      const rows = await base44.entities.NoticeDelivery.filter({
+        school_id: userProfile.school_id,
+        status: 'SENT',
+      }, '-created_date', 100);
+      const studentRows = await base44.entities.Student.filter({ is_active: true });
+      const classStudentIds = new Set(studentRows.filter((student) => classroomIds.includes(student.classroom_id)).map((student) => student.id));
+      const relevantDeliveries = rows.filter((row) => classStudentIds.has(row.student_id));
+      const urgentNotices = await base44.entities.Notice.filter({ school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50);
+      const urgentIds = new Set(urgentNotices.map((notice) => notice.id));
+      return relevantDeliveries.filter((row) => urgentIds.has(row.notice_id));
+    },
+    enabled: classroomIds.length > 0,
+  });
+
   const studentsWithDiary = new Set(todayDiaries.map(d => d.student_id));
   const studentsMissingDiary = students.filter(s => !studentsWithDiary.has(s.id));
   const diaryProgress = students.length > 0 
@@ -206,8 +224,10 @@ export default function TeacherHome({ user, userProfile, subscription }) {
           <BigTile
             icon={Bell}
             title="Avisos"
-            subtitle="Enviar comunicado"
+            subtitle={unreadUrgentNotices.length > 0 ? `${unreadUrgentNotices.length} urgentes sin leer` : 'Enviar comunicado'}
             href={createPageUrl('AvisosMaestro')}
+            badge={unreadUrgentNotices.length}
+            badgeColor="bg-red-500"
             color="from-violet-50 to-white"
             iconColor="text-violet-600"
             delay={0.2}

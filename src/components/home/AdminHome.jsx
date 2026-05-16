@@ -65,6 +65,17 @@ export default function AdminHome({ user, userProfile, subscription }) {
     },
   });
 
+
+  const { data: unreadUrgentNotices = [] } = useQuery({
+    queryKey: ['adminUnreadUrgentNotices', userProfile.school_id],
+    queryFn: async () => {
+      const urgentNotices = await base44.entities.Notice.filter({ school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50);
+      const urgentIds = new Set(urgentNotices.map((notice) => notice.id));
+      const pending = await base44.entities.NoticeDelivery.filter({ school_id: userProfile.school_id, status: 'SENT' }, '-created_date', 200);
+      return pending.filter((row) => urgentIds.has(row.notice_id));
+    },
+  });
+
   const handleEmergencyAlert = () => {
     navigate(createPageUrl('AlertaEmergencia'));
   };
@@ -134,8 +145,10 @@ export default function AdminHome({ user, userProfile, subscription }) {
           <BigTile
             icon={Bell}
             title="Avisos"
-            subtitle="Enviar comunicados"
+            subtitle={unreadUrgentNotices.length > 0 ? `${unreadUrgentNotices.length} urgentes sin leer` : 'Enviar comunicados'}
             href={createPageUrl('AvisosAdmin')}
+            badge={unreadUrgentNotices.length}
+            badgeColor="bg-red-500"
             color="from-violet-50 to-white"
             iconColor="text-violet-600"
             delay={0.2}

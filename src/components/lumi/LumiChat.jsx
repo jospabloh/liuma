@@ -5,6 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { base44 } from '@/api/base44Client';
 import ReactMarkdown from 'react-markdown';
+import {
+  LUMI_INTENTS,
+  buildCapabilityRequest,
+  evaluateCapabilityAccess,
+  buildDeniedCapabilityResponse,
+} from '@/lib/lumi/capabilities';
 
 export default function LumiChat({ isOpen, onClose, userProfile }) {
   const [messages, setMessages] = useState([]);
@@ -53,18 +59,40 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading || !conversationId) return;
-    
-    const userMessage = input.trim();
+  const handleSend = async ({ intent, prompt, inputs } = {}) => {
+    const messageText = (prompt ?? input).trim();
+    if (!messageText || isLoading || !conversationId) return;
+
+    const capabilityRequest = buildCapabilityRequest({
+      intent,
+      prompt: messageText,
+      inputs,
+      userProfile,
+    });
+
+    const access = evaluateCapabilityAccess({
+      intent: capabilityRequest.intent,
+      request: capabilityRequest,
+    });
+
+    if (!access.allowed) {
+      const denied = buildDeniedCapabilityResponse({
+        intent: capabilityRequest.intent,
+        denial: access.denial,
+      });
+      setMessages((prev) => [...prev, { role: 'assistant', content: denied.message }]);
+      setInput('');
+      return;
+    }
+
     setInput('');
     setIsLoading(true);
-    
+
     try {
       const conversation = await base44.agents.getConversation(conversationId);
       await base44.agents.addMessage(conversation, {
         role: 'user',
-        content: userMessage
+        content: JSON.stringify(capabilityRequest)
       });
     } catch (error) {
       console.error('Error sending message:', error);
@@ -73,9 +101,12 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
   };
 
   const quickActions = [
-    '¿Qué tarea hay hoy?',
-    '¿Hay avisos importantes?',
-    '¿Cómo estuvo mi hijo hoy?',
+    { label: '¿Qué tarea hay hoy?', intent: LUMI_INTENTS.HOMEWORK_LOOKUP },
+    { label: '¿Cómo va la asistencia?', intent: LUMI_INTENTS.ATTENDANCE_STATUS },
+    { label: '¿Hay avisos importantes?', intent: LUMI_INTENTS.NOTICES_SUMMARY },
+    { label: '¿Qué pagos tengo pendientes?', intent: LUMI_INTENTS.PAYMENT_REMINDERS },
+    { label: '¿Cómo estuvo mi hijo hoy?', intent: LUMI_INTENTS.BEHAVIOR_RECAP },
+    { label: '¿Qué citas o eventos vienen?', intent: LUMI_INTENTS.SCHEDULE_APPOINTMENTS },
   ];
 
   if (!isOpen) return null;
@@ -135,13 +166,13 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
                 ¿En qué te puedo ayudar hoy?
               </p>
               <div className="space-y-2">
-                {quickActions.map((action, i) => (
+                {quickActions.map((action) => (
                   <button
-                    key={i}
-                    onClick={() => setInput(action)}
+                    key={action.intent}
+                    onClick={() => handleSend({ intent: action.intent, prompt: action.label })}
                     className="block w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm transition-colors"
                   >
-                    {action}
+                    {action.label}
                   </button>
                 ))}
               </div>

@@ -50,6 +50,7 @@ import __Layout from './Layout.jsx';
  */
 import AlertaEmergencia from './pages/AlertaEmergencia';
 import Aprobaciones from './pages/Aprobaciones';
+import AuditoriaAdmin from './pages/AuditoriaAdmin';
 import Asistencia from './pages/Asistencia';
 import Avisos from './pages/Avisos';
 import AvisosAdmin from './pages/AvisosAdmin';
@@ -85,6 +86,7 @@ import __Layout from './Layout.jsx';
 export const PAGES = {
     "AlertaEmergencia": AlertaEmergencia,
     "Aprobaciones": Aprobaciones,
+    "AuditoriaAdmin": AuditoriaAdmin,
     "Asistencia": Asistencia,
     "Avisos": Avisos,
     "AvisosAdmin": AvisosAdmin,

@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
-import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -82,7 +82,6 @@ export default function PagosAdmin() {
       }, '-due_date');
       
       // Actualizar automáticamente estados de cargos vencidos
-      const now = new Date();
       for (const charge of allCharges) {
         if (charge.status === 'PENDING' && isPast(new Date(charge.due_date))) {
           try {
@@ -112,13 +111,14 @@ export default function PagosAdmin() {
   const createChargeMutation = useMutation({
     mutationFn: async (data) => {
       const charge = await base44.entities.ChargeItem.create(data);
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.CHARGE_ITEM,
+        entityId: charge.id,
         action: 'CHARGE_CREATED',
-        target_type: 'ChargeItem',
-        target_id: charge.id,
+        reason: 'Admin payment charge creation',
+        context: { student_id: data.student_id, amount: data.amount, due_date: data.due_date }
       });
       return charge;
     },
@@ -134,13 +134,14 @@ export default function PagosAdmin() {
     mutationFn: async (data) => {
       await base44.entities.ChargeItem.update(selectedCharge.id, { status: 'PAID' });
       const payment = await base44.entities.PaymentRecord.create(data);
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.PAYMENT_RECORD,
+        entityId: payment.id,
         action: 'PAYMENT_RECORDED',
-        target_type: 'PaymentRecord',
-        target_id: payment.id,
+        reason: 'Admin payment registration',
+        context: { charge_id: selectedCharge.id, amount: data.amount, payment_method: data.payment_method }
       });
       return payment;
     },
@@ -180,13 +181,13 @@ export default function PagosAdmin() {
     const originalAmount = parseFloat(chargeForm.amount);
     let discountAmount = 0;
     let applicableDiscount = null;
+    const now = new Date();
     
     // Buscar descuento aplicable al concepto
     for (const discount of discounts) {
       if (discount.applicable_to_concepts?.includes(concept?.concept_type)) {
         // Validar fechas de vigencia
-        const now = new Date();
-        if (discount.valid_from && new Date(discount.valid_from) > now) continue;
+          if (discount.valid_from && new Date(discount.valid_from) > now) continue;
         if (discount.valid_until && new Date(discount.valid_until) < now) continue;
         
         // Calcular descuento

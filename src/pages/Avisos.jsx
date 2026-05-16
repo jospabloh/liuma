@@ -12,6 +12,7 @@ import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
 import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { loadStudentsByIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 import {
   Dialog,
   DialogContent,
@@ -57,16 +58,8 @@ export default function Avisos() {
   const studentIds = parentLinks.map(l => l.student_id);
 
   const { data: students = [] } = useQuery({
-    queryKey: ['students', studentIds],
-    queryFn: async () => {
-      if (studentIds.length === 0) return [];
-      const results = [];
-      for (const id of studentIds) {
-        const studentList = await base44.entities.Student.filter({ id });
-        if (studentList.length > 0) results.push(studentList[0]);
-      }
-      return results;
-    },
+    queryKey: normalizedIdQueryKey('students', studentIds),
+    queryFn: async () => (await loadStudentsByIds(studentIds)).items,
     enabled: studentIds.length > 0,
   });
 

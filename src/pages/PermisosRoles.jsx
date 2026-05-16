@@ -17,6 +17,7 @@ import {
   updatePermissionOverride,
 } from '@/lib/authorization/overrides';
 import { getEffectivePolicyDecision } from '@/lib/authorization/policy';
+import { hasOtherActiveAdminWithManagePermissions } from '@/lib/authorization/adminSafety';
 
 const RESOURCES = [
   'Students',
@@ -112,6 +113,13 @@ export default function PermisosRoles() {
   const overrideTargetProfile = schoolProfiles.find((profile) => profile.id === overrideForm.user_profile_id) || null;
   const isOverrideTargetAdmin = overrideTargetProfile?.app_role === 'ADMIN';
   const isAppOwner = selectedProfile?.user_id === userProfile?.user_id;
+  const isSelfRoleChange = selectedProfile?.id === userProfile?.id;
+  const isSelfAdminDemotion = isSelfRoleChange && selectedProfile?.app_role === 'ADMIN' && selectedRole !== 'ADMIN';
+  const isLastManagePermissionsAdminAtRisk = selectedProfile?.app_role === 'ADMIN' && selectedRole !== 'ADMIN' && !hasOtherActiveAdminWithManagePermissions({
+    profiles: schoolProfiles,
+    actorProfileId: userProfile?.id,
+    targetProfileId: selectedProfile?.id,
+  });
 
   if (userLoading || profileLoading) {
     return <LoadingScreen message="Validando permisos..." />;
@@ -216,6 +224,14 @@ export default function PermisosRoles() {
       setErrorText('Selecciona un rol distinto al actual.');
       return;
     }
+    if (isSelfAdminDemotion) {
+      setErrorText('Bloqueado: no puedes remover tu propio manage_permissions.');
+      return;
+    }
+    if (isLastManagePermissionsAdminAtRisk) {
+      setErrorText('Bloqueado: debe existir otro ADMIN activo con manage_permissions antes de este cambio.');
+      return;
+    }
 
     const pendingOpenRequest = pendingRoleChanges.find((change) =>
       change.target_profile_id === selectedProfile.id &&
@@ -277,6 +293,16 @@ export default function PermisosRoles() {
     }
     setPendingDecisionByChangeId((prev) => ({ ...prev, [change.id]: true }));
     try {
+      const targetProfile = schoolProfiles.find((profile) => profile.id === change.target_profile_id);
+      const approvesAdminDemotion = decision === 'approve' && targetProfile?.app_role === 'ADMIN' && change.payload?.to_role !== 'ADMIN';
+      if (approvesAdminDemotion && !hasOtherActiveAdminWithManagePermissions({
+        profiles: schoolProfiles,
+        actorProfileId: userProfile?.id,
+        targetProfileId: targetProfile?.id,
+      })) {
+        toast.error('Bloqueado: debe existir otro ADMIN activo con manage_permissions antes de aprobar este cambio.');
+        return;
+      }
       const updateData = {
         status: decision === 'approve' ? PENDING_CHANGE_STATUSES.APPROVED : PENDING_CHANGE_STATUSES.REJECTED,
         approver_profile_id: userProfile.id,
@@ -307,9 +333,18 @@ export default function PermisosRoles() {
       setErrorText('No se permiten overrides sobre usuarios ADMIN.');
       return;
     }
+    if (overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id) {
+      setErrorText('Bloqueado: no puedes remover tu propio manage_permissions.');
+      return;
+    }
     setErrorText('');
     setIsSavingOverride(true);
-    const payload = { ...overrideForm, school_id: userProfile.school_id, reason: reasonText.trim() };
+    const payload = {
+      ...overrideForm,
+      school_id: userProfile.school_id,
+      reason: reasonText.trim(),
+      actor_profile_id: userProfile.id,
+    };
     try {
       if (editingOverrideId) {
         await updatePermissionOverride(editingOverrideId, payload);
@@ -382,6 +417,8 @@ export default function PermisosRoles() {
             </select>
           </div>
           {isAdminRoleChange ? <p className="text-sm text-red-700">Cambio de alto riesgo: otorgar o revocar ADMIN.</p> : null}
+          {isSelfAdminDemotion ? <p className="text-sm text-red-700">Bloqueado: no puedes remover tu propio manage_permissions.</p> : null}
+          {isLastManagePermissionsAdminAtRisk ? <p className="text-sm text-red-700">Bloqueado: se requiere otro ADMIN activo para conservar manage_permissions.</p> : null}
           <Button variant={isAdminRoleChange ? 'destructive' : 'default'} onClick={handleRoleChange} disabled={isUpdatingRole}>
             {isUpdatingRole ? 'Guardando...' : 'Actualizar rol'}
           </Button>
@@ -437,6 +474,7 @@ export default function PermisosRoles() {
             </select>
           </div>
           {isOverrideTargetAdmin ? <p className="text-sm text-red-700">Bloqueado: no se permiten overrides para ADMIN.</p> : null}
+          {overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id ? <p className="text-sm text-red-700">Bloqueado: no puedes cambiar tu propio manage_permissions.</p> : null}
           <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar override' : 'Crear override'}</Button>
           <div className="overflow-auto border rounded">
             <table className="min-w-full text-sm">

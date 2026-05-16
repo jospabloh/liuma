@@ -53,6 +53,43 @@ export default function ConfiguracionInicial() {
     ),
     enabled: !!userProfile?.school_id,
   });
+  const { data: allProfiles = [] } = useQuery({
+    queryKey: ['allUserProfiles', userProfile?.school_id],
+    queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
+    enabled: !!userProfile?.school_id,
+  });
+  const { data: students = [] } = useQuery({
+    queryKey: ['setupStudents', userProfile?.school_id],
+    queryFn: () => base44.entities.Student.filter({ school_id: userProfile.school_id, is_active: true }),
+    enabled: !!userProfile?.school_id,
+  });
+  const { data: teacherAssignments = [] } = useQuery({
+    queryKey: ['setupTeacherAssignments', userProfile?.school_id],
+    queryFn: () => base44.entities.TeacherClassroom.filter({ school_id: userProfile.school_id, is_active: true }),
+    enabled: !!userProfile?.school_id,
+  });
+  const { data: parentLinks = [] } = useQuery({
+    queryKey: ['setupParentLinks', userProfile?.school_id],
+    queryFn: () => base44.entities.ParentStudent.filter({ school_id: userProfile.school_id, status: 'ACTIVE' }),
+    enabled: !!userProfile?.school_id,
+  });
+  const { data: concepts = [] } = useQuery({
+    queryKey: ['setupPaymentConcepts', userProfile?.school_id],
+    queryFn: () => base44.entities.PaymentConcept.filter({ school_id: userProfile.school_id, is_active: true }),
+    enabled: !!userProfile?.school_id,
+  });
+  const { data: emergencyContacts = [] } = useQuery({
+    queryKey: ['setupEmergencyContacts', userProfile?.school_id],
+    queryFn: async () => {
+      const allContacts = [];
+      for (const student of students) {
+        const rows = await base44.entities.EmergencyContact.filter({ student_id: student.id });
+        allContacts.push(...rows);
+      }
+      return allContacts;
+    },
+    enabled: !!userProfile?.school_id && students.length > 0,
+  });
 
   const createStepMutation = useMutation({
     mutationFn: (data) => base44.entities.SchoolSetupGuide.create(data),
@@ -116,6 +153,18 @@ export default function ConfiguracionInicial() {
         completed_at: !step.is_completed ? new Date().toISOString() : null
       }
     });
+  };
+  const handleReopenStep = async (step) => {
+    await updateStepMutation.mutateAsync({
+      id: step.id,
+      data: {
+        ...step,
+        is_completed: false,
+        reopened_by: user.id,
+        reopened_at: new Date().toISOString(),
+      }
+    });
+    toast.success('Paso reabierto para corrección');
   };
 
   const handleConfirmStep = async (step) => {
@@ -198,6 +247,19 @@ export default function ConfiguracionInicial() {
   const categories = ['GENERAL', 'GUARDERIA', 'ESCUELA', 'COLEGIO'];
   const completedSteps = steps.filter(s => s.is_completed).length;
   const progress = steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0;
+  const teachers = allProfiles.filter((p) => p.app_role === 'TEACHER');
+  const roleBootstrap = allProfiles.length > 0 ? Math.round((allProfiles.filter((p) => p.status === 'ACTIVE').length / allProfiles.length) * 100) : 0;
+  const teacherCoverage = teachers.length > 0 ? Math.round((new Set(teacherAssignments.map((a) => a.teacher_id)).size / teachers.length) * 100) : 0;
+  const parentCoverage = students.length > 0 ? Math.round((new Set(parentLinks.map((l) => l.student_id)).size / students.length) * 100) : 0;
+  const paymentConceptBaseline = concepts.length > 0 ? 100 : 0;
+  const emergencyCoverage = students.length > 0 ? Math.round((new Set(emergencyContacts.map((c) => c.student_id)).size / students.length) * 100) : 0;
+  const setupChecklist = [
+    { key: 'role_bootstrap', label: 'Role bootstrap completado', value: roleBootstrap },
+    { key: 'classroom_teacher', label: 'Cobertura maestro-salón', value: teacherCoverage },
+    { key: 'student_parent', label: 'Vinculación alumno-padre', value: parentCoverage },
+    { key: 'payment_concepts', label: 'Línea base conceptos de pago', value: paymentConceptBaseline },
+    { key: 'emergency_contacts', label: 'Cobertura contactos de emergencia', value: emergencyCoverage },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
@@ -223,6 +285,24 @@ export default function ConfiguracionInicial() {
           <p className="text-xs text-slate-500 mt-2">
             {completedSteps} de {steps.length} pasos completados
           </p>
+        </CardContent>
+      </Card>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Checklist operativo de arranque</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {setupChecklist.map((item) => (
+            <div key={item.key}>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-slate-700">{item.label}</span>
+                <span className="font-semibold text-slate-900">{item.value}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2">
+                <div className="bg-indigo-600 h-2 rounded-full transition-all" style={{ width: `${item.value}%` }} />
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
@@ -364,6 +444,16 @@ export default function ConfiguracionInicial() {
                               ✓ Confirmado vigente el {new Date(step.last_confirmed_at).toLocaleDateString('es-MX')}
                             </div>
                           )}
+                          {step.completed_at && (
+                            <div className="mt-2 text-xs text-slate-500">
+                              Completado por {step.completed_by || 'N/D'} el {new Date(step.completed_at).toLocaleDateString('es-MX')}
+                            </div>
+                          )}
+                          {step.reopened_at && (
+                            <div className="mt-1 text-xs text-amber-700">
+                              Reabierto por {step.reopened_by || 'N/D'} el {new Date(step.reopened_at).toLocaleDateString('es-MX')}
+                            </div>
+                          )}
                         </div>
                         <Button
                           variant="ghost"
@@ -384,6 +474,15 @@ export default function ConfiguracionInicial() {
                           >
                             <Check className="w-4 h-4 mr-2" />
                             Confirmar Vigencia
+                          </Button>
+                        )}
+                        {step.is_completed && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleReopenStep(step)}
+                          >
+                            Reabrir paso
                           </Button>
                         )}
                         <Dialog>

@@ -25,6 +25,10 @@ export default function AdminHome({ user, userProfile, subscription }) {
       status: 'PENDING' 
     }),
   });
+  const { data: allProfiles = [] } = useQuery({
+    queryKey: ['allProfiles', userProfile.school_id],
+    queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
+  });
 
   // Get school info
   const { data: school } = useQuery({
@@ -64,6 +68,34 @@ export default function AdminHome({ user, userProfile, subscription }) {
       return charges.filter(c => new Date(c.due_date) < new Date());
     },
   });
+  const { data: setupSteps = [] } = useQuery({
+    queryKey: ['homeSetupGuide', userProfile.school_id],
+    queryFn: () => base44.entities.SchoolSetupGuide.filter({ school_id: userProfile.school_id }),
+  });
+  const { data: teacherAssignments = [] } = useQuery({
+    queryKey: ['homeTeacherAssignments', userProfile.school_id],
+    queryFn: () => base44.entities.TeacherClassroom.filter({ school_id: userProfile.school_id, is_active: true }),
+  });
+  const { data: parentLinks = [] } = useQuery({
+    queryKey: ['homeParentLinks', userProfile.school_id],
+    queryFn: () => base44.entities.ParentStudent.filter({ school_id: userProfile.school_id, status: 'ACTIVE' }),
+  });
+  const { data: paymentConcepts = [] } = useQuery({
+    queryKey: ['homePaymentConcepts', userProfile.school_id],
+    queryFn: () => base44.entities.PaymentConcept.filter({ school_id: userProfile.school_id, is_active: true }),
+  });
+  const { data: emergencyContacts = [] } = useQuery({
+    queryKey: ['homeEmergencyContacts', userProfile.school_id, students.length],
+    queryFn: async () => {
+      const allContacts = [];
+      for (const student of students) {
+        const rows = await base44.entities.EmergencyContact.filter({ student_id: student.id });
+        allContacts.push(...rows);
+      }
+      return allContacts;
+    },
+    enabled: students.length > 0,
+  });
 
 
   const { data: unreadUrgentNotices = [] } = useQuery({
@@ -79,6 +111,13 @@ export default function AdminHome({ user, userProfile, subscription }) {
   const handleEmergencyAlert = () => {
     navigate(createPageUrl('AlertaEmergencia'));
   };
+  const completedSetupSteps = setupSteps.filter((step) => step.is_completed).length;
+  const setupProgress = setupSteps.length > 0 ? Math.round((completedSetupSteps / setupSteps.length) * 100) : 0;
+  const teacherProfiles = allProfiles.filter((p) => p.app_role === 'TEACHER' && p.status === 'ACTIVE');
+  const teacherCoverage = teacherProfiles.length > 0 ? Math.round((new Set(teacherAssignments.map((a) => a.teacher_id)).size / teacherProfiles.length) * 100) : 0;
+  const parentCoverage = students.length > 0 ? Math.round((new Set(parentLinks.map((l) => l.student_id)).size / students.length) * 100) : 0;
+  const emergencyCoverage = students.length > 0 ? Math.round((new Set(emergencyContacts.map((c) => c.student_id)).size / students.length) * 100) : 0;
+  const paymentReady = paymentConcepts.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -156,10 +195,10 @@ export default function AdminHome({ user, userProfile, subscription }) {
           <BigTile
             icon={CreditCard}
             title="Pagos"
-            subtitle={overdueCharges.length > 0 ? `${overdueCharges.length} vencidos` : 'Gestionar pagos'}
+            subtitle={paymentReady ? (overdueCharges.length > 0 ? `${overdueCharges.length} vencidos` : 'Gestionar pagos') : 'Bloqueado: define conceptos base'}
             badge={overdueCharges.length}
             badgeColor="bg-red-500"
-            href={createPageUrl('PagosAdmin')}
+            href={paymentReady ? createPageUrl('PagosAdmin') : undefined}
             color="from-rose-50 to-white"
             iconColor="text-rose-600"
             delay={0.25}
@@ -269,6 +308,22 @@ export default function AdminHome({ user, userProfile, subscription }) {
           <div className="bg-white rounded-xl p-4 border border-slate-100">
             <p className="text-3xl font-bold text-red-600">{overdueCharges.length}</p>
             <p className="text-sm text-slate-500">Pagos vencidos</p>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-slate-100">
+            <p className="text-3xl font-bold text-indigo-600">{setupProgress}%</p>
+            <p className="text-sm text-slate-500">Setup general</p>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-slate-100">
+            <p className="text-3xl font-bold text-sky-600">{teacherCoverage}%</p>
+            <p className="text-sm text-slate-500">Maestro-salón</p>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-slate-100">
+            <p className="text-3xl font-bold text-emerald-600">{parentCoverage}%</p>
+            <p className="text-sm text-slate-500">Alumno-padre</p>
+          </div>
+          <div className="bg-white rounded-xl p-4 border border-slate-100">
+            <p className="text-3xl font-bold text-orange-600">{emergencyCoverage}%</p>
+            <p className="text-sm text-slate-500">Contactos emergencia</p>
           </div>
         </motion.div>
 

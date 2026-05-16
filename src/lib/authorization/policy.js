@@ -60,6 +60,34 @@ function resolvePolicyDecision({ role, entity, action }) {
   return { allowed: false, reason: 'default_deny', precedence: 'default_deny' };
 }
 
+
+function findOverrides({ overrides = [], userProfileId, entity, action }) {
+  if (!userProfileId) return null;
+  return overrides.filter((override) => (
+    override.user_profile_id === userProfileId &&
+    override.resource === entity &&
+    override.action === action
+  ));
+}
+
+export function getEffectivePolicyDecision({ role, entity, action, userProfileId, overrides = [] }) {
+  const baseDecision = resolvePolicyDecision({ role, entity, action });
+  const matchingOverrides = findOverrides({ overrides, userProfileId, entity, action }) || [];
+  if (matchingOverrides.length === 0) return baseDecision;
+  if (matchingOverrides.some((override) => override.effect === 'deny')) {
+    return { allowed: false, reason: 'override_deny', precedence: 'override_deny' };
+  }
+
+  if (matchingOverrides.some((override) => override.effect === 'allow')) {
+    if (baseDecision.reason === 'explicit_deny') {
+      return baseDecision;
+    }
+    return { allowed: true, reason: 'override_allow', precedence: 'override_allow' };
+  }
+
+  return baseDecision;
+}
+
 export function canReadEntity(role, entity) {
   return resolvePolicyDecision({ role, entity, action: 'read' }).allowed;
 }

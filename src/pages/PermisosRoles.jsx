@@ -10,6 +10,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { createPageUrl } from '@/utils';
 import { toast } from 'sonner';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
+import {
+  createPermissionOverride,
+  deletePermissionOverride,
+  listPermissionOverrides,
+  updatePermissionOverride,
+} from '@/lib/authorization/overrides';
+import { getEffectivePolicyDecision } from '@/lib/authorization/policy';
 
 const RESOURCES = [
   'Students',
@@ -27,6 +34,7 @@ const RESOURCES = [
 ];
 
 const ACTIONS = ['view', 'add', 'edit', 'delete', 'approve', 'export', 'manage_permissions'];
+const POLICY_ACTIONS = ['read', 'write'];
 
 const DEFAULT_TEMPLATE = {
   name: 'Plantilla Admin',
@@ -64,6 +72,9 @@ export default function PermisosRoles() {
   const [selectedProfileId, setSelectedProfileId] = React.useState('');
   const [selectedRole, setSelectedRole] = React.useState('PARENT');
   const [isUpdatingRole, setIsUpdatingRole] = React.useState(false);
+  const [overrideForm, setOverrideForm] = React.useState({ user_profile_id: '', resource: 'Notice', action: 'read', effect: 'deny' });
+  const [editingOverrideId, setEditingOverrideId] = React.useState('');
+  const [isSavingOverride, setIsSavingOverride] = React.useState(false);
 
   const { data: schoolProfiles = [], refetch: refetchSchoolProfiles } = useQuery({
     queryKey: ['schoolUserProfiles', userProfile?.school_id],
@@ -76,10 +87,17 @@ export default function PermisosRoles() {
     queryFn: () => base44.entities.User.list(),
     enabled: !!schoolProfiles.length,
   });
+  const { data: permissionOverrides = [], refetch: refetchOverrides } = useQuery({
+    queryKey: ['permissionOverrides', userProfile?.school_id],
+    queryFn: () => listPermissionOverrides({ schoolId: userProfile.school_id }),
+    enabled: !!userProfile?.school_id,
+  });
 
   const activeTemplate = templates[activeTemplateIndex] || null;
   const selectedProfile = schoolProfiles.find((profile) => profile.id === selectedProfileId) || null;
   const isAdminRoleChange = selectedProfile && (selectedProfile.app_role === 'ADMIN' || selectedRole === 'ADMIN');
+  const overrideTargetProfile = schoolProfiles.find((profile) => profile.id === overrideForm.user_profile_id) || null;
+  const isOverrideTargetAdmin = overrideTargetProfile?.app_role === 'ADMIN';
 
   if (userLoading || profileLoading) {
     return <LoadingScreen message="Validando permisos..." />;
@@ -211,6 +229,59 @@ export default function PermisosRoles() {
       setIsUpdatingRole(false);
     }
   };
+  const handleSaveOverride = async () => {
+    if (!hasMutationReason(reasonText)) {
+      setErrorText('El motivo es obligatorio para cualquier cambio.');
+      return;
+    }
+    if (!overrideTargetProfile) {
+      setErrorText('Selecciona un usuario para el override.');
+      return;
+    }
+    if (isOverrideTargetAdmin) {
+      setErrorText('No se permiten overrides sobre usuarios ADMIN.');
+      return;
+    }
+    setErrorText('');
+    setIsSavingOverride(true);
+    const payload = { ...overrideForm, school_id: userProfile.school_id, reason: reasonText.trim() };
+    try {
+      if (editingOverrideId) {
+        await updatePermissionOverride(editingOverrideId, payload);
+      } else {
+        await createPermissionOverride(payload);
+      }
+      await refetchOverrides();
+      setReasonText('');
+      setEditingOverrideId('');
+      toast.success('Override guardado');
+    } catch {
+      toast.error('No se pudo guardar el override');
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
+
+  const handleEditOverride = (override) => {
+    setEditingOverrideId(override.id);
+    setOverrideForm({
+      user_profile_id: override.user_profile_id,
+      resource: override.resource,
+      action: override.action,
+      effect: override.effect,
+    });
+  };
+
+  const handleDeleteOverride = async (overrideId) => {
+    if (!hasMutationReason(reasonText)) {
+      setErrorText('El motivo es obligatorio para cualquier cambio.');
+      return;
+    }
+    await deletePermissionOverride(overrideId);
+    await refetchOverrides();
+    setReasonText('');
+    toast.success('Override eliminado');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -254,6 +325,46 @@ export default function PermisosRoles() {
           <label className="text-sm font-medium">Motivo del cambio (obligatorio)</label>
           <Textarea value={reasonText} onChange={(event) => setReasonText(event.target.value)} placeholder="Describe el motivo" />
           {errorText ? <p className="text-sm text-red-600">{errorText}</p> : null}
+        </div>
+        <div className="space-y-3 border rounded bg-white p-3">
+          <p className="font-medium text-slate-800">Overrides por usuario</p>
+          <div className="grid gap-3 md:grid-cols-4">
+            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={overrideForm.user_profile_id} onChange={(event) => setOverrideForm((prev) => ({ ...prev, user_profile_id: event.target.value }))}>
+              <option value="">Selecciona usuario</option>
+              {schoolProfiles.map((profile) => <option key={profile.id} value={profile.id}>{getUserName(profile.user_id)} ({profile.app_role})</option>)}
+            </select>
+            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={overrideForm.resource} onChange={(event) => setOverrideForm((prev) => ({ ...prev, resource: event.target.value }))}>
+              {['Notice', 'Attendance', 'Homework', 'DiaryEntry', 'ChargeItem', 'PaymentConcept', 'PaymentRecord'].map((resource) => <option key={resource} value={resource}>{resource}</option>)}
+            </select>
+            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={overrideForm.action} onChange={(event) => setOverrideForm((prev) => ({ ...prev, action: event.target.value }))}>
+              {POLICY_ACTIONS.map((action) => <option key={action} value={action}>{action}</option>)}
+            </select>
+            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={overrideForm.effect} onChange={(event) => setOverrideForm((prev) => ({ ...prev, effect: event.target.value }))}>
+              <option value="deny">deny</option>
+              <option value="allow">allow</option>
+            </select>
+          </div>
+          {isOverrideTargetAdmin ? <p className="text-sm text-red-700">Bloqueado: no se permiten overrides para ADMIN.</p> : null}
+          <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar override' : 'Crear override'}</Button>
+          <div className="overflow-auto border rounded">
+            <table className="min-w-full text-sm">
+              <thead><tr className="bg-slate-100"><th className="p-2 text-left">Usuario</th><th className="p-2 text-left">Recurso</th><th className="p-2 text-left">Acción</th><th className="p-2 text-left">Efecto</th><th className="p-2 text-left">Preview</th><th className="p-2 text-left">Acciones</th></tr></thead>
+              <tbody>
+                {permissionOverrides.map((override) => {
+                  const profile = schoolProfiles.find((entry) => entry.id === override.user_profile_id);
+                  const preview = getEffectivePolicyDecision({ role: profile?.app_role, entity: override.resource, action: override.action, userProfileId: override.user_profile_id, overrides: permissionOverrides });
+                  return (
+                    <tr key={override.id} className="border-t">
+                      <td className="p-2">{profile ? `${getUserName(profile.user_id)} (${profile.app_role})` : override.user_profile_id}</td>
+                      <td className="p-2">{override.resource}</td><td className="p-2">{override.action}</td><td className="p-2">{override.effect}</td>
+                      <td className="p-2">{preview.allowed ? 'Permitido' : 'Denegado'} ({preview.precedence})</td>
+                      <td className="p-2 space-x-2"><Button variant="outline" onClick={() => handleEditOverride(override)}>Editar</Button><Button variant="destructive" onClick={() => handleDeleteOverride(override.id)}>Eliminar</Button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">

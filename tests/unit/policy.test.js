@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '../../src/lib/authorization/policy.js';
+import {
+  canReadEntity,
+  canWriteEntity,
+  buildScopedFilter,
+  filterByRowLevel,
+  getEffectivePolicyDecision,
+} from '../../src/lib/authorization/policy.js';
 import { actors, rows } from '../fixtures/authorization-fixtures.js';
 
 test('denies unknown entities by default', () => {
@@ -53,4 +59,19 @@ test('builds teacher scoped filters with classroom restriction', () => {
     school_id: 'school-a',
     classroom_id: { $in: ['class-a1'] },
   });
+});
+
+test('applies deny override precedence for effective permissions', () => {
+  const decision = getEffectivePolicyDecision({
+    role: 'TEACHER',
+    entity: 'Notice',
+    action: 'read',
+    userProfileId: 'profile-1',
+    overrides: [
+      { user_profile_id: 'profile-1', resource: 'Notice', action: 'read', effect: 'deny' },
+      { user_profile_id: 'profile-1', resource: 'Notice', action: 'read', effect: 'allow' },
+    ],
+  });
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.precedence, 'override_deny');
 });

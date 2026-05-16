@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar, Clock, MapPin, DollarSign, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -29,17 +30,13 @@ export default function EventosParaPadres() {
     queryFn: () => base44.auth.me(),
   });
 
-  const { data: students } = useQuery({
-    queryKey: ['linkedStudents', user?.data?.linked_student_ids],
-    queryFn: async () => {
-      const studentPromises = user.data.linked_student_ids.map(id =>
-        base44.entities.Student.filter({ id })
-      );
-      const results = await Promise.all(studentPromises);
-      return results.flat();
-    },
-    enabled: !!user?.data?.linked_student_ids?.length,
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+    queryKey: ['linkedStudents', user?.id],
+    queryFn: () => getLinkedStudents(user),
+    enabled: !!user,
   });
+
+  const students = linkedStudents.students;
 
   const { data: events, isLoading } = useQuery({
     queryKey: ['eventsRequiringConfirmation', user?.data?.school_id],

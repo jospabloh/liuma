@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -28,17 +29,13 @@ export default function SolicitarAusencia() {
     queryFn: () => base44.auth.me(),
   });
 
-  const { data: students } = useQuery({
-    queryKey: ['linkedStudents', user?.data?.linked_student_ids],
-    queryFn: async () => {
-      const studentPromises = user.data.linked_student_ids.map(id =>
-        base44.entities.Student.filter({ id })
-      );
-      const results = await Promise.all(studentPromises);
-      return results.flat();
-    },
-    enabled: !!user?.data?.linked_student_ids?.length,
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+    queryKey: ['linkedStudents', user?.id],
+    queryFn: () => getLinkedStudents(user),
+    enabled: !!user,
   });
+
+  const students = linkedStudents.students;
 
   const { data: notifications, isLoading } = useQuery({
     queryKey: ['absenceNotifications', user?.id],

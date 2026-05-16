@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 
 export default function MisHijos() {
   const navigate = useNavigate();
@@ -21,30 +22,14 @@ export default function MisHijos() {
     queryFn: () => base44.auth.me(),
   });
 
-  const { data: parentLinks = [], isLoading } = useQuery({
-    queryKey: ['parentLinks', user?.id],
-    queryFn: () => base44.entities.ParentStudent.filter({ 
-      parent_id: user.id, 
-      status: 'ACTIVE' 
-    }),
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] }, isLoading } = useQuery({
+    queryKey: ['linkedStudents', user?.id],
+    queryFn: () => getLinkedStudents(user),
     enabled: !!user,
   });
 
-  const studentIds = parentLinks.map(l => l.student_id);
-
-  const { data: students = [] } = useQuery({
-    queryKey: ['students', studentIds],
-    queryFn: async () => {
-      if (studentIds.length === 0) return [];
-      const results = [];
-      for (const id of studentIds) {
-        const studentList = await base44.entities.Student.filter({ id });
-        if (studentList.length > 0) results.push(studentList[0]);
-      }
-      return results;
-    },
-    enabled: studentIds.length > 0,
-  });
+  const students = linkedStudents.students;
+  const studentIds = linkedStudents.studentIds;
 
   const { data: classrooms = [] } = useQuery({
     queryKey: ['classrooms', students.map(s => s.classroom_id)],

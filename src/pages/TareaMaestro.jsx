@@ -16,7 +16,8 @@ import { Label } from "@/components/ui/label";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
-import { loadClassroomsByIds, loadHomeworkByClassroomIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
+import { loadHomeworkByClassroomIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
+import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
 import {
   Dialog,
   DialogContent,
@@ -56,22 +57,14 @@ export default function TareaMaestro() {
     enabled: !!user,
   });
 
-  const { data: teacherClassrooms = [] } = useQuery({
-    queryKey: ['teacherClassrooms', user?.id],
-    queryFn: () => base44.entities.TeacherClassroom.filter({ 
-      teacher_id: user.id,
-      is_active: true 
-    }),
+  const { data: linkedClassrooms = { classrooms: [], classroomIds: [] } } = useQuery({
+    queryKey: ['linkedClassrooms', user?.id],
+    queryFn: () => getLinkedClassrooms(user),
     enabled: !!user,
   });
 
-  const classroomIds = teacherClassrooms.map(tc => tc.classroom_id);
-
-  const { data: classrooms = [] } = useQuery({
-    queryKey: normalizedIdQueryKey('classrooms', classroomIds),
-    queryFn: async () => (await loadClassroomsByIds(classroomIds)).items,
-    enabled: classroomIds.length > 0,
-  });
+  const classroomIds = linkedClassrooms.classroomIds;
+  const classrooms = linkedClassrooms.classrooms;
 
   const { data: homework = [], isLoading } = useQuery({
     queryKey: normalizedIdQueryKey('teacherHomework', classroomIds),

@@ -12,21 +12,19 @@ import PaymentReminderBanner from '@/components/subscription/PaymentReminderBann
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 
 export default function ParentHome({ user, userProfile, subscription }) {
   const [showLumi, setShowLumi] = useState(false);
   const today = format(new Date(), 'yyyy-MM-dd');
 
   // Get linked students
-  const { data: parentLinks = [] } = useQuery({
-    queryKey: ['parentLinks', user.id],
-    queryFn: () => base44.entities.ParentStudent.filter({ 
-      parent_id: user.id, 
-      status: 'ACTIVE' 
-    }),
+  const { data: linkedStudents = { students: [], studentIds: [] } } = useQuery({
+    queryKey: ['linkedStudents', user.id],
+    queryFn: () => getLinkedStudents(user),
   });
 
-  const studentIds = parentLinks.map(l => l.student_id);
+  const studentIds = linkedStudents.studentIds;
 
   // Get urgent notices
   const { data: notices = [] } = useQuery({
@@ -108,7 +106,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
           <BigTile
             icon={Users}
             title="Mis hijos"
-            subtitle={`${parentLinks.length} vinculado${parentLinks.length !== 1 ? 's' : ''}`}
+            subtitle={`${studentIds.length} vinculado${studentIds.length !== 1 ? 's' : ''}`}
             href={createPageUrl('MisHijos')}
             color="from-blue-50 to-white"
             iconColor="text-blue-600"

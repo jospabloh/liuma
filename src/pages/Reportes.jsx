@@ -20,7 +20,7 @@ export default function Reportes() {
 
   const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
   const { data: userProfile } = useQuery({ queryKey: ['userProfile', user?.id], queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0], enabled: !!user });
-  const role = userProfile?.role || 'PARENT';
+  const role = userProfile?.app_role || 'PARENT';
 
   const { data: students = [] } = useQuery({
     queryKey: ['allStudents', userProfile?.school_id],

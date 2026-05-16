@@ -48,3 +48,8 @@ export async function getLinkedStudents(user) {
     orphanedLinkIds,
   };
 }
+
+export async function getLinkedStudentIds(user) {
+  const { studentIds } = await getLinkedStudents(user);
+  return studentIds;
+}

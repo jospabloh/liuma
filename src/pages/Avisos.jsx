@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
+import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import {
   Dialog,
   DialogContent,
@@ -74,17 +75,10 @@ export default function Avisos() {
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['notices', userProfile?.school_id, classroomIds, studentIds],
     queryFn: async () => {
-      const allNotices = await base44.entities.Notice.filter({ 
-        school_id: userProfile.school_id 
-      }, '-created_date', 50);
-      
-      // Filter notices based on scope
-      return allNotices.filter(notice => {
-        if (notice.scope === 'SCHOOL') return true;
-        if (notice.scope === 'CLASSROOM' && classroomIds.includes(notice.classroom_id)) return true;
-        if (notice.scope === 'STUDENT' && studentIds.includes(notice.student_id)) return true;
-        return false;
-      });
+      if (!canReadEntity(userProfile?.app_role, 'Notice')) return [];
+      const scopedFilter = buildScopedFilter({ role: userProfile?.app_role, entity: 'Notice', schoolId: userProfile?.school_id, classroomIds, studentIds });
+      const allNotices = await base44.entities.Notice.filter(scopedFilter || { school_id: userProfile.school_id }, '-created_date', 50);
+      return filterByRowLevel({ role: userProfile?.app_role, entity: 'Notice', rows: allNotices, classroomIds, studentIds });
     },
     enabled: !!userProfile,
   });

@@ -40,7 +40,11 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         agent_name: "lumi",
         metadata: {
           name: "Chat con Lumi",
-          user_role: userProfile?.app_role || 'PARENT'
+          user_role: userProfile?.app_role || 'PARENT',
+          authorization_scope: {
+            school_id: userProfile?.school_id || null,
+            role: userProfile?.app_role || 'PARENT'
+          }
         }
       });
       setConversationId(conversation.id);

@@ -10,6 +10,7 @@ import { CreditCard, CheckCircle, Clock, AlertTriangle, Calendar } from 'lucide-
 import { format, isPast, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
+import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -49,7 +50,7 @@ export default function Pagos() {
   const { data: students = [] } = useQuery({
     queryKey: ['students', studentIds],
     queryFn: async () => {
-      if (studentIds.length === 0) return [];
+      if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'ChargeItem')) return [];
       const results = [];
       for (const id of studentIds) {
         const studentList = await base44.entities.Student.filter({ id });
@@ -63,10 +64,9 @@ export default function Pagos() {
   const { data: charges = [], isLoading } = useQuery({
     queryKey: ['charges', studentIds],
     queryFn: async () => {
-      if (studentIds.length === 0) return [];
-      const allCharges = await base44.entities.ChargeItem.filter({ 
-        school_id: userProfile.school_id 
-      }, '-due_date');
+      if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'ChargeItem')) return [];
+      const scopedFilter = buildScopedFilter({ role: userProfile?.app_role, entity: 'ChargeItem', schoolId: userProfile?.school_id, studentIds });
+      const allCharges = await base44.entities.ChargeItem.filter(scopedFilter || { school_id: userProfile.school_id }, '-due_date');
       
       // Actualizar automáticamente estados de cargos vencidos
       const now = new Date();

@@ -11,6 +11,7 @@ import { format, addDays, subDays, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
+import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import {
   Dialog,
   DialogContent,
@@ -53,7 +54,7 @@ export default function Bitacora() {
   const { data: students = [] } = useQuery({
     queryKey: ['students', studentIds],
     queryFn: async () => {
-      if (studentIds.length === 0) return [];
+      if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'DiaryEntry')) return [];
       const results = [];
       for (const id of studentIds) {
         const studentList = await base44.entities.Student.filter({ id });
@@ -69,7 +70,7 @@ export default function Bitacora() {
   const { data: diaryEntries = [], isLoading } = useQuery({
     queryKey: ['diaryEntries', studentIds, dateStr],
     queryFn: async () => {
-      if (studentIds.length === 0) return [];
+      if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'DiaryEntry')) return [];
       const entries = await base44.entities.DiaryEntry.filter({ 
         date: dateStr,
         school_id: userProfile?.school_id

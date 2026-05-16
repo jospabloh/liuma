@@ -12,6 +12,7 @@ import LoadingScreen from "@/components/ui/LoadingScreen";
 import { format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { canWriteEntity } from '@/lib/authorization/policy';
 
 const statusConfig = {
   present: { label: 'Presente', icon: CheckCircle2, color: 'bg-green-500', textColor: 'text-green-700', bgColor: 'bg-green-50' },
@@ -95,6 +96,7 @@ export default function Asistencia() {
 
   const markAttendanceMutation = useMutation({
     mutationFn: async ({ student, status, reason = '' }) => {
+      if (!canWriteEntity(userProfile?.app_role, 'Attendance')) throw new Error('No autorizado');
       const existingRecord = attendanceRecords.find(r => r.student_id === student.id);
       
       const data = {

@@ -9,7 +9,10 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/**/*.test.js",
+    "test:permissions": "node --test tests/unit/policy.test.js tests/integration/key-pages.test.js",
+    "release:gate": "npm run test:permissions"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.28",

@@ -23,6 +23,7 @@ export function buildPermissionChangeContext({
   actorProfileId,
   reviewerProfileId,
   reason,
+  snapshot,
 }) {
   return {
     change_type: changeType,
@@ -34,6 +35,7 @@ export function buildPermissionChangeContext({
     reason: reason || null,
     changed_at: new Date().toISOString(),
     reviewed_at: reviewerProfileId ? new Date().toISOString() : null,
+    snapshot: snapshot || { before, after },
   };
 }
 

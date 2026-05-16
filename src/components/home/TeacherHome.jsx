@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { ClipboardList, BookOpen, Bell, Sparkles, CheckCircle, AlertCircle, Users, Calendar } from 'lucide-react';
+import { ClipboardList, BookOpen, Bell, Sparkles, CheckCircle, AlertCircle, Users, Calendar, ListChecks } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -249,6 +249,15 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             color="from-blue-50 to-white"
             iconColor="text-blue-600"
             delay={0.3}
+          />
+          <BigTile
+            icon={ListChecks}
+            title="Operación Diaria"
+            subtitle="Mi timeline del día"
+            href={createPageUrl('OperacionDiaria')}
+            color="from-lime-50 to-white"
+            iconColor="text-lime-600"
+            delay={0.35}
           />
         </div>
 

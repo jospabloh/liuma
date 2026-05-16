@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag, CheckSquare, CalendarX } from 'lucide-react';
+import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag, CheckSquare, CalendarX, ListChecks } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -189,6 +189,15 @@ export default function ParentHome({ user, userProfile, subscription }) {
             color="from-orange-50 to-white"
             iconColor="text-orange-600"
             delay={0.5}
+          />
+          <BigTile
+            icon={ListChecks}
+            title="Operación Diaria"
+            subtitle="Timeline de mis hijos"
+            href={createPageUrl('OperacionDiaria')}
+            color="from-lime-50 to-white"
+            iconColor="text-lime-600"
+            delay={0.55}
           />
         </div>
 

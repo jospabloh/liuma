@@ -28,7 +28,8 @@
  *
  *   import Home from './pages/Home';
  *   import Settings from './pages/Settings';
- *   import __Layout from './Layout.jsx';
+ *   import OperacionDiaria from './pages/OperacionDiaria';
+import __Layout from './Layout.jsx';
  *
  *   export const PAGES = {
  *       "Home": Home,
@@ -77,6 +78,7 @@ import ResumenAsistencia from './pages/ResumenAsistencia';
 import SolicitarAusencia from './pages/SolicitarAusencia';
 import Tarea from './pages/Tarea';
 import TareaMaestro from './pages/TareaMaestro';
+import OperacionDiaria from './pages/OperacionDiaria';
 import __Layout from './Layout.jsx';
 
 
@@ -103,6 +105,7 @@ export const PAGES = {
     "GestionSalon": GestionSalon,
     "Home": Home,
     "MisHijos": MisHijos,
+    "OperacionDiaria": OperacionDiaria,
     "Pagos": Pagos,
     "PagosAdmin": PagosAdmin,
     "PedidosUniformes": PedidosUniformes,

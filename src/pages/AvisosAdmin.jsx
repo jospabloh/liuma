@@ -84,6 +84,37 @@ export default function AvisosAdmin() {
   const createNoticeMutation = useMutation({
     mutationFn: async (data) => {
       const notice = await base44.entities.Notice.create(data);
+
+      const activeLinks = await base44.entities.ParentStudent.filter({ status: 'ACTIVE' });
+      const schoolStudentIds = new Set(students.map((student) => student.id));
+      const recipients = activeLinks.filter((link) => {
+        if (!schoolStudentIds.has(link.student_id)) return false;
+        if (data.scope === 'SCHOOL') return true;
+        if (data.scope === 'STUDENT') return link.student_id === data.student_id;
+        if (data.scope === 'CLASSROOM') {
+          const linkedStudent = students.find((student) => student.id === link.student_id);
+          return linkedStudent?.classroom_id === data.classroom_id;
+        }
+        return false;
+      });
+
+      const escalationDueAt = data.priority === 'URGENT'
+        ? new Date(Date.now() + (24 * 60 * 60 * 1000)).toISOString()
+        : null;
+
+      await Promise.all(
+        recipients.map((recipient) => base44.entities.NoticeDelivery.create({
+          school_id: userProfile.school_id,
+          notice_id: notice.id,
+          recipient_user_id: recipient.parent_id,
+          recipient_role: 'PARENT',
+          student_id: recipient.student_id,
+          classroom_id: data.classroom_id || null,
+          status: 'SENT',
+          sent_at: notice.sent_at || new Date().toISOString(),
+          escalation_due_at: escalationDueAt,
+        }))
+      );
       
       await base44.entities.AuditLog.create({
         school_id: userProfile.school_id,
@@ -92,7 +123,7 @@ export default function AvisosAdmin() {
         action: 'NOTICE_SENT',
         target_type: 'Notice',
         target_id: notice.id,
-        details: { scope: data.scope, priority: data.priority }
+        details: { scope: data.scope, priority: data.priority, recipients: recipients.length }
       });
       
       return notice;

@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import NoticeCard from '@/components/notices/NoticeCard';
-import { Bell, Filter } from 'lucide-react';
+import { Bell, Check, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,9 @@ import {
 export default function Avisos() {
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterReadState, setFilterReadState] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const queryClient = useQueryClient();
   
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -76,9 +78,48 @@ export default function Avisos() {
     enabled: !!userProfile,
   });
 
-  const filteredNotices = filterPriority === 'all' 
-    ? notices 
-    : notices.filter(n => n.priority === filterPriority);
+
+
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ['noticeDeliveries', user?.id, userProfile?.school_id],
+    queryFn: async () => {
+      const rows = await base44.entities.NoticeDelivery.filter({
+        school_id: userProfile.school_id,
+        recipient_user_id: user.id,
+      }, '-created_date', 100);
+
+      const escalated = rows.filter((row) =>
+        row.status !== 'ACKNOWLEDGED' && row.escalation_due_at && new Date(row.escalation_due_at) < new Date() && row.escalation_status !== 'ESCALATED'
+      );
+
+      await Promise.all(escalated.map((row) => base44.entities.NoticeDelivery.update(row.id, { escalation_status: 'ESCALATED' })));
+      return rows.map((row) => ({
+        ...row,
+        escalation_status: row.escalation_status || (row.escalation_due_at && new Date(row.escalation_due_at) < new Date() && row.status !== 'ACKNOWLEDGED' ? 'ESCALATED' : null),
+      }));
+    },
+    enabled: !!user && !!userProfile,
+  });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: async (delivery) => base44.entities.NoticeDelivery.update(delivery.id, {
+      status: 'READ',
+      read_at: delivery.read_at || new Date().toISOString(),
+    }),
+    onSuccess: () => queryClient.invalidateQueries(['noticeDeliveries']),
+  });
+  const noticesById = useMemo(() => new Map(notices.map((notice) => [notice.id, notice])), [notices]);
+  const noticeRows = deliveries
+    .map((delivery) => ({ notice: noticesById.get(delivery.notice_id), delivery }))
+    .filter((item) => !!item.notice);
+
+  const filteredNotices = noticeRows.filter(({ notice, delivery }) => {
+    const priorityOk = filterPriority === 'all' || notice.priority === filterPriority;
+    const readOk = filterReadState === 'all'
+      || (filterReadState === 'unread' && delivery.status === 'SENT')
+      || (filterReadState === 'read' && (delivery.status === 'READ' || delivery.status === 'ACKNOWLEDGED'));
+    return priorityOk && readOk;
+  });
 
   if (isLoading) return <LoadingScreen message="Cargando avisos..." />;
 
@@ -117,6 +158,16 @@ export default function Avisos() {
               <SelectItem value="NORMAL">Solo normales</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={filterReadState} onValueChange={setFilterReadState}>
+            <SelectTrigger className="mt-2">
+              <SelectValue placeholder="Filtrar por lectura" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="unread">No leídos</SelectItem>
+              <SelectItem value="read">Leídos</SelectItem>
+            </SelectContent>
+          </Select>
         </motion.div>
       )}
 
@@ -128,17 +179,29 @@ export default function Avisos() {
         />
       ) : (
         <div className="space-y-4">
-          {filteredNotices.map((notice, index) => (
+          {filteredNotices.map(({ notice, delivery }, index) => (
             <motion.div
               key={notice.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
             >
-              <NoticeCard
-                notice={notice}
-                onClick={() => setSelectedNotice(notice)}
-              />
+              <div className="space-y-2">
+                <NoticeCard
+                  notice={notice}
+                  onClick={() => setSelectedNotice({ ...notice, delivery })}
+                />
+                {delivery.status === 'SENT' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => markAsReadMutation.mutate(delivery)}
+                    className="w-full"
+                  >
+                    <Check className="w-4 h-4 mr-1" /> Marcar como leído
+                  </Button>
+                )}
+              </div>
             </motion.div>
           ))}
         </div>
@@ -161,6 +224,12 @@ export default function Avisos() {
                 <p className="text-slate-700 whitespace-pre-wrap">{selectedNotice.content}</p>
               </div>
               
+              {selectedNotice.delivery?.escalation_status === 'ESCALATED' && (
+                <p className="text-xs text-red-600 text-center font-medium">
+                  Aviso urgente escalado por falta de acuse
+                </p>
+              )}
+
               {selectedNotice.author_name && (
                 <p className="text-xs text-slate-400 text-center">
                   Enviado por {selectedNotice.author_name}

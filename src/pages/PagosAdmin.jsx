@@ -165,6 +165,10 @@ export default function PagosAdmin() {
 
   const handleCreateCharge = async (e) => {
     e.preventDefault();
+    if (concepts.length === 0) {
+      toast.error('Debes configurar al menos un concepto de pago antes de crear cargos.');
+      return;
+    }
     const concept = concepts.find(c => c.id === chargeForm.concept_id);
     
     // Buscar descuentos aplicables
@@ -304,6 +308,11 @@ export default function PagosAdmin() {
         showBack
         backTo={createPageUrl('Home')}
       />
+      {concepts.length === 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Módulo de cargos y pagos bloqueado hasta definir la línea base de conceptos de pago.
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-3 gap-3 mb-6">

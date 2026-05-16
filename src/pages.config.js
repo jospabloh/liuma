@@ -74,6 +74,7 @@ import MisHijos from './pages/MisHijos';
 import Pagos from './pages/Pagos';
 import PagosAdmin from './pages/PagosAdmin';
 import PedidosUniformes from './pages/PedidosUniformes';
+import PermisosRoles from './pages/PermisosRoles';
 import Reportes from './pages/Reportes';
 import ResumenAsistencia from './pages/ResumenAsistencia';
 import SolicitarAusencia from './pages/SolicitarAusencia';
@@ -110,6 +111,7 @@ export const PAGES = {
     "OperacionDiaria": OperacionDiaria,
     "Pagos": Pagos,
     "PagosAdmin": PagosAdmin,
+    "PermisosRoles": PermisosRoles,
     "PedidosUniformes": PedidosUniformes,
     "Reportes": Reportes,
     "ResumenAsistencia": ResumenAsistencia,

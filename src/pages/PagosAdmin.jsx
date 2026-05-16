@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
+import { notificationService } from '@/lib/notifications/service';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -72,6 +73,14 @@ export default function PagosAdmin() {
       is_active: true 
     }),
     enabled: !!userProfile,
+  });
+  const { data: school } = useQuery({
+    queryKey: ['school', userProfile?.school_id],
+    queryFn: async () => {
+      const schools = await base44.entities.School.filter({ id: userProfile.school_id });
+      return schools[0];
+    },
+    enabled: !!userProfile?.school_id,
   });
 
   const { data: charges = [], isLoading } = useQuery({
@@ -264,25 +273,23 @@ export default function PagosAdmin() {
             for (const link of parentLinks) {
               const parent = allUsers.find(u => u.id === link.parent_id);
               if (parent) {
-                await base44.integrations.Core.SendEmail({
-                  from_name: 'LIUMA - Recordatorio de Pago',
-                  to: parent.email,
-                  subject: `Recordatorio: Pago próximo a vencer - ${student.first_name}`,
-                  body: `
-                    <h2>Recordatorio de Pago</h2>
-                    <p>Estimado padre/madre de familia:</p>
-                    <p>Le recordamos que tiene un pago pendiente que vence pronto:</p>
-                    
-                    <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fbbf24; margin: 16px 0;">
-                      <p><strong>Estudiante:</strong> ${student.first_name} ${student.last_name}</p>
-                      <p><strong>Concepto:</strong> ${charge.concept_name}</p>
-                      <p><strong>Monto:</strong> $${charge.amount?.toLocaleString()}</p>
-                      <p><strong>Fecha de vencimiento:</strong> ${format(new Date(charge.due_date), "d 'de' MMMM, yyyy", { locale: es })}</p>
-                    </div>
-                    
-                    <p>Por favor, realice su pago antes de la fecha de vencimiento para evitar recargos.</p>
-                    <p>Atentamente,<br>Equipo LIUMA</p>
-                  `
+                await notificationService.sendByEvent({
+                  eventType: 'payment_due',
+                  schoolId: userProfile.school_id,
+                  actorUserId: user.id,
+                  recipients: [{
+                    user_id: parent.id,
+                    app_role: 'PARENT',
+                    email: parent.email,
+                    school_notification_preferences: school?.notification_preferences || {},
+                  }],
+                  templateContext: {
+                    studentName: `${student.first_name} ${student.last_name}`,
+                    conceptName: charge.concept_name,
+                    amountLabel: `$${charge.amount?.toLocaleString()}`,
+                    dueDateLabel: format(new Date(charge.due_date), "d 'de' MMMM, yyyy", { locale: es }),
+                  },
+                  channels: ['email', 'in_app'],
                 });
               }
             }
@@ -298,7 +305,7 @@ export default function PagosAdmin() {
     if (pendingCharges.length > 0 && students.length > 0) {
       sendReminders();
     }
-  }, [pendingCharges, students]);
+  }, [pendingCharges, students, school, userProfile, user]);
 
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
+import { notificationService } from '@/lib/notifications/service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,16 +54,40 @@ export default function AlertaEmergencia() {
 
   const sendAlertMutation = useMutation({
     mutationFn: async () => {
-      const notice = await base44.entities.Notice.create({
+      const alertMessage = message || 'Se ha activado una alerta de emergencia. Por favor, siga las instrucciones del personal de la escuela.';
+      const targetProfiles = await base44.entities.UserProfile.filter({
         school_id: userProfile.school_id,
-        scope: 'SCHOOL',
-        title: '🚨 ALERTA DE EMERGENCIA',
-        content: message || 'Se ha activado una alerta de emergencia. Por favor, siga las instrucciones del personal de la escuela.',
+        status: 'ACTIVE',
+      });
+      const allUsers = await base44.entities.User.list();
+      const recipients = targetProfiles
+        .filter((profile) => ['PARENT', 'TEACHER'].includes(profile.app_role))
+        .map((profile) => {
+          const account = allUsers.find((u) => u.id === profile.user_id);
+          return {
+            user_id: profile.user_id,
+            app_role: profile.app_role,
+            email: account?.email,
+            notification_preferences: profile.notification_preferences || {},
+            school_notification_preferences: school?.notification_preferences || {},
+          };
+        });
+
+      const title = '🚨 ALERTA DE EMERGENCIA';
+      await notificationService.sendHighPriorityAlert({
+        schoolId: userProfile.school_id,
+        title,
+        content: alertMessage,
+        actorUserId: user.id,
+      });
+      await notificationService.sendByEvent({
+        eventType: 'emergency_alert',
+        schoolId: userProfile.school_id,
+        actorUserId: user.id,
+        recipients,
+        templateContext: { schoolName: school?.name, message: alertMessage },
+        channels: ['email', 'in_app'],
         priority: 'URGENT',
-        is_emergency: true,
-        author_id: user.id,
-        author_name: user.full_name,
-        sent_at: new Date().toISOString(),
       });
 
       await base44.entities.AuditLog.create({
@@ -71,11 +96,10 @@ export default function AlertaEmergencia() {
         user_email: user.email,
         action: 'EMERGENCY_ALERT',
         target_type: 'Notice',
-        target_id: notice.id,
-        details: { message }
+        details: { message: alertMessage }
       });
 
-      return notice;
+      return true;
     },
     onSuccess: () => {
       setSent(true);

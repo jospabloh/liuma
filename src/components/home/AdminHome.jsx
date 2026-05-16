@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings } from 'lucide-react';
+import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
@@ -235,6 +235,15 @@ export default function AdminHome({ user, userProfile, subscription }) {
             color="from-pink-50 to-white"
             iconColor="text-pink-600"
             delay={0.65}
+          />
+          <BigTile
+            icon={ListChecks}
+            title="Operación Diaria"
+            subtitle="Timeline combinado"
+            href={createPageUrl('OperacionDiaria')}
+            color="from-lime-50 to-white"
+            iconColor="text-lime-600"
+            delay={0.7}
           />
         </div>
 

@@ -11,6 +11,7 @@ import { format, isToday, isTomorrow, addDays, startOfWeek, endOfWeek } from 'da
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createPageUrl } from '@/utils';
+import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import {
   Dialog,
   DialogContent,
@@ -50,7 +51,7 @@ export default function Tarea() {
   const { data: students = [] } = useQuery({
     queryKey: ['students', studentIds],
     queryFn: async () => {
-      if (studentIds.length === 0) return [];
+      if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'Homework')) return [];
       const results = [];
       for (const id of studentIds) {
         const studentList = await base44.entities.Student.filter({ id });

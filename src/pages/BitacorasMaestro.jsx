@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
+import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import { useNavigate } from 'react-router-dom';
 
 export default function BitacorasMaestro() {

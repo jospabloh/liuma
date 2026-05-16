@@ -37,3 +37,11 @@ Open [Base44.com](http://Base44.com) and click on Publish.
 Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
 
 Support: [https://app.base44.com/support](https://app.base44.com/support)
+
+## Deno permission checks
+
+Run the Deno-only checks (scoped to `deno/`):
+
+- `deno task fmt`
+- `deno task lint`
+- `deno task test`

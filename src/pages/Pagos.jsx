@@ -10,6 +10,7 @@ import { CreditCard, CheckCircle, Clock, AlertTriangle, Calendar } from 'lucide-
 import { format, isPast, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import { Badge } from "@/components/ui/badge";
 import {
@@ -36,30 +37,14 @@ export default function Pagos() {
     enabled: !!user,
   });
 
-  const { data: parentLinks = [] } = useQuery({
-    queryKey: ['parentLinks', user?.id],
-    queryFn: () => base44.entities.ParentStudent.filter({ 
-      parent_id: user.id, 
-      status: 'ACTIVE' 
-    }),
-    enabled: !!user,
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+    queryKey: ['linkedStudents', user?.id],
+    queryFn: () => getLinkedStudents(user),
+    enabled: !!user && canReadEntity(userProfile?.app_role, 'ChargeItem'),
   });
 
-  const studentIds = parentLinks.map(l => l.student_id);
-
-  const { data: students = [] } = useQuery({
-    queryKey: ['students', studentIds],
-    queryFn: async () => {
-      if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'ChargeItem')) return [];
-      const results = [];
-      for (const id of studentIds) {
-        const studentList = await base44.entities.Student.filter({ id });
-        if (studentList.length > 0) results.push(studentList[0]);
-      }
-      return results;
-    },
-    enabled: studentIds.length > 0,
-  });
+  const students = linkedStudents.students;
+  const studentIds = linkedStudents.studentIds;
 
   const { data: charges = [], isLoading } = useQuery({
     queryKey: ['charges', studentIds],

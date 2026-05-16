@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShoppingBag, Plus, Trash2, Download, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -35,17 +36,13 @@ export default function PedidosUniformes() {
     queryFn: () => base44.auth.me(),
   });
 
-  const { data: students } = useQuery({
-    queryKey: ['linkedStudents', user?.data?.linked_student_ids],
-    queryFn: async () => {
-      const studentPromises = user.data.linked_student_ids.map(id =>
-        base44.entities.Student.filter({ id })
-      );
-      const results = await Promise.all(studentPromises);
-      return results.flat();
-    },
-    enabled: !!user?.data?.linked_student_ids?.length,
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+    queryKey: ['linkedStudents', user?.id],
+    queryFn: () => getLinkedStudents(user),
+    enabled: !!user,
   });
+
+  const students = linkedStudents.students;
 
   const { data: catalog } = useQuery({
     queryKey: ['uniformCatalog', user?.data?.school_id],

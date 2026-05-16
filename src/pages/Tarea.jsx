@@ -11,6 +11,7 @@ import { format, isToday, isTomorrow, addDays, startOfWeek, endOfWeek } from 'da
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createPageUrl } from '@/utils';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import {
   Dialog,
@@ -37,30 +38,14 @@ export default function Tarea() {
     enabled: !!user,
   });
 
-  const { data: parentLinks = [] } = useQuery({
-    queryKey: ['parentLinks', user?.id],
-    queryFn: () => base44.entities.ParentStudent.filter({ 
-      parent_id: user.id, 
-      status: 'ACTIVE' 
-    }),
-    enabled: !!user,
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+    queryKey: ['linkedStudents', user?.id],
+    queryFn: () => getLinkedStudents(user),
+    enabled: !!user && canReadEntity(userProfile?.app_role, 'Homework'),
   });
 
-  const studentIds = parentLinks.map(l => l.student_id);
-
-  const { data: students = [] } = useQuery({
-    queryKey: ['students', studentIds],
-    queryFn: async () => {
-      if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'Homework')) return [];
-      const results = [];
-      for (const id of studentIds) {
-        const studentList = await base44.entities.Student.filter({ id });
-        if (studentList.length > 0) results.push(studentList[0]);
-      }
-      return results;
-    },
-    enabled: studentIds.length > 0,
-  });
+  const students = linkedStudents.students;
+  const studentIds = linkedStudents.studentIds;
 
   const classroomIds = [...new Set(students.map(s => s.classroom_id).filter(Boolean))];
 

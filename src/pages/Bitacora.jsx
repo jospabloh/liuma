@@ -11,6 +11,7 @@ import { format, addDays, subDays, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import {
   Dialog,
@@ -40,30 +41,14 @@ export default function Bitacora() {
     enabled: !!user,
   });
 
-  const { data: parentLinks = [] } = useQuery({
-    queryKey: ['parentLinks', user?.id],
-    queryFn: () => base44.entities.ParentStudent.filter({ 
-      parent_id: user.id, 
-      status: 'ACTIVE' 
-    }),
-    enabled: !!user,
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+    queryKey: ['linkedStudents', user?.id],
+    queryFn: () => getLinkedStudents(user),
+    enabled: !!user && canReadEntity(userProfile?.app_role, 'DiaryEntry'),
   });
 
-  const studentIds = studentIdParam ? [studentIdParam] : parentLinks.map(l => l.student_id);
-
-  const { data: students = [] } = useQuery({
-    queryKey: ['students', studentIds],
-    queryFn: async () => {
-      if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'DiaryEntry')) return [];
-      const results = [];
-      for (const id of studentIds) {
-        const studentList = await base44.entities.Student.filter({ id });
-        if (studentList.length > 0) results.push(studentList[0]);
-      }
-      return results;
-    },
-    enabled: studentIds.length > 0,
-  });
+  const students = linkedStudents.students;
+  const studentIds = studentIdParam ? [studentIdParam].filter((id) => linkedStudents.studentIds.includes(id)) : linkedStudents.studentIds;
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { base44 } from '@/api/base44Client';
+import { notificationService } from '@/lib/notifications/service';
 import { Loader2, School, GraduationCap, Users, ArrowRight, Check } from 'lucide-react';
 
 export default function Onboarding({ user, onComplete }) {
@@ -88,39 +89,37 @@ export default function Onboarding({ user, onComplete }) {
 
         // Get admin user details
         const allUsers = await base44.entities.User.list();
-        const adminEmails = adminProfiles
-          .map(profile => {
-            const adminUser = allUsers.find(u => u.id === profile.user_id);
-            return adminUser?.email;
-          })
-          .filter(email => email);
-
-        // Send email to each admin
         const roleNames = {
           TEACHER: 'Maestro/a',
           PARENT: 'Padre/Madre'
         };
 
-        for (const adminEmail of adminEmails) {
-          try {
-            await base44.integrations.Core.SendEmail({
-              to: adminEmail,
-              subject: `Nuevo usuario pendiente de aprobación - ${school?.name || 'LIUMA'}`,
-              body: `
-                <h2>Nuevo registro pendiente de aprobación</h2>
-                <p>Un nuevo usuario se ha registrado y necesita tu aprobación:</p>
-                <ul>
-                  <li><strong>Nombre:</strong> ${user.full_name}</li>
-                  <li><strong>Email:</strong> ${user.email}</li>
-                  <li><strong>Rol:</strong> ${roleNames[formData.role]}</li>
-                </ul>
-                <p>Por favor, ingresa a la aplicación para aprobar o rechazar esta solicitud.</p>
-              `
-            });
-          } catch (error) {
-            console.error('Error sending notification email:', error);
-          }
-        }
+        const schools = await base44.entities.School.filter({ id: schoolId });
+        const school = schools[0];
+        const recipients = adminProfiles.map((profile) => {
+          const adminUser = allUsers.find((u) => u.id === profile.user_id);
+          return {
+            user_id: profile.user_id,
+            app_role: profile.app_role,
+            email: adminUser?.email,
+            notification_preferences: profile.notification_preferences || {},
+            school_notification_preferences: school?.notification_preferences || {},
+          };
+        });
+
+        await notificationService.sendByEvent({
+          eventType: 'new_user_pending',
+          schoolId,
+          actorUserId: user.id,
+          recipients,
+          templateContext: {
+            schoolName: school?.name || 'LIUMA',
+            userName: user.full_name,
+            userEmail: user.email,
+            roleName: roleNames[formData.role],
+          },
+          channels: ['email', 'in_app'],
+        });
       }
 
       onComplete();

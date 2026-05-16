@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
-import { loadClassroomsByIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
+import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
 import {
   Dialog,
   DialogContent,
@@ -55,22 +55,14 @@ export default function AvisosMaestro() {
     enabled: !!user,
   });
 
-  const { data: teacherClassrooms = [] } = useQuery({
-    queryKey: ['teacherClassrooms', user?.id],
-    queryFn: () => base44.entities.TeacherClassroom.filter({ 
-      teacher_id: user.id,
-      is_active: true 
-    }),
+  const { data: linkedClassrooms = { classrooms: [], classroomIds: [] } } = useQuery({
+    queryKey: ['linkedClassrooms', user?.id],
+    queryFn: () => getLinkedClassrooms(user),
     enabled: !!user,
   });
 
-  const classroomIds = teacherClassrooms.map(tc => tc.classroom_id);
-
-  const { data: classrooms = [] } = useQuery({
-    queryKey: normalizedIdQueryKey('classrooms', classroomIds),
-    queryFn: async () => (await loadClassroomsByIds(classroomIds)).items,
-    enabled: classroomIds.length > 0,
-  });
+  const classroomIds = linkedClassrooms.classroomIds;
+  const classrooms = linkedClassrooms.classrooms;
 
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['teacherNotices', user?.id],

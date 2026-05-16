@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
+import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
 import { Card } from "@/components/ui/card";
 
 function UpcomingEventsSection({ schoolId, classroomIds }) {
@@ -65,31 +66,13 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   const [showLumi, setShowLumi] = useState(false);
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  // Get teacher's classrooms
-  const { data: teacherClassrooms = [] } = useQuery({
-    queryKey: ['teacherClassrooms', user.id],
-    queryFn: () => base44.entities.TeacherClassroom.filter({ 
-      teacher_id: user.id,
-      is_active: true 
-    }),
+  const { data: linkedClassrooms = { classrooms: [], classroomIds: [] } } = useQuery({
+    queryKey: ['linkedClassrooms', user.id],
+    queryFn: () => getLinkedClassrooms(user),
   });
 
-  const classroomIds = teacherClassrooms.map(tc => tc.classroom_id);
-
-  // Get classrooms details
-  const { data: classrooms = [] } = useQuery({
-    queryKey: ['classrooms', classroomIds],
-    queryFn: async () => {
-      if (classroomIds.length === 0) return [];
-      const results = [];
-      for (const id of classroomIds) {
-        const classroomList = await base44.entities.Classroom.filter({ id });
-        if (classroomList.length > 0) results.push(classroomList[0]);
-      }
-      return results;
-    },
-    enabled: classroomIds.length > 0,
-  });
+  const classroomIds = linkedClassrooms.classroomIds;
+  const classrooms = linkedClassrooms.classrooms;
 
   // Get students in classrooms
   const { data: students = [] } = useQuery({

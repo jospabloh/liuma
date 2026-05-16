@@ -12,7 +12,8 @@ import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
 import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
-import { loadStudentsByIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
+import { normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
+import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import {
   Dialog,
   DialogContent,
@@ -48,22 +49,14 @@ export default function Avisos() {
     enabled: !!user,
   });
 
-  const { data: parentLinks = [] } = useQuery({
-    queryKey: ['parentLinks', user?.id],
-    queryFn: () => base44.entities.ParentStudent.filter({ 
-      parent_id: user.id, 
-      status: 'ACTIVE' 
-    }),
+  const { data: linkedStudents = { students: [], studentIds: [] } } = useQuery({
+    queryKey: ['linkedStudents', user?.id],
+    queryFn: () => getLinkedStudents(user),
     enabled: !!user,
   });
 
-  const studentIds = parentLinks.map(l => l.student_id);
-
-  const { data: students = [] } = useQuery({
-    queryKey: normalizedIdQueryKey('students', studentIds),
-    queryFn: async () => (await loadStudentsByIds(studentIds)).items,
-    enabled: studentIds.length > 0,
-  });
+  const studentIds = linkedStudents.studentIds;
+  const students = linkedStudents.students;
 
   const classroomIds = [...new Set(students.map(s => s.classroom_id).filter(Boolean))];
 

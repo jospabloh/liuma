@@ -42,19 +42,68 @@ const POLICY = {
   },
 };
 
+function resolvePolicyDecision({ role, entity, action }) {
+  const permissions = POLICY[entity]?.[action] || [];
+
+  if (!role || !entity || !action) {
+    return { allowed: false, reason: 'missing_context', precedence: 'default_deny' };
+  }
+
+  if (permissions.includes(`!${role}`)) {
+    return { allowed: false, reason: 'explicit_deny', precedence: 'explicit_deny' };
+  }
+
+  if (permissions.includes(role)) {
+    return { allowed: true, reason: 'explicit_allow', precedence: 'explicit_allow' };
+  }
+
+  return { allowed: false, reason: 'default_deny', precedence: 'default_deny' };
+}
+
 export function canReadEntity(role, entity) {
-  return Boolean(POLICY[entity]?.read?.includes(role));
+  return resolvePolicyDecision({ role, entity, action: 'read' }).allowed;
 }
 
 export function canWriteEntity(role, entity) {
-  return Boolean(POLICY[entity]?.write?.includes(role));
+  return resolvePolicyDecision({ role, entity, action: 'write' }).allowed;
+}
+
+export function getPolicyDecision({ role, entity, action }) {
+  return resolvePolicyDecision({ role, entity, action });
+}
+
+export function buildTenantScopeGuard({ schoolId, classroomIds = [], studentIds = [] }) {
+  const guard = { school_id: schoolId || null };
+
+  if (classroomIds.length > 0) guard.classroom_id = { $in: classroomIds };
+  if (studentIds.length > 0) guard.student_id = { $in: studentIds };
+
+  return guard;
+}
+
+export function applyTenantScopeToQuery(filter = {}, guard = {}) {
+  const query = { ...filter };
+
+  Object.entries(guard).forEach(([key, value]) => {
+    if (value == null) return;
+    query[key] = value;
+  });
+
+  return query;
+}
+
+export function assertSameTenant({ sourceSchoolId, targetSchoolId }) {
+  return Boolean(sourceSchoolId && targetSchoolId && sourceSchoolId === targetSchoolId);
+}
+
+export function rejectsCrossTenantReference({ sourceSchoolId, targetSchoolId }) {
+  return !assertSameTenant({ sourceSchoolId, targetSchoolId });
 }
 
 export function buildScopedFilter({ role, entity, schoolId, classroomIds = [], studentIds = [] }) {
   if (!canReadEntity(role, entity)) return null;
 
-  const base = {};
-  if (schoolId) base.school_id = schoolId;
+  const base = buildTenantScopeGuard({ schoolId });
 
   if (role === ROLES.TEACHER) {
     if (classroomIds.length > 0) base.classroom_id = { $in: classroomIds };

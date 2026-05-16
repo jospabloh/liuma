@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { createPageUrl } from '@/utils';
+import { toast } from 'sonner';
+import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 
 const RESOURCES = [
   'Students',
@@ -59,8 +61,25 @@ export default function PermisosRoles() {
   const [editTemplateName, setEditTemplateName] = React.useState('');
   const [reasonText, setReasonText] = React.useState('');
   const [errorText, setErrorText] = React.useState('');
+  const [selectedProfileId, setSelectedProfileId] = React.useState('');
+  const [selectedRole, setSelectedRole] = React.useState('PARENT');
+  const [isUpdatingRole, setIsUpdatingRole] = React.useState(false);
+
+  const { data: schoolProfiles = [], refetch: refetchSchoolProfiles } = useQuery({
+    queryKey: ['schoolUserProfiles', userProfile?.school_id],
+    queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
+    enabled: !!userProfile?.school_id,
+  });
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['allUsersForRoleChange'],
+    queryFn: () => base44.entities.User.list(),
+    enabled: !!schoolProfiles.length,
+  });
 
   const activeTemplate = templates[activeTemplateIndex] || null;
+  const selectedProfile = schoolProfiles.find((profile) => profile.id === selectedProfileId) || null;
+  const isAdminRoleChange = selectedProfile && (selectedProfile.app_role === 'ADMIN' || selectedRole === 'ADMIN');
 
   if (userLoading || profileLoading) {
     return <LoadingScreen message="Validando permisos..." />;
@@ -150,11 +169,86 @@ export default function PermisosRoles() {
     });
   };
 
+  const getUserName = (userId) => users.find((entry) => entry.id === userId)?.full_name || 'Sin nombre';
+
+  const handleRoleChange = async () => {
+    if (!selectedProfile) {
+      setErrorText('Selecciona un usuario para cambiar el rol.');
+      return;
+    }
+    if (!hasMutationReason(reasonText)) {
+      setErrorText('El motivo es obligatorio para cualquier cambio.');
+      return;
+    }
+    if (selectedProfile.app_role === selectedRole) {
+      setErrorText('Selecciona un rol distinto al actual.');
+      return;
+    }
+
+    setErrorText('');
+    setIsUpdatingRole(true);
+    try {
+      await base44.entities.UserProfile.update(selectedProfile.id, { app_role: selectedRole });
+      await logAuditEvent({
+        user,
+        userProfile,
+        entity: AUDIT_ENTITIES.USER_PROFILE,
+        entityId: selectedProfile.id,
+        action: selectedRole === 'ADMIN' ? 'ROLE_ADMIN_GRANTED' : selectedProfile.app_role === 'ADMIN' ? 'ROLE_ADMIN_REVOKED' : 'ROLE_CHANGED',
+        reason: reasonText.trim(),
+        context: {
+          from_role: selectedProfile.app_role,
+          to_role: selectedRole,
+          risk_level: isAdminRoleChange ? 'HIGH' : 'NORMAL',
+        },
+      });
+      await refetchSchoolProfiles();
+      toast.success('Rol actualizado correctamente');
+      setReasonText('');
+    } catch (error) {
+      toast.error('No se pudo actualizar el rol');
+    } finally {
+      setIsUpdatingRole(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <PageHeader title="Permisos y Roles" subtitle="Configuración de acceso" showBack backTo={createPageUrl('Home')} />
       <Card className="p-4 mt-4 space-y-4">
         <p className="text-slate-700">Matriz de permisos por recurso y acción.</p>
+
+        <div className="space-y-3 border rounded bg-white p-3">
+          <p className="font-medium text-slate-800">Cambio de rol de usuario</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <select
+              className="h-10 rounded-md border border-slate-200 px-3 text-sm"
+              value={selectedProfileId}
+              onChange={(event) => setSelectedProfileId(event.target.value)}
+            >
+              <option value="">Selecciona un usuario</option>
+              {schoolProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {getUserName(profile.user_id)} ({profile.app_role})
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="h-10 rounded-md border border-slate-200 px-3 text-sm"
+              value={selectedRole}
+              onChange={(event) => setSelectedRole(event.target.value)}
+            >
+              <option value="PARENT">PARENT</option>
+              <option value="TEACHER">TEACHER</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+          </div>
+          {isAdminRoleChange ? <p className="text-sm text-red-700">Cambio de alto riesgo: otorgar o revocar ADMIN.</p> : null}
+          <Button variant={isAdminRoleChange ? 'destructive' : 'default'} onClick={handleRoleChange} disabled={isUpdatingRole}>
+            {isUpdatingRole ? 'Guardando...' : 'Actualizar rol'}
+          </Button>
+        </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Motivo del cambio (obligatorio)</label>

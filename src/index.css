@@ -90,6 +90,17 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  button:not(:disabled),
+  [role='button'],
+  a[href] {
+    @apply cursor-pointer transition-all;
+  }
+
+  a[href]:focus-visible,
+  [role='button']:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2;
+  }
 }
 
 html, body, #root {

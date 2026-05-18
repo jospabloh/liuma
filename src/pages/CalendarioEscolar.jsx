@@ -77,7 +77,19 @@ export default function CalendarioEscolar() {
     return events.filter(event => isSameDay(new Date(event.date), date));
   };
 
+  const selectedDayEvents = getEventsForDate(selectedDate);
   const upcomingEvents = events.filter(e => new Date(e.date) >= new Date()).slice(0, 5);
+
+  const handleDaySelect = (day) => {
+    setSelectedDate(day);
+  };
+
+  const handleDayKeyDown = (event, day) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleDaySelect(day);
+    }
+  };
 
   const handleEventClick = (event) => {
     if (isAdmin) {
@@ -148,18 +160,27 @@ export default function CalendarioEscolar() {
                 const dayEvents = getEventsForDate(day);
                 const isCurrentMonth = isSameMonth(day, selectedDate);
                 const isToday = isSameDay(day, new Date());
+                const isSelected = isSameDay(day, selectedDate);
 
                 return (
                   <motion.div
                     key={i}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    aria-label={`Ver agenda del ${format(day, "d 'de' MMMM", { locale: es })}`}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.01 }}
+                    onClick={() => handleDaySelect(day)}
+                    onKeyDown={(event) => handleDayKeyDown(event, day)}
                     className={`
-                      min-h-20 p-2 rounded-lg border transition-all
+                      min-h-20 p-2 rounded-lg border cursor-pointer transition-all duration-200
+                      hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-md
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2
                       ${!isCurrentMonth ? 'bg-slate-50 text-slate-400' : 'bg-white'}
                       ${isToday ? 'border-indigo-500 border-2' : 'border-slate-200'}
-                      ${dayEvents.length > 0 ? 'cursor-pointer hover:shadow-md' : ''}
+                      ${isSelected ? 'bg-indigo-100 border-indigo-600 ring-2 ring-indigo-200 shadow-md' : ''}
                     `}
                   >
                     <div className={`text-sm font-medium mb-1 ${isToday ? 'text-indigo-600' : ''}`}>
@@ -169,8 +190,8 @@ export default function CalendarioEscolar() {
                       {dayEvents.slice(0, 2).map(event => (
                         <div
                           key={event.id}
-                          onClick={() => handleEventClick(event)}
-                          className={`text-xs px-1.5 py-0.5 rounded truncate ${
+                          onClick={(clickEvent) => { clickEvent.stopPropagation(); handleEventClick(event); }}
+                          className={`text-xs px-1.5 py-0.5 rounded truncate transition-colors hover:ring-2 hover:ring-indigo-300 ${
                             event.scope === 'SCHOOL' 
                               ? 'bg-indigo-100 text-indigo-700' 
                               : 'bg-emerald-100 text-emerald-700'
@@ -194,6 +215,71 @@ export default function CalendarioEscolar() {
 
         {/* Upcoming Events Sidebar */}
         <div className="space-y-4">
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-indigo-600" />
+              Agenda del día
+            </h3>
+            <p className="text-sm font-medium text-slate-600 capitalize mb-4">
+              {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
+            </p>
+            {selectedDayEvents.length === 0 ? (
+              <p className="text-slate-500 text-sm text-center py-8">
+                No hay eventos para este día
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {selectedDayEvents.map(event => (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="p-3 rounded-lg bg-indigo-50 border border-indigo-200 hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer"
+                    onClick={() => handleEventClick(event)}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-slate-800 text-sm">{event.title}</h4>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-red-500 hover:text-red-600"
+                          onClick={(e) => handleDeleteEvent(event.id, e)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-600 space-y-1">
+                      {event.time && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {event.time}
+                        </div>
+                      )}
+                      {event.location && (
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {event.location}
+                        </div>
+                      )}
+                      <Badge className={`text-xs ${
+                        event.scope === 'SCHOOL' 
+                          ? 'bg-indigo-100 text-indigo-700' 
+                          : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {event.scope === 'SCHOOL' ? 'Toda la escuela' : 'Por salón'}
+                      </Badge>
+                    </div>
+                    {event.description && (
+                      <p className="text-xs text-slate-500 mt-2">{event.description}</p>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <Card className="p-6">
             <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-indigo-600" />

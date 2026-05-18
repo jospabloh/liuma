@@ -4,8 +4,6 @@ import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { ClipboardList, BookOpen, Bell, CheckCircle, AlertCircle, Users, Calendar, ListChecks } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
-import LumiButton from '@/components/ui/LumiButton';
-import LumiChat from '@/components/lumi/LumiChat';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
@@ -62,7 +60,6 @@ function UpcomingEventsSection({ schoolId, classroomIds }) {
 }
 
 export default function TeacherHome({ user, userProfile, subscription }) {
-  const [showLumi, setShowLumi] = useState(false);
   const today = format(new Date(), 'yyyy-MM-dd');
 
   const { data: linkedClassrooms = { classrooms: [], classroomIds: [] } } = useQuery({
@@ -291,15 +288,6 @@ export default function TeacherHome({ user, userProfile, subscription }) {
         )}
       </div>
 
-      {/* Lumi Button */}
-      <LumiButton onClick={() => setShowLumi(true)} />
-      
-      {/* Lumi Chat */}
-      <LumiChat 
-        isOpen={showLumi} 
-        onClose={() => setShowLumi(false)} 
-        userProfile={userProfile}
-      />
     </div>
   );
 }

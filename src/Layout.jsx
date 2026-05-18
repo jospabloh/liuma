@@ -1,5 +1,6 @@
 import React from 'react';
 import { Toaster } from "sonner";
+import GlobalLumiBubble from '@/components/lumi/GlobalLumiBubble';
 
 export default function Layout({ children, currentPageName }) {
   return (
@@ -59,6 +60,7 @@ export default function Layout({ children, currentPageName }) {
       />
       
       {children}
+      <GlobalLumiBubble />
     </div>
   );
 }

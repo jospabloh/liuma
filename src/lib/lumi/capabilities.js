@@ -1,4 +1,14 @@
-import { canReadEntity } from '@/lib/authorization/policy';
+import { canReadEntity } from '../authorization/policy.js';
+
+export const CAPABILITY_ACTIONS = {
+  VIEW: 'view',
+  ADD: 'add',
+  EDIT: 'edit',
+  DELETE: 'delete',
+  APPROVE: 'approve',
+  EXPORT: 'export',
+  MANAGE_PERMISSIONS: 'manage_permissions',
+};
 
 export const LUMI_INTENTS = {
   HOMEWORK_LOOKUP: 'homework_lookup',
@@ -9,13 +19,13 @@ export const LUMI_INTENTS = {
   SCHEDULE_APPOINTMENTS: 'schedule_appointments',
 };
 
-const INTENT_ENTITY = {
-  [LUMI_INTENTS.HOMEWORK_LOOKUP]: 'Homework',
-  [LUMI_INTENTS.ATTENDANCE_STATUS]: 'Attendance',
-  [LUMI_INTENTS.NOTICES_SUMMARY]: 'Notice',
-  [LUMI_INTENTS.PAYMENT_REMINDERS]: 'ChargeItem',
-  [LUMI_INTENTS.BEHAVIOR_RECAP]: 'DiaryEntry',
-  [LUMI_INTENTS.SCHEDULE_APPOINTMENTS]: 'Notice',
+export const CAPABILITY_RULES = {
+  [LUMI_INTENTS.HOMEWORK_LOOKUP]: { entity: 'Homework', allowed_roles: ['ADMIN','TEACHER','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No tengo permiso para consultar tareas con este perfil.' },
+  [LUMI_INTENTS.ATTENDANCE_STATUS]: { entity: 'Attendance', allowed_roles: ['ADMIN','TEACHER','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo compartir resumen de asistencia con este acceso.' },
+  [LUMI_INTENTS.NOTICES_SUMMARY]: { entity: 'Notice', allowed_roles: ['ADMIN','TEACHER','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo resumir avisos para este perfil.' },
+  [LUMI_INTENTS.PAYMENT_REMINDERS]: { entity: 'ChargeItem', allowed_roles: ['ADMIN','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo dar seguimiento de pagos con este acceso.' },
+  [LUMI_INTENTS.BEHAVIOR_RECAP]: { entity: 'DiaryEntry', allowed_roles: ['ADMIN','TEACHER','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo compartir reportes de conducta con este acceso.' },
+  [LUMI_INTENTS.SCHEDULE_APPOINTMENTS]: { entity: 'Notice', allowed_roles: ['ADMIN','TEACHER','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo revisar anuncios o eventos con este acceso.' },
 };
 
 function toLinkedStudentIds(userProfile) {
@@ -54,21 +64,35 @@ export function buildCapabilityRequest({ intent, prompt, inputs = {}, userProfil
 
 export function evaluateCapabilityAccess({ intent, request }) {
   const role = request?.context?.user_role;
-  const entity = INTENT_ENTITY[intent];
+  const schoolId = request?.context?.school_id;
+  const rule = CAPABILITY_RULES[intent];
+  const entity = rule?.entity;
 
   if (!intent) return { allowed: true };
 
-  if (!role || !entity || !canReadEntity(role, entity)) {
+
+  if (!role || !rule || !entity || !canReadEntity(role, entity) || !rule.allowed_roles.includes(role)) {
     return {
       allowed: false,
       denial: {
         reason_code: 'policy_forbidden',
         reason: `Role ${role || 'UNKNOWN'} cannot access capability ${intent}`,
+        safe_message: rule?.safe_denial_response || 'No tengo permiso para completar esta solicitud.',
       },
     };
   }
 
   const linkedStudents = request?.context?.linked_students || [];
+  if (!schoolId) {
+    return {
+      allowed: false,
+      denial: {
+        reason_code: 'missing_scope',
+        reason: 'Missing tenant scope for capability request',
+        safe_message: rule.safe_denial_response,
+      },
+    };
+  }
   const studentId = request?.inputs?.student_id;
 
   if (role === 'PARENT' && studentId && !linkedStudents.includes(studentId)) {
@@ -77,18 +101,22 @@ export function evaluateCapabilityAccess({ intent, request }) {
       denial: {
         reason_code: 'student_scope_mismatch',
         reason: 'Requested student is not linked to this account',
+        safe_message: rule.safe_denial_response,
       },
     };
   }
 
-  return { allowed: true };
+  return {
+    allowed: true,
+    rule,
+  };
 }
 
 export function buildDeniedCapabilityResponse({ intent, denial }) {
   return {
     status: 'denied',
     intent,
-    message: `No pude completar la solicitud: ${denial.reason}`,
+    message: denial.safe_message || `No pude completar la solicitud: ${denial.reason}`,
     data: {},
     meta: {
       capability: intent,

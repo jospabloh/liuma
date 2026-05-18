@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -134,6 +134,10 @@ export default function AvisosMaestro() {
     setWizardStep(1);
   };
 
+  const isDirty = useMemo(() => (
+    formData.classroom_id || formData.title || formData.content || formData.priority !== 'NORMAL' || wizardStep > 1
+  ), [formData, wizardStep]);
+
   const handleSubmit = () => {
     createNoticeMutation.mutate({
       ...formData,
@@ -187,7 +191,15 @@ export default function AvisosMaestro() {
 
       {/* Create Notice Wizard */}
       <Dialog open={showWizard} onOpenChange={(open) => { setShowWizard(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent
+          className="max-w-md"
+          onInteractOutside={(event) => {
+            if (isDirty && !createNoticeMutation.isPending) {
+              event.preventDefault();
+              toast.error('Tienes cambios sin guardar');
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Nuevo aviso</DialogTitle>
           </DialogHeader>

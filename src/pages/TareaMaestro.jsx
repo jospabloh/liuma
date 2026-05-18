@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
@@ -100,6 +100,10 @@ export default function TareaMaestro() {
     });
   };
 
+  const isDirty = useMemo(() => (
+    formData.classroom_id || formData.subject || formData.title || formData.description || formData.due_date !== format(new Date(), 'yyyy-MM-dd')
+  ), [formData]);
+
   const getClassroomName = (id) => {
     const classroom = classrooms.find(c => c.id === id);
     return classroom?.name || '';
@@ -153,7 +157,15 @@ export default function TareaMaestro() {
 
       {/* Create Homework Modal */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent
+          className="max-w-md"
+          onInteractOutside={(event) => {
+            if (isDirty && !createHomeworkMutation.isPending) {
+              event.preventDefault();
+              toast.error('Tienes cambios sin guardar');
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Nueva tarea</DialogTitle>
           </DialogHeader>
@@ -219,7 +231,10 @@ export default function TareaMaestro() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="flex-1">
+              <Button type="button" variant="outline" onClick={() => {
+                if (isDirty && !createHomeworkMutation.isPending && !window.confirm('¿Descartar cambios de la tarea?')) return;
+                setShowForm(false);
+              }} className="flex-1">
                 Cancelar
               </Button>
               <Button

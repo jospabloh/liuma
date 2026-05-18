@@ -65,6 +65,10 @@ function hasMutationReason(value) {
   return Boolean(value && value.trim().length > 0);
 }
 
+function requireExplicitConfirmation(message) {
+  return window.confirm(message);
+}
+
 export default function PermisosRoles() {
   const { data: user, isLoading: userLoading } = useQuery({
     queryKey: ['currentUser'],
@@ -277,6 +281,9 @@ export default function PermisosRoles() {
       setErrorText('Ya existe una solicitud pendiente para este usuario.');
       return;
     }
+    if (isAdminRoleChange && !requireExplicitConfirmation('Confirmación de alto riesgo: este cambio modifica privilegios ADMIN. ¿Deseas continuar?')) {
+      return;
+    }
     setErrorText('');
     setIsUpdatingRole(true);
     try {
@@ -341,6 +348,9 @@ export default function PermisosRoles() {
     const isRequester = change.requester_profile_id === userProfile.id;
     if (isRequester) {
       toast.error('El aprobador no puede ser el mismo solicitante.');
+      return;
+    }
+    if (decision === 'approve' && !requireExplicitConfirmation('Confirmación: aprobar este cambio aplicará el nuevo rol inmediatamente. ¿Continuar?')) {
       return;
     }
     setPendingDecisionByChangeId((prev) => ({ ...prev, [change.id]: true }));
@@ -479,6 +489,9 @@ export default function PermisosRoles() {
       setErrorText('El motivo es obligatorio para cualquier cambio.');
       return;
     }
+    if (!requireExplicitConfirmation('Confirmación: eliminar este override quitará la excepción activa. ¿Deseas continuar?')) {
+      return;
+    }
     const current = permissionOverrides.find((entry) => entry.id === overrideId);
     await deletePermissionOverride(overrideId);
     await logAuditEvent({
@@ -509,6 +522,9 @@ export default function PermisosRoles() {
     }
     if (!rollbackOverride) {
       setErrorText('Selecciona un override para rollback.');
+      return;
+    }
+    if (!requireExplicitConfirmation('Confirmación: esta acción revierte permisos en producción. ¿Deseas continuar?')) {
       return;
     }
     setErrorText('');
@@ -593,7 +609,7 @@ export default function PermisosRoles() {
           {isSelfAdminDemotion ? <p className="text-sm text-red-700">Bloqueado: no puedes remover tu propio manage_permissions.</p> : null}
           {isLastManagePermissionsAdminAtRisk ? <p className="text-sm text-red-700">Bloqueado: se requiere otro ADMIN activo para conservar manage_permissions.</p> : null}
           <Button variant={isAdminRoleChange ? 'destructive' : 'default'} onClick={handleRoleChange} disabled={isUpdatingRole}>
-            {isUpdatingRole ? 'Guardando...' : 'Actualizar rol'}
+            {isUpdatingRole ? 'Guardando...' : isAdminRoleChange ? 'Solicitar cambio de rol (alto riesgo)' : 'Solicitar cambio de rol'}
           </Button>
         </div>
         <div className="space-y-3 border rounded bg-white p-3">
@@ -610,14 +626,14 @@ export default function PermisosRoles() {
           {rollbackOverride ? <pre className="rounded bg-slate-50 p-2 text-xs">{JSON.stringify({ before: rollbackOverride, after: null }, null, 2)}</pre> : null}
           {rollbackOverride?.action === 'manage_permissions' ? <p className="text-sm text-red-700">Alto riesgo: requiere maker-checker.</p> : null}
           <Button variant={rollbackOverride?.action === 'manage_permissions' ? 'destructive' : 'outline'} onClick={handleApplyRollback} disabled={isApplyingRollback}>
-            {isApplyingRollback ? 'Aplicando...' : 'Aplicar rollback'}
+            {isApplyingRollback ? 'Aplicando...' : rollbackOverride?.action === 'manage_permissions' ? 'Solicitar rollback (alto riesgo)' : 'Aplicar rollback controlado'}
           </Button>
         </div>
         <div className="space-y-3 border rounded bg-white p-3">
           <p className="font-medium text-slate-800">Solicitudes pendientes de cambio de rol</p>
           <div className="overflow-auto border rounded">
             <table className="min-w-full text-sm">
-              <thead><tr className="bg-slate-100"><th className="p-2 text-left">Usuario objetivo</th><th className="p-2 text-left">Desde</th><th className="p-2 text-left">Hacia</th><th className="p-2 text-left">Estado</th><th className="p-2 text-left">Acciones</th></tr></thead>
+              <thead><tr className="bg-slate-100"><th className="sticky top-0 bg-slate-100 p-2 text-left">Usuario objetivo</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Desde</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Hacia</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Estado</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Acciones</th></tr></thead>
               <tbody>
                 {pendingRoleChanges.map((change) => {
                   const targetProfile = schoolProfiles.find((profile) => profile.id === change.target_profile_id);
@@ -651,7 +667,7 @@ export default function PermisosRoles() {
           <p className="text-xs text-red-700">Todas las operaciones son de alto riesgo, irreversibles en algunos casos, y usan maker-checker con segundo ADMIN (excepto app owner).</p>
           <div className="overflow-auto border rounded">
             <table className="min-w-full text-sm">
-              <thead><tr className="bg-slate-100"><th className="p-2 text-left">Operación</th><th className="p-2 text-left">Riesgo</th><th className="p-2 text-left">Confirmación requerida</th><th className="p-2 text-left">Rollback/Compensación</th></tr></thead>
+              <thead><tr className="bg-slate-100"><th className="sticky top-0 bg-slate-100 p-2 text-left">Operación</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Riesgo</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Confirmación requerida</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Rollback/Compensación</th></tr></thead>
               <tbody>
                 {dangerZoneOperations.map((operation) => (
                   <tr key={operation.key} className="border-t">
@@ -688,10 +704,10 @@ export default function PermisosRoles() {
           </div>
           {isOverrideTargetAdmin ? <p className="text-sm text-red-700">Bloqueado: no se permiten overrides para ADMIN.</p> : null}
           {overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id ? <p className="text-sm text-red-700">Bloqueado: no puedes cambiar tu propio manage_permissions.</p> : null}
-          <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar override' : 'Crear override'}</Button>
+          <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar override de permisos' : 'Crear override de permisos'}</Button>
           <div className="overflow-auto border rounded">
             <table className="min-w-full text-sm">
-              <thead><tr className="bg-slate-100"><th className="p-2 text-left">Usuario</th><th className="p-2 text-left">Recurso</th><th className="p-2 text-left">Acción</th><th className="p-2 text-left">Efecto</th><th className="p-2 text-left">Preview</th><th className="p-2 text-left">Acciones</th></tr></thead>
+              <thead><tr className="bg-slate-100"><th className="sticky top-0 bg-slate-100 p-2 text-left">Usuario</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Recurso</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Acción</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Efecto</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Preview</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Acciones</th></tr></thead>
               <tbody>
                 {permissionOverrides.map((override) => {
                   const profile = schoolProfiles.find((entry) => entry.id === override.user_profile_id);

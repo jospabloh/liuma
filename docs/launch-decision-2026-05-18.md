@@ -26,7 +26,7 @@
 
 | KPI | Threshold | Observed (2026-05-18 evidence) | Result |
 |---|---|---|---|
-| Open blocker UX/security defects | 0 | 0 | PASS |
+| Open blocker UX/security defects | 0 | 1 | FAIL |
 | Open high UX/security defects | 0 | 0 | PASS |
 | Critical journey quality score | >= certification threshold (11.1 rubric pass level) | Certified with provisional tags on some journeys; one admin surface (AlertaEmergencia) below threshold | PARTIAL |
 | Authorization/tenant security regression tests | 100% pass on defined hardening suite | PASS in documented hardening matrix | PASS |
@@ -36,12 +36,13 @@
 
 | Severity | Count | Notes |
 |---|---:|---|
-| Critical/Blocker incidents | 0 | No open blocker incidents recorded in consolidation artifacts. |
+| Critical/Blocker incidents | 1 | `OWNER_ACCESS_AND_TENANT_CREATION_BLOCKER` is open and blocks post-launch expansion. |
 | High incidents | 0 | No open high incidents recorded. |
 | Medium incidents | 7 | Tracked as THM-01, THM-02, JNY-01, LUM-01, ADM-04, ADM-05, TCH-01. |
 | Low incidents | 2 | ADM-06, TCH-02. |
 
 ### 1.3 Unresolved issues (current open set)
+- OWNER_ACCESS_AND_TENANT_CREATION_BLOCKER — blocker incident for owner access and tenant creation.
 - THM-01 — semantic token drift on status colors.
 - THM-02 — missing palette safety validator/auto-adjust.
 - JNY-01 — journey visual automation not CI-gating yet.
@@ -64,7 +65,7 @@
 
 | Hard gate | Re-validation result | Status |
 |---|---|---|
-| No open blocker/high security issues | Confirmed (0 blocker, 0 high open) | PASS |
+| No open blocker/high security issues | Blocked: 1 blocker incident open, 0 high open | FAIL |
 | Tenant isolation remained intact | Cross-tenant denial and role-boundary evidence pass | PASS |
 | Permission/audit controls held under real usage | Permission logic pass; audit persistence evidence remains partial-live | PARTIAL |
 | UX quality above certification threshold | Overall certified for constrained pilot, but with provisional areas and one below-threshold admin surface in cert table | PARTIAL |
@@ -94,31 +95,30 @@
 
 ## 4) Final rollout decision
 
-## **LIMITED GO**
+## **NO-GO FOR POST-LAUNCH EXPANSION**
 
-### Why this is not FULL GO
-- Full rollout requires all hard gates fully closed; current evidence shows partial gaps (audit persistence validation and CI deno evidence).
-
-### Why this is not NO-GO
-- Security/permission isolation gates are passing, blocker/high defect counts are zero, and critical role journeys are largely certified for constrained exposure.
+### Why post-launch expansion is paused
+- `OWNER_ACCESS_AND_TENANT_CREATION_BLOCKER` is open at blocker severity.
+- Owner access and tenant creation must be fixed before any additional tenant cohort or expansion task resumes.
+- Full rollout still requires all hard gates fully closed; current evidence also shows partial gaps (audit persistence validation and CI deno evidence).
 
 **Decision timestamp (UTC):** 2026-05-18T00:00:00Z.
 
 ---
 
-## 5) Rollout execution plan (LIMITED GO path)
+## 5) Rollout execution plan (POST-LAUNCH EXPANSION PAUSED)
 
 ## 5.1 Rollout waves (tenant cohorts)
-- **Wave 1 (Canary, 1–2 low-risk tenants):** internal-friendly tenants with strong admin champions and rapid feedback loops.
-- **Wave 2 (Early expansion, +3–5 tenants):** mixed complexity tenants after 7-day stable window and no rollback triggers.
-- **Wave 3 (Broader staged expansion):** remaining medium-complexity tenants only after must-fix list closure.
-- **Wave 4 (Full rollout):** all remaining tenants after hard-gate closure and sign-off refresh.
+All remaining post-launch expansion tasks are paused while `OWNER_ACCESS_AND_TENANT_CREATION_BLOCKER` is open. The prior wave plan is retained only as a reference and must not execute until the incident exit criteria pass.
 
-## 5.2 Monitoring intensity per wave
-- **Wave 1:** highest intensity (daily triage; security + UX review each day).
-- **Wave 2:** high intensity (48h triage cadence; incident review twice weekly).
-- **Wave 3:** moderate-high (weekly governance review + automated dashboards).
-- **Wave 4:** steady-state monitoring (standard SLO/SLA cadence).
+- **Wave 1 (Canary, 1–2 low-risk tenants):** paused.
+- **Wave 2 (Early expansion, +3–5 tenants):** paused.
+- **Wave 3 (Broader staged expansion):** paused.
+- **Wave 4 (Full rollout):** paused.
+
+## 5.2 Monitoring intensity during pause
+- Maintain blocker-incident triage until owner access and tenant creation fixes are verified.
+- Resume wave-specific monitoring only after incident closure and sign-off refresh.
 
 ## 5.3 Rollback triggers (objective)
 Rollback to prior stable release if any occur:
@@ -134,18 +134,19 @@ Rollback to prior stable release if any occur:
 
 | Function | Decision | Name | Date |
 |---|---|---|---|
-| Product | Approved for LIMITED GO | _Pending_ | _Pending_ |
-| Engineering | Approved for LIMITED GO | _Pending_ | _Pending_ |
-| Security/Compliance | Approved for LIMITED GO | _Pending_ | _Pending_ |
-| Operations | Approved for LIMITED GO | _Pending_ | _Pending_ |
+| Product | Expansion paused pending blocker closure | _Pending_ | _Pending_ |
+| Engineering | Expansion paused pending blocker closure | _Pending_ | _Pending_ |
+| Security/Compliance | Expansion paused pending blocker closure | _Pending_ | _Pending_ |
+| Operations | Expansion paused pending blocker closure | _Pending_ | _Pending_ |
 
 ---
 
-## 7) Operational checklist to start Wave 1
-1. Confirm active on-call roster and escalation path.
-2. Confirm incident triage channel + severity rubric.
-3. Confirm per-tenant rollout window and rollback owner.
-4. Confirm dashboard watchers (product, eng, security, ops).
-5. Confirm must-fix tracking board with due dates above.
+## 7) Operational checklist before any expansion resumes
+1. Close `OWNER_ACCESS_AND_TENANT_CREATION_BLOCKER` only after owner access is fixed, tenant creation is fixed, and full E2E passes.
+2. Confirm active on-call roster and escalation path.
+3. Confirm incident triage channel + severity rubric.
+4. Confirm per-tenant rollout window and rollback owner.
+5. Confirm dashboard watchers (product, eng, security, ops).
+6. Confirm must-fix tracking board with due dates above.
 
-This report’s conclusion is explicit and executable: **LIMITED GO with staged expansion and strict rollback governance**.
+This report’s conclusion is explicit and executable: **post-launch expansion is paused until the blocker incident exit criteria pass**.

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShoppingBag, Plus, Trash2, Download, FileText } from 'lucide-react';
+import { ShoppingBag, Plus, Trash2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';

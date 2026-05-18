@@ -6,12 +6,12 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import PaymentStatusCard from '@/components/payments/PaymentStatusCard';
-import { CreditCard, CheckCircle, Clock, AlertTriangle, Calendar } from 'lucide-react';
+import { CreditCard, CheckCircle, Calendar } from 'lucide-react';
 import { format, isPast, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
-import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { canReadEntity, buildScopedFilter } from '@/lib/authorization/policy';
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,

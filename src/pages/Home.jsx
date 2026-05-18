@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -8,7 +8,6 @@ import TeacherHome from '@/components/home/TeacherHome';
 import AdminHome from '@/components/home/AdminHome';
 import Onboarding from '@/components/onboarding/Onboarding';
 import WelcomeTrialModal from '@/components/subscription/WelcomeTrialModal';
-import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import SuspendedAccountModal from '@/components/subscription/SuspendedAccountModal';
 
 export default function Home() {

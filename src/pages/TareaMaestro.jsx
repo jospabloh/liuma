@@ -6,16 +6,14 @@ import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import HomeworkCard from '@/components/homework/HomeworkCard';
 import EmptyState from '@/components/ui/EmptyState';
-import { BookOpen, Plus, Loader2, Calendar } from 'lucide-react';
+import { BookOpen, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
-import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import { loadHomeworkByClassroomIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
 import {

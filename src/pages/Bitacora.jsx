@@ -6,13 +6,13 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import DiaryCard from '@/components/diary/DiaryCard';
-import { ClipboardList, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, addDays, subDays, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
-import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { canReadEntity } from '@/lib/authorization/policy';
 import {
   Dialog,
   DialogContent,

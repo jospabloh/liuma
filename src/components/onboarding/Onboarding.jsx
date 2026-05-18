@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { base44 } from '@/api/base44Client';
 import { notificationService } from '@/lib/notifications/service';
 import { Loader2, School, GraduationCap, Users, ArrowRight, Check } from 'lucide-react';

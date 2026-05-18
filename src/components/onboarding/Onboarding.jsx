@@ -9,6 +9,11 @@ import { notificationService } from '@/lib/notifications/service';
 import { Loader2, School, GraduationCap, Users, ArrowRight, Check, Upload } from 'lucide-react';
 import { extractPaletteFromFile, DEFAULT_THEME } from '@/lib/tenantTheme';
 import { logAuditEvent } from '@/lib/audit';
+import {
+  captureOnboardingFailure,
+  completeOnboardingTenantCreation,
+  mapOnboardingError,
+} from '@/lib/onboardingTenantCreation';
 
 export default function Onboarding({ user, onComplete }) {
   const [step, setStep] = useState(1);
@@ -31,136 +36,39 @@ export default function Onboarding({ user, onComplete }) {
 
   const handleSubmit = async () => {
     setIsLoading(true);
+    const requestPayload = {
+      role: formData.role,
+      schoolCode: formData.schoolCode,
+      newSchoolName: formData.newSchoolName,
+      phone: formData.phone,
+      isDemo: formData.isDemo,
+      hasLogo: Boolean(logoFile),
+    };
+
     try {
-      let schoolId = null;
-      
-      // If ADMIN creating new school
-      if (formData.role === 'ADMIN' && formData.newSchoolName) {
-        const schoolPayload = { name: formData.newSchoolName };
-        if (logoFile) {
-          const { file_url } = await base44.integrations.Core.UploadFile({ file: logoFile });
-          schoolPayload.logo_url = file_url;
-          schoolPayload.theme_settings = themePreview;
-        }
-        const school = await base44.entities.School.create(schoolPayload);
-        schoolId = school.id;
-        
-        // Create trial subscription for new schools
-        const trialEndDate = new Date();
-        trialEndDate.setDate(trialEndDate.getDate() + 30); // 30 days trial
-        
-        await base44.entities.SchoolSubscription.create({
-          school_id: schoolId,
-          subscription_status: 'trial',
-          subscription_plan: 'trial',
-          trial_start_date: new Date().toISOString(),
-          trial_end_date: trialEndDate.toISOString(),
-          welcome_message_shown: false,
-        });
-      } else if (formData.schoolCode) {
-        // Find school by code (using school ID as code for simplicity)
-        const schools = await base44.entities.School.filter({ id: formData.schoolCode });
-        if (schools.length > 0) {
-          schoolId = schools[0].id;
-        } else {
-          alert('Código de escuela inválido. Verifica con tu administrador.');
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      if (!schoolId) {
-        alert('Error: No se pudo determinar la escuela.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Determine status: ACTIVE for ADMIN, PENDING for others
-      const userStatus = formData.role === 'ADMIN' ? 'ACTIVE' : 'PENDING';
-
-      const isOwnerCreator = user?.email?.toLowerCase() === String(import.meta.env.VITE_OWNER_EMAIL || '').toLowerCase();
-      const existingProfiles = await base44.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId }, '-created_date', 1);
-      const profilePayload = {
-        app_role: formData.role === 'ADMIN' ? 'ADMIN' : formData.role,
-        status: formData.role === 'ADMIN' ? 'ACTIVE' : userStatus,
-        phone: formData.phone,
-        onboarding_completed: true,
-        ...(formData.role === 'ADMIN' ? { is_super_admin: isOwnerCreator } : {}),
-      };
-
-      if (existingProfiles[0]) {
-        await base44.entities.UserProfile.update(existingProfiles[0].id, profilePayload);
-      } else {
-        await base44.entities.UserProfile.create({
-          user_id: user.id,
-          school_id: schoolId,
-          ...profilePayload,
-        });
-      }
-
-      // If user is pending, notify school admins
-      if (userStatus === 'PENDING') {
-        // Get all admin users for this school
-        const adminProfiles = await base44.entities.UserProfile.filter({
-          school_id: schoolId,
-          app_role: 'ADMIN',
-          status: 'ACTIVE'
-        });
-
-        // Get admin user details
-        const allUsers = await base44.entities.User.list();
-        const roleNames = {
-          TEACHER: 'Maestro/a',
-          PARENT: 'Padre/Madre'
-        };
-
-        const schools = await base44.entities.School.filter({ id: schoolId });
-        const school = schools[0];
-        const recipients = adminProfiles.map((profile) => {
-          const adminUser = allUsers.find((u) => u.id === profile.user_id);
-          return {
-            user_id: profile.user_id,
-            app_role: profile.app_role,
-            email: adminUser?.email,
-            notification_preferences: profile.notification_preferences || {},
-            school_notification_preferences: school?.notification_preferences || {},
-          };
-        });
-
-        await notificationService.sendByEvent({
-          eventType: 'new_user_pending',
-          schoolId,
-          actorUserId: user.id,
-          recipients,
-          templateContext: {
-            schoolName: school?.name || 'LIUMA',
-            userName: user.full_name,
-            userEmail: user.email,
-            roleName: roleNames[formData.role],
-          },
-          channels: ['email', 'in_app'],
-        });
-      }
-
-      if (formData.role === 'ADMIN') {
-        const actorProfile = { school_id: schoolId, app_role: 'ADMIN' };
-        await logAuditEvent({
-          user,
-          userProfile: actorProfile,
-          entity: 'SchoolTheme',
-          entityId: schoolId,
-          action: 'THEME_CREATED_OR_UPDATED',
-          reason: 'tenant_theme_onboarding',
-          context: { old_palette: null, new_palette: themePreview.palette, timestamp: new Date().toISOString() },
-        });
-      }
+      await completeOnboardingTenantCreation({
+        base44,
+        notificationService,
+        logAuditEvent,
+        user,
+        formData,
+        logoFile,
+        themePreview,
+        ownerEmail: import.meta.env.VITE_OWNER_EMAIL,
+      });
       onComplete();
     } catch (error) {
-      console.error('Error in onboarding:', error);
-      alert('Hubo un error. Intenta de nuevo.');
+      const failureDetails = captureOnboardingFailure({
+        error,
+        requestPayload,
+        phase: 'onboarding_tenant_creation',
+      });
+      console.error('Error in onboarding:', failureDetails);
+      alert(mapOnboardingError(error).message);
     }
     setIsLoading(false);
   };
+
 
 
   const handleLogoChange = async (event) => {

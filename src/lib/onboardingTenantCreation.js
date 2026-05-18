@@ -1,3 +1,5 @@
+import { DEFAULT_THEME } from './tenantTheme.js';
+
 export const ONBOARDING_ERROR_CODES = {
   VALIDATION: 'validation_error',
   INVALID_SCHOOL_CODE: 'invalid_school_code',
@@ -21,6 +23,18 @@ function normalizeText(value) {
 function getResponseBody(error) {
   return error?.data || error?.response?.data || error?.body || null;
 }
+
+export const REQUIRED_TENANT_ROLES = [
+  { role_key: 'ADMIN', name: 'Administrador', is_required: true },
+  { role_key: 'TEACHER', name: 'Maestro/a', is_required: true },
+  { role_key: 'PARENT', name: 'Padre/Madre', is_required: true },
+];
+
+export const BASELINE_PERMISSION_TEMPLATES = [
+  { role_key: 'ADMIN', name: 'Plantilla Admin', permissions: { all: true } },
+  { role_key: 'TEACHER', name: 'Plantilla Maestro', permissions: { classroom_scope: true } },
+  { role_key: 'PARENT', name: 'Plantilla Padre/Madre', permissions: { student_scope: true } },
+];
 
 export function validateOnboardingPayload({ formData, user }) {
   if (!user?.id) {
@@ -46,11 +60,11 @@ export function buildSchoolPayload({ formData, user, logoUrl, themePreview }) {
   const payload = {
     name: normalizeText(formData.newSchoolName),
     created_by_user_id: user.id,
+    theme_settings: themePreview || DEFAULT_THEME,
   };
 
   if (logoUrl) {
     payload.logo_url = logoUrl;
-    payload.theme_settings = themePreview;
   }
 
   if (formData.isDemo) {
@@ -147,6 +161,48 @@ async function ensureSchoolSubscription(SchoolSubscription, schoolId) {
   });
 }
 
+async function ensureMissingTenantRows(Entity, query, payload) {
+  if (!Entity?.filter || !Entity?.create) return null;
+
+  const existing = await Entity.filter(query, '-created_date', 1);
+  if (existing[0]) return existing[0];
+
+  return Entity.create(payload);
+}
+
+async function ensureTenantBootstrapRecords(base44, schoolId, ownerProfileId) {
+  const created = { roles: [], permissionTemplates: [], accessBindings: [] };
+
+  for (const role of REQUIRED_TENANT_ROLES) {
+    const row = await ensureMissingTenantRows(
+      base44.entities.Role,
+      { school_id: schoolId, role_key: role.role_key },
+      { ...role, school_id: schoolId }
+    );
+    if (row) created.roles.push(row);
+  }
+
+  for (const template of BASELINE_PERMISSION_TEMPLATES) {
+    const row = await ensureMissingTenantRows(
+      base44.entities.PermissionTemplate,
+      { school_id: schoolId, role_key: template.role_key },
+      { ...template, school_id: schoolId, is_baseline: true }
+    );
+    if (row) created.permissionTemplates.push(row);
+  }
+
+  if (ownerProfileId) {
+    const row = await ensureMissingTenantRows(
+      base44.entities.AccessBinding,
+      { school_id: schoolId, user_profile_id: ownerProfileId, binding_key: 'tenant_owner_admin' },
+      { school_id: schoolId, user_profile_id: ownerProfileId, binding_key: 'tenant_owner_admin', role_key: 'ADMIN', status: 'ACTIVE' }
+    );
+    if (row) created.accessBindings.push(row);
+  }
+
+  return created;
+}
+
 async function upsertUserProfile(UserProfile, profilePayload) {
   const existingProfiles = await UserProfile.filter({
     user_id: profilePayload.user_id,
@@ -208,7 +264,11 @@ export async function completeOnboardingTenantCreation({
   }
 
   const profilePayload = buildUserProfilePayload({ formData, user, schoolId, ownerEmail });
-  await upsertUserProfile(base44.entities.UserProfile, profilePayload);
+  const profileId = await upsertUserProfile(base44.entities.UserProfile, profilePayload);
+
+  if (formData.role === 'ADMIN') {
+    await ensureTenantBootstrapRecords(base44, schoolId, profileId);
+  }
 
   if (profilePayload.status === 'PENDING') {
     const adminProfiles = await base44.entities.UserProfile.filter({
@@ -256,9 +316,9 @@ export async function completeOnboardingTenantCreation({
       entityId: schoolId,
       action: 'THEME_CREATED_OR_UPDATED',
       reason: 'tenant_theme_onboarding',
-      context: { old_palette: null, new_palette: themePreview.palette, timestamp: new Date().toISOString() },
+      context: { old_palette: null, new_palette: (themePreview || DEFAULT_THEME).palette, timestamp: new Date().toISOString() },
     });
   }
 
-  return { schoolId };
+  return { schoolId, profileId };
 }

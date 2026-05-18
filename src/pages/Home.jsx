@@ -9,6 +9,7 @@ import AdminHome from '@/components/home/AdminHome';
 import Onboarding from '@/components/onboarding/Onboarding';
 import WelcomeTrialModal from '@/components/subscription/WelcomeTrialModal';
 import SuspendedAccountModal from '@/components/subscription/SuspendedAccountModal';
+import { selectCurrentUserProfile } from '@/lib/tenantSelection';
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -20,8 +21,8 @@ export default function Home() {
     queryFn: async () => {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
-      const profiles = await base44.entities.UserProfile.filter({ user_id: currentUser.id });
-      return profiles[0] || null;
+      const profiles = await base44.entities.UserProfile.filter({ user_id: currentUser.id }, '-created_date');
+      return selectCurrentUserProfile(profiles);
     },
   });
 

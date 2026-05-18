@@ -30,3 +30,13 @@ test('absence request pages resolve school context from profiles instead of user
   assert.match(parentAbsenceRequest, /student\?\.school_id \|\| userProfile\?\.school_id/);
   assert.doesNotMatch(parentAbsenceRequest, /school_id: user\.data\.school_id/);
 });
+
+
+test('calendar page guards missing profile before role-specific rendering', () => {
+  const calendar = read('src/pages/CalendarioEscolar.jsx');
+
+  assert.match(calendar, /loadingUser \|\| loadingEvents \|\| !userProfile/);
+  assert.match(calendar, /const isAdmin = userProfile\.app_role === 'ADMIN'/);
+  assert.match(calendar, /if \(isAdmin\)/);
+  assert.doesNotMatch(calendar, /if \(userProfile\.app_role === 'ADMIN'\)/);
+});

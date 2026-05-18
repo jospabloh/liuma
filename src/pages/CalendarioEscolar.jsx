@@ -61,9 +61,11 @@ export default function CalendarioEscolar() {
     }
   });
 
-  if (loadingUser || loadingEvents) {
+  if (loadingUser || loadingEvents || !userProfile) {
     return <LoadingScreen message="Cargando calendario..." />;
   }
+
+  const isAdmin = userProfile.app_role === 'ADMIN';
 
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
@@ -78,7 +80,7 @@ export default function CalendarioEscolar() {
   const upcomingEvents = events.filter(e => new Date(e.date) >= new Date()).slice(0, 5);
 
   const handleEventClick = (event) => {
-    if (userProfile.app_role === 'ADMIN') {
+    if (isAdmin) {
       setEditingEvent(event);
       setShowEventForm(true);
     }
@@ -98,7 +100,7 @@ export default function CalendarioEscolar() {
         subtitle={format(selectedDate, "MMMM yyyy", { locale: es })}
         showBack
         action={
-          userProfile.app_role === 'ADMIN' && (
+          isAdmin && (
             <Button onClick={() => { setEditingEvent(null); setShowEventForm(true); }}>
               <Plus className="w-4 h-4 mr-2" />
               Nuevo Evento
@@ -213,7 +215,7 @@ export default function CalendarioEscolar() {
                   >
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="font-semibold text-slate-800 text-sm">{event.title}</h4>
-                      {userProfile.app_role === 'ADMIN' && (
+                      {isAdmin && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -261,7 +263,7 @@ export default function CalendarioEscolar() {
       </div>
 
       {/* Event Form Dialog */}
-      {userProfile.app_role === 'ADMIN' && (
+      {isAdmin && (
         <EventFormDialog
           isOpen={showEventForm}
           onClose={() => {

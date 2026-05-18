@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LUMI_INTENTS, buildCapabilityRequest, evaluateCapabilityAccess } from '../../src/lib/lumi/capabilities.js';
+import { LUMI_INTENTS, buildCapabilityRequest, evaluateCapabilityAccess, buildDeniedCapabilityResponse } from '../../src/lib/lumi/capabilities.js';
 import { isLumiBubbleExcluded } from '../../src/lib/lumi/bubble-visibility.js';
 
 test('denies unauthorized capability by role', () => {
@@ -39,4 +39,14 @@ test('hides bubble in reserved routes', () => {
   assert.equal(isLumiBubbleExcluded('/licenses'), true);
   assert.equal(isLumiBubbleExcluded('/trial/setup'), true);
   assert.equal(isLumiBubbleExcluded('/Home'), false);
+});
+
+
+test('returns safe alternative guidance for denied responses', () => {
+  const denied = buildDeniedCapabilityResponse({
+    intent: LUMI_INTENTS.PAYMENT_REMINDERS,
+    denial: { safe_message: 'No autorizado.' },
+  });
+  assert.equal(typeof denied.safe_alternative, 'string');
+  assert.equal(denied.safe_alternative.length > 0, true);
 });

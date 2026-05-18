@@ -60,6 +60,29 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
     }
   };
 
+
+  const getDisplayPayload = (rawContent, role) => {
+    if (typeof rawContent !== 'string') return { text: String(rawContent || ''), meta: null };
+
+    try {
+      const parsed = JSON.parse(rawContent);
+      if (role === 'user') {
+        return { text: parsed.prompt || rawContent, meta: null };
+      }
+
+      if (parsed && typeof parsed === 'object') {
+        return {
+          text: parsed.message || parsed.response || rawContent,
+          meta: parsed.meta || null,
+        };
+      }
+    } catch (_) {
+      return { text: rawContent, meta: null };
+    }
+
+    return { text: rawContent, meta: null };
+  };
+
   const handleSend = async ({ intent, prompt, inputs } = {}) => {
     const messageText = (prompt ?? input).trim();
     if (!messageText || isLoading || !conversationId) return;
@@ -90,7 +113,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         intent: capabilityRequest.intent,
         denial: access.denial,
       });
-      setMessages((prev) => [...prev, { role: 'assistant', content: `🔒 ${denied.message}` }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `🔒 ${denied.message}\n\n${denied.safe_alternative}` }]);
       setInput('');
       return;
     }
@@ -232,13 +255,23 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
                       : 'bg-slate-100 text-slate-800'
                   }`}
                 >
-                  {msg.role === 'user' ? (
-                    <p className="text-sm">{msg.content}</p>
-                  ) : (
-                    <div className="text-sm prose prose-sm max-w-none">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    </div>
-                  )}
+                  {(() => {
+                    const payload = getDisplayPayload(msg.content, msg.role);
+                    return msg.role === 'user' ? (
+                      <p className="text-sm">{payload.text}</p>
+                    ) : (
+                      <div>
+                        <div className="text-sm prose prose-sm max-w-none">
+                          <ReactMarkdown>{payload.text}</ReactMarkdown>
+                        </div>
+                        {Array.isArray(payload.meta?.sources) && payload.meta.sources.length > 0 && (
+                          <p className="text-xs text-slate-500 mt-2">
+                            Fuente: {payload.meta.sources.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </motion.div>
             ))}

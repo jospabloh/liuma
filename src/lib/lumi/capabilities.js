@@ -117,6 +117,7 @@ export function buildDeniedCapabilityResponse({ intent, denial }) {
     status: 'denied',
     intent,
     message: denial.safe_message || `No pude completar la solicitud: ${denial.reason}`,
+    safe_alternative: 'Puedo ayudarte con una consulta permitida, por ejemplo tareas, avisos o asistencia dentro de tu perfil.',
     data: {},
     meta: {
       capability: intent,

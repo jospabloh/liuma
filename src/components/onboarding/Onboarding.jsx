@@ -78,15 +78,25 @@ export default function Onboarding({ user, onComplete }) {
       // Determine status: ACTIVE for ADMIN, PENDING for others
       const userStatus = formData.role === 'ADMIN' ? 'ACTIVE' : 'PENDING';
 
-      // Create user profile
-      const newProfile = await base44.entities.UserProfile.create({
-        user_id: user.id,
-        school_id: schoolId,
-        app_role: formData.role,
-        status: userStatus,
+      const isOwnerCreator = user?.email?.toLowerCase() === String(import.meta.env.VITE_OWNER_EMAIL || '').toLowerCase();
+      const existingProfiles = await base44.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId }, '-created_date', 1);
+      const profilePayload = {
+        app_role: formData.role === 'ADMIN' ? 'ADMIN' : formData.role,
+        status: formData.role === 'ADMIN' ? 'ACTIVE' : userStatus,
         phone: formData.phone,
         onboarding_completed: true,
-      });
+        ...(formData.role === 'ADMIN' ? { is_super_admin: isOwnerCreator } : {}),
+      };
+
+      if (existingProfiles[0]) {
+        await base44.entities.UserProfile.update(existingProfiles[0].id, profilePayload);
+      } else {
+        await base44.entities.UserProfile.create({
+          user_id: user.id,
+          school_id: schoolId,
+          ...profilePayload,
+        });
+      }
 
       // If user is pending, notify school admins
       if (userStatus === 'PENDING') {

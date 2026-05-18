@@ -2,11 +2,13 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { MessageCircle, Sparkles } from 'lucide-react';
 
-export default function LumiButton({ onClick, className = '' }) {
+export default function LumiButton({ onClick, className = '', isOpen = false }) {
   return (
     <motion.button
+      aria-label={isOpen ? "Cerrar chat de Lumi" : "Abrir chat de Lumi"}
+      aria-expanded={isOpen}
       onClick={onClick}
-      className={`fixed bottom-6 right-6 z-50 w-16 h-16 rounded-full bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-2xl flex items-center justify-center ${className}`}
+      className={`fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-2xl flex items-center justify-center ${className}`}
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.95 }}
       initial={{ scale: 0, opacity: 0 }}

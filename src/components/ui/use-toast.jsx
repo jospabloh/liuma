@@ -2,7 +2,8 @@
 import { useState, useEffect } from "react";
 
 const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_REMOVE_DELAY = 5000;
+const TOAST_DEDUP_WINDOW_MS = 2500;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -102,6 +103,7 @@ export const reducer = (state, action) => {
 const listeners = [];
 
 let memoryState = { toasts: [] };
+const recentToastEvents = new Map();
 
 function dispatch(action) {
   memoryState = reducer(memoryState, action);
@@ -110,7 +112,19 @@ function dispatch(action) {
   });
 }
 
+function buildToastKey(props) {
+  return `${props.variant || "default"}::${props.title || ""}::${props.description || ""}`;
+}
+
 function toast({ ...props }) {
+  const dedupeKey = props.dedupeKey || buildToastKey(props);
+  const now = Date.now();
+  const lastShownAt = recentToastEvents.get(dedupeKey);
+  if (lastShownAt && now - lastShownAt < TOAST_DEDUP_WINDOW_MS) {
+    return { id: null, dismiss: () => {}, update: () => {} };
+  }
+  recentToastEvents.set(dedupeKey, now);
+
   const id = genId();
 
   const update = (props) =>

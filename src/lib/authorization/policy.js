@@ -168,3 +168,34 @@ export function filterByRowLevel({ role, entity, rows = [], classroomIds = [], s
 }
 
 export { ROLES, POLICY };
+
+export function assertRoleAccess({ role, entity, action }) {
+  const decision = resolvePolicyDecision({ role, entity, action });
+  if (!decision.allowed) {
+    return { allowed: false, reason: 'forbidden_action' };
+  }
+  return { allowed: true };
+}
+
+export function assertTenantScope({ actorSchoolId, targetSchoolId }) {
+  if (!assertSameTenant({ sourceSchoolId: actorSchoolId, targetSchoolId })) {
+    return { allowed: false, reason: 'cross_tenant_denied' };
+  }
+  return { allowed: true };
+}
+
+export function assertTeacherClassroomScope({ role, classroomIds = [], targetClassroomId }) {
+  if (role !== ROLES.TEACHER) return { allowed: true };
+  if (!targetClassroomId || !classroomIds.includes(targetClassroomId)) {
+    return { allowed: false, reason: 'cross_classroom_denied' };
+  }
+  return { allowed: true };
+}
+
+export function assertParentStudentScope({ role, studentIds = [], targetStudentId }) {
+  if (role !== ROLES.PARENT) return { allowed: true };
+  if (!targetStudentId || !studentIds.includes(targetStudentId)) {
+    return { allowed: false, reason: 'unrelated_student_denied' };
+  }
+  return { allowed: true };
+}

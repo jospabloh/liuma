@@ -1,5 +1,46 @@
 # Authorization matrix
 
+## Route-access matrix
+
+### ADMIN-only routes
+- /Aprobaciones
+- /AlertaEmergencia
+- /AuditoriaAdmin
+- /AvisosAdmin
+- /CalendarioEscolar
+- /ConfiguracionInicial
+- /GestionDescuentos
+- /GestionDocumentos
+- /GestionEscuela
+- /GestionPedidosAdmin
+- /PagosAdmin
+- /PermisosRoles
+- /Reportes
+
+### TEACHER-only routes
+- /AvisosMaestro
+- /BitacorasMaestro
+- /CrearBitacora
+- /GestionAlumno
+- /GestionAusencias
+- /GestionSalon
+- /ResumenAsistencia
+- /TareaMaestro
+
+### PARENT-only routes
+- /Asistencia
+- /Avisos
+- /Bitacora
+- /EventosParaPadres
+- /MisHijos
+- /Tarea
+
+### Shared routes
+- ADMIN + PARENT: /ContactosEmergencia, /Pagos, /PedidosUniformes, /SolicitarAusencia
+- ADMIN + TEACHER + PARENT: /Home, /OperacionDiaria
+
+## Entity authorization
+
 | Entity | ADMIN | TEACHER | PARENT | Row-level constraints |
 |---|---|---|---|---|
 | Notice | Read/Write | Read/Write | Read | school_id + (classroom_id OR student_id by scope) |

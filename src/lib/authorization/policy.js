@@ -74,6 +74,22 @@ export function getOwnerScopedAccess({ currentUser, ownerEmail, actorSchoolId, t
   return { allowed: true, reason: 'owner_override', precedence: 'owner_override' };
 }
 
+export function verifyCreatorProvisioning(profile) {
+  if (!profile) {
+    return { valid: false, reason: 'missing_user_profile' };
+  }
+  if (profile.app_role !== ROLES.ADMIN) {
+    return { valid: false, reason: 'invalid_role' };
+  }
+  if (profile.status !== 'ACTIVE') {
+    return { valid: false, reason: 'inactive_profile' };
+  }
+  if (Object.prototype.hasOwnProperty.call(profile, 'is_super_admin') && profile.is_super_admin !== true) {
+    return { valid: false, reason: 'super_admin_required' };
+  }
+  return { valid: true };
+}
+
 
 function findOverrides({ overrides = [], userProfileId, entity, action }) {
   if (!userProfileId) return null;

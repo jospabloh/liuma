@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import RouteAccessDenied from '@/components/RouteAccessDenied';
 import { canAccessRoute, DEFAULT_DENIED_REDIRECT } from '@/lib/authorization/routeAccess';
-import { logAuditEvent } from '@/lib/audit';
+import { AUDIT_ACTIONS, logAuditEvent } from '@/lib/audit';
 import { getOwnerScopedAccess } from '@/lib/authorization/policy';
 
 export default function GuardedRoute({ routeName, children }) {
@@ -29,7 +29,7 @@ export default function GuardedRoute({ routeName, children }) {
       userProfile: profile,
       entity: 'Route',
       entityId: routeName,
-      action: 'OWNER_OVERRIDE_ACCESS',
+      action: AUDIT_ACTIONS.OWNER_OVERRIDE,
       reason: 'owner_override',
       context: { route: routeName, policy_decision: 'allow' },
     });

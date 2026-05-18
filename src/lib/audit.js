@@ -14,6 +14,7 @@ export const AUDIT_ENTITIES = {
 export const AUDIT_ACTIONS = {
   POLICY_DECISION: 'POLICY_DECISION',
   PERMISSION_CHANGE: 'PERMISSION_CHANGE',
+  OWNER_OVERRIDE: 'owner_override',
 };
 
 export function buildPermissionChangeContext({

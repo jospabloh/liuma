@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { base44 } from '@/api/base44Client';
 import { notificationService } from '@/lib/notifications/service';
-import { Loader2, School, GraduationCap, Users, ArrowRight, Check } from 'lucide-react';
+import { Loader2, School, GraduationCap, Users, ArrowRight, Check, Upload } from 'lucide-react';
+import { extractPaletteFromFile, DEFAULT_THEME } from '@/lib/tenantTheme';
+import { logAuditEvent } from '@/lib/audit';
 
 export default function Onboarding({ user, onComplete }) {
   const [step, setStep] = useState(1);
@@ -17,6 +20,10 @@ export default function Onboarding({ user, onComplete }) {
     phone: '',
     isDemo: false,
   });
+  const [logoFile, setLogoFile] = useState(null);
+  const [themePreview, setThemePreview] = useState(DEFAULT_THEME);
+
+  const colorRoles = useMemo(() => ['primary', 'secondary', 'accent', 'neutral'], []);
 
   const handleRoleSelect = (role) => {
     setFormData({ ...formData, role });
@@ -29,9 +36,13 @@ export default function Onboarding({ user, onComplete }) {
       
       // If ADMIN creating new school
       if (formData.role === 'ADMIN' && formData.newSchoolName) {
-        const school = await base44.entities.School.create({
-          name: formData.newSchoolName,
-        });
+        const schoolPayload = { name: formData.newSchoolName };
+        if (logoFile) {
+          const { file_url } = await base44.integrations.Core.UploadFile({ file: logoFile });
+          schoolPayload.logo_url = file_url;
+          schoolPayload.theme_settings = themePreview;
+        }
+        const school = await base44.entities.School.create(schoolPayload);
         schoolId = school.id;
         
         // Create trial subscription for new schools
@@ -121,12 +132,44 @@ export default function Onboarding({ user, onComplete }) {
         });
       }
 
+      if (formData.role === 'ADMIN') {
+        const actorProfile = { school_id: schoolId, app_role: 'ADMIN' };
+        await logAuditEvent({
+          user,
+          userProfile: actorProfile,
+          entity: 'SchoolTheme',
+          entityId: schoolId,
+          action: 'THEME_CREATED_OR_UPDATED',
+          reason: 'tenant_theme_onboarding',
+          context: { old_palette: null, new_palette: themePreview.palette, timestamp: new Date().toISOString() },
+        });
+      }
       onComplete();
     } catch (error) {
       console.error('Error in onboarding:', error);
       alert('Hubo un error. Intenta de nuevo.');
     }
     setIsLoading(false);
+  };
+
+
+  const handleLogoChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setLogoFile(file);
+    try {
+      const extracted = await extractPaletteFromFile(file);
+      setThemePreview(extracted.quality === 'failed' ? DEFAULT_THEME : extracted);
+    } catch (error) {
+      setThemePreview(DEFAULT_THEME);
+    }
+  };
+
+  const updateThemeColor = (role, value) => {
+    setThemePreview((prev) => ({
+      ...prev,
+      palette: { ...(prev.palette || DEFAULT_THEME.palette), [role]: value }
+    }));
   };
 
   return (
@@ -244,6 +287,26 @@ export default function Onboarding({ user, onComplete }) {
                         placeholder="Ej: Colegio Montessori"
                         className="mt-1 h-12"
                       />
+                    </div>
+                    <div>
+                      <Label>Logo (opcional)</Label>
+                      <Input type="file" accept="image/*" onChange={handleLogoChange} className="mt-1 h-12" />
+                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Upload className="w-3 h-3" /> Extraemos colores automáticamente con fallback seguro.</p>
+                    </div>
+                    <div className="rounded-xl border p-3 bg-slate-50">
+                      <p className="text-sm font-medium text-slate-700 mb-2">Vista previa de paleta</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {colorRoles.map((role) => (
+                          <label key={role} className="text-xs text-slate-600">
+                            <span className="capitalize">{role}</span>
+                            <Input type="color" value={themePreview.palette?.[role] || DEFAULT_THEME.palette[role]} onChange={(e) => updateThemeColor(role, e.target.value)} className="mt-1 h-10 p-1" />
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-3 rounded-lg p-3" style={{ background: themePreview.palette?.secondary || DEFAULT_THEME.palette.secondary }}>
+                        <Button className="mr-2" style={{ background: themePreview.palette?.primary || DEFAULT_THEME.palette.primary, color: '#fff' }}>Botón</Button>
+                        <Badge style={{ background: themePreview.palette?.accent || DEFAULT_THEME.palette.accent, color: '#fff' }}>Badge</Badge>
+                      </div>
                     </div>
                   </div>
                 ) : (

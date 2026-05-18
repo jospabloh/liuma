@@ -7,6 +7,7 @@ import {
   filterByRowLevel,
   getEffectivePolicyDecision,
   getOwnerScopedAccess,
+  verifyCreatorProvisioning,
 } from '../../src/lib/authorization/policy.js';
 import { actors, rows } from '../fixtures/authorization-fixtures.js';
 
@@ -111,4 +112,22 @@ test('owner override blocks cross-tenant access to preserve tenant isolation', (
 
   assert.equal(decision.allowed, false);
   assert.equal(decision.reason, 'cross_tenant_denied');
+});
+
+test('creator provisioning is valid only for active admin profile', () => {
+  const result = verifyCreatorProvisioning({
+    id: 'creator-1',
+    app_role: 'ADMIN',
+    status: 'ACTIVE',
+    is_super_admin: true,
+  });
+
+  assert.equal(result.valid, true);
+});
+
+test('creator provisioning fails when profile is missing admin flags', () => {
+  assert.equal(verifyCreatorProvisioning(null).valid, false);
+  assert.equal(verifyCreatorProvisioning({ app_role: 'TEACHER', status: 'ACTIVE' }).reason, 'invalid_role');
+  assert.equal(verifyCreatorProvisioning({ app_role: 'ADMIN', status: 'PENDING' }).reason, 'inactive_profile');
+  assert.equal(verifyCreatorProvisioning({ app_role: 'ADMIN', status: 'ACTIVE', is_super_admin: false }).reason, 'super_admin_required');
 });

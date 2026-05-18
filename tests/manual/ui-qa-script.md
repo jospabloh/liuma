@@ -1,5 +1,25 @@
 # Manual QA Script - UX Consistency
 
+## Shared scoring model (apply to every screen)
+
+Pass threshold per screen: **>= 85/100**.
+
+| Criterion | Weight |
+|---|---:|
+| Clarity/readability | 15 |
+| Information hierarchy | 15 |
+| Interaction friction | 15 |
+| Mobile ergonomics | 10 |
+| Laptop efficiency | 10 |
+| Accessibility | 15 |
+| Consistency | 10 |
+| Trust/safety messaging | 10 |
+
+### Auto-fail blockers
+- Confusing critical flows.
+- Inaccessible primary actions.
+- Policy-denied flows with unclear messaging.
+
 ## Devices
 - Phone viewport: 360x800
 - Laptop viewport: 1366x768

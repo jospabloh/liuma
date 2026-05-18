@@ -10,6 +10,7 @@ import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { buildTenantSelectionContext } from '@/lib/tenantSelection';
 
 export default function AdminHome({ user, userProfile, subscription }) {
   const navigate = useNavigate();
@@ -34,6 +35,29 @@ export default function AdminHome({ user, userProfile, subscription }) {
       const schools = await base44.entities.School.filter({ id: userProfile.school_id });
       return schools[0];
     },
+  });
+
+  const { data: tenantProfiles = [] } = useQuery({
+    queryKey: ['adminTenantProfiles', user?.id],
+    queryFn: () => base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date'),
+    enabled: !!user?.id,
+  });
+  const { data: tenantSchools = [] } = useQuery({
+    queryKey: ['adminTenantSchools', tenantProfiles.map((profile) => profile.school_id).join('|')],
+    queryFn: async () => {
+      const rows = [];
+      for (const profile of tenantProfiles) {
+        const schools = await base44.entities.School.filter({ id: profile.school_id });
+        if (schools[0]) rows.push(schools[0]);
+      }
+      return rows;
+    },
+    enabled: tenantProfiles.length > 0,
+  });
+  const tenantSelection = buildTenantSelectionContext({
+    profiles: tenantProfiles,
+    schools: tenantSchools,
+    currentSchoolId: userProfile.school_id,
   });
 
   // Get classrooms count
@@ -128,6 +152,18 @@ export default function AdminHome({ user, userProfile, subscription }) {
           <p className="text-slate-400 text-sm mt-1">
             {classrooms.length} salones · {students.length} alumnos
           </p>
+          {tenantSelection.options.length > 1 && (
+            <div className="mt-4 flex flex-wrap gap-2" aria-label="Tenants administrados">
+              {tenantSelection.options.map((option) => (
+                <span
+                  key={option.profile_id}
+                  className={`rounded-full px-3 py-1 text-xs ${option.is_current ? 'bg-white text-slate-900' : 'bg-slate-700 text-slate-200'}`}
+                >
+                  {option.school_name}{option.is_current ? ' · actual' : ''}
+                </span>
+              ))}
+            </div>
+          )}
         </motion.div>
       </div>
 

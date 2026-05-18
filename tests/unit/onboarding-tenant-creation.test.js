@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  BASELINE_PERMISSION_TEMPLATES,
   ONBOARDING_ERROR_CODES,
+  REQUIRED_TENANT_ROLES,
   buildSchoolPayload,
   buildUserProfilePayload,
   captureOnboardingFailure,
@@ -10,6 +12,7 @@ import {
   mapOnboardingError,
   validateOnboardingPayload,
 } from '../../src/lib/onboardingTenantCreation.js';
+import { DEFAULT_THEME } from '../../src/lib/tenantTheme.js';
 
 const user = { id: 'user-1', email: 'owner@example.com', full_name: 'Owner User' };
 const themePreview = { palette: { primary: '#111111', secondary: '#222222', accent: '#333333', neutral: '#444444' } };
@@ -20,8 +23,10 @@ function createEntity(seed = []) {
     rows,
     createCalls: [],
     updateCalls: [],
-    async filter(query) {
-      return rows.filter((row) => Object.entries(query).every(([key, value]) => row[key] === value));
+    async filter(query, order) {
+      const result = rows.filter((row) => Object.entries(query).every(([key, value]) => row[key] === value));
+      if (order === '-created_date') return [...result].sort((a, b) => String(b.created_date || '').localeCompare(String(a.created_date || '')));
+      return result;
     },
     async create(payload) {
       this.createCalls.push(payload);
@@ -49,6 +54,9 @@ function createBase44(seed = {}) {
       SchoolSubscription: createEntity(seed.subscriptions),
       UserProfile: createEntity(seed.profiles),
       User: createEntity(seed.users),
+      Role: createEntity(seed.roles),
+      PermissionTemplate: createEntity(seed.permissionTemplates),
+      AccessBinding: createEntity(seed.accessBindings),
     },
   };
 }
@@ -72,6 +80,7 @@ test('builds test-data tenant and profile payloads with required defaults and fo
     created_by_user_id: 'user-1',
     is_demo: true,
     data_mode: 'test-data',
+    theme_settings: themePreview,
   });
 
   assert.deepEqual(buildUserProfilePayload({ formData, user, schoolId: 'school-1', ownerEmail: 'owner@example.com' }), {
@@ -101,11 +110,44 @@ test('provisions tenant, trial subscription, admin profile, and audit hook for a
   });
 
   assert.equal(result.schoolId, '1');
+  assert.equal(result.profileId, '1');
   assert.equal(base44.entities.School.createCalls.length, 1);
   assert.equal(base44.entities.SchoolSubscription.createCalls[0].school_id, '1');
   assert.equal(base44.entities.UserProfile.createCalls[0].school_id, '1');
   assert.equal(base44.entities.UserProfile.createCalls[0].status, 'ACTIVE');
   assert.equal(auditCalls[0].entityId, '1');
+});
+
+test('automatically bootstraps required roles, permission templates, owner binding, and theme fallback for new admin tenant', async () => {
+  const base44 = createBase44();
+
+  await completeOnboardingTenantCreation({
+    base44,
+    notificationService: { sendByEvent: async () => {} },
+    logAuditEvent: async () => {},
+    user,
+    formData: { role: 'ADMIN', newSchoolName: 'Colegio Bootstrap', phone: '', isDemo: false },
+    logoFile: null,
+    themePreview: null,
+    ownerEmail: 'owner@example.com',
+  });
+
+  assert.deepEqual(base44.entities.School.createCalls[0].theme_settings, DEFAULT_THEME);
+  assert.deepEqual(
+    base44.entities.Role.createCalls.map((row) => ({ role_key: row.role_key, school_id: row.school_id, is_required: row.is_required })),
+    REQUIRED_TENANT_ROLES.map((role) => ({ role_key: role.role_key, school_id: '1', is_required: true }))
+  );
+  assert.deepEqual(
+    base44.entities.PermissionTemplate.createCalls.map((row) => ({ role_key: row.role_key, school_id: row.school_id, is_baseline: row.is_baseline })),
+    BASELINE_PERMISSION_TEMPLATES.map((template) => ({ role_key: template.role_key, school_id: '1', is_baseline: true }))
+  );
+  assert.deepEqual(base44.entities.AccessBinding.createCalls[0], {
+    school_id: '1',
+    user_profile_id: '1',
+    binding_key: 'tenant_owner_admin',
+    role_key: 'ADMIN',
+    status: 'ACTIVE',
+  });
 });
 
 test('retries tenant provisioning idempotently after school creation succeeds but hooks are incomplete', async () => {

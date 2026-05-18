@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { buildThemeCssVars, DEFAULT_THEME } from '@/lib/tenantTheme';
+import { selectCurrentUserProfile } from '@/lib/tenantSelection';
 
 export default function TenantThemeRuntime() {
   const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
   const { data: userProfile } = useQuery({
     queryKey: ['themeUserProfile', user?.id],
-    queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0],
+    queryFn: async () => selectCurrentUserProfile(await base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date')),
     enabled: !!user,
   });
   const { data: school } = useQuery({

@@ -60,6 +60,20 @@ function resolvePolicyDecision({ role, entity, action }) {
   return { allowed: false, reason: 'default_deny', precedence: 'default_deny' };
 }
 
+export function isOwnerUser({ currentUser, ownerEmail }) {
+  if (!currentUser?.email || !ownerEmail) return false;
+  return currentUser.email.toLowerCase() === ownerEmail.toLowerCase();
+}
+
+export function getOwnerScopedAccess({ currentUser, ownerEmail, actorSchoolId, targetSchoolId }) {
+  const isOwner = isOwnerUser({ currentUser, ownerEmail });
+  if (!isOwner) return { allowed: false };
+  if (!targetSchoolId || actorSchoolId !== targetSchoolId) {
+    return { allowed: false, reason: 'cross_tenant_denied' };
+  }
+  return { allowed: true, reason: 'owner_override', precedence: 'owner_override' };
+}
+
 
 function findOverrides({ overrides = [], userProfileId, entity, action }) {
   if (!userProfileId) return null;

@@ -6,6 +6,7 @@ import {
   buildScopedFilter,
   filterByRowLevel,
   getEffectivePolicyDecision,
+  getOwnerScopedAccess,
 } from '../../src/lib/authorization/policy.js';
 import { actors, rows } from '../fixtures/authorization-fixtures.js';
 
@@ -74,4 +75,40 @@ test('applies deny override precedence for effective permissions', () => {
   });
   assert.equal(decision.allowed, false);
   assert.equal(decision.precedence, 'override_deny');
+});
+
+test('owner override allows admin access only when scoped to the same tenant', () => {
+  const decision = getOwnerScopedAccess({
+    currentUser: { email: 'owner@example.com' },
+    ownerEmail: 'owner@example.com',
+    actorSchoolId: 'school-a',
+    targetSchoolId: 'school-a',
+  });
+
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, 'owner_override');
+});
+
+test('non-owner users remain deny-by-default when they have no role permission', () => {
+  const ownerDecision = getOwnerScopedAccess({
+    currentUser: { email: 'user@example.com' },
+    ownerEmail: 'owner@example.com',
+    actorSchoolId: 'school-a',
+    targetSchoolId: 'school-a',
+  });
+
+  assert.equal(ownerDecision.allowed, false);
+  assert.equal(canWriteEntity('PARENT', 'PaymentRecord'), false);
+});
+
+test('owner override blocks cross-tenant access to preserve tenant isolation', () => {
+  const decision = getOwnerScopedAccess({
+    currentUser: { email: 'owner@example.com' },
+    ownerEmail: 'owner@example.com',
+    actorSchoolId: 'school-a',
+    targetSchoolId: 'school-b',
+  });
+
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason, 'cross_tenant_denied');
 });

@@ -86,3 +86,22 @@
     @apply bg-background text-foreground;
   }
 }
+
+html, body, #root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@layer utilities {
+  .ui-readable-text {
+    @apply text-sm md:text-[15px] leading-6;
+  }
+
+  .ui-truncate-cell {
+    @apply max-w-[220px] truncate;
+  }
+
+  .ui-sticky-actions {
+    @apply sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80;
+  }
+}

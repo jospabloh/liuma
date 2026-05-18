@@ -90,7 +90,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         intent: capabilityRequest.intent,
         denial: access.denial,
       });
-      setMessages((prev) => [...prev, { role: 'assistant', content: denied.message }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `🔒 ${denied.message}` }]);
       setInput('');
       return;
     }
@@ -136,6 +136,8 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+      aria-hidden="true"
     >
       <motion.div
         initial={{ y: '100%' }}
@@ -143,6 +145,10 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         className="absolute bottom-0 left-0 right-0 h-[85vh] md:h-[600px] md:w-[400px] md:right-6 md:bottom-6 md:left-auto md:rounded-2xl bg-white shadow-2xl flex flex-col overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Chat con Lumi"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-violet-600 to-indigo-700 p-4 flex items-center gap-3">
@@ -150,6 +156,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
             variant="ghost"
             size="icon"
             onClick={onClose}
+            aria-label="Volver"
             className="text-white hover:bg-white/20 rounded-full"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -167,6 +174,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
             variant="ghost"
             size="icon"
             onClick={onClose}
+            aria-label="Volver"
             className="text-white hover:bg-white/20 rounded-full md:hidden"
           >
             <X className="w-5 h-5" />

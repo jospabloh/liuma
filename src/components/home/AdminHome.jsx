@@ -361,7 +361,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
       </div>
 
       {/* Lumi Button */}
-      <LumiButton onClick={() => setShowLumi(true)} />
+      <LumiButton onClick={() => setShowLumi(true)} isOpen={showLumi} />
       
       {/* Lumi Chat */}
       <LumiChat 

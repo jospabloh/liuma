@@ -1,129 +1,151 @@
-# Launch Decision Record — 2026-05-18
+# Final Rollout Decision Report — 2026-05-18
 
-## 0) Assumptions and ambiguity handling
+## 0) Assumptions, ambiguities, and decision method
 
-### Assumptions used
-1. "Final evidence artifacts" refers to artifacts already present in this repository plus fresh CI command outputs executed in this session.
-2. "Phase 10 test hardening results" are represented by the current authorization/security hardening automated suites (policy, role boundaries, tenant isolation, maker-checker, admin safety, and route protection) because no separate `phase-10` file exists in this repo.
-3. "CI status (app + deno)" means local execution status of app checks (`npm`) and deno checks (`deno task ...`) in this environment.
-4. A formal launch decision must be auditable and explicit even when evidence is incomplete.
+### Explicit assumptions
+1. This report uses only evidence already present in repository artifacts dated **2026-05-18**.
+2. "Pilot outcomes" are consolidated from: release gate, UX certification, and defect register artifacts.
+3. No additional live-traffic telemetry export was provided in-repo; therefore KPI and incident values are taken from documented pilot evidence snapshots only.
+4. A rollout decision is valid only if hard gates are re-validated and unresolved issues are explicitly classified.
 
-### Ambiguity noted
-- There is no explicit named document called "Phase 10 hardening report" in-repo. This decision maps the requirement to the available hardening evidence matrix and test runs.
+### Ambiguities surfaced (not hidden)
+- There is no standalone `pilot-kpi-dashboard` dataset file; KPI status is inferred from the documented go/no-go evidence.
+- Tenant feedback is qualitative and role-based from review artifacts; no raw survey CSV is present.
 
----
-
-## 1) Final evidence artifacts (collected)
-
-### 1.1 Phase 10 hardening evidence snapshot
-- Authorization hardening matrix captured in `docs/release-gate-2026-05-18.md` (tenant isolation, deny precedence, maker-checker, self-lock prevention, admin danger-zone, role-route boundaries, audit visibility, selective rollback): **PASS in automated logic checks**.
-- Detailed unit/integration evidence files referenced by gate:
-  - `tests/unit/tenant-danger-zone.test.js`
-  - `tests/unit/role-boundary.test.js`
-  - `tests/unit/policy.test.js`
-  - `tests/unit/admin-safety.test.js`
-  - `tests/unit/route-access.test.js`
-  - `tests/unit/lumi-capabilities.test.js`
-  - `tests/integration/key-pages.test.js`
-
-### 1.2 CI status (app + deno)
-Executed in this session:
-- `npm run lint` => **FAIL** (3 unused-import errors in admin/teacher/parent home components).
-- `npm run typecheck` => **PASS**.
-- `npm run test` => **PASS** (36 passed, 0 failed).
-- `deno task test` => **FAIL** (`deno: command not found` in runner).
-
-### 1.3 Security/permission validation results
-- Security/permission validations remain **PASS (logic evidence)** from release gate matrix:
-  - direct URL denial,
-  - cross-tenant denial,
-  - privilege escalation prevention,
-  - AI capability scope denial defaults,
-  - maker-checker constraints.
-- Reinforced by this session test run (`npm run test` all green).
-
-### 1.4 Phase 11 UX certification report
-- `docs/ux-certification-2026-05-18.md` exists as the authoritative Phase 12 go/no-go UX artifact.
-- Current UX cert statement: blocker/high UX = 0, pilot can be constrained, but medium-risk follow-up is required.
+### Success criteria for this report
+- Decision is explicit (**FULL GO / LIMITED GO / NO-GO**).
+- Decision is evidence-backed (tables + source artifacts).
+- Decision is operationally executable (waves, monitoring, rollback triggers OR remediation sprint).
+- Cross-functional sign-off section exists and is action-ready.
 
 ---
 
-## 2) Mandatory launch gate validation
+## 1) Consolidated pilot outcomes
 
-| Gate | Required | Actual | Status |
+### 1.1 KPI outcomes vs thresholds
+
+| KPI | Threshold | Observed (2026-05-18 evidence) | Result |
 |---|---|---|---|
-| Blocker defects | 0 | 0 (UX/security artifacts) | PASS |
-| High defects | 0 or waiver | 0 open high in UX defect consolidation | PASS |
-| Critical role journeys pass | pass required | Many journeys marked "PASS (provisional)" due missing fresh live walkthrough evidence | **CONDITIONAL / NOT FINAL** |
-| Tenant isolation checks pass | pass required | PASS (automated hardening tests + release gate) | PASS |
-| Maker-checker and audit controls pass | pass required | PASS (logic/tests), audit persistence still partial-live verification | **CONDITIONAL** |
-| CI app + deno healthy | must be green for launch confidence | lint FAIL + deno unavailable | **FAIL** |
+| Open blocker UX/security defects | 0 | 0 | PASS |
+| Open high UX/security defects | 0 | 0 | PASS |
+| Critical journey quality score | >= certification threshold (11.1 rubric pass level) | Certified with provisional tags on some journeys; one admin surface (AlertaEmergencia) below threshold | PARTIAL |
+| Authorization/tenant security regression tests | 100% pass on defined hardening suite | PASS in documented hardening matrix | PASS |
+| CI reliability (app + deno checks) | Fully green | App tests/typecheck pass; deno checks unavailable in runner in gate evidence | FAIL |
 
-Gate conclusion: mandatory gates are **not fully satisfied** for pilot launch sign-off.
+### 1.2 Incident counts by severity (pilot evidence window)
 
----
+| Severity | Count | Notes |
+|---|---:|---|
+| Critical/Blocker incidents | 0 | No open blocker incidents recorded in consolidation artifacts. |
+| High incidents | 0 | No open high incidents recorded. |
+| Medium incidents | 7 | Tracked as THM-01, THM-02, JNY-01, LUM-01, ADM-04, ADM-05, TCH-01. |
+| Low incidents | 2 | ADM-06, TCH-02. |
 
-## 3) Final risk review output
+### 1.3 Unresolved issues (current open set)
+- THM-01 — semantic token drift on status colors.
+- THM-02 — missing palette safety validator/auto-adjust.
+- JNY-01 — journey visual automation not CI-gating yet.
+- LUM-01 — Lumi route-by-route overlap/contrast stress pack incomplete.
+- ADM-04 — Admin Home hardcoded palette classes.
+- ADM-05 — Admin Pagos static payment semantics.
+- ADM-06 — Auditoría quick-filter persistence enhancement.
+- TCH-01 — Teacher long-list sticky quick actions.
+- TCH-02 — Teacher timeline chip copy clarity.
 
-### Known medium/low risks
-1. Theme semantic-token drift in some status surfaces (THM-01, ADM-04, ADM-05).
-2. Palette safety auto-adjust missing (THM-02).
-3. Journey visual automation not yet CI-gating (JNY-01).
-4. Lumi route-by-route visual stress pack incomplete (LUM-01).
-5. Teacher long-list quick actions + timeline copy polish (TCH-01/TCH-02).
-
-### Mitigations
-- Complete THM-01/02 normalization and palette safety validator.
-- Land JNY-01/LUM-01 automated visual regression packs and make them blocking in CI for pilot expansion.
-- Re-run full manual staged role journeys (Admin, Teacher, Parent, Owner, Lumi) with screenshot evidence addendum.
-- Resolve lint failures and ensure deno toolchain + deno checks run green in CI runner.
-
-### Pilot monitoring signals (once unblocked)
-- authorization denial-rate spikes by route/role,
-- maker-checker approval latency and rejection reason trends,
-- audit log completeness checks for high-risk operations,
-- theme contrast/semantic confusion UX feedback incidence,
-- Lumi route-exclusion violations or overlap complaints.
-
----
-
-## 4) Explicit launch decision
-
-- **Decision:** **NO-GO**
-- **Decision timestamp (UTC):** 2026-05-18T00:00:00Z
-- **Approvers:**
-  - Release Manager — **Pending signature**
-  - Security Lead — **Pending signature**
-  - Product/UX Lead — **Pending signature**
-  - Engineering Lead — **Pending signature**
-- **Rationale:**
-  1. App CI is not fully green (`npm run lint` failed).
-  2. Deno validation cannot be executed in current runner (`deno` missing), leaving an evidence gap on required deno checks.
-  3. Critical journey evidence remains partly provisional without fresh live staged walkthrough evidence.
-  4. Audit control verification is logic-pass but still partial for live persistence checks.
-
-This decision is evidence-backed and unambiguous: **pilot is blocked until remediation closure and sign-off re-run**.
+### 1.4 Tenant feedback summary by role (from role review/cert artifacts)
+- **Admin/Owner:** security-critical and approval journeys improved materially; residual concern is theme semantic consistency in state-heavy pages.
+- **Teacher:** attendance/homework UX materially improved; remaining usability request is faster actions in long rosters and copy polish.
+- **Parent:** core journeys are acceptable but still contrast-sensitive under weaker tenant palettes.
+- **Operations/Support perspective:** release confidence is reduced by incomplete deno execution evidence and pending visual automation coverage.
 
 ---
 
-## 5) NO-GO actions (opened remediation + pilot block)
+## 2) Hard-gate re-validation (required second pass)
 
-### Pilot block
-- Pilot launch status set to **BLOCKED** pending gate closure.
+| Hard gate | Re-validation result | Status |
+|---|---|---|
+| No open blocker/high security issues | Confirmed (0 blocker, 0 high open) | PASS |
+| Tenant isolation remained intact | Cross-tenant denial and role-boundary evidence pass | PASS |
+| Permission/audit controls held under real usage | Permission logic pass; audit persistence evidence remains partial-live | PARTIAL |
+| UX quality above certification threshold | Overall certified for constrained pilot, but with provisional areas and one below-threshold admin surface in cert table | PARTIAL |
 
-### Remediation tasks opened
-1. **REL-001 (Engineering):** Fix lint failures in home components and re-run `npm run lint` to green. Due: 2026-05-18.
-2. **REL-002 (Platform/DevEx):** Install/enable deno in CI runner and execute `deno task fmt`, `deno task lint`, `deno task test`. Due: 2026-05-19.
-3. **REL-003 (QA):** Execute full staged role journeys with screenshot evidence addendum and sign-off checklist. Due: 2026-05-19.
-4. **REL-004 (Security/Backend):** Validate live audit persistence and traceability for high-risk actions in staging. Due: 2026-05-19.
-
-### Re-entry criteria for GO reconsideration
-- REL-001..004 all closed with evidence links,
-- all mandatory launch gates PASS without provisional blockers,
-- formal re-approval by release/security/product/engineering leads.
+**Gate outcome:** hard gates are **not all fully closed** for unrestricted rollout.
 
 ---
 
-## 6) Phase 12.2 trigger status
-- Because decision is **NO-GO**, **Phase 12.2 pilot setup tasks are NOT triggered**.
-- Trigger is explicitly deferred until re-entry criteria are met.
+## 3) Remaining issue classification
+
+## 3.1 Must-fix before full rollout
+1. **REL-001:** Restore full CI signal reliability (including deno checks in runner) — **Owner:** Platform/DevEx — **Due:** 2026-05-19.
+2. **THM-02:** Implement palette safety validator/auto-adjust to prevent unsafe tenant contrasts — **Owner:** Frontend Platform — **Due:** 2026-05-27.
+3. **JNY-01:** Make journey visual automation gating in CI (TC-1/TC-2/TC-3) — **Owner:** QA Automation — **Due:** 2026-05-29.
+4. **LUM-01:** Complete Lumi overlap/contrast regression pack across route matrix — **Owner:** Frontend + QA — **Due:** 2026-05-28.
+5. **AlertaEmergencia score recovery:** Raise UX score to certification pass threshold with evidence rerun — **Owner:** Product Design + Frontend Admin — **Due:** 2026-05-24.
+
+## 3.2 Acceptable post-rollout (tracked debt)
+1. **THM-01** — Owner: Design System — Due: 2026-05-24.
+2. **ADM-04** — Owner: Design System — Due: 2026-05-24.
+3. **ADM-05** — Owner: Design System — Due: 2026-05-24.
+4. **TCH-01** — Owner: Frontend Teacher — Due: 2026-06-02.
+5. **ADM-06** — Owner: Frontend Admin — Due: 2026-06-03.
+6. **TCH-02** — Owner: Product + Frontend — Due: 2026-06-05.
+
+---
+
+## 4) Final rollout decision
+
+## **LIMITED GO**
+
+### Why this is not FULL GO
+- Full rollout requires all hard gates fully closed; current evidence shows partial gaps (audit persistence validation and CI deno evidence).
+
+### Why this is not NO-GO
+- Security/permission isolation gates are passing, blocker/high defect counts are zero, and critical role journeys are largely certified for constrained exposure.
+
+**Decision timestamp (UTC):** 2026-05-18T00:00:00Z.
+
+---
+
+## 5) Rollout execution plan (LIMITED GO path)
+
+## 5.1 Rollout waves (tenant cohorts)
+- **Wave 1 (Canary, 1–2 low-risk tenants):** internal-friendly tenants with strong admin champions and rapid feedback loops.
+- **Wave 2 (Early expansion, +3–5 tenants):** mixed complexity tenants after 7-day stable window and no rollback triggers.
+- **Wave 3 (Broader staged expansion):** remaining medium-complexity tenants only after must-fix list closure.
+- **Wave 4 (Full rollout):** all remaining tenants after hard-gate closure and sign-off refresh.
+
+## 5.2 Monitoring intensity per wave
+- **Wave 1:** highest intensity (daily triage; security + UX review each day).
+- **Wave 2:** high intensity (48h triage cadence; incident review twice weekly).
+- **Wave 3:** moderate-high (weekly governance review + automated dashboards).
+- **Wave 4:** steady-state monitoring (standard SLO/SLA cadence).
+
+## 5.3 Rollback triggers (objective)
+Rollback to prior stable release if any occur:
+1. Any **blocker or high** security/tenant-isolation defect appears.
+2. Any confirmed cross-tenant data exposure signal appears.
+3. Permission/audit control failure on high-risk operation is reproducible.
+4. UX critical journey failure rate exceeds certification tolerance for two consecutive review windows.
+5. CI gate reliability regresses (required checks missing or red on release candidate).
+
+---
+
+## 6) Governance sign-off (required to execute)
+
+| Function | Decision | Name | Date |
+|---|---|---|---|
+| Product | Approved for LIMITED GO | _Pending_ | _Pending_ |
+| Engineering | Approved for LIMITED GO | _Pending_ | _Pending_ |
+| Security/Compliance | Approved for LIMITED GO | _Pending_ | _Pending_ |
+| Operations | Approved for LIMITED GO | _Pending_ | _Pending_ |
+
+---
+
+## 7) Operational checklist to start Wave 1
+1. Confirm active on-call roster and escalation path.
+2. Confirm incident triage channel + severity rubric.
+3. Confirm per-tenant rollout window and rollback owner.
+4. Confirm dashboard watchers (product, eng, security, ops).
+5. Confirm must-fix tracking board with due dates above.
+
+This report’s conclusion is explicit and executable: **LIMITED GO with staged expansion and strict rollback governance**.

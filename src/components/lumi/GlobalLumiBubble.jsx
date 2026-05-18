@@ -13,7 +13,7 @@ export default function GlobalLumiBubble() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
-  const { data: userProfile } = useQuery({
+  const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['globalLumiUserProfile', user?.id],
     queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0],
     enabled: isAuthenticated && Boolean(user?.id),
@@ -21,8 +21,11 @@ export default function GlobalLumiBubble() {
 
   const hidden = useMemo(() => {
     if (!isAuthenticated) return true;
+    if (isLoadingProfile) return true;
+    if (!userProfile) return true;
+    if (userProfile.status && userProfile.status !== 'ACTIVE') return true;
     return isLumiBubbleExcluded(location.pathname);
-  }, [isAuthenticated, location.pathname]);
+  }, [isAuthenticated, isLoadingProfile, userProfile, location.pathname]);
 
   if (hidden) return null;
 

@@ -7,6 +7,8 @@ import {
   filterByRowLevel,
   getEffectivePolicyDecision,
   getOwnerScopedAccess,
+  resolveOwnerIdentity,
+  validateOwnerProfiles,
   verifyCreatorProvisioning,
 } from '../../src/lib/authorization/policy.js';
 import { actors, rows } from '../fixtures/authorization-fixtures.js';
@@ -130,4 +132,78 @@ test('creator provisioning fails when profile is missing admin flags', () => {
   assert.equal(verifyCreatorProvisioning({ app_role: 'TEACHER', status: 'ACTIVE' }).reason, 'invalid_role');
   assert.equal(verifyCreatorProvisioning({ app_role: 'ADMIN', status: 'PENDING' }).reason, 'inactive_profile');
   assert.equal(verifyCreatorProvisioning({ app_role: 'ADMIN', status: 'ACTIVE', is_super_admin: false }).reason, 'super_admin_required');
+});
+
+
+test('owner identity prefers configured user_id and rejects email conflicts', () => {
+  assert.deepEqual(resolveOwnerIdentity({
+    currentUser: { id: 'owner-user-1', email: 'owner@example.com' },
+    ownerEmail: 'other@example.com',
+    ownerUserId: 'owner-user-1',
+  }), {
+    isOwner: false,
+    source: 'user_id',
+    reason: 'owner_identity_conflict',
+  });
+
+  assert.equal(resolveOwnerIdentity({
+    currentUser: { id: 'owner-user-1', email: 'owner@example.com' },
+    ownerEmail: 'owner@example.com',
+    ownerUserId: 'owner-user-1',
+  }).isOwner, true);
+});
+
+test('owner override requires one active admin UserProfile in the target tenant', () => {
+  const decision = getOwnerScopedAccess({
+    currentUser: { id: 'owner-user-1', email: 'owner@example.com' },
+    ownerEmail: 'owner@example.com',
+    actorSchoolId: 'school-a',
+    targetSchoolId: 'school-a',
+    ownerProfiles: [
+      { id: 'owner-profile-1', user_id: 'owner-user-1', school_id: 'school-a', app_role: 'ADMIN', status: 'ACTIVE', is_super_admin: true },
+    ],
+  });
+
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.identity_source, 'email');
+});
+
+test('owner profile validation rejects missing, inactive, and non-admin target-tenant profiles', () => {
+  assert.equal(validateOwnerProfiles({
+    currentUser: { id: 'owner-user-1' },
+    ownerProfiles: [{ id: 'other-tenant', user_id: 'owner-user-1', school_id: 'school-b', app_role: 'ADMIN', status: 'ACTIVE' }],
+    targetSchoolId: 'school-a',
+  }).reason, 'missing_user_profile');
+
+  assert.equal(validateOwnerProfiles({
+    currentUser: { id: 'owner-user-1' },
+    ownerProfiles: [{ id: 'inactive', user_id: 'owner-user-1', school_id: 'school-a', app_role: 'ADMIN', status: 'SUSPENDED' }],
+    targetSchoolId: 'school-a',
+  }).reason, 'inactive_profile');
+
+  assert.equal(validateOwnerProfiles({
+    currentUser: { id: 'owner-user-1' },
+    ownerProfiles: [{ id: 'teacher', user_id: 'owner-user-1', school_id: 'school-a', app_role: 'TEACHER', status: 'ACTIVE' }],
+    targetSchoolId: 'school-a',
+  }).reason, 'invalid_role');
+});
+
+test('owner profile validation detects duplicate and conflicting target-tenant profiles', () => {
+  assert.equal(validateOwnerProfiles({
+    currentUser: { id: 'owner-user-1' },
+    ownerProfiles: [
+      { id: 'owner-profile-1', user_id: 'owner-user-1', school_id: 'school-a', app_role: 'ADMIN', status: 'ACTIVE', is_super_admin: true },
+      { id: 'owner-profile-2', user_id: 'owner-user-1', school_id: 'school-a', app_role: 'ADMIN', status: 'ACTIVE', is_super_admin: true },
+    ],
+    targetSchoolId: 'school-a',
+  }).reason, 'duplicate_owner_profile');
+
+  assert.equal(validateOwnerProfiles({
+    currentUser: { id: 'owner-user-1' },
+    ownerProfiles: [
+      { id: 'owner-profile-1', user_id: 'owner-user-1', school_id: 'school-a', app_role: 'ADMIN', status: 'ACTIVE', is_super_admin: true },
+      { id: 'owner-profile-2', user_id: 'owner-user-1', school_id: 'school-a', app_role: 'PARENT', status: 'ACTIVE' },
+    ],
+    targetSchoolId: 'school-a',
+  }).reason, 'conflicting_owner_profile');
 });

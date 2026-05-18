@@ -18,6 +18,7 @@ import {
 } from '@/lib/authorization/overrides';
 import { getEffectivePolicyDecision } from '@/lib/authorization/policy';
 import { hasOtherActiveAdminWithManagePermissions } from '@/lib/authorization/adminSafety';
+import { DANGER_ZONE_OPERATIONS, getRollbackPolicy } from '@/lib/authorization/tenantDangerZone';
 
 const RESOURCES = [
   'Students',
@@ -126,6 +127,13 @@ export default function PermisosRoles() {
   });
   const rollbackCandidates = permissionOverrides.filter((entry) => entry.resource === rollbackModule);
   const rollbackOverride = rollbackCandidates.find((entry) => entry.id === rollbackOverrideId) || null;
+
+  const dangerZoneOperations = [
+    { key: DANGER_ZONE_OPERATIONS.DELETE_TENANT, label: 'delete tenant' },
+    { key: DANGER_ZONE_OPERATIONS.SUSPEND_TENANT, label: 'suspend tenant' },
+    { key: DANGER_ZONE_OPERATIONS.RESET_TENANT_DATA, label: 'reset tenant data' },
+    { key: DANGER_ZONE_OPERATIONS.TRANSFER_TENANT_OWNERSHIP, label: 'transfer tenant ownership' },
+  ];
 
   if (userLoading || profileLoading) {
     return <LoadingScreen message="Validando permisos..." />;
@@ -615,6 +623,29 @@ export default function PermisosRoles() {
           <Textarea value={reasonText} onChange={(event) => setReasonText(event.target.value)} placeholder="Describe el motivo" />
           {errorText ? <p className="text-sm text-red-600">{errorText}</p> : null}
         </div>
+
+        <div className="space-y-3 border rounded bg-white p-3">
+          <p className="font-medium text-slate-800">Danger Zone (Permisos y Roles)</p>
+          <p className="text-xs text-red-700">Todas las operaciones son de alto riesgo, irreversibles en algunos casos, y usan maker-checker con segundo ADMIN (excepto app owner).</p>
+          <div className="overflow-auto border rounded">
+            <table className="min-w-full text-sm">
+              <thead><tr className="bg-slate-100"><th className="p-2 text-left">Operación</th><th className="p-2 text-left">Riesgo</th><th className="p-2 text-left">Confirmación requerida</th><th className="p-2 text-left">Rollback/Compensación</th></tr></thead>
+              <tbody>
+                {dangerZoneOperations.map((operation) => (
+                  <tr key={operation.key} className="border-t">
+                    <td className="p-2">{operation.label}</td>
+                    <td className="p-2 text-red-700">High-risk</td>
+                    <td className="p-2">Frase escrita + warning irreversible + preview de tenant objetivo</td>
+                    <td className="p-2">{getRollbackPolicy(operation.key)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-600">Guardrails backend: verificación de tenant, verificación de rol ADMIN, y deny-by-default si falta contexto.</p>
+          <p className="text-xs text-slate-600">Auditoría obligatoria por acción: requested_by, approved_by, reason, before/after, timestamp, outcome.</p>
+        </div>
+
         <div className="space-y-3 border rounded bg-white p-3">
           <p className="font-medium text-slate-800">Overrides por usuario</p>
           <div className="grid gap-3 md:grid-cols-4">

@@ -55,3 +55,29 @@ test('menu routes shown to each role are allowed by the route guard', () => {
     }
   }
 });
+
+test('owner override allows every admin route while non-owners stay denied on owner-only fallback', () => {
+  const adminRoutes = Object.entries(ROUTE_ACCESS)
+    .filter(([, roles]) => roles.includes('ADMIN'))
+    .map(([routeName]) => routeName);
+
+  assert.ok(adminRoutes.length > 0, 'admin route coverage should not be empty');
+
+  for (const routeName of adminRoutes) {
+    const ownerDecision = getRouteAccessDecision({
+      role: 'OWNER_OVERRIDE_ONLY',
+      routeName,
+      ownerAccess: { allowed: true, reason: 'owner_override', identity_source: 'email' },
+    });
+    const nonOwnerDecision = getRouteAccessDecision({
+      role: 'OWNER_OVERRIDE_ONLY',
+      routeName,
+      ownerAccess: { allowed: false, reason_code: 'owner_not_configured' },
+    });
+
+    assert.equal(ownerDecision.allowed, true, `${routeName} should allow the configured owner through the override path`);
+    assert.equal(ownerDecision.precedence, 'owner_override', `${routeName} should prove owner access is not just role-based`);
+    assert.equal(nonOwnerDecision.allowed, false, `${routeName} should deny non-owner users when their role is not allowed`);
+    assert.equal(nonOwnerDecision.reason_code, 'forbidden_action');
+  }
+});

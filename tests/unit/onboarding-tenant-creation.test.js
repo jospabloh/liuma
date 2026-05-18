@@ -182,7 +182,10 @@ test('captures unknown backend details and maps duplicate failures explicitly fo
     backendCode: 'duplicate_key',
     backendMessage: 'School already exists',
   });
-  assert.equal(mapOnboardingError(error).code, ONBOARDING_ERROR_CODES.DUPLICATE_TENANT);
+  assert.deepEqual(mapOnboardingError(error), {
+    code: ONBOARDING_ERROR_CODES.DUPLICATE_TENANT,
+    message: 'Ya existe una escuela con esos datos. Revisa el nombre o contacta a soporte.',
+  });
   assert.deepEqual(captureOnboardingFailure({ error, requestPayload: { role: 'ADMIN' }, phase: 'school_create' }), {
     phase: 'school_create',
     requestPayload: { role: 'ADMIN' },
@@ -191,4 +194,35 @@ test('captures unknown backend details and maps duplicate failures explicitly fo
     backendCode: 'duplicate_key',
     backendMessage: 'School already exists',
   });
+});
+
+test('maps failed tenant creation to a deterministic duplicate message without creating dependent rows', async () => {
+  const duplicateError = {
+    status: 409,
+    data: { code: 'duplicate_school', message: 'School already exists' },
+  };
+  const base44 = createBase44();
+  base44.entities.School.create = async () => { throw duplicateError; };
+
+  await assert.rejects(
+    completeOnboardingTenantCreation({
+      base44,
+      notificationService: { sendByEvent: async () => {} },
+      logAuditEvent: async () => {},
+      user,
+      formData: { role: 'ADMIN', newSchoolName: 'Colegio Duplicado', phone: '', isDemo: false },
+      logoFile: null,
+      themePreview,
+      ownerEmail: 'owner@example.com',
+    }),
+    duplicateError
+  );
+
+  assert.deepEqual(mapOnboardingError(duplicateError), {
+    code: ONBOARDING_ERROR_CODES.DUPLICATE_TENANT,
+    message: 'Ya existe una escuela con esos datos. Revisa el nombre o contacta a soporte.',
+  });
+  assert.equal(base44.entities.SchoolSubscription.createCalls.length, 0);
+  assert.equal(base44.entities.UserProfile.createCalls.length, 0);
+  assert.equal(base44.entities.Role.createCalls.length, 0);
 });

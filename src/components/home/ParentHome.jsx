@@ -120,7 +120,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
           <BigTile
             icon={BookOpen}
             title="Tarea"
-            subtitle="Ver tareas pendientes"
+            subtitle="Revisar lo que deben entregar"
             href={createPageUrl('Tarea')}
             color="from-amber-50 to-white"
             iconColor="text-amber-600"
@@ -129,7 +129,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
           <BigTile
             icon={Bell}
             title="Avisos"
-            subtitle="Ver comunicados"
+            subtitle="Leer mensajes de la escuela"
             href={createPageUrl('Avisos')}
             badge={unreadUrgentDeliveries.length}
             badgeColor="bg-red-500"
@@ -178,7 +178,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
           <BigTile
             icon={CalendarX}
             title="Solicitar Ausencia"
-            subtitle="Avisar ausencias con anticipación"
+            subtitle="Avisar cuando tu hijo faltará"
             href={createPageUrl('SolicitarAusencia')}
             color="from-orange-50 to-white"
             iconColor="text-orange-600"
@@ -187,7 +187,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
           <BigTile
             icon={ListChecks}
             title="Operación Diaria"
-            subtitle="Timeline de mis hijos"
+            subtitle="Resumen del día de tus hijos"
             href={createPageUrl('OperacionDiaria')}
             color="from-lime-50 to-white"
             iconColor="text-lime-600"

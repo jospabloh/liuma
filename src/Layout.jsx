@@ -60,6 +60,16 @@ export default function Layout({ children, currentPageName }) {
       />
       
       {children}
+      <footer className="py-4 text-center text-sm text-slate-500">
+        <a
+          href="https://acaciaco.com.mx"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-slate-700 underline"
+        >
+          crafted with care &lt;3 by ACACIA Consultoria
+        </a>
+      </footer>
       <GlobalLumiBubble />
     </div>
   );

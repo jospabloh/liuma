@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -27,12 +27,20 @@ export default function GlobalLumiBubble() {
     return isLumiBubbleExcluded(location.pathname);
   }, [isAuthenticated, isLoadingProfile, userProfile, location.pathname]);
 
+  const handleBubbleToggle = useCallback(() => {
+    setIsOpen((current) => !current);
+  }, []);
+
+  const handleChatClose = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
   if (hidden) return null;
 
   return (
     <>
-      <LumiButton onClick={() => setIsOpen(true)} className="bottom-4 right-4 md:bottom-6 md:right-6" />
-      <LumiChat isOpen={isOpen} onClose={() => setIsOpen(false)} userProfile={userProfile} />
+      <LumiButton isOpen={isOpen} onClick={handleBubbleToggle} className="bottom-4 right-4 md:bottom-6 md:right-6" />
+      <LumiChat isOpen={isOpen} onClose={handleChatClose} userProfile={userProfile} />
     </>
   );
 }

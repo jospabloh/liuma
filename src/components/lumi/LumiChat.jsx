@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Loader2, Sparkles, ArrowLeft } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,9 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const messagesEndRef = useRef(null);
+  const dialogRef = useRef(null);
+  const triggerRef = useRef(null);
+  const titleId = useId();
 
   useEffect(() => {
     if (isOpen && !conversationId) {
@@ -29,6 +32,53 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      triggerRef.current?.focus();
+      return;
+    }
+
+    triggerRef.current = document.activeElement;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const focusable = dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length > 0) {
+      focusable[0].focus();
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const focusableElements = Array.from(
+        dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+      ).filter((el) => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusableElements[0];
+      const last = focusableElements[focusableElements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    dialog.addEventListener('keydown', handleKeyDown);
+    return () => dialog.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -182,7 +232,8 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Chat con Lumi"
+        aria-labelledby={titleId}
+        ref={dialogRef}
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-[var(--tenant-accent)] to-[var(--tenant-primary)] p-4 flex items-center gap-3">
@@ -200,7 +251,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="font-semibold text-white">Lumi</h3>
+              <h3 id={titleId} className="font-semibold text-white">Lumi</h3>
               <p className="text-xs text-white/80">Tu asistente escolar</p>
             </div>
           </div>
@@ -278,7 +329,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
           </AnimatePresence>
           
           {isLoading && (
-            <div className="flex justify-start">
+            <div className="flex justify-start" role="status" aria-live="polite">
               <div className="bg-slate-100 rounded-2xl px-4 py-3">
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
@@ -301,6 +352,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
             className="flex gap-2"
           >
             <Input
+              aria-label="Escribe un mensaje para Lumi"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Escribe tu pregunta..."
@@ -309,6 +361,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
             />
             <Button
               type="submit"
+              aria-label="Enviar mensaje"
               disabled={!input.trim() || isLoading}
               className="rounded-full w-12 h-12 bg-indigo-600 hover:bg-indigo-700"
             >

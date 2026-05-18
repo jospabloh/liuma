@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 
-export default function RouteAccessDenied({ redirectTo = '/Home', message = 'No tienes permisos para ver esta sección.' }) {
+export default function RouteAccessDenied({ redirectTo = '/Home', message = 'No tienes permisos para ver esta sección.', reasonCode }) {
   const navigate = useNavigate();
 
   return (
@@ -14,6 +14,7 @@ export default function RouteAccessDenied({ redirectTo = '/Home', message = 'No 
           <AlertTriangle className="mx-auto w-8 h-8 text-amber-600" />
           <h1 className="text-lg font-semibold">Acceso denegado</h1>
           <p className="text-sm text-slate-600">{message}</p>
+          {reasonCode && <p className="text-xs text-slate-500">Código: {reasonCode}</p>}
           <Button onClick={() => navigate(redirectTo)}>Ir a una página permitida</Button>
         </CardContent>
       </Card>

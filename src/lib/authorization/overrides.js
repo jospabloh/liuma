@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { DENIAL_REASON_CODES } from '@/lib/authorization/policy';
 
 const ENTITY = 'PermissionOverride';
 
@@ -16,7 +17,9 @@ function buildOverridePayload(input) {
 function assertOverrideSafety(input) {
   if (input.action !== 'manage_permissions') return;
   if (input.actor_profile_id && input.user_profile_id && input.actor_profile_id === input.user_profile_id) {
-    throw new Error('SELF_MANAGE_PERMISSIONS_CHANGE_BLOCKED');
+    const error = new Error('SELF_MANAGE_PERMISSIONS_CHANGE_BLOCKED');
+    error.reason_code = DENIAL_REASON_CODES.SELF_PERMISSION_CHANGE_DENIED;
+    throw error;
   }
 }
 

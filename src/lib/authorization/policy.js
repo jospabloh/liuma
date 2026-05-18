@@ -4,6 +4,34 @@ const ROLES = {
   PARENT: 'PARENT',
 };
 
+export const DENIAL_REASON_CODES = {
+  MISSING_CONTEXT: 'missing_context',
+  EXPLICIT_DENY: 'explicit_deny',
+  DEFAULT_DENY: 'default_deny',
+  FORBIDDEN_ACTION: 'forbidden_action',
+  CROSS_TENANT_DENIED: 'cross_tenant_denied',
+  CROSS_CLASSROOM_DENIED: 'cross_classroom_denied',
+  UNRELATED_STUDENT_DENIED: 'unrelated_student_denied',
+  OWNER_IDENTITY_CONFLICT: 'owner_identity_conflict',
+  OWNER_NOT_CONFIGURED: 'owner_not_configured',
+  OWNER_PROFILE_MISSING: 'missing_user_profile',
+  OWNER_PROFILE_DUPLICATE: 'duplicate_owner_profile',
+  OWNER_PROFILE_CONFLICT: 'conflicting_owner_profile',
+  INVALID_ROLE: 'invalid_role',
+  INACTIVE_PROFILE: 'inactive_profile',
+  SUPER_ADMIN_REQUIRED: 'super_admin_required',
+  OVERRIDE_DENY: 'override_deny',
+  SECOND_ADMIN_REQUIRED: 'second_admin_required',
+  SELF_APPROVAL_DENIED: 'self_approval_denied',
+  REASON_REQUIRED: 'reason_required',
+  ADMIN_ONLY: 'admin_only',
+  SELF_PERMISSION_CHANGE_DENIED: 'self_permission_change_denied',
+};
+
+function deny(reason_code, extra = {}) {
+  return { allowed: false, reason: reason_code, reason_code, ...extra };
+}
+
 const POLICY = {
   Notice: {
     read: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
@@ -46,18 +74,18 @@ function resolvePolicyDecision({ role, entity, action }) {
   const permissions = POLICY[entity]?.[action] || [];
 
   if (!role || !entity || !action) {
-    return { allowed: false, reason: 'missing_context', precedence: 'default_deny' };
+    return deny(DENIAL_REASON_CODES.MISSING_CONTEXT, { precedence: 'default_deny' });
   }
 
   if (permissions.includes(`!${role}`)) {
-    return { allowed: false, reason: 'explicit_deny', precedence: 'explicit_deny' };
+    return deny(DENIAL_REASON_CODES.EXPLICIT_DENY, { precedence: 'explicit_deny' });
   }
 
   if (permissions.includes(role)) {
     return { allowed: true, reason: 'explicit_allow', precedence: 'explicit_allow' };
   }
 
-  return { allowed: false, reason: 'default_deny', precedence: 'default_deny' };
+  return deny(DENIAL_REASON_CODES.DEFAULT_DENY, { precedence: 'default_deny' });
 }
 
 function normalizeIdentity(value) {
@@ -73,7 +101,7 @@ export function resolveOwnerIdentity({ currentUser, ownerEmail, ownerUserId }) {
   if (configuredUserId) {
     if (currentUserId !== configuredUserId) return { isOwner: false, source: 'user_id' };
     if (configuredEmail && currentEmail && currentEmail !== configuredEmail) {
-      return { isOwner: false, source: 'user_id', reason: 'owner_identity_conflict' };
+      return { isOwner: false, source: 'user_id', reason: DENIAL_REASON_CODES.OWNER_IDENTITY_CONFLICT, reason_code: DENIAL_REASON_CODES.OWNER_IDENTITY_CONFLICT };
     }
     return { isOwner: true, source: 'user_id' };
   }
@@ -87,7 +115,7 @@ export function isOwnerUser({ currentUser, ownerEmail, ownerUserId }) {
 }
 
 export function validateOwnerProfiles({ currentUser, ownerProfiles = [], targetSchoolId }) {
-  if (!targetSchoolId) return { valid: false, reason: 'cross_tenant_denied' };
+  if (!targetSchoolId) return { valid: false, reason: DENIAL_REASON_CODES.CROSS_TENANT_DENIED, reason_code: DENIAL_REASON_CODES.CROSS_TENANT_DENIED };
   if (!Array.isArray(ownerProfiles)) return { valid: true };
 
   const matchingProfiles = ownerProfiles.filter((profile) => (
@@ -96,7 +124,7 @@ export function validateOwnerProfiles({ currentUser, ownerProfiles = [], targetS
   ));
 
   if (matchingProfiles.length === 0) {
-    return { valid: false, reason: 'missing_user_profile' };
+    return { valid: false, reason: DENIAL_REASON_CODES.OWNER_PROFILE_MISSING, reason_code: DENIAL_REASON_CODES.OWNER_PROFILE_MISSING };
   }
 
   const activeAdminProfiles = matchingProfiles.filter((profile) => verifyCreatorProvisioning(profile).valid);
@@ -105,11 +133,11 @@ export function validateOwnerProfiles({ currentUser, ownerProfiles = [], targetS
   }
 
   if (activeAdminProfiles.length > 1) {
-    return { valid: false, reason: 'duplicate_owner_profile' };
+    return { valid: false, reason: DENIAL_REASON_CODES.OWNER_PROFILE_DUPLICATE, reason_code: DENIAL_REASON_CODES.OWNER_PROFILE_DUPLICATE };
   }
 
   if (matchingProfiles.length > 1) {
-    return { valid: false, reason: 'conflicting_owner_profile' };
+    return { valid: false, reason: DENIAL_REASON_CODES.OWNER_PROFILE_CONFLICT, reason_code: DENIAL_REASON_CODES.OWNER_PROFILE_CONFLICT };
   }
 
   return { valid: true, profile: activeAdminProfiles[0] };
@@ -117,15 +145,15 @@ export function validateOwnerProfiles({ currentUser, ownerProfiles = [], targetS
 
 export function getOwnerScopedAccess({ currentUser, ownerEmail, ownerUserId, actorSchoolId, targetSchoolId, ownerProfiles }) {
   const ownerIdentity = resolveOwnerIdentity({ currentUser, ownerEmail, ownerUserId });
-  if (!ownerIdentity.isOwner) return { allowed: false, reason: ownerIdentity.reason };
+  if (!ownerIdentity.isOwner) return deny(ownerIdentity.reason_code || ownerIdentity.reason || DENIAL_REASON_CODES.OWNER_NOT_CONFIGURED);
   if (!targetSchoolId || actorSchoolId !== targetSchoolId) {
-    return { allowed: false, reason: 'cross_tenant_denied' };
+    return deny(DENIAL_REASON_CODES.CROSS_TENANT_DENIED);
   }
 
   if (ownerProfiles) {
     const profileValidation = validateOwnerProfiles({ currentUser, ownerProfiles, targetSchoolId });
     if (!profileValidation.valid) {
-      return { allowed: false, reason: profileValidation.reason };
+      return deny(profileValidation.reason_code || profileValidation.reason);
     }
   }
 
@@ -134,16 +162,16 @@ export function getOwnerScopedAccess({ currentUser, ownerEmail, ownerUserId, act
 
 export function verifyCreatorProvisioning(profile) {
   if (!profile) {
-    return { valid: false, reason: 'missing_user_profile' };
+    return { valid: false, reason: DENIAL_REASON_CODES.OWNER_PROFILE_MISSING, reason_code: DENIAL_REASON_CODES.OWNER_PROFILE_MISSING };
   }
   if (profile.app_role !== ROLES.ADMIN) {
-    return { valid: false, reason: 'invalid_role' };
+    return { valid: false, reason: DENIAL_REASON_CODES.INVALID_ROLE, reason_code: DENIAL_REASON_CODES.INVALID_ROLE };
   }
   if (profile.status !== 'ACTIVE') {
-    return { valid: false, reason: 'inactive_profile' };
+    return { valid: false, reason: DENIAL_REASON_CODES.INACTIVE_PROFILE, reason_code: DENIAL_REASON_CODES.INACTIVE_PROFILE };
   }
   if (Object.prototype.hasOwnProperty.call(profile, 'is_super_admin') && profile.is_super_admin !== true) {
-    return { valid: false, reason: 'super_admin_required' };
+    return { valid: false, reason: DENIAL_REASON_CODES.SUPER_ADMIN_REQUIRED, reason_code: DENIAL_REASON_CODES.SUPER_ADMIN_REQUIRED };
   }
   return { valid: true };
 }
@@ -163,7 +191,7 @@ export function getEffectivePolicyDecision({ role, entity, action, userProfileId
   const matchingOverrides = findOverrides({ overrides, userProfileId, entity, action }) || [];
   if (matchingOverrides.length === 0) return baseDecision;
   if (matchingOverrides.some((override) => override.effect === 'deny')) {
-    return { allowed: false, reason: 'override_deny', precedence: 'override_deny' };
+    return deny(DENIAL_REASON_CODES.OVERRIDE_DENY, { precedence: 'override_deny' });
   }
 
   if (matchingOverrides.some((override) => override.effect === 'allow')) {
@@ -260,14 +288,14 @@ export { ROLES, POLICY };
 export function assertRoleAccess({ role, entity, action }) {
   const decision = resolvePolicyDecision({ role, entity, action });
   if (!decision.allowed) {
-    return { allowed: false, reason: 'forbidden_action' };
+    return deny(DENIAL_REASON_CODES.FORBIDDEN_ACTION);
   }
   return { allowed: true };
 }
 
 export function assertTenantScope({ actorSchoolId, targetSchoolId }) {
   if (!assertSameTenant({ sourceSchoolId: actorSchoolId, targetSchoolId })) {
-    return { allowed: false, reason: 'cross_tenant_denied' };
+    return deny(DENIAL_REASON_CODES.CROSS_TENANT_DENIED);
   }
   return { allowed: true };
 }
@@ -275,7 +303,7 @@ export function assertTenantScope({ actorSchoolId, targetSchoolId }) {
 export function assertTeacherClassroomScope({ role, classroomIds = [], targetClassroomId }) {
   if (role !== ROLES.TEACHER) return { allowed: true };
   if (!targetClassroomId || !classroomIds.includes(targetClassroomId)) {
-    return { allowed: false, reason: 'cross_classroom_denied' };
+    return deny(DENIAL_REASON_CODES.CROSS_CLASSROOM_DENIED);
   }
   return { allowed: true };
 }
@@ -283,7 +311,7 @@ export function assertTeacherClassroomScope({ role, classroomIds = [], targetCla
 export function assertParentStudentScope({ role, studentIds = [], targetStudentId }) {
   if (role !== ROLES.PARENT) return { allowed: true };
   if (!targetStudentId || !studentIds.includes(targetStudentId)) {
-    return { allowed: false, reason: 'unrelated_student_denied' };
+    return deny(DENIAL_REASON_CODES.UNRELATED_STUDENT_DENIED);
   }
   return { allowed: true };
 }

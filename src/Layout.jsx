@@ -4,7 +4,7 @@ import GlobalLumiBubble from '@/components/lumi/GlobalLumiBubble';
 
 export default function Layout({ children, currentPageName }) {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[color:var(--tenant-neutral)]/10">
       <style>{`
         :root {
           --primary: 99 102 241;

@@ -162,7 +162,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         aria-label="Chat con Lumi"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-violet-600 to-indigo-700 p-4 flex items-center gap-3">
+        <div className="bg-gradient-to-r from-[var(--tenant-accent)] to-[var(--tenant-primary)] p-4 flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"

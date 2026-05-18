@@ -130,9 +130,10 @@ function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelected
                               variant={isActive ? 'default' : 'outline'}
                               onClick={() => markAttendanceMutation.mutate({ student, status })}
                               disabled={markAttendanceMutation.isPending}
-                              className={isActive ? `${cfg.color} text-white hover:opacity-90` : ''}
+                              className={`${isActive ? `${cfg.color} text-white hover:opacity-90` : ''} min-h-11 min-w-11`}}
                             >
                               <Icon className="w-4 h-4" />
+                              <span className="sr-only">{cfg.label}</span>
                             </Button>
                           );
                         })}

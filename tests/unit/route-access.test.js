@@ -41,3 +41,17 @@ test('route owner override is explicit and keeps non-owner users denied by defau
   assert.equal(nonOwnerDecision.allowed, false);
   assert.equal(nonOwnerDecision.reason_code, 'forbidden_action');
 });
+
+test('menu routes shown to each role are allowed by the route guard', () => {
+  const menuRoutesByRole = {
+    ADMIN: ['PagosAdmin', 'ResumenAsistencia', 'CalendarioEscolar', 'GestionAusencias', 'SolicitarAusencia'],
+    TEACHER: ['Asistencia', 'CalendarioEscolar'],
+    PARENT: ['CalendarioEscolar', 'SolicitarAusencia'],
+  };
+
+  for (const [role, routes] of Object.entries(menuRoutesByRole)) {
+    for (const routeName of routes) {
+      assert.equal(canAccessRoute({ role, routeName }), true, `${role} menu route ${routeName} should not show access denied`);
+    }
+  }
+});

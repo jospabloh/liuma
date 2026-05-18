@@ -67,7 +67,7 @@ export default function Layout({ children, currentPageName }) {
           rel="noopener noreferrer"
           className="hover:text-slate-700 underline"
         >
-          crafted with care &lt;3 by ACACIA Consultoria
+          creado con cariño ❤ por ACACIA Consultoría
         </a>
       </footer>
       <GlobalLumiBubble />

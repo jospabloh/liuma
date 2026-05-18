@@ -60,18 +60,76 @@ function resolvePolicyDecision({ role, entity, action }) {
   return { allowed: false, reason: 'default_deny', precedence: 'default_deny' };
 }
 
-export function isOwnerUser({ currentUser, ownerEmail }) {
-  if (!currentUser?.email || !ownerEmail) return false;
-  return currentUser.email.toLowerCase() === ownerEmail.toLowerCase();
+function normalizeIdentity(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
-export function getOwnerScopedAccess({ currentUser, ownerEmail, actorSchoolId, targetSchoolId }) {
-  const isOwner = isOwnerUser({ currentUser, ownerEmail });
-  if (!isOwner) return { allowed: false };
+export function resolveOwnerIdentity({ currentUser, ownerEmail, ownerUserId }) {
+  const configuredUserId = normalizeIdentity(ownerUserId);
+  const configuredEmail = normalizeIdentity(ownerEmail);
+  const currentUserId = normalizeIdentity(currentUser?.id);
+  const currentEmail = normalizeIdentity(currentUser?.email);
+
+  if (configuredUserId) {
+    if (currentUserId !== configuredUserId) return { isOwner: false, source: 'user_id' };
+    if (configuredEmail && currentEmail && currentEmail !== configuredEmail) {
+      return { isOwner: false, source: 'user_id', reason: 'owner_identity_conflict' };
+    }
+    return { isOwner: true, source: 'user_id' };
+  }
+
+  if (!configuredEmail || !currentEmail) return { isOwner: false, source: 'email' };
+  return { isOwner: currentEmail === configuredEmail, source: 'email' };
+}
+
+export function isOwnerUser({ currentUser, ownerEmail, ownerUserId }) {
+  return resolveOwnerIdentity({ currentUser, ownerEmail, ownerUserId }).isOwner;
+}
+
+export function validateOwnerProfiles({ currentUser, ownerProfiles = [], targetSchoolId }) {
+  if (!targetSchoolId) return { valid: false, reason: 'cross_tenant_denied' };
+  if (!Array.isArray(ownerProfiles)) return { valid: true };
+
+  const matchingProfiles = ownerProfiles.filter((profile) => (
+    profile?.school_id === targetSchoolId &&
+    (!currentUser?.id || profile.user_id === currentUser.id)
+  ));
+
+  if (matchingProfiles.length === 0) {
+    return { valid: false, reason: 'missing_user_profile' };
+  }
+
+  const activeAdminProfiles = matchingProfiles.filter((profile) => verifyCreatorProvisioning(profile).valid);
+  if (activeAdminProfiles.length === 0) {
+    return verifyCreatorProvisioning(matchingProfiles[0]);
+  }
+
+  if (activeAdminProfiles.length > 1) {
+    return { valid: false, reason: 'duplicate_owner_profile' };
+  }
+
+  if (matchingProfiles.length > 1) {
+    return { valid: false, reason: 'conflicting_owner_profile' };
+  }
+
+  return { valid: true, profile: activeAdminProfiles[0] };
+}
+
+export function getOwnerScopedAccess({ currentUser, ownerEmail, ownerUserId, actorSchoolId, targetSchoolId, ownerProfiles }) {
+  const ownerIdentity = resolveOwnerIdentity({ currentUser, ownerEmail, ownerUserId });
+  if (!ownerIdentity.isOwner) return { allowed: false, reason: ownerIdentity.reason };
   if (!targetSchoolId || actorSchoolId !== targetSchoolId) {
     return { allowed: false, reason: 'cross_tenant_denied' };
   }
-  return { allowed: true, reason: 'owner_override', precedence: 'owner_override' };
+
+  if (ownerProfiles) {
+    const profileValidation = validateOwnerProfiles({ currentUser, ownerProfiles, targetSchoolId });
+    if (!profileValidation.valid) {
+      return { allowed: false, reason: profileValidation.reason };
+    }
+  }
+
+  return { allowed: true, reason: 'owner_override', precedence: 'owner_override', identity_source: ownerIdentity.source };
 }
 
 export function verifyCreatorProvisioning(profile) {

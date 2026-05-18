@@ -8,18 +8,21 @@ import { getOwnerScopedAccess } from '@/lib/authorization/policy';
 
 export default function GuardedRoute({ routeName, children }) {
   const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-  const { data: profile } = useQuery({
+  const { data: profiles = [] } = useQuery({
     queryKey: ['profileRouteGuard', user?.id],
-    queryFn: () => base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date', 1).then((rows) => rows[0] || null),
+    queryFn: () => base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date'),
     enabled: !!user?.id,
   });
+  const profile = profiles[0] || null;
 
   const hasAccess = canAccessRoute({ role: profile?.app_role, routeName });
   const ownerAccess = getOwnerScopedAccess({
     currentUser: user,
     ownerEmail: import.meta.env.VITE_OWNER_EMAIL,
+    ownerUserId: import.meta.env.VITE_OWNER_USER_ID,
     actorSchoolId: profile?.school_id,
     targetSchoolId: profile?.school_id,
+    ownerProfiles: profiles,
   });
 
   React.useEffect(() => {

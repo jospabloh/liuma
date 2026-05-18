@@ -84,7 +84,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         entityId: conversationId || `denied-${Date.now()}` ,
         action: 'AI_REQUEST_DENIED',
         reason: access.denial?.reason || 'Capability policy denied',
-        context: { intent: capabilityRequest.intent, entities_touched: capabilityRequest.inputs?.entities || [], policy_decision: 'deny' }
+        context: { intent: capabilityRequest.intent, role: capabilityRequest.context.user_role, capability: capabilityRequest.intent, scope: capabilityRequest.context.school_id, policy_decision: 'deny', entities_touched: capabilityRequest.inputs?.entities || [] }
       });
       const denied = buildDeniedCapabilityResponse({
         intent: capabilityRequest.intent,
@@ -107,7 +107,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         entityId: conversationId,
         action: 'AI_REQUEST_ALLOWED',
         reason: 'Capability policy allowed',
-        context: { intent: capabilityRequest.intent, entities_touched: capabilityRequest.inputs?.entities || [], policy_decision: 'allow' }
+        context: { intent: capabilityRequest.intent, role: capabilityRequest.context.user_role, capability: capabilityRequest.intent, scope: capabilityRequest.context.school_id, policy_decision: 'allow', entities_touched: capabilityRequest.inputs?.entities || [] }
       });
       await base44.agents.addMessage(conversation, {
         role: 'user',
@@ -119,14 +119,25 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
     }
   };
 
-  const quickActions = [
-    { label: '¿Qué tarea hay hoy?', intent: LUMI_INTENTS.HOMEWORK_LOOKUP },
-    { label: '¿Cómo va la asistencia?', intent: LUMI_INTENTS.ATTENDANCE_STATUS },
-    { label: '¿Hay avisos importantes?', intent: LUMI_INTENTS.NOTICES_SUMMARY },
-    { label: '¿Qué pagos tengo pendientes?', intent: LUMI_INTENTS.PAYMENT_REMINDERS },
-    { label: '¿Cómo estuvo mi hijo hoy?', intent: LUMI_INTENTS.BEHAVIOR_RECAP },
-    { label: '¿Qué citas o eventos vienen?', intent: LUMI_INTENTS.SCHEDULE_APPOINTMENTS },
-  ];
+  const quickActionsByRole = {
+    ADMIN: [
+      { label: 'Resumen de asistencia general', intent: LUMI_INTENTS.ATTENDANCE_STATUS },
+      { label: 'Seguimiento de pagos pendientes', intent: LUMI_INTENTS.PAYMENT_REMINDERS },
+      { label: 'Resumen de avisos importantes', intent: LUMI_INTENTS.NOTICES_SUMMARY },
+    ],
+    TEACHER: [
+      { label: 'Resumen de asistencia de mi grupo', intent: LUMI_INTENTS.ATTENDANCE_STATUS },
+      { label: 'Reporte de conducta del día', intent: LUMI_INTENTS.BEHAVIOR_RECAP },
+      { label: 'Tareas activas por salón', intent: LUMI_INTENTS.HOMEWORK_LOOKUP },
+    ],
+    PARENT: [
+      { label: '¿Qué tarea hay hoy?', intent: LUMI_INTENTS.HOMEWORK_LOOKUP },
+      { label: '¿Cómo va la asistencia?', intent: LUMI_INTENTS.ATTENDANCE_STATUS },
+      { label: '¿Qué pagos tengo pendientes?', intent: LUMI_INTENTS.PAYMENT_REMINDERS },
+    ],
+  };
+
+  const quickActions = quickActionsByRole[userProfile?.app_role || 'PARENT'] || quickActionsByRole.PARENT;
 
   if (!isOpen) return null;
 

@@ -36,6 +36,9 @@ const RESOURCES = [
 ];
 
 const ACTIONS = ['view', 'add', 'edit', 'delete', 'approve', 'export', 'manage_permissions'];
+
+const AI_CAPABILITIES = ['attendance_summary','payment_follow_up','behavior_report','announcements','homework_assistant'];
+
 const POLICY_ACTIONS = ['read', 'write'];
 const PENDING_CHANGE_ENTITY = 'PendingChange';
 const ROLLBACK_MODULES = ['Notice', 'Attendance', 'Homework', 'DiaryEntry', 'ChargeItem', 'PaymentConcept', 'PaymentRecord'];
@@ -55,6 +58,7 @@ const DEFAULT_TEMPLATE = {
     }, {});
     return acc;
   }, {}),
+  ai_capabilities: AI_CAPABILITIES.reduce((acc, capability) => { acc[capability] = true; return acc; }, {}),
 };
 
 function hasMutationReason(value) {
@@ -174,6 +178,7 @@ export default function PermisosRoles() {
           }, {});
           return acc;
         }, {}),
+        ai_capabilities: AI_CAPABILITIES.reduce((acc, capability) => { acc[capability] = false; return acc; }, {}),
       };
 
       const updated = [...templates, nextTemplate];
@@ -216,6 +221,23 @@ export default function PermisosRoles() {
               ...template.permissions[resource],
               [action]: !template.permissions[resource][action],
             },
+          },
+        };
+      });
+      setTemplates(updated);
+    });
+  };
+
+
+  const handleToggleAICapability = (capability) => {
+    requireReason(() => {
+      const updated = templates.map((template, index) => {
+        if (index !== activeTemplateIndex) return template;
+        return {
+          ...template,
+          ai_capabilities: {
+            ...template.ai_capabilities,
+            [capability]: !template.ai_capabilities?.[capability],
           },
         };
       });
@@ -742,6 +764,22 @@ export default function PermisosRoles() {
                 </tbody>
               </table>
             </div>
+
+
+            <div className="overflow-auto border rounded bg-white">
+              <table className="min-w-full text-sm">
+                <thead><tr className="bg-slate-100"><th className="p-2 text-left">Capacidad AI</th><th className="p-2 text-left">allow</th></tr></thead>
+                <tbody>
+                  {AI_CAPABILITIES.map((capability) => (
+                    <tr key={capability} className="border-t">
+                      <td className="p-2 font-medium">{capability}</td>
+                      <td className="p-2"><input type="checkbox" checked={Boolean(activeTemplate.ai_capabilities?.[capability])} onChange={() => handleToggleAICapability(capability)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
           </div>
         ) : null}
       </Card>

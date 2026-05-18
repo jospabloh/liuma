@@ -4,8 +4,6 @@ import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag, CheckSquare, CalendarX, ListChecks } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
-import LumiButton from '@/components/ui/LumiButton';
-import LumiChat from '@/components/lumi/LumiChat';
 import NoticeCard from '@/components/notices/NoticeCard';
 import EventCard from '@/components/events/EventCard';
 import { format } from 'date-fns';
@@ -14,7 +12,6 @@ import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 
 export default function ParentHome({ user, userProfile, subscription }) {
-  const [showLumi, setShowLumi] = useState(false);
   const today = format(new Date(), 'yyyy-MM-dd');
 
   // Get linked students
@@ -239,15 +236,6 @@ export default function ParentHome({ user, userProfile, subscription }) {
         )}
       </div>
 
-      {/* Lumi Button */}
-      <LumiButton onClick={() => setShowLumi(true)} isOpen={showLumi} />
-      
-      {/* Lumi Chat */}
-      <LumiChat 
-        isOpen={showLumi} 
-        onClose={() => setShowLumi(false)} 
-        userProfile={userProfile}
-      />
     </div>
   );
 }

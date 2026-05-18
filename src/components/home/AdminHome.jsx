@@ -4,8 +4,6 @@ import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck, KeyRound } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
-import LumiButton from '@/components/ui/LumiButton';
-import LumiChat from '@/components/lumi/LumiChat';
 import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -14,7 +12,6 @@ import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 
 export default function AdminHome({ user, userProfile, subscription }) {
-  const [showLumi, setShowLumi] = useState(false);
   const navigate = useNavigate();
 
   // Get pending approvals
@@ -360,15 +357,6 @@ export default function AdminHome({ user, userProfile, subscription }) {
         )}
       </div>
 
-      {/* Lumi Button */}
-      <LumiButton onClick={() => setShowLumi(true)} isOpen={showLumi} />
-      
-      {/* Lumi Chat */}
-      <LumiChat 
-        isOpen={showLumi} 
-        onClose={() => setShowLumi(false)} 
-        userProfile={userProfile}
-      />
     </div>
   );
 }

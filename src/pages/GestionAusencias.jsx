@@ -28,20 +28,29 @@ export default function GestionAusencias() {
     queryFn: () => base44.auth.me(),
   });
 
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile', user?.id],
+    queryFn: async () => {
+      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
+      return profiles[0];
+    },
+    enabled: !!user?.id,
+  });
+
   const { data: notifications, isLoading } = useQuery({
-    queryKey: ['absenceNotifications', user?.data?.school_id],
+    queryKey: ['absenceNotifications', userProfile?.school_id],
     queryFn: () => base44.entities.AbsenceNotification.filter({
-      school_id: user.data.school_id
+      school_id: userProfile.school_id
     }, '-created_date'),
-    enabled: !!user?.data?.school_id,
+    enabled: !!userProfile?.school_id,
   });
 
   const { data: students } = useQuery({
-    queryKey: ['allStudents', user?.data?.school_id],
+    queryKey: ['allStudents', userProfile?.school_id],
     queryFn: () => base44.entities.Student.filter({
-      school_id: user.data.school_id
+      school_id: userProfile.school_id
     }),
-    enabled: !!user?.data?.school_id,
+    enabled: !!userProfile?.school_id,
   });
 
   const updateNotificationMutation = useMutation({
@@ -129,8 +138,8 @@ export default function GestionAusencias() {
   const pendingCount = notifications?.filter(n => n.status === 'PENDING').length || 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+      <div className="max-w-7xl mx-auto">
         <PageHeader
           title="Solicitudes de Ausencias"
           subtitle={`${pendingCount} pendientes de revisión`}

@@ -29,6 +29,15 @@ export default function SolicitarAusencia() {
     queryFn: () => base44.auth.me(),
   });
 
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile', user?.id],
+    queryFn: async () => {
+      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
+      return profiles[0];
+    },
+    enabled: !!user?.id,
+  });
+
   const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
     queryKey: ['linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
@@ -75,8 +84,10 @@ export default function SolicitarAusencia() {
       return;
     }
 
+    const student = students.find((item) => item.id === selectedStudent);
+
     createNotificationMutation.mutate({
-      school_id: user.data.school_id,
+      school_id: student?.school_id || userProfile?.school_id,
       student_id: selectedStudent,
       parent_id: user.id,
       parent_name: user.full_name,
@@ -96,8 +107,8 @@ export default function SolicitarAusencia() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+      <div className="max-w-7xl mx-auto">
         <PageHeader
           title="Solicitar Ausencia"
           subtitle="Notifica con anticipación las ausencias de tus hijos"

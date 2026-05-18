@@ -68,14 +68,14 @@
 | Aprobaciones | `/Aprobaciones` | Always on Admin home | Yes | Shows pending-user badge. |
 | Escuela | `/GestionEscuela` | Always on Admin home | Yes | School/classroom/student management. |
 | Avisos | `/AvisosAdmin` | Always on Admin home | Yes | Shows urgent unread badge. |
-| Pagos | `/PagosAdmin` | Only clickable when `paymentReady`; otherwise tile has no `href` | Yes | Disabled until base payment setup is complete. |
+| Pagos | `/PagosAdmin` | Always on Admin home | Yes | Opens payment setup and charge management; concepts can be configured inside the module. |
 | Reportes | `/Reportes` | Always on Admin home | Yes | Reports dashboard. |
-| Asistencia | `/ResumenAsistencia` | Always on Admin home | No | Current menu/route mismatch: route requires `TEACHER`, so an Admin click is denied unless owner override applies. |
+| Asistencia | `/ResumenAsistencia` | Always on Admin home | Yes | Attendance summary. |
 | Calendario | `/CalendarioEscolar` | Always on Admin home | Yes | Calendar management. |
 | Documentos Oficiales | `/GestionDocumentos` | Always on Admin home | Yes | Official documents. |
 | Pedidos de Uniformes | `/GestionPedidosAdmin` | Always on Admin home | Yes | Admin order management. |
 | Descuentos | `/GestionDescuentos` | Always on Admin home | Yes | Discount configuration. |
-| Solicitudes de Ausencias | `/GestionAusencias` | Always on Admin home | No | Current menu/route mismatch: route requires `TEACHER`, so an Admin click is denied unless owner override applies. |
+| Solicitudes de Ausencias | `/GestionAusencias` | Always on Admin home | Yes | Review absence requests. |
 | Configuración Inicial | `/ConfiguracionInicial` | Always on Admin home | Yes | Initial setup guide. |
 | Auditoría | `/AuditoriaAdmin` | Always on Admin home | Yes | Audit traceability. |
 | Permisos y Roles | `/PermisosRoles` | Always on Admin home | Yes | Administrative access controls. |
@@ -88,8 +88,8 @@
 | Bitácoras de hoy | `/BitacorasMaestro` | Always on Teacher home | Yes | Shows missing-diary badge. |
 | Tarea | `/TareaMaestro` | Always on Teacher home | Yes | Assign homework. |
 | Avisos | `/AvisosMaestro` | Always on Teacher home | Yes | Shows urgent unread badge. |
-| Asistencia | `/Asistencia` | Always on Teacher home | No | Current menu/route mismatch: route requires `PARENT`, so a Teacher click is denied unless owner override applies. |
-| Calendario | `/CalendarioEscolar` | Always on Teacher home | No | Current menu/route mismatch: route requires `ADMIN`, so a Teacher click is denied unless owner override applies. |
+| Asistencia | `/Asistencia` | Always on Teacher home | Yes | Daily attendance capture. |
+| Calendario | `/CalendarioEscolar` | Always on Teacher home | Yes | School calendar view. |
 | Operación Diaria | `/OperacionDiaria` | Always on Teacher home | Yes | Teacher-scoped daily timeline. |
 
 ### Parent
@@ -101,7 +101,7 @@
 | Tarea | `/Tarea` | Always on Parent home | Yes | Homework view. |
 | Avisos | `/Avisos` | Always on Parent home | Yes | Shows urgent unread badge. |
 | Pagos | `/Pagos` | Always on Parent home | Yes | Shows overdue badge. |
-| Calendario | `/CalendarioEscolar` | Always on Parent home | No | Current menu/route mismatch: route requires `ADMIN`, so a Parent click is denied unless owner override applies. |
+| Calendario | `/CalendarioEscolar` | Always on Parent home | Yes | School calendar view. |
 | Uniformes | `/PedidosUniformes` | Always on Parent home | Yes | Parent uniform orders. |
 | Eventos | `/EventosParaPadres` | Always on Parent home | Yes | Event attendance confirmations. |
 | Solicitar Ausencia | `/SolicitarAusencia` | Always on Parent home | Yes | Absence request flow. |
@@ -128,12 +128,4 @@ These mounted routes are not primary home-menu entries for any role, although so
 
 ## Current mismatches to verify before release
 
-The following menu entries point to routes whose route guard does not include the menu role. They are documented here instead of silently corrected because this export is intended to reflect the current code:
-
-| Role menu | Entry | Route | Current route requirement | Expected click result without owner override |
-|---|---|---|---|---|
-| Admin | Asistencia | `/ResumenAsistencia` | `TEACHER` | Deny to `/Home` |
-| Admin | Solicitudes de Ausencias | `/GestionAusencias` | `TEACHER` | Deny to `/Home` |
-| Teacher | Asistencia | `/Asistencia` | `PARENT` | Deny to `/Home` |
-| Teacher | Calendario | `/CalendarioEscolar` | `ADMIN` | Deny to `/Home` |
-| Parent | Calendario | `/CalendarioEscolar` | `ADMIN` | Deny to `/Home` |
+No current home-menu route mismatches are expected for Calendario, Asistencia, Pagos, or Solicitudes de Ausencias. The release gate should fail if a visible home-menu route returns `forbidden_action` for its owning role.

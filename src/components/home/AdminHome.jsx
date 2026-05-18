@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
@@ -77,10 +77,6 @@ export default function AdminHome({ user, userProfile, subscription }) {
     queryKey: ['homeParentLinks', userProfile.school_id],
     queryFn: () => base44.entities.ParentStudent.filter({ school_id: userProfile.school_id, status: 'ACTIVE' }),
   });
-  const { data: paymentConcepts = [] } = useQuery({
-    queryKey: ['homePaymentConcepts', userProfile.school_id],
-    queryFn: () => base44.entities.PaymentConcept.filter({ school_id: userProfile.school_id, is_active: true }),
-  });
   const { data: emergencyContacts = [] } = useQuery({
     queryKey: ['homeEmergencyContacts', userProfile.school_id, students.length],
     queryFn: async () => {
@@ -114,7 +110,6 @@ export default function AdminHome({ user, userProfile, subscription }) {
   const teacherCoverage = teacherProfiles.length > 0 ? Math.round((new Set(teacherAssignments.map((a) => a.teacher_id)).size / teacherProfiles.length) * 100) : 0;
   const parentCoverage = students.length > 0 ? Math.round((new Set(parentLinks.map((l) => l.student_id)).size / students.length) * 100) : 0;
   const emergencyCoverage = students.length > 0 ? Math.round((new Set(emergencyContacts.map((c) => c.student_id)).size / students.length) * 100) : 0;
-  const paymentReady = paymentConcepts.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -192,10 +187,10 @@ export default function AdminHome({ user, userProfile, subscription }) {
           <BigTile
             icon={CreditCard}
             title="Pagos"
-            subtitle={paymentReady ? (overdueCharges.length > 0 ? `${overdueCharges.length} vencidos` : 'Gestionar pagos') : 'Bloqueado: define conceptos base'}
+            subtitle={overdueCharges.length > 0 ? `${overdueCharges.length} vencidos` : 'Configurar conceptos y cargos'}
             badge={overdueCharges.length}
             badgeColor="bg-red-500"
-            href={paymentReady ? createPageUrl('PagosAdmin') : undefined}
+            href={createPageUrl('PagosAdmin')}
             color="from-rose-50 to-white"
             iconColor="text-rose-600"
             delay={0.25}

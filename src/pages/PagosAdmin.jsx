@@ -318,7 +318,7 @@ export default function PagosAdmin() {
       />
       {concepts.length === 0 && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          Módulo de cargos y pagos bloqueado hasta definir la línea base de conceptos de pago.
+          Primero crea al menos un concepto de pago; después podrás generar cargos para los alumnos.
         </div>
       )}
 

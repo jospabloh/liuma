@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
-import { CheckCircle, AlertCircle, User, ChevronRight } from 'lucide-react';
+import { CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
-import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
 import { useNavigate } from 'react-router-dom';
 
 export default function BitacorasMaestro() {

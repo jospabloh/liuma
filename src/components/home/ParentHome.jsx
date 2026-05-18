@@ -8,7 +8,6 @@ import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
 import NoticeCard from '@/components/notices/NoticeCard';
 import EventCard from '@/components/events/EventCard';
-import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';

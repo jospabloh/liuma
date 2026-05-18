@@ -7,12 +7,12 @@ import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import HomeworkCard from '@/components/homework/HomeworkCard';
 import { BookOpen, Calendar } from 'lucide-react';
-import { format, isToday, isTomorrow, addDays, startOfWeek, endOfWeek } from 'date-fns';
+import { format, addDays, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
-import { canReadEntity, canWriteEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { canReadEntity } from '@/lib/authorization/policy';
 import { loadHomeworkByClassroomIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 import {
   Dialog,

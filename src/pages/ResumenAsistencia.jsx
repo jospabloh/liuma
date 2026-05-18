@@ -2,15 +2,13 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Calendar, TrendingDown, Users, Filter, Download } from 'lucide-react';
-import { Button } from "@/components/ui/button";
+import { Calendar, TrendingDown, Users, Filter } from 'lucide-react';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PageHeader from "@/components/ui/PageHeader";
 import LoadingScreen from "@/components/ui/LoadingScreen";
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
 export default function ResumenAsistencia() {
   const [userProfile, setUserProfile] = useState(null);

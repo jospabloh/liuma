@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, AlertTriangle, Clock, DollarSign } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 
 const statusConfig = {
   'Al día': {

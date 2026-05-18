@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, BookOpen, User, Paperclip } from 'lucide-react';
+import { Calendar, User, Paperclip } from 'lucide-react';
 import { format, isToday, isTomorrow, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";

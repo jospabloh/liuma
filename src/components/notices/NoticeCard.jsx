@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, AlertCircle, Bell, Calendar, User } from 'lucide-react';
+import { Calendar, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PriorityBadge } from '@/components/ui/StatusBadge';

@@ -13,6 +13,7 @@ import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity, buildScopedFilter } from '@/lib/authorization/policy';
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import {
 
 export default function Pagos() {
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [activeStudentId, setActiveStudentId] = useState('all');
   
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -45,6 +47,7 @@ export default function Pagos() {
 
   const students = linkedStudents.students;
   const studentIds = linkedStudents.studentIds;
+  const activeStudents = activeStudentId === 'all' ? students : students.filter((student) => student.id === activeStudentId);
 
   const { data: charges = [], isLoading } = useQuery({
     queryKey: ['charges', studentIds],
@@ -122,7 +125,23 @@ export default function Pagos() {
         />
       ) : (
         <div className="space-y-4">
-          {students.map((student, index) => (
+          {students.length > 1 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-3">
+              <p className="text-xs font-medium text-slate-500 mb-2">Hijo activo</p>
+              <Select value={activeStudentId} onValueChange={setActiveStudentId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos mis hijos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos mis hijos</SelectItem>
+                  {students.map((student) => (
+                    <SelectItem key={student.id} value={student.id}>{student.first_name} {student.last_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {activeStudents.map((student, index) => (
             <motion.div
               key={student.id}
               initial={{ opacity: 0, y: 20 }}

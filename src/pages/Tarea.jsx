@@ -10,6 +10,8 @@ import { BookOpen, Calendar } from 'lucide-react';
 import { format, addDays, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity } from '@/lib/authorization/policy';
@@ -24,6 +26,7 @@ import {
 export default function Tarea() {
   const [selectedHomework, setSelectedHomework] = useState(null);
   const [activeTab, setActiveTab] = useState('hoy');
+  const [activeStudentId, setActiveStudentId] = useState('all');
   
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -49,11 +52,13 @@ export default function Tarea() {
   const studentIds = linkedStudents.studentIds;
 
   const classroomIds = [...new Set(students.map(s => s.classroom_id).filter(Boolean))];
+  const activeStudent = students.find((student) => student.id === activeStudentId) || null;
+  const activeClassroomIds = activeStudent ? [activeStudent.classroom_id].filter(Boolean) : classroomIds;
 
   const { data: homework = [], isLoading } = useQuery({
-    queryKey: normalizedIdQueryKey('homework', classroomIds),
-    queryFn: async () => (await loadHomeworkByClassroomIds(classroomIds)).items,
-    enabled: classroomIds.length > 0,
+    queryKey: normalizedIdQueryKey('homework', activeClassroomIds),
+    queryFn: async () => (await loadHomeworkByClassroomIds(activeClassroomIds)).items,
+    enabled: activeClassroomIds.length > 0,
   });
 
   const today = new Date();
@@ -73,9 +78,26 @@ export default function Tarea() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
       <PageHeader
         title="Tarea"
+        subtitle="Sigue tareas por hijo sin confusiones"
         showBack
         backTo={createPageUrl('Home')}
       />
+      {students.length > 1 && (
+        <div className="mb-4 bg-white border border-slate-200 rounded-xl p-3">
+          <p className="text-xs font-medium text-slate-500 mb-2">Hijo activo</p>
+          <Select value={activeStudentId} onValueChange={setActiveStudentId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Todos mis hijos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos mis hijos</SelectItem>
+              {students.map((student) => (
+                <SelectItem key={student.id} value={student.id}>{student.first_name} {student.last_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full mb-6">
@@ -150,6 +172,11 @@ export default function Tarea() {
                   <BookOpen className="w-4 h-4" />
                   <span className="font-medium">{selectedHomework.subject}</span>
                 </div>
+              )}
+              {activeStudent && (
+                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                  Hijo activo: {activeStudent.first_name} {activeStudent.last_name}
+                </Badge>
               )}
               
               <div className="flex items-center gap-2 text-slate-600">

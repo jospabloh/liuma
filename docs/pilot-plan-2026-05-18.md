@@ -118,8 +118,85 @@ A pilot is accepted only if **all** conditions are met:
 3. Any hotfix must include rollback steps and owner sign-off (technical on-call + product owner).
 4. Non-critical backlog items are deferred to post-pilot release planning.
 
+## 9) Launch controls and daily operating cadence
+
+### 9.1 Launch to selected pilot tenants only
+
+1. Pilot launch is limited to: `PILOT-SM-01`, `PILOT-MD-01`, `PILOT-HC-01`.
+2. No broader rollout is permitted until end-of-pilot Go/No-Go approval is complete.
+
+### 9.2 Launch-window health confirmation checklist
+
+Within the launch window (first 2 hours on 2026-06-01), confirm and record:
+
+- Login/authentication success across all pilot roles.
+- Role-based routing correctness for Director/Admin/Teacher/Parent paths.
+- Permission boundaries (deny/allow) for high-risk actions.
+- Lumi availability for allowed roles and Lumi exclusions where disabled by policy.
+
+### 9.3 Daily pilot checkpoint (same time each day)
+
+Daily checkpoint time is fixed at **16:00-16:30 UTC**. Required review artifacts:
+
+1. Incidents opened/closed since previous checkpoint.
+2. KPI trend vs target thresholds (section 4).
+3. Blocker/high defects with status and ETA.
+4. Support feedback themes (top 3 recurring).
+5. AI usage quality signals (usefulness, safety flags, unresolved low-confidence responses).
+
+### 9.4 Strict change policy enforcement during pilot
+
+1. Only blocker/high fixes may ship.
+2. No feature expansion or scope increase is allowed.
+3. Mandatory regression subset must pass before every hotfix deploy:
+   - Auth/login flow by role.
+   - Role route access checks.
+   - Tenant isolation checks.
+   - Maker-checker approval path.
+   - Danger-zone authorization controls.
+   - Audit event write/read completeness.
+
+### 9.5 Tenant-by-tenant health tracking
+
+Maintain a daily status board with one row per pilot tenant:
+
+| Tenant | Health | Major pain points | Mitigation actions | Owner |
+|---|---|---|---|---|
+| PILOT-SM-01 | Green / Yellow / Red | Top issues impacting operations | Current actions and due dates | Named owner |
+| PILOT-MD-01 | Green / Yellow / Red | Top issues impacting operations | Current actions and due dates | Named owner |
+| PILOT-HC-01 | Green / Yellow / Red | Top issues impacting operations | Current actions and due dates | Named owner |
+
+### 9.6 Daily safety control validation
+
+Validate and record evidence for:
+
+- Tenant isolation integrity.
+- Maker-checker control integrity.
+- Danger-zone control enforcement.
+- Audit completeness (critical user/admin actions present and attributable).
+
+### 9.7 Daily stakeholder summary requirements
+
+Send a daily summary covering:
+
+1. What happened (incidents, KPI movement, tenant status changes).
+2. What changed (hotfixes/config changes, if any).
+3. Current risks.
+4. Next 24-hour plan.
+
+### 9.8 Security/privacy incident response rule
+
+If any security/privacy incident is detected:
+
+1. Execute incident playbook immediately.
+2. Pause pilot expansion and any rollout increase.
+3. Escalate to formal Go/No-Go review before resuming.
+
 ## Success Criteria Checklist
 
 - [x] Pilot tenants chosen (small, medium, high complexity)
 - [x] Measurable KPI framework set
 - [x] Scope and responsibilities locked
+- [x] Daily operating controls defined (launch checks, checkpoints, safety validation, stakeholder updates)
+- [x] Security/privacy escalation gate defined (incident playbook + expansion pause + Go/No-Go)
+- [x] Pilot success requires guardrail compliance and daily trend stability or explicit corrective actions

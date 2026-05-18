@@ -31,7 +31,7 @@ export default function GlobalLumiBubble() {
 
   return (
     <>
-      <LumiButton onClick={() => setIsOpen(true)} className="bottom-4 right-4 md:bottom-6 md:right-6" />
+      <LumiButton isOpen={isOpen} onClick={() => setIsOpen((current) => !current)} className="bottom-4 right-4 md:bottom-6 md:right-6" />
       <LumiChat isOpen={isOpen} onClose={() => setIsOpen(false)} userProfile={userProfile} />
     </>
   );

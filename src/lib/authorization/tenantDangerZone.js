@@ -1,3 +1,5 @@
+import { DENIAL_REASON_CODES } from './policy.js';
+
 const DANGER_ZONE_OPERATIONS = {
   DELETE_TENANT: 'DELETE_TENANT',
   SUSPEND_TENANT: 'SUSPEND_TENANT',
@@ -47,17 +49,17 @@ export function evaluateDangerZoneRequest({
   appOwnerProfileId,
   hasSecondAdminApproval,
 }) {
-  if (!operation || !actorProfile || !targetTenantId || !actorTenantId) return { allowed: false, reason: 'missing_context' };
-  if (!isHighRiskOperation(operation)) return { allowed: false, reason: 'default_deny' };
-  if (actorProfile.app_role !== 'ADMIN') return { allowed: false, reason: 'admin_only' };
-  if (targetTenantId !== actorTenantId) return { allowed: false, reason: 'cross_tenant_denied' };
-  if (!reason?.trim() || !approvalReason?.trim()) return { allowed: false, reason: 'reason_required' };
+  if (!operation || !actorProfile || !targetTenantId || !actorTenantId) return { allowed: false, reason: DENIAL_REASON_CODES.MISSING_CONTEXT, reason_code: DENIAL_REASON_CODES.MISSING_CONTEXT };
+  if (!isHighRiskOperation(operation)) return { allowed: false, reason: DENIAL_REASON_CODES.DEFAULT_DENY, reason_code: DENIAL_REASON_CODES.DEFAULT_DENY };
+  if (actorProfile.app_role !== 'ADMIN') return { allowed: false, reason: DENIAL_REASON_CODES.ADMIN_ONLY, reason_code: DENIAL_REASON_CODES.ADMIN_ONLY };
+  if (targetTenantId !== actorTenantId) return { allowed: false, reason: DENIAL_REASON_CODES.CROSS_TENANT_DENIED, reason_code: DENIAL_REASON_CODES.CROSS_TENANT_DENIED };
+  if (!reason?.trim() || !approvalReason?.trim()) return { allowed: false, reason: DENIAL_REASON_CODES.REASON_REQUIRED, reason_code: DENIAL_REASON_CODES.REASON_REQUIRED };
 
   const appOwnerExempt = appOwnerProfileId && requesterProfileId === appOwnerProfileId;
   if (!appOwnerExempt) {
-    if (!hasSecondAdminApproval) return { allowed: false, reason: 'second_admin_required' };
-    if (!approverProfileId) return { allowed: false, reason: 'second_admin_required' };
-    if (requesterProfileId === approverProfileId) return { allowed: false, reason: 'self_approval_denied' };
+    if (!hasSecondAdminApproval) return { allowed: false, reason: DENIAL_REASON_CODES.SECOND_ADMIN_REQUIRED, reason_code: DENIAL_REASON_CODES.SECOND_ADMIN_REQUIRED };
+    if (!approverProfileId) return { allowed: false, reason: DENIAL_REASON_CODES.SECOND_ADMIN_REQUIRED, reason_code: DENIAL_REASON_CODES.SECOND_ADMIN_REQUIRED };
+    if (requesterProfileId === approverProfileId) return { allowed: false, reason: DENIAL_REASON_CODES.SELF_APPROVAL_DENIED, reason_code: DENIAL_REASON_CODES.SELF_APPROVAL_DENIED };
   }
 
   return { allowed: true, reason: 'approved' };

@@ -45,7 +45,7 @@ test('denies when actor is not admin to keep danger-zone admin-only', () => {
     approvalReason: 'Approved',
   });
 
-  assert.deepEqual(result, { allowed: false, reason: 'admin_only' });
+  assert.deepEqual(result, { allowed: false, reason: 'admin_only', reason_code: 'admin_only' });
 });
 
 test('denies self-approval to preserve maker-checker separation of duties', () => {
@@ -62,7 +62,7 @@ test('denies self-approval to preserve maker-checker separation of duties', () =
     appOwnerProfileId: 'owner-1',
   });
 
-  assert.deepEqual(result, { allowed: false, reason: 'self_approval_denied' });
+  assert.deepEqual(result, { allowed: false, reason: 'self_approval_denied', reason_code: 'self_approval_denied' });
 });
 
 test('denies requests without mandatory request and approval reasons', () => {
@@ -78,7 +78,7 @@ test('denies requests without mandatory request and approval reasons', () => {
     approvalReason: ' ',
   });
 
-  assert.deepEqual(result, { allowed: false, reason: 'reason_required' });
+  assert.deepEqual(result, { allowed: false, reason: 'reason_required', reason_code: 'reason_required' });
 });
 
 test('denies cross-tenant requests to enforce tenant scope verification', () => {
@@ -94,7 +94,7 @@ test('denies cross-tenant requests to enforce tenant scope verification', () => 
     approvalReason: 'Validado',
   });
 
-  assert.deepEqual(result, { allowed: false, reason: 'cross_tenant_denied' });
+  assert.deepEqual(result, { allowed: false, reason: 'cross_tenant_denied', reason_code: 'cross_tenant_denied' });
 });
 
 test('preserves app owner exemption from second admin approval requirement', () => {

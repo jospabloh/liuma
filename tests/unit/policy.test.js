@@ -144,6 +144,7 @@ test('owner identity prefers configured user_id and rejects email conflicts', ()
     isOwner: false,
     source: 'user_id',
     reason: 'owner_identity_conflict',
+    reason_code: 'owner_identity_conflict',
   });
 
   assert.equal(resolveOwnerIdentity({

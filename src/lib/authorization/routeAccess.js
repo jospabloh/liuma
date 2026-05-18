@@ -1,4 +1,4 @@
-import { ROLES } from './policy.js';
+import { DENIAL_REASON_CODES, ROLES } from './policy.js';
 
 export const DEFAULT_DENIED_REDIRECT = '/Home';
 
@@ -44,8 +44,30 @@ export function getRouteAccessMatrix() {
   return ROUTE_ACCESS;
 }
 
-export function canAccessRoute({ role, routeName }) {
+export function getRouteAccessDecision({ role, routeName, ownerAccess }) {
   const allowedRoles = ROUTE_ACCESS[routeName];
-  if (!allowedRoles || !role) return false;
-  return allowedRoles.includes(role);
+
+  if (!routeName || !allowedRoles) {
+    return { allowed: false, reason: DENIAL_REASON_CODES.DEFAULT_DENY, reason_code: DENIAL_REASON_CODES.DEFAULT_DENY, precedence: 'route_default_deny' };
+  }
+
+  if (role && allowedRoles.includes(role)) {
+    return { allowed: true, reason: 'route_role_allow', precedence: 'route_role_allow' };
+  }
+
+  if (ownerAccess?.allowed) {
+    return {
+      allowed: true,
+      reason: 'owner_override',
+      precedence: 'owner_override',
+      owner_reason: ownerAccess.reason,
+      identity_source: ownerAccess.identity_source,
+    };
+  }
+
+  return { allowed: false, reason: DENIAL_REASON_CODES.FORBIDDEN_ACTION, reason_code: DENIAL_REASON_CODES.FORBIDDEN_ACTION, precedence: 'route_default_deny' };
+}
+
+export function canAccessRoute({ role, routeName }) {
+  return getRouteAccessDecision({ role, routeName }).allowed;
 }

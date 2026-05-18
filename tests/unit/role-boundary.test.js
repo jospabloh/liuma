@@ -8,17 +8,25 @@ import {
 } from '../../src/lib/authorization/policy.js';
 
 test('forbidden action denial', () => {
-  assert.deepEqual(assertRoleAccess({ role: 'PARENT', entity: 'PaymentRecord', action: 'read' }), { allowed: false, reason: 'forbidden_action' });
+  const result = assertRoleAccess({ role: 'PARENT', entity: 'PaymentRecord', action: 'read' });
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason_code, 'forbidden_action');
 });
 
 test('cross-tenant denial', () => {
-  assert.deepEqual(assertTenantScope({ actorSchoolId: 'tenant-1', targetSchoolId: 'tenant-2' }), { allowed: false, reason: 'cross_tenant_denied' });
+  const result = assertTenantScope({ actorSchoolId: 'tenant-1', targetSchoolId: 'tenant-2' });
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason_code, 'cross_tenant_denied');
 });
 
 test('cross-classroom denial for teacher', () => {
-  assert.deepEqual(assertTeacherClassroomScope({ role: 'TEACHER', classroomIds: ['c-1'], targetClassroomId: 'c-2' }), { allowed: false, reason: 'cross_classroom_denied' });
+  const result = assertTeacherClassroomScope({ role: 'TEACHER', classroomIds: ['c-1'], targetClassroomId: 'c-2' });
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason_code, 'cross_classroom_denied');
 });
 
 test('unrelated-student denial for parent', () => {
-  assert.deepEqual(assertParentStudentScope({ role: 'PARENT', studentIds: ['s-1'], targetStudentId: 's-9' }), { allowed: false, reason: 'unrelated_student_denied' });
+  const result = assertParentStudentScope({ role: 'PARENT', studentIds: ['s-1'], targetStudentId: 's-9' });
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason_code, 'unrelated_student_denied');
 });

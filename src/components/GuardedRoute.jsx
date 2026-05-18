@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import RouteAccessDenied from '@/components/RouteAccessDenied';
-import { canAccessRoute, DEFAULT_DENIED_REDIRECT } from '@/lib/authorization/routeAccess';
+import { DEFAULT_DENIED_REDIRECT, getRouteAccessDecision } from '@/lib/authorization/routeAccess';
 import { AUDIT_ACTIONS, logAuditEvent } from '@/lib/audit';
 import { getOwnerScopedAccess } from '@/lib/authorization/policy';
 
@@ -15,7 +15,6 @@ export default function GuardedRoute({ routeName, children }) {
   });
   const profile = profiles[0] || null;
 
-  const hasAccess = canAccessRoute({ role: profile?.app_role, routeName });
   const ownerAccess = getOwnerScopedAccess({
     currentUser: user,
     ownerEmail: import.meta.env.VITE_OWNER_EMAIL,
@@ -25,8 +24,10 @@ export default function GuardedRoute({ routeName, children }) {
     ownerProfiles: profiles,
   });
 
+  const routeDecision = getRouteAccessDecision({ role: profile?.app_role, routeName, ownerAccess });
+
   React.useEffect(() => {
-    if (!ownerAccess.allowed || !user || !profile) return;
+    if (routeDecision.precedence !== 'owner_override' || !user || !profile) return;
     logAuditEvent({
       user,
       userProfile: profile,
@@ -34,16 +35,24 @@ export default function GuardedRoute({ routeName, children }) {
       entityId: routeName,
       action: AUDIT_ACTIONS.OWNER_OVERRIDE,
       reason: 'owner_override',
-      context: { route: routeName, policy_decision: 'allow' },
+      context: {
+        route: routeName,
+        policy_decision: 'allow',
+        precedence: routeDecision.precedence,
+        owner_identity_source: routeDecision.identity_source,
+        actor_school_id: profile.school_id,
+        target_school_id: profile.school_id,
+      },
     });
-  }, [ownerAccess.allowed, user, profile, routeName]);
+  }, [routeDecision.precedence, routeDecision.identity_source, user, profile, routeName]);
 
-  if (!hasAccess && !ownerAccess.allowed) {
+  if (!routeDecision.allowed) {
     const ownerProfileMissing = !profile && user?.email?.toLowerCase() === String(import.meta.env.VITE_OWNER_EMAIL || '').toLowerCase();
     return (
       <RouteAccessDenied
         redirectTo={DEFAULT_DENIED_REDIRECT}
         message={ownerProfileMissing ? 'Perfil de owner no provisionado en este tenant.' : 'No tienes permisos para ver esta sección.'}
+        reasonCode={routeDecision.reason_code}
       />
     );
   }

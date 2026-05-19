@@ -37,14 +37,14 @@ export default function Layout({ children, currentPageName }) {
           border-radius: 2px;
         }
         
-        /* Large touch targets */
-        button, a, input, select, textarea {
-          min-height: 44px;
-        }
-        
-        /* Prevent zoom on input focus (iOS) */
-        input, select, textarea {
-          font-size: 16px !important;
+        @media (max-width: 767px) {
+          .mobile-touch-target {
+            min-height: 44px;
+          }
+
+          .mobile-input-no-zoom {
+            font-size: 16px;
+          }
         }
       `}</style>
       

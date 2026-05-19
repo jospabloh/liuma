@@ -319,7 +319,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
                   <button
                     key={action.intent}
                     onClick={() => handleSend({ intent: action.intent, prompt: action.label })}
-                    className="block w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm transition-colors min-h-11"
+                    className="mobile-touch-target block w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm transition-colors"
                   >
                     {action.label}
                   </button>
@@ -396,14 +396,14 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Escribe tu pregunta..."
-              className="flex-1 rounded-full bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="mobile-touch-target mobile-input-no-zoom flex-1 rounded-full bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-indigo-500"
               disabled={isLoading}
             />
             <Button
               type="submit"
               aria-label="Enviar mensaje"
               disabled={!input.trim() || isLoading}
-              className="rounded-full w-12 h-12 bg-indigo-600 hover:bg-indigo-700"
+              className="mobile-touch-target rounded-full w-12 h-12 bg-indigo-600 hover:bg-indigo-700"
             >
               <Send className="w-5 h-5" />
             </Button>

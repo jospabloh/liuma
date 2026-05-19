@@ -251,3 +251,23 @@ test('maps failed tenant creation to a deterministic duplicate message without c
   assert.equal(base44.entities.UserProfile.createCalls.length, 0);
   assert.equal(base44.entities.Role.createCalls.length, 0);
 });
+
+test('maps validation and invalid-school backend failures to deterministic user-facing messages', () => {
+  const validationError = {
+    status: 400,
+    data: { code: 'validation_failed', message: 'required field missing' },
+  };
+  const invalidSchoolCodeError = {
+    status: 404,
+    data: { code: 'invalid_school_code', message: 'invalid school code' },
+  };
+
+  assert.deepEqual(mapOnboardingError(validationError), {
+    code: ONBOARDING_ERROR_CODES.VALIDATION,
+    message: 'Faltan datos requeridos para completar el registro.',
+  });
+  assert.deepEqual(mapOnboardingError(invalidSchoolCodeError), {
+    code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE,
+    message: 'Código de escuela inválido. Verifica con tu administrador.',
+  });
+});

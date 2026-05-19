@@ -26,9 +26,9 @@
 | App lint | `npm run lint` | PASS |
 | App typecheck | `npm run typecheck` | PASS |
 | App tests (unit+integration) | `npm run test` | PASS |
-| Deno format check | `deno task fmt` | FAIL (deno not installed in runner) |
-| Deno lint | `deno task lint` | FAIL (deno not installed in runner) |
-| Deno tests | `deno task test` | FAIL (deno not installed in runner) |
+| Deno format check | `.github/workflows/ci-deno.yml` (`deno fmt --check deno/`) | BLOCKED (hosted CI rerun not executable from this environment; see `docs/ci-deno-verification-2026-05-19.md`) |
+| Deno lint | `.github/workflows/ci-deno.yml` (`deno lint deno/`) | BLOCKED (hosted CI rerun not executable from this environment; see `docs/ci-deno-verification-2026-05-19.md`) |
+| Deno tests | `.github/workflows/ci-deno.yml` (`deno test --no-prompt deno/`) | BLOCKED (hosted CI rerun not executable from this environment; see `docs/ci-deno-verification-2026-05-19.md`) |
 | Integration/E2E availability | N/A (no dedicated browser e2e command found) | WARN |
 
 ## Manual End-to-End Role Journeys
@@ -67,8 +67,9 @@
 | Denial events visible and explainable | PASS (logic) | Structured denial reason codes are asserted in policy and capability tests. |
 
 ## Release Decision
-- **Gate status: CONDITIONAL HOLD**.
+- **Gate status: HOLD (DENO GATE RED)**.
 - Automated critical authorization/security checks passed.
+- Deno CI hosted runner verification remains blocked.
 - Manual journeys and production-like UX checks were not executed in this environment; therefore release readiness is incomplete.
 - Per rule, stabilization should be reopened **before full rollout** until blocked manual checks are completed and signed off.
 

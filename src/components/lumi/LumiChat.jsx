@@ -211,6 +211,11 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
   };
 
   const quickActions = quickActionsByRole[userProfile?.app_role || 'PARENT'] || quickActionsByRole.PARENT;
+  const roleQuickActionTitle = {
+    ADMIN: 'Acciones rápidas de administración',
+    TEACHER: 'Acciones rápidas para tu grupo',
+    PARENT: 'Acciones rápidas para familia',
+  };
 
   if (!isOpen) return null;
 
@@ -277,12 +282,15 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
               <p className="text-slate-500 text-sm mb-6">
                 ¿En qué te puedo ayudar hoy?
               </p>
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                {roleQuickActionTitle[userProfile?.app_role || 'PARENT'] || roleQuickActionTitle.PARENT}
+              </p>
               <div className="space-y-2">
                 {quickActions.map((action) => (
                   <button
                     key={action.intent}
                     onClick={() => handleSend({ intent: action.intent, prompt: action.label })}
-                    className="block w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm transition-colors"
+                    className="block w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm transition-colors min-h-11"
                   >
                     {action.label}
                   </button>

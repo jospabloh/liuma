@@ -126,6 +126,24 @@ export function mapOnboardingError(error) {
   const lowerCode = String(details.backendCode || '').toLowerCase();
   const lowerMessage = String(details.backendMessage || '').toLowerCase();
 
+  if (
+    details.status === 400 ||
+    lowerCode.includes('validation') ||
+    lowerCode.includes('invalid_payload') ||
+    lowerMessage.includes('required')
+  ) {
+    return { code: ONBOARDING_ERROR_CODES.VALIDATION, message: ONBOARDING_ERROR_MESSAGES[ONBOARDING_ERROR_CODES.VALIDATION] };
+  }
+
+  if (
+    details.status === 404 ||
+    lowerCode.includes('school_not_found') ||
+    lowerCode.includes('invalid_school_code') ||
+    lowerMessage.includes('invalid school code')
+  ) {
+    return { code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE, message: ONBOARDING_ERROR_MESSAGES[ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE] };
+  }
+
   if (details.status === 403 || details.status === 401) {
     return { code: ONBOARDING_ERROR_CODES.FORBIDDEN, message: ONBOARDING_ERROR_MESSAGES[ONBOARDING_ERROR_CODES.FORBIDDEN] };
   }

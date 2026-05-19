@@ -177,9 +177,8 @@ Evidence basis for journey outcomes: Task 11 role/theme audit, Task 11 defect co
 
 ### Known limitations
 1. No fresh browser-executed, screenshot-backed cross-device run exists in this environment for TC-1/TC-2/TC-3 on every critical journey.
-2. Theme-token normalization is incomplete in certain status-heavy surfaces.
-3. Palette safety auto-adjust is not yet implemented.
-4. Lumi full visual stress pack is still pending.
+2. Theme-token normalization is still incomplete in certain status-heavy surfaces.
+3. Lumi full visual stress pack is still pending.
 
 ### Mitigation plan
 1. Complete THM-01/THM-02 token + validator work before broad rollout.
@@ -202,3 +201,20 @@ Decision rationale:
 - Critical journeys are pass with available evidence, with provisional tags clearly stated where live visual evidence is pending.
 - Residual risk is medium/low and has named owners + due dates.
 - Certification is suitable for **Phase 12 Go/No-Go with controlled pilot scope** and mandatory follow-through on mitigation backlog.
+
+---
+
+## Addendum — 2026-05-19 palette safety post-fix rerun
+
+### Scope
+- Tenant theme extraction pipeline now enforces palette safety validation and semantic color protection before runtime CSS variables are applied.
+- Post-fix rerun covered automated role-focused checks for Admin, Teacher, Parent, and Lumi under low-contrast + monochrome tenant logo inputs.
+
+### Post-fix results
+- **Admin / Teacher / Parent / Lumi low-contrast + monochrome stress inputs:** PASS in automated palette extraction regression tests.
+- **Semantic protection (danger/warning/success near-collision):** PASS with auto-adjusted primary fallback and adjustment reason logging.
+- **Theme runtime safety:** PASS via palette safety enforcement in CSS variable build path.
+
+### Remaining notes
+- This addendum closes the code-level gap for THM-02 (palette safety validator + auto-adjust).
+- Browser screenshot evidence across full journey matrix is still tracked separately under JNY-01 and LUM-01.

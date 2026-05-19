@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractPaletteFromImageData, DEFAULT_THEME, ensureAccessiblePair } from '../../src/lib/tenantTheme.js';
+import { extractPaletteFromImageData, DEFAULT_THEME, ensureAccessiblePair, enforcePaletteSafety } from '../../src/lib/tenantTheme.js';
 
 test('extracts multicolor logo palette with at least 4 colors', () => {
   const data = new Uint8ClampedArray([
@@ -34,4 +34,27 @@ test('theme extraction is tenant-isolated by independent input data', () => {
   const tenantA = extractPaletteFromImageData(new Uint8ClampedArray([200, 10, 10, 255, 10, 10, 200, 255, 10, 200, 10, 255, 200, 200, 10, 255]));
   const tenantB = extractPaletteFromImageData(new Uint8ClampedArray([10, 200, 200, 255, 200, 10, 200, 255, 120, 120, 120, 255, 200, 100, 10, 255]));
   assert.notDeepEqual(tenantA.palette, tenantB.palette);
+});
+
+test('protects semantic danger/warning/success colors from primary collisions', () => {
+  const result = enforcePaletteSafety({
+    primary: '#dc2626',
+    secondary: '#dc2626',
+    accent: '#dc2626',
+    neutral: '#dc2626',
+  });
+  assert.notEqual(result.palette.primary, '#dc2626');
+  assert.ok(result.reasons.includes('primary_too_close_to_danger'));
+});
+
+test('admin/teacher/parent + lumi low-contrast and monochrome logos are auto-adjusted', () => {
+  const lowContrastAndMonochrome = new Uint8ClampedArray([
+    120, 120, 120, 255, 121, 121, 121, 255,
+    122, 122, 122, 255, 121, 121, 121, 255,
+    120, 120, 120, 255, 122, 122, 122, 255,
+  ]);
+  const theme = extractPaletteFromImageData(lowContrastAndMonochrome, { targetCount: 4, minCount: 1 });
+  const uniqueColors = new Set(Object.values(theme.palette));
+  assert.ok(uniqueColors.size >= 2);
+  assert.equal(theme.source, 'logo');
 });

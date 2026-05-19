@@ -71,6 +71,57 @@ function generateShades(hex) {
   };
 }
 
+function normalizeHex(hex, fallback) {
+  if (typeof hex !== 'string') return fallback;
+  const value = hex.trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(value) || /^#[0-9a-f]{6}$/.test(value)) return value;
+  return fallback;
+}
+
+function enforcePaletteSafety(palette) {
+  const sanitized = {
+    primary: normalizeHex(palette.primary, DEFAULT_THEME.palette.primary),
+    secondary: normalizeHex(palette.secondary, DEFAULT_THEME.palette.secondary),
+    accent: normalizeHex(palette.accent, DEFAULT_THEME.palette.accent),
+    neutral: normalizeHex(palette.neutral, DEFAULT_THEME.palette.neutral),
+  };
+  const reasons = [];
+
+  const roles = ['primary', 'secondary', 'accent', 'neutral'];
+  for (const role of roles) {
+    const pair = ensureAccessiblePair(sanitized[role], 4.5);
+    if (pair.background !== sanitized[role]) {
+      reasons.push(`${role}_contrast_adjusted`);
+      sanitized[role] = pair.background;
+    }
+  }
+
+  const primaryRgb = hexToRgb(sanitized.primary);
+  const semanticSafeguards = {
+    danger: '#dc2626',
+    warning: '#d97706',
+    success: '#16a34a',
+  };
+  for (const [name, semanticHex] of Object.entries(semanticSafeguards)) {
+    const semanticRgb = hexToRgb(semanticHex);
+    if (distance(primaryRgb, semanticRgb) < 26) {
+      reasons.push(`primary_too_close_to_${name}`);
+      sanitized.primary = ensureAccessiblePair(DEFAULT_THEME.palette.primary, 4.5).background;
+      break;
+    }
+  }
+
+  const uniqueCount = new Set(Object.values(sanitized)).size;
+  if (uniqueCount < 2) {
+    reasons.push('monochrome_palette_auto_spread');
+    sanitized.secondary = ensureAccessiblePair(DEFAULT_THEME.palette.secondary, 4.5).background;
+    sanitized.accent = ensureAccessiblePair(DEFAULT_THEME.palette.accent, 4.5).background;
+    sanitized.neutral = ensureAccessiblePair(DEFAULT_THEME.palette.neutral, 4.5).background;
+  }
+
+  return { palette: sanitized, reasons };
+}
+
 export function extractPaletteFromImageData(imageData, options = {}) {
   const { targetCount = 4, minCount = 2 } = options;
   const bins = new Map();
@@ -102,7 +153,14 @@ export function extractPaletteFromImageData(imageData, options = {}) {
     neutral: pickedHex[3] || '#334155',
   };
 
-  const safePalette = Object.fromEntries(Object.entries(palette).map(([name, hex]) => [name, ensureAccessiblePair(hex).background]));
+  const { palette: safePalette, reasons } = enforcePaletteSafety(palette);
+  if (reasons.length) {
+    console.warn('tenant_theme_palette_adjusted', {
+      reasons,
+      originalPalette: palette,
+      adjustedPalette: safePalette,
+    });
+  }
 
   return {
     palette: safePalette,
@@ -138,7 +196,7 @@ export async function extractPaletteFromFile(file) {
 }
 
 export function buildThemeCssVars(themeSettings = DEFAULT_THEME) {
-  const palette = themeSettings.palette || DEFAULT_THEME.palette;
+  const { palette } = enforcePaletteSafety(themeSettings.palette || DEFAULT_THEME.palette);
   return {
     '--tenant-primary': palette.primary,
     '--tenant-secondary': palette.secondary,
@@ -147,4 +205,4 @@ export function buildThemeCssVars(themeSettings = DEFAULT_THEME) {
   };
 }
 
-export { DEFAULT_THEME, ensureAccessiblePair };
+export { DEFAULT_THEME, ensureAccessiblePair, enforcePaletteSafety };

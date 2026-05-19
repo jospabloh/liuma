@@ -66,6 +66,15 @@ export function validateOnboardingPayload({ formData, user }) {
   return { valid: true };
 }
 
+function validateAdminTenantCreator({ formData, user, ownerEmail }) {
+  if (formData?.role !== 'ADMIN') return { valid: true };
+  const normalizedOwner = String(ownerEmail || '').trim().toLowerCase();
+  if (!normalizedOwner) return { valid: true };
+  const normalizedUserEmail = String(user?.email || '').trim().toLowerCase();
+  if (normalizedUserEmail === normalizedOwner) return { valid: true };
+  return { valid: false, code: ONBOARDING_ERROR_CODES.FORBIDDEN, field: 'ownerEmail' };
+}
+
 export function buildSchoolPayload({ formData, user, logoUrl, themePreview }) {
   const payload = {
     name: normalizeText(formData.newSchoolName),
@@ -269,6 +278,14 @@ export async function completeOnboardingTenantCreation({
     const error = new Error(`Invalid onboarding payload: ${validation.field}`);
     error.code = validation.code;
     error.field = validation.field;
+    throw error;
+  }
+
+  const creatorValidation = validateAdminTenantCreator({ formData, user, ownerEmail });
+  if (!creatorValidation.valid) {
+    const error = new Error('Forbidden admin tenant creation');
+    error.code = creatorValidation.code;
+    error.field = creatorValidation.field;
     throw error;
   }
 

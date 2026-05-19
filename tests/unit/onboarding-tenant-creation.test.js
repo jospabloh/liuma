@@ -180,7 +180,9 @@ test('captures unknown backend details and maps duplicate failures explicitly fo
     status: 409,
     responseBody: { code: 'duplicate_key', message: 'School already exists' },
     backendCode: 'duplicate_key',
+    errorCode: 'duplicate_key',
     backendMessage: 'School already exists',
+    correlationId: null,
   });
   assert.deepEqual(mapOnboardingError(error), {
     code: ONBOARDING_ERROR_CODES.DUPLICATE_TENANT,
@@ -192,8 +194,31 @@ test('captures unknown backend details and maps duplicate failures explicitly fo
     status: 409,
     responseBody: { code: 'duplicate_key', message: 'School already exists' },
     backendCode: 'duplicate_key',
+    errorCode: 'duplicate_key',
     backendMessage: 'School already exists',
+    correlationId: null,
   });
+});
+
+test('captures tenant creation correlation IDs and error codes for operational logs', () => {
+  const error = {
+    response: {
+      status: 500,
+      data: { error_code: 'tenant_write_failed', message: 'Write failed' },
+      headers: { 'x-correlation-id': 'corr-123' },
+    },
+  };
+
+  const failure = captureOnboardingFailure({
+    error,
+    requestPayload: { role: 'ADMIN' },
+    phase: 'onboarding_tenant_creation',
+    correlationId: 'client-corr-1',
+  });
+
+  assert.equal(failure.correlationId, 'corr-123');
+  assert.equal(failure.errorCode, 'tenant_write_failed');
+  assert.equal(failure.backendCode, 'tenant_write_failed');
 });
 
 test('maps failed tenant creation to a deterministic duplicate message without creating dependent rows', async () => {

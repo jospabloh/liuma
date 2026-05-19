@@ -40,6 +40,7 @@ test('route owner override is explicit and keeps non-owner users denied by defau
   assert.equal(ownerDecision.precedence, 'owner_override');
   assert.equal(nonOwnerDecision.allowed, false);
   assert.equal(nonOwnerDecision.reason_code, 'forbidden_action');
+  assert.equal(nonOwnerDecision.owner_denied, false);
 });
 
 test('menu routes shown to each role are allowed by the route guard', () => {
@@ -80,4 +81,16 @@ test('owner override allows every admin route while non-owners stay denied on ow
     assert.equal(nonOwnerDecision.allowed, false, `${routeName} should deny non-owner users when their role is not allowed`);
     assert.equal(nonOwnerDecision.reason_code, 'forbidden_action');
   }
+});
+
+test('route denials preserve owner denial reason for repeated owner-denied alerting', () => {
+  const decision = getRouteAccessDecision({
+    role: 'OWNER_OVERRIDE_ONLY',
+    routeName: 'PermisosRoles',
+    ownerAccess: { allowed: false, reason_code: 'owner_profile_missing' },
+  });
+
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.owner_denied, true);
+  assert.equal(decision.owner_reason, 'owner_profile_missing');
 });

@@ -65,7 +65,14 @@ export function getRouteAccessDecision({ role, routeName, ownerAccess }) {
     };
   }
 
-  return { allowed: false, reason: DENIAL_REASON_CODES.FORBIDDEN_ACTION, reason_code: DENIAL_REASON_CODES.FORBIDDEN_ACTION, precedence: 'route_default_deny' };
+  return {
+    allowed: false,
+    reason: DENIAL_REASON_CODES.FORBIDDEN_ACTION,
+    reason_code: DENIAL_REASON_CODES.FORBIDDEN_ACTION,
+    precedence: 'route_default_deny',
+    owner_denied: Boolean(ownerAccess && !ownerAccess.allowed && (ownerAccess.reason_code || ownerAccess.reason) !== DENIAL_REASON_CODES.OWNER_NOT_CONFIGURED),
+    owner_reason: ownerAccess?.reason_code || ownerAccess?.reason || null,
+  };
 }
 
 export function canAccessRoute({ role, routeName }) {

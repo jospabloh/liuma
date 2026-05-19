@@ -50,3 +50,32 @@
 - Open a targeted remediation sprint focused on the newly failed gate(s).
 - Run a mini-pilot on impacted journeys/tenants only.
 - Re-run this launch gate decision artifact after remediation evidence is complete.
+
+---
+
+## Final Decision Addendum — 2026-05-19T00:00:00Z
+
+### Requested explicit re-checks
+
+| Item | Status | Date | Evidence |
+|---|---|---|---|
+| app CI green | PASS | 2026-05-19 | `docs/ops-health-and-governance-review-2026-05-19.md` command set reports all listed suites passed (authorization, route, policy, observability, Lumi). |
+| deno CI green in actual runner | MISSING (not explicit PASS) | 2026-05-19 | Current repository evidence does not include a dated Deno-hosted CI runner artifact for this re-check window; prior gate artifacts flagged this as a gap. |
+| owner access regression resolved (no false denials) | PASS | 2026-05-19 | Owner denial/allow behavior and reason preservation remain green in authorization and route test evidence; cross-tenant owner access remains denied by policy. |
+| tenant creation flow passes in Base44 test-data mode with deterministic failure-path errors | PASS (code-level deterministic mapping) / MISSING (live Base44 runner proof) | 2026-05-19 | Deterministic error mapping and sustained-failure alerting are covered in current test evidence and incident/governance review; a fresh Base44 hosted test-data execution artifact is not attached in-repo for this timestamp. |
+| blocker defects = 0 | PASS | 2026-05-19 | Gate rerun artifact records blocker = 0 for the decision context. |
+| high defects = 0 | PASS | 2026-05-19 | Gate rerun artifact records high = 0 for the decision context. |
+| cross-tenant + role-boundary security tests passed on latest commit | PASS | 2026-05-19 | Weekly tenant isolation and role-boundary verification is documented as passing, including cross-tenant owner denial and unauthorized role denials. |
+| monitoring/alerting dashboards active and tested | MISSING (not explicit PASS) | 2026-05-19 | Alert logic test coverage is green, but this repo does not include a dated dashboard-activity/export artifact proving live dashboard checks for this exact re-check. |
+
+### Decision
+Given the missing explicit evidence for **(a)** Deno CI green in an actual Deno runner and **(b)** live monitoring/dashboard activity verification at this timestamp, status remains:
+
+## **LIMITED GO (unchanged)**
+
+### Operational directive (unchanged)
+Continue staged rollout only. Do not escalate to FULL GO until missing evidence artifacts are attached and approved.
+
+### Approvers and timestamp
+- Decision timestamp: **2026-05-19T00:00:00Z**.
+- Approver set: **Product, Engineering, Security, Operations** (sign-off record pending attachment in repository artifact set).

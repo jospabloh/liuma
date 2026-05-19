@@ -23,6 +23,8 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
   const triggerRef = useRef(null);
   const titleId = useId();
 
+  const [keyboardInset, setKeyboardInset] = useState(0);
+
   useEffect(() => {
     if (isOpen && !conversationId) {
       initConversation();
@@ -79,6 +81,29 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
     dialog.addEventListener('keydown', handleKeyDown);
     return () => dialog.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined' || !window.visualViewport) {
+      setKeyboardInset(0);
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    const updateKeyboardInset = () => {
+      const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      setKeyboardInset(inset > 0 ? inset : 0);
+    };
+
+    updateKeyboardInset();
+    viewport.addEventListener('resize', updateKeyboardInset);
+    viewport.addEventListener('scroll', updateKeyboardInset);
+
+    return () => {
+      viewport.removeEventListener('resize', updateKeyboardInset);
+      viewport.removeEventListener('scroll', updateKeyboardInset);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -233,15 +258,19 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="absolute bottom-0 left-0 right-0 h-[85vh] md:h-[600px] md:w-[400px] md:right-6 md:bottom-6 md:left-auto md:rounded-2xl bg-white shadow-2xl flex flex-col overflow-hidden"
+        className="absolute bottom-0 left-0 right-0 h-[100dvh] max-h-[100dvh] md:h-[600px] md:max-h-[600px] md:w-[400px] md:right-6 md:bottom-6 md:left-auto md:rounded-2xl bg-white shadow-2xl flex flex-col overflow-hidden"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         ref={dialogRef}
+        style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top))' }}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[var(--tenant-accent)] to-[var(--tenant-primary)] p-4 flex items-center gap-3">
+        <div
+          className="bg-gradient-to-r from-[var(--tenant-accent)] to-[var(--tenant-primary)] p-4 flex items-center gap-3"
+          style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}
+        >
           <Button
             variant="ghost"
             size="icon"
@@ -272,7 +301,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 && (
             <div className="text-center py-8">
               <div className="w-16 h-16 rounded-full bg-violet-100 flex items-center justify-center mx-auto mb-4">
@@ -351,7 +380,10 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         </div>
 
         {/* Input */}
-        <div className="p-4 border-t bg-white">
+        <div
+          className="p-4 border-t bg-white"
+          style={{ paddingBottom: `calc(1rem + env(safe-area-inset-bottom) + ${keyboardInset}px)` }}
+        >
           <form
             onSubmit={(e) => {
               e.preventDefault();

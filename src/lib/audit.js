@@ -15,6 +15,7 @@ export const AUDIT_ACTIONS = {
   POLICY_DECISION: 'POLICY_DECISION',
   PERMISSION_CHANGE: 'PERMISSION_CHANGE',
   OWNER_OVERRIDE: 'owner_override',
+  ACCESS_DENIED: 'access_denied',
 };
 
 export function buildPermissionChangeContext({
@@ -81,6 +82,39 @@ export async function logAuditEvent({
     target_type: entity,
     target_id: entityId,
     details: context,
+  });
+}
+
+export async function logAccessDeniedEvent({
+  user,
+  userProfile,
+  route,
+  reason,
+  tenantId,
+  context = {},
+}) {
+  const payload = {
+    event: AUDIT_ACTIONS.ACCESS_DENIED,
+    actor: user?.id || 'anonymous',
+    actor_email: user?.email || null,
+    route: route || null,
+    reason: reason || 'unknown_denial',
+    tenant_id: tenantId || userProfile?.school_id || null,
+    ...context,
+  };
+
+  console.warn('access_denied', payload);
+
+  if (!user || !userProfile || !route) return;
+
+  return logAuditEvent({
+    user,
+    userProfile,
+    entity: 'Route',
+    entityId: route,
+    action: AUDIT_ACTIONS.ACCESS_DENIED,
+    reason: payload.reason,
+    context: payload,
   });
 }
 

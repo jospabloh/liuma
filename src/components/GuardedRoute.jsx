@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import RouteAccessDenied from '@/components/RouteAccessDenied';
 import { DEFAULT_DENIED_REDIRECT, getRouteAccessDecision } from '@/lib/authorization/routeAccess';
-import { AUDIT_ACTIONS, logAuditEvent } from '@/lib/audit';
+import { AUDIT_ACTIONS, logAccessDeniedEvent, logAuditEvent } from '@/lib/audit';
 import { getOwnerScopedAccess } from '@/lib/authorization/policy';
 
 export default function GuardedRoute({ routeName, children }) {
-  const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
+  const { data: user, isFetched: userFetched } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
   const { data: profiles = [] } = useQuery({
     queryKey: ['profileRouteGuard', user?.id],
     queryFn: () => base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date'),
@@ -25,6 +25,24 @@ export default function GuardedRoute({ routeName, children }) {
   });
 
   const routeDecision = getRouteAccessDecision({ role: profile?.app_role, routeName, ownerAccess });
+
+  React.useEffect(() => {
+    if (!userFetched || routeDecision.allowed || !routeName) return;
+    logAccessDeniedEvent({
+      user,
+      userProfile: profile,
+      route: routeName,
+      reason: routeDecision.reason_code || routeDecision.reason,
+      tenantId: profile?.school_id || null,
+      context: {
+        policy_decision: 'deny',
+        precedence: routeDecision.precedence,
+        role: profile?.app_role || null,
+        owner_denied: routeDecision.owner_denied || false,
+        owner_reason: routeDecision.owner_reason || null,
+      },
+    });
+  }, [userFetched, routeDecision.allowed, routeDecision.reason_code, routeDecision.reason, routeDecision.precedence, routeDecision.owner_denied, routeDecision.owner_reason, user, profile, routeName]);
 
   React.useEffect(() => {
     if (routeDecision.precedence !== 'owner_override' || !user || !profile) return;

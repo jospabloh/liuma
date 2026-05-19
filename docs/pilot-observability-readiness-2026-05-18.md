@@ -124,6 +124,11 @@ Create one dashboard folder: `Pilot 2026-06 - Operations` with these dashboards.
 
 ## 4) Alert Thresholds and Severity Routing
 
+Implemented alert rules are tracked in `src/lib/observability/alertRules.js` so log/monitoring configuration can ingest the same reviewed thresholds.
+
+- `owner-denied-repeated`: high severity when `logs.access_denied` has `owner_denied=true` at least 3 times in 10 minutes, grouped by `tenant_id`, `actor`, `route`, and `owner_reason`.
+- `tenant-creation-failure-rate`: blocker severity when `logs.tenant_creation_failed` reaches at least 20% failures over 10 minutes with at least 5 attempts.
+
 Use three operational severities for pilot: blocker / high / medium.
 
 | Severity | Trigger examples | Initial response target | Routing |

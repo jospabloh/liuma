@@ -24,6 +24,16 @@ function getResponseBody(error) {
   return error?.data || error?.response?.data || error?.body || null;
 }
 
+function getResponseHeaders(error) {
+  return error?.headers || error?.response?.headers || {};
+}
+
+function getHeader(headers, name) {
+  if (!headers) return null;
+  if (typeof headers.get === 'function') return headers.get(name) || headers.get(name.toLowerCase());
+  return headers[name] || headers[name.toLowerCase()] || null;
+}
+
 export const REQUIRED_TENANT_ROLES = [
   { role_key: 'ADMIN', name: 'Administrador', is_required: true },
   { role_key: 'TEACHER', name: 'Maestro/a', is_required: true },
@@ -92,14 +102,18 @@ export function buildUserProfilePayload({ formData, user, schoolId, ownerEmail }
 
 export function extractBackendErrorDetails(error) {
   const responseBody = getResponseBody(error);
+  const headers = getResponseHeaders(error);
   const backendCode = responseBody?.code || responseBody?.error_code || responseBody?.extra_data?.reason || error?.code || null;
   const backendMessage = responseBody?.message || responseBody?.error || error?.message || null;
+  const correlationId = responseBody?.correlation_id || responseBody?.request_id || error?.correlationId || error?.requestId || getHeader(headers, 'x-correlation-id') || getHeader(headers, 'x-request-id') || null;
 
   return {
     status: error?.status || error?.response?.status || null,
     responseBody,
     backendCode,
+    errorCode: backendCode,
     backendMessage,
+    correlationId,
   };
 }
 
@@ -123,11 +137,15 @@ export function mapOnboardingError(error) {
   return { code: ONBOARDING_ERROR_CODES.UNKNOWN, message: ONBOARDING_ERROR_MESSAGES[ONBOARDING_ERROR_CODES.UNKNOWN] };
 }
 
-export function captureOnboardingFailure({ error, requestPayload, phase }) {
+export function captureOnboardingFailure({ error, requestPayload, phase, correlationId }) {
+  const details = extractBackendErrorDetails(error);
+
   return {
     phase,
     requestPayload,
-    ...extractBackendErrorDetails(error),
+    ...details,
+    errorCode: details.errorCode || 'unknown_error',
+    correlationId: details.correlationId || correlationId || null,
   };
 }
 

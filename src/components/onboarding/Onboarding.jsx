@@ -15,6 +15,11 @@ import {
   mapOnboardingError,
 } from '@/lib/onboardingTenantCreation';
 
+function buildCorrelationId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `tenant-create-${Date.now()}`;
+}
+
 export default function Onboarding({ user, onComplete }) {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,7 +41,9 @@ export default function Onboarding({ user, onComplete }) {
 
   const handleSubmit = async () => {
     setIsLoading(true);
+    const correlationId = buildCorrelationId();
     const requestPayload = {
+      correlationId,
       role: formData.role,
       schoolCode: formData.schoolCode,
       newSchoolName: formData.newSchoolName,
@@ -58,13 +65,18 @@ export default function Onboarding({ user, onComplete }) {
       });
       onComplete();
     } catch (error) {
+      const mappedError = mapOnboardingError(error);
       const failureDetails = captureOnboardingFailure({
         error,
         requestPayload,
         phase: 'onboarding_tenant_creation',
+        correlationId,
       });
-      console.error('Error in onboarding:', failureDetails);
-      alert(mapOnboardingError(error).message);
+      console.error('tenant_creation_failed', {
+        ...failureDetails,
+        userFacingErrorCode: mappedError.code,
+      });
+      alert(mappedError.message);
     }
     setIsLoading(false);
   };

@@ -33,7 +33,7 @@ export default function PageHeader({
             variant="ghost"
             size="icon"
             onClick={handleBack}
-            className="rounded-full"
+            className="mobile-touch-target rounded-full"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>

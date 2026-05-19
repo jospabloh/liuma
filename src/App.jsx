@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
+import { Suspense } from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -13,6 +14,19 @@ import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
+
+const PageTransitionFallback = () => (
+  <div className="min-h-[30vh] w-full px-4 py-6 sm:py-10">
+    <div className="mx-auto max-w-sm space-y-4 animate-pulse">
+      <div className="h-6 w-2/3 rounded-md bg-slate-200" />
+      <div className="h-4 w-full rounded-md bg-slate-200" />
+      <div className="h-4 w-5/6 rounded-md bg-slate-200" />
+      <div className="flex justify-center pt-2">
+        <div className="h-8 w-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin" />
+      </div>
+    </div>
+  </div>
+);
 
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
@@ -46,7 +60,7 @@ const AuthenticatedApp = () => {
     <Routes>
       <Route path="/" element={
         <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
+          <Suspense fallback={<PageTransitionFallback />}><MainPage /></Suspense>
         </LayoutWrapper>
       } />
       {Object.entries(Pages).map(([path, Page]) => (
@@ -56,7 +70,7 @@ const AuthenticatedApp = () => {
           element={
             <GuardedRoute routeName={path}>
               <LayoutWrapper currentPageName={path}>
-                <Page />
+                <Suspense fallback={<PageTransitionFallback />}><Page /></Suspense>
               </LayoutWrapper>
             </GuardedRoute>
           }

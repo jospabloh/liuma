@@ -26,9 +26,9 @@
  * 
  * Example with Layout (wraps all pages):
  *
- *   import Home from './pages/Home';
+ *   const Home = React.lazy(() => import('./pages/Home'));
  *   import Settings from './pages/Settings';
- *   import OperacionDiaria from './pages/OperacionDiaria';
+ *   const OperacionDiaria = React.lazy(() => import('./pages/OperacionDiaria'));
 import __Layout from './Layout.jsx';
  *
  *   export const PAGES = {
@@ -48,39 +48,40 @@ import __Layout from './Layout.jsx';
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
-import AlertaEmergencia from './pages/AlertaEmergencia';
-import Aprobaciones from './pages/Aprobaciones';
-import AuditoriaAdmin from './pages/AuditoriaAdmin';
-import Asistencia from './pages/Asistencia';
-import Avisos from './pages/Avisos';
-import AvisosAdmin from './pages/AvisosAdmin';
-import AvisosMaestro from './pages/AvisosMaestro';
-import Bitacora from './pages/Bitacora';
-import BitacorasMaestro from './pages/BitacorasMaestro';
-import CalendarioEscolar from './pages/CalendarioEscolar';
-import ConfiguracionInicial from './pages/ConfiguracionInicial';
-import ContactosEmergencia from './pages/ContactosEmergencia';
-import CrearBitacora from './pages/CrearBitacora';
-import EventosParaPadres from './pages/EventosParaPadres';
-import GestionAlumno from './pages/GestionAlumno';
-import GestionAusencias from './pages/GestionAusencias';
-import GestionDescuentos from './pages/GestionDescuentos';
-import GestionDocumentos from './pages/GestionDocumentos';
-import GestionEscuela from './pages/GestionEscuela';
-import GestionPedidosAdmin from './pages/GestionPedidosAdmin';
-import GestionSalon from './pages/GestionSalon';
-import Home from './pages/Home';
-import MisHijos from './pages/MisHijos';
-import Pagos from './pages/Pagos';
-import PagosAdmin from './pages/PagosAdmin';
-import PedidosUniformes from './pages/PedidosUniformes';
-import PermisosRoles from './pages/PermisosRoles';
-import Reportes from './pages/Reportes';
-import ResumenAsistencia from './pages/ResumenAsistencia';
-import SolicitarAusencia from './pages/SolicitarAusencia';
-import Tarea from './pages/Tarea';
-import TareaMaestro from './pages/TareaMaestro';
-import OperacionDiaria from './pages/OperacionDiaria';
+import React from 'react';
+const AlertaEmergencia = React.lazy(() => import('./pages/AlertaEmergencia'));
+const Aprobaciones = React.lazy(() => import('./pages/Aprobaciones'));
+const AuditoriaAdmin = React.lazy(() => import('./pages/AuditoriaAdmin'));
+const Asistencia = React.lazy(() => import('./pages/Asistencia'));
+const Avisos = React.lazy(() => import('./pages/Avisos'));
+const AvisosAdmin = React.lazy(() => import('./pages/AvisosAdmin'));
+const AvisosMaestro = React.lazy(() => import('./pages/AvisosMaestro'));
+const Bitacora = React.lazy(() => import('./pages/Bitacora'));
+const BitacorasMaestro = React.lazy(() => import('./pages/BitacorasMaestro'));
+const CalendarioEscolar = React.lazy(() => import('./pages/CalendarioEscolar'));
+const ConfiguracionInicial = React.lazy(() => import('./pages/ConfiguracionInicial'));
+const ContactosEmergencia = React.lazy(() => import('./pages/ContactosEmergencia'));
+const CrearBitacora = React.lazy(() => import('./pages/CrearBitacora'));
+const EventosParaPadres = React.lazy(() => import('./pages/EventosParaPadres'));
+const GestionAlumno = React.lazy(() => import('./pages/GestionAlumno'));
+const GestionAusencias = React.lazy(() => import('./pages/GestionAusencias'));
+const GestionDescuentos = React.lazy(() => import('./pages/GestionDescuentos'));
+const GestionDocumentos = React.lazy(() => import('./pages/GestionDocumentos'));
+const GestionEscuela = React.lazy(() => import('./pages/GestionEscuela'));
+const GestionPedidosAdmin = React.lazy(() => import('./pages/GestionPedidosAdmin'));
+const GestionSalon = React.lazy(() => import('./pages/GestionSalon'));
+const Home = React.lazy(() => import('./pages/Home'));
+const MisHijos = React.lazy(() => import('./pages/MisHijos'));
+const Pagos = React.lazy(() => import('./pages/Pagos'));
+const PagosAdmin = React.lazy(() => import('./pages/PagosAdmin'));
+const PedidosUniformes = React.lazy(() => import('./pages/PedidosUniformes'));
+const PermisosRoles = React.lazy(() => import('./pages/PermisosRoles'));
+const Reportes = React.lazy(() => import('./pages/Reportes'));
+const ResumenAsistencia = React.lazy(() => import('./pages/ResumenAsistencia'));
+const SolicitarAusencia = React.lazy(() => import('./pages/SolicitarAusencia'));
+const Tarea = React.lazy(() => import('./pages/Tarea'));
+const TareaMaestro = React.lazy(() => import('./pages/TareaMaestro'));
+const OperacionDiaria = React.lazy(() => import('./pages/OperacionDiaria'));
 import __Layout from './Layout.jsx';
 
 

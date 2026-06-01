@@ -30,6 +30,12 @@ const RESOURCES = [
   'Payments',
   'Documents',
   'Reports',
+  'Calendar',
+  'Events',
+  'Uniforms',
+  'Discounts',
+  'Emergency Alerts',
+  'Absences',
   'AI',
   'Audit',
   'Tenant Danger Zone',
@@ -61,6 +67,18 @@ const DEFAULT_TEMPLATE = {
   ai_capabilities: AI_CAPABILITIES.reduce((acc, capability) => { acc[capability] = true; return acc; }, {}),
 };
 
+const MEMBER_TEMPLATE = {
+  name: 'Plantilla Miembro (Por Defecto)',
+  permissions: RESOURCES.reduce((acc, resource) => {
+    acc[resource] = ACTIONS.reduce((actions, action) => {
+      actions[action] = false;
+      return actions;
+    }, {});
+    return acc;
+  }, {}),
+  ai_capabilities: AI_CAPABILITIES.reduce((acc, capability) => { acc[capability] = false; return acc; }, {}),
+};
+
 function hasMutationReason(value) {
   return Boolean(value && value.trim().length > 0);
 }
@@ -81,7 +99,7 @@ export default function PermisosRoles() {
     enabled: !!user,
   });
 
-  const [templates, setTemplates] = React.useState([DEFAULT_TEMPLATE]);
+  const [templates, setTemplates] = React.useState([DEFAULT_TEMPLATE, MEMBER_TEMPLATE]);
   const [newTemplateName, setNewTemplateName] = React.useState('');
   const [activeTemplateIndex, setActiveTemplateIndex] = React.useState(0);
   const [editTemplateName, setEditTemplateName] = React.useState('');

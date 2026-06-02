@@ -72,6 +72,26 @@ test('validates required tenant creation fields before backend calls', () => {
   );
 });
 
+test('fails fast with forbidden error when owner email restriction is enabled and actor is not owner', async () => {
+  const base44 = createBase44();
+
+  await assert.rejects(
+    completeOnboardingTenantCreation({
+      base44,
+      notificationService: { sendByEvent: async () => {} },
+      logAuditEvent: async () => {},
+      user: { ...user, email: 'director@example.com' },
+      formData: { role: 'ADMIN', newSchoolName: 'Colegio Nuevo', phone: '', isDemo: false },
+      logoFile: null,
+      themePreview,
+      ownerEmail: 'owner@example.com',
+    }),
+    (error) => error.code === ONBOARDING_ERROR_CODES.FORBIDDEN
+  );
+
+  assert.equal(base44.entities.School.createCalls.length, 0);
+});
+
 test('builds test-data tenant and profile payloads with required defaults and foreign keys', () => {
   const formData = { role: 'ADMIN', newSchoolName: ' Colegio Demo ', phone: ' 555 ', isDemo: true };
 

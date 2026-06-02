@@ -103,7 +103,9 @@ export async function logAccessDeniedEvent({
     ...context,
   };
 
-  console.warn('access_denied', payload);
+  if (import.meta.env.DEV) {
+    console.warn('access_denied', { event: payload.event, route: payload.route, reason: payload.reason });
+  }
 
   if (!user || !userProfile || !route) return;
 

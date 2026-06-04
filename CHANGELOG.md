@@ -5,6 +5,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.5] - 2026-06-04
+
+### Security
+
+- **RLS hardening round 4 (Base44 entity schemas)**: addressed 1 critical finding
+  from a follow-up Base44 security scan. See
+  `docs/rls-hardening-2026-06-04-round4.md`.
+  - `OfficialDocument`: `read` is now limited by `target_audience` and role
+    (admins all; teachers `TODOS`/`MAESTROS`; parents `TODOS`/`PADRES`) instead
+    of being readable by any user in the school. `UNIFORM_CATALOG` documents stay
+    readable by all in-school roles so the parent uniform-ordering flow keeps
+    working regardless of the catalog's audience tag. `create`/`update`/`delete`
+    remain admin-only.
+
 ## [1.0.4] - 2026-06-04
 
 ### Security

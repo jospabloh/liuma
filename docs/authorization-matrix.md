@@ -225,3 +225,9 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 > it locally from `due_date`. `NoticeRead` gained a `school_id` field with
 > create/read scoped to the user's tenant. Full record:
 > `docs/rls-hardening-2026-06-04-round3.md`.
+>
+> **2026-06-04 — Backend RLS hardening (round 4):** `OfficialDocument.read` was
+> limited by `target_audience` + role (admins all; teachers `TODOS`/`MAESTROS`;
+> parents `TODOS`/`PADRES`) instead of any-user-in-school, with a carve-out so
+> `UNIFORM_CATALOG` stays readable by all in-school roles (parent uniform
+> ordering). Full record: `docs/rls-hardening-2026-06-04-round4.md`.

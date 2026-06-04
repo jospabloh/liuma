@@ -55,20 +55,10 @@ export default function Pagos() {
       if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'ChargeItem')) return [];
       const scopedFilter = buildScopedFilter({ role: userProfile?.app_role, entity: 'ChargeItem', schoolId: userProfile?.school_id, studentIds });
       const allCharges = await base44.entities.ChargeItem.filter(scopedFilter || { school_id: userProfile.school_id }, '-due_date');
-      
-      // Actualizar automáticamente estados de cargos vencidos
-      const now = new Date();
-      for (const charge of allCharges) {
-        if (charge.status === 'PENDING' && isPast(new Date(charge.due_date))) {
-          try {
-            await base44.entities.ChargeItem.update(charge.id, { status: 'OVERDUE' });
-            charge.status = 'OVERDUE';
-          } catch (error) {
-            console.error('Error updating charge status:', error);
-          }
-        }
-      }
-      
+
+      // El estado "Vencido" se deriva localmente para mostrar (ver isOverdue más
+      // abajo). Los cargos los gestiona la administración: la vista de padres no
+      // modifica ChargeItem (RLS de actualización restringida a ADMIN).
       return allCharges.filter(c => studentIds.includes(c.student_id));
     },
     enabled: studentIds.length > 0 && !!userProfile,

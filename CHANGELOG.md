@@ -5,6 +5,31 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.2] - 2026-06-04
+
+### Security
+
+- **RLS hardening (Base44 entity schemas)**: addressed 9 critical row-level
+  security findings from the Base44 security scan. See
+  `docs/rls-hardening-2026-06-04.md` for the full per-entity record.
+  - `ChargeItem`: removed an unscoped parent read branch that exposed every
+    charge in the school; parents now read only their linked students' charges.
+  - `UserProfile`: restricted reads to the owner and school admins; removed a
+    malformed teacher branch that exposed all profiles in the school.
+  - `SchoolSubscription`: restricted reads to school admins; removed the create
+    rule so onboarding is not blocked.
+  - `Classroom`, `Student`, `Notice`, `Event`: added explicit role + tenant
+    validation on teacher/parent read branches; parents can now read their
+    children's classroom events.
+  - `AuditLog`: restricted create to admins and teachers within their school.
+  - `School`: removed the create RLS rule; tenant creation is handled by the
+    onboarding backend flow.
+- Documented the two outstanding HTTP security-header recommendations
+  (`X-Frame-Options`, `Permissions-Policy`) as host-level (Base44 edge)
+  configuration. See `docs/rls-hardening-2026-06-04.md`.
+
+---
+
 ## [1.0.1] - 2026-06-02
 
 ### Security

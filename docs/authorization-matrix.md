@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-06-02 · Version 1.0.1**
+**Last updated: 2026-06-04 · Version 1.0.2**
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -198,4 +198,11 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 |---|---|---|
 | `react-quill` XSS (quill ≤ 1.3.7) | Moderate | Accepted — editor is admin/teacher only; breaking fix deferred |
 | No HTTP Content Security Policy headers | Medium | Open — requires hosting/deployment configuration outside app code |
+| `X-Frame-Options` / `Permissions-Policy` headers | Medium/Low | Open — host-level (Base44 edge) config; see `docs/rls-hardening-2026-06-04.md` |
 | No automated Node.js CI pipeline | High | Open — tests run manually; CI setup deferred |
+
+> **2026-06-04 — Backend RLS hardening:** the Base44 entity-schema RLS rules were
+> tightened to fix 9 critical findings from the Base44 security scan (ChargeItem,
+> UserProfile, SchoolSubscription, Classroom, Student, Notice, Event, AuditLog,
+> School). These rules are enforced by the Base44 backend in addition to the
+> app-side `policy.js` layer. Full record: `docs/rls-hardening-2026-06-04.md`.

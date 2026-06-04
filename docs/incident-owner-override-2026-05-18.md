@@ -37,3 +37,11 @@ Resultado técnico: se implementó validación explícita en política (`verifyC
 
 ## Acción preventiva
 Agregar control operativo en alta/reprovisioning de tenant para no finalizar proceso si falta `UserProfile` ACTIVE con `app_role=ADMIN` (y `is_super_admin=true` cuando aplique).
+
+## Adenda 2026-06-04 — Remediación de exposición de secreto (owner identity)
+Las variables `VITE_OWNER_EMAIL` y `VITE_OWNER_USER_ID` quedaban embebidas en el bundle del cliente (prefijo `VITE_`), exponiendo la identidad del owner y permitiendo verificaciones de owner manipulables en el cliente.
+
+Cambios aplicados:
+- `GuardedRoute` ya no lee `import.meta.env.VITE_OWNER_*`. El override de owner se deriva del `UserProfile` persistido en backend con `is_super_admin=true` (protegido por RLS de Base44), con `identity_source=profile`.
+- El onboarding dejó de leer el email del owner y de auto-asignar `is_super_admin` desde el cliente. Ese campo privilegiado lo controla exclusivamente el backend (reglas de entidad / RLS de Base44); la elevación a owner es una operación de servidor.
+- Acción pendiente de operación: rotar/retirar las variables `VITE_OWNER_EMAIL` y `VITE_OWNER_USER_ID` de los entornos (local, Vercel, Base44) ya que no son necesarias en el cliente, y garantizar que `is_super_admin` solo se pueda escribir server-side.

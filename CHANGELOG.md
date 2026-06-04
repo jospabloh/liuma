@@ -5,6 +5,29 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.3] - 2026-06-04
+
+### Security
+
+- **RLS hardening round 2 (Base44 entity schemas)**: addressed 8 more critical
+  row-level security findings plus 2 ChargeItem authorization failures from a
+  follow-up Base44 security scan. See `docs/rls-hardening-2026-06-04-round2.md`
+  for the full per-entity record.
+  - `DiaryEntry`, `Homework`: removed role-only read branches that let any
+    teacher or parent read every row; reads are now scoped to assigned
+    classrooms (teacher) and linked students/classrooms (parent).
+  - `Event`: made the admin read branch explicit (admins read all school events).
+  - `SchoolSubscription`: scoped `update`/`delete` to the school's own admin
+    (was platform-`admin`-only and not tenant-scoped), restoring cross-tenant
+    isolation.
+  - `ChargeItem`: allowed parents to create `EVENTO` charges for their linked
+    students and to update their children's charges (unblocks event-charge
+    creation in `EventosParaPadres.jsx` and `PENDING→OVERDUE` updates in
+    `Pagos.jsx`).
+  - `NoticeDelivery`, `PendingChange`, `PermissionOverride`: formalized these
+    previously schema-less (and RLS-less) entities with strict rules — own/
+    teacher-classroom/admin reads for deliveries; admin-only for the other two.
+
 ## [1.0.2] - 2026-06-04
 
 ### Security

@@ -206,3 +206,14 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 > UserProfile, SchoolSubscription, Classroom, Student, Notice, Event, AuditLog,
 > School). These rules are enforced by the Base44 backend in addition to the
 > app-side `policy.js` layer. Full record: `docs/rls-hardening-2026-06-04.md`.
+>
+> **2026-06-04 — Backend RLS hardening (round 2):** a second Base44 security scan
+> flagged 8 more critical RLS issues plus 2 ChargeItem authorization failures.
+> Fixed: DiaryEntry/Homework read scoping (removed role-only branches that exposed
+> all rows), explicit Event admin read, SchoolSubscription update/delete scoped to
+> the school's admin (cross-tenant isolation), ChargeItem create/update opened to
+> parents for their linked students (unblocks event-charge creation and
+> PENDING→OVERDUE updates), and three previously schema-less, RLS-less entities
+> formalized with strict rules: NoticeDelivery (own/teacher-classroom/admin),
+> PendingChange (admin-only), PermissionOverride (admin-only). Full record:
+> `docs/rls-hardening-2026-06-04-round2.md`.

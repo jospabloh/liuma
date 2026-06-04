@@ -5,6 +5,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.4] - 2026-06-04
+
+### Security
+
+- **RLS hardening round 3 (Base44 entity schemas)**: addressed 2 further critical
+  findings from a follow-up Base44 security scan. See
+  `docs/rls-hardening-2026-06-04-round3.md`.
+  - `ChargeItem`: restricted `update` back to school admins only. The round-2
+    parent-update branch had no field restriction, so a parent could have
+    modified financial fields (e.g. `amount`); admin-only update closes that hole.
+    `src/pages/Pagos.jsx` no longer writes `OVERDUE` from the parent view — the
+    "Vencido" state was already derived locally from `due_date`, so the now-
+    unauthorized write was removed with no UI change for parents.
+  - `NoticeRead`: added `school_id` and scoped `create`/`read` to the user's own
+    tenant (was keyed on `user_id` only), preventing cross-tenant read-receipts.
+
 ## [1.0.3] - 2026-06-04
 
 ### Security

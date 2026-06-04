@@ -217,3 +217,11 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 > formalized with strict rules: NoticeDelivery (own/teacher-classroom/admin),
 > PendingChange (admin-only), PermissionOverride (admin-only). Full record:
 > `docs/rls-hardening-2026-06-04-round2.md`.
+>
+> **2026-06-04 — Backend RLS hardening (round 3):** a follow-up scan flagged 2
+> more issues. `ChargeItem.update` was restricted back to admins-only (the
+> round-2 parent-update branch allowed financial-field tampering); the parent
+> payments view (`Pagos.jsx`) no longer persists `OVERDUE` since the UI derives
+> it locally from `due_date`. `NoticeRead` gained a `school_id` field with
+> create/read scoped to the user's tenant. Full record:
+> `docs/rls-hardening-2026-06-04-round3.md`.

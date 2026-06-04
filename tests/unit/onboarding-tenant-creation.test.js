@@ -72,24 +72,23 @@ test('validates required tenant creation fields before backend calls', () => {
   );
 });
 
-test('fails fast with forbidden error when owner email restriction is enabled and actor is not owner', async () => {
+test('lets any admin create a tenant and never assigns the privileged super-admin flag from the client', async () => {
   const base44 = createBase44();
 
-  await assert.rejects(
-    completeOnboardingTenantCreation({
-      base44,
-      notificationService: { sendByEvent: async () => {} },
-      logAuditEvent: async () => {},
-      user: { ...user, email: 'director@example.com' },
-      formData: { role: 'ADMIN', newSchoolName: 'Colegio Nuevo', phone: '', isDemo: false },
-      logoFile: null,
-      themePreview,
-      ownerEmail: 'owner@example.com',
-    }),
-    (error) => error.code === ONBOARDING_ERROR_CODES.FORBIDDEN
-  );
+  const result = await completeOnboardingTenantCreation({
+    base44,
+    notificationService: { sendByEvent: async () => {} },
+    logAuditEvent: async () => {},
+    user: { ...user, email: 'director@example.com' },
+    formData: { role: 'ADMIN', newSchoolName: 'Colegio Nuevo', phone: '', isDemo: false },
+    logoFile: null,
+    themePreview,
+  });
 
-  assert.equal(base44.entities.School.createCalls.length, 0);
+  assert.ok(result.profileId);
+  assert.equal(base44.entities.School.createCalls.length, 1);
+  assert.equal(base44.entities.UserProfile.createCalls.length, 1);
+  assert.equal('is_super_admin' in base44.entities.UserProfile.createCalls[0], false);
 });
 
 test('builds test-data tenant and profile payloads with required defaults and foreign keys', () => {
@@ -103,14 +102,13 @@ test('builds test-data tenant and profile payloads with required defaults and fo
     theme_settings: themePreview,
   });
 
-  assert.deepEqual(buildUserProfilePayload({ formData, user, schoolId: 'school-1', ownerEmail: 'owner@example.com' }), {
+  assert.deepEqual(buildUserProfilePayload({ formData, user, schoolId: 'school-1' }), {
     user_id: 'user-1',
     school_id: 'school-1',
     app_role: 'ADMIN',
     status: 'ACTIVE',
     phone: '555',
     onboarding_completed: true,
-    is_super_admin: true,
   });
 });
 
@@ -126,7 +124,6 @@ test('provisions tenant, trial subscription, admin profile, and audit hook for a
     formData: { role: 'ADMIN', newSchoolName: 'Colegio Nuevo', phone: '', isDemo: false },
     logoFile: null,
     themePreview,
-    ownerEmail: 'owner@example.com',
   });
 
   assert.equal(result.schoolId, '1');
@@ -149,7 +146,6 @@ test('automatically bootstraps required roles, permission templates, owner bindi
     formData: { role: 'ADMIN', newSchoolName: 'Colegio Bootstrap', phone: '', isDemo: false },
     logoFile: null,
     themePreview: null,
-    ownerEmail: 'owner@example.com',
   });
 
   assert.deepEqual(base44.entities.School.createCalls[0].theme_settings, DEFAULT_THEME);
@@ -181,7 +177,6 @@ test('retries tenant provisioning idempotently after school creation succeeds bu
     formData: { role: 'ADMIN', newSchoolName: 'Colegio Retry', phone: '', isDemo: false },
     logoFile: null,
     themePreview,
-    ownerEmail: '',
   });
 
   assert.equal(result.schoolId, 'school-existing');
@@ -258,7 +253,6 @@ test('maps failed tenant creation to a deterministic duplicate message without c
       formData: { role: 'ADMIN', newSchoolName: 'Colegio Duplicado', phone: '', isDemo: false },
       logoFile: null,
       themePreview,
-      ownerEmail: 'owner@example.com',
     }),
     duplicateError
   );

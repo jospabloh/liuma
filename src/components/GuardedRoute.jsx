@@ -15,10 +15,10 @@ export default function GuardedRoute({ routeName, children }) {
   });
   const profile = profiles[0] || null;
 
+  // Owner override is derived from the server-persisted super-admin UserProfile, not from
+  // any client-embedded owner identity. Owner email/id are never shipped in the bundle.
   const ownerAccess = getOwnerScopedAccess({
     currentUser: user,
-    ownerEmail: import.meta.env.VITE_OWNER_EMAIL,
-    ownerUserId: import.meta.env.VITE_OWNER_USER_ID,
     actorSchoolId: profile?.school_id,
     targetSchoolId: profile?.school_id,
     ownerProfiles: profiles,
@@ -65,11 +65,11 @@ export default function GuardedRoute({ routeName, children }) {
   }, [routeDecision.precedence, routeDecision.identity_source, user, profile, routeName]);
 
   if (!routeDecision.allowed) {
-    const ownerProfileMissing = !profile && user?.email?.toLowerCase() === String(import.meta.env.VITE_OWNER_EMAIL || '').toLowerCase();
+    const profileMissing = userFetched && Boolean(user) && profiles.length === 0;
     return (
       <RouteAccessDenied
         redirectTo={DEFAULT_DENIED_REDIRECT}
-        message={ownerProfileMissing ? 'Perfil de owner no provisionado en este tenant.' : 'No tienes permisos para ver esta sección.'}
+        message={profileMissing ? 'Perfil no provisionado en este tenant.' : 'No tienes permisos para ver esta sección.'}
         reasonCode={routeDecision.reason_code}
       />
     );

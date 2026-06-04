@@ -104,6 +104,49 @@ test('non-owner users remain deny-by-default when they have no role permission',
   assert.equal(canWriteEntity('PARENT', 'PaymentRecord'), false);
 });
 
+test('owner override derives ownership from the persisted super-admin profile when no client identity is configured', () => {
+  const decision = getOwnerScopedAccess({
+    currentUser: { id: 'owner-user-1', email: 'owner@example.com' },
+    actorSchoolId: 'school-a',
+    targetSchoolId: 'school-a',
+    ownerProfiles: [
+      { id: 'owner-profile-1', user_id: 'owner-user-1', school_id: 'school-a', app_role: 'ADMIN', status: 'ACTIVE', is_super_admin: true },
+    ],
+  });
+
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, 'owner_override');
+  assert.equal(decision.identity_source, 'profile');
+});
+
+test('profile-based owner override denies admins without the super-admin flag', () => {
+  const decision = getOwnerScopedAccess({
+    currentUser: { id: 'admin-user-1' },
+    actorSchoolId: 'school-a',
+    targetSchoolId: 'school-a',
+    ownerProfiles: [
+      { id: 'admin-profile-1', user_id: 'admin-user-1', school_id: 'school-a', app_role: 'ADMIN', status: 'ACTIVE' },
+    ],
+  });
+
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason_code, 'super_admin_required');
+});
+
+test('profile-based owner override stays within the tenant boundary', () => {
+  const decision = getOwnerScopedAccess({
+    currentUser: { id: 'owner-user-1' },
+    actorSchoolId: 'school-a',
+    targetSchoolId: 'school-b',
+    ownerProfiles: [
+      { id: 'owner-profile-1', user_id: 'owner-user-1', school_id: 'school-b', app_role: 'ADMIN', status: 'ACTIVE', is_super_admin: true },
+    ],
+  });
+
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason_code, 'cross_tenant_denied');
+});
+
 test('owner override blocks cross-tenant access to preserve tenant isolation', () => {
   const decision = getOwnerScopedAccess({
     currentUser: { email: 'owner@example.com' },

@@ -61,7 +61,6 @@ export default function Onboarding({ user, onComplete }) {
         formData,
         logoFile,
         themePreview,
-        ownerEmail: import.meta.env.VITE_OWNER_EMAIL,
       });
       onComplete();
     } catch (error) {

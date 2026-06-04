@@ -144,20 +144,43 @@ export function validateOwnerProfiles({ currentUser, ownerProfiles = [], targetS
 }
 
 export function getOwnerScopedAccess({ currentUser, ownerEmail, ownerUserId, actorSchoolId, targetSchoolId, ownerProfiles }) {
-  const ownerIdentity = resolveOwnerIdentity({ currentUser, ownerEmail, ownerUserId });
-  if (!ownerIdentity.isOwner) return deny(ownerIdentity.reason_code || ownerIdentity.reason || DENIAL_REASON_CODES.OWNER_NOT_CONFIGURED);
+  const identityConfigured = Boolean(normalizeIdentity(ownerEmail) || normalizeIdentity(ownerUserId));
+
+  // Legacy path: an owner identity is supplied explicitly (server-side callers only).
+  // The client must NOT pass owner email/id — those would leak into the bundle.
+  if (identityConfigured) {
+    const ownerIdentity = resolveOwnerIdentity({ currentUser, ownerEmail, ownerUserId });
+    if (!ownerIdentity.isOwner) return deny(ownerIdentity.reason_code || ownerIdentity.reason || DENIAL_REASON_CODES.OWNER_NOT_CONFIGURED);
+    if (!targetSchoolId || actorSchoolId !== targetSchoolId) {
+      return deny(DENIAL_REASON_CODES.CROSS_TENANT_DENIED);
+    }
+
+    if (ownerProfiles) {
+      const profileValidation = validateOwnerProfiles({ currentUser, ownerProfiles, targetSchoolId });
+      if (!profileValidation.valid) {
+        return deny(profileValidation.reason_code || profileValidation.reason);
+      }
+    }
+
+    return { allowed: true, reason: 'owner_override', precedence: 'owner_override', identity_source: ownerIdentity.source };
+  }
+
+  // Default path: ownership is derived from the server-persisted super-admin UserProfile
+  // in the target tenant (RLS-protected), never from a client-embedded identity value.
   if (!targetSchoolId || actorSchoolId !== targetSchoolId) {
     return deny(DENIAL_REASON_CODES.CROSS_TENANT_DENIED);
   }
 
-  if (ownerProfiles) {
-    const profileValidation = validateOwnerProfiles({ currentUser, ownerProfiles, targetSchoolId });
-    if (!profileValidation.valid) {
-      return deny(profileValidation.reason_code || profileValidation.reason);
-    }
+  const profileValidation = validateOwnerProfiles({ currentUser, ownerProfiles, targetSchoolId });
+  if (!profileValidation.valid) {
+    return deny(profileValidation.reason_code || profileValidation.reason);
   }
 
-  return { allowed: true, reason: 'owner_override', precedence: 'owner_override', identity_source: ownerIdentity.source };
+  if (!profileValidation.profile || profileValidation.profile.is_super_admin !== true) {
+    return deny(DENIAL_REASON_CODES.SUPER_ADMIN_REQUIRED);
+  }
+
+  return { allowed: true, reason: 'owner_override', precedence: 'owner_override', identity_source: 'profile' };
 }
 
 export function verifyCreatorProvisioning(profile) {

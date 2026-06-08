@@ -1,6 +1,6 @@
 # LIUMA User Manual
 
-**Version 1.0.1 · Updated 2026-06-02**
+**Version 1.0.6 · Updated 2026-06-08**
 
 LIUMA is a school management platform connecting school administrators, teachers, and parents/guardians. This manual explains what each role can do, how permissions work, and how privacy is protected.
 
@@ -272,6 +272,12 @@ LIUMA sends notifications for school events such as:
 | Absence Management | Review absence requests for their students. |
 | Attendance Summary | View attendance summaries for their classrooms. |
 
+### Teacher + Parent modules
+
+| Module | Roles | Description |
+|---|---|---|
+| Attendance | Teacher, Parent | Teachers record daily attendance for their assigned classrooms. Parents view their children's attendance records. |
+
 ### Parent-only modules
 
 | Module | Description |
@@ -279,7 +285,6 @@ LIUMA sends notifications for school events such as:
 | My Children | View linked student profiles. |
 | Notices | View notices for their children. |
 | Events | View school events. |
-| Attendance | View their children's attendance. |
 | Homework | View their children's homework. |
 | Daily Diary | View diary entries for their children. |
 | Payments | View payment charges for their children. |

@@ -5,6 +5,28 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.6] - 2026-06-08
+
+### Documentation
+
+- **Authorization matrix corrected**: `/Asistencia` route was incorrectly listed
+  as PARENT-only in `docs/authorization-matrix.md`. The route access code
+  (`routeAccess.js`) and the page itself (`Asistencia.jsx`) confirm it is
+  accessible to both TEACHER and PARENT roles — teachers use it to record daily
+  attendance; parents use it to view their children's records. Fixed the matrix
+  and updated `docs/user-manual.md` to match.
+- **Authorization matrix extended**: Added the four entities introduced in RLS
+  hardening rounds 2–4 that were previously undocumented in the matrix:
+  `OfficialDocument`, `NoticeDelivery`, `PendingChange`, and `PermissionOverride`.
+- **Version metadata synchronised**: `package.json` was stuck at `1.0.1` while
+  the CHANGELOG progressed through four security-hardening releases (1.0.2–1.0.5).
+  All version references — `package.json`, `docs/authorization-matrix.md`, and
+  `docs/user-manual.md` — are now aligned at 1.0.6.
+- **Owner identity note added**: The authorization matrix now records that
+  `VITE_OWNER_EMAIL` / `VITE_OWNER_USER_ID` are no longer embedded in the client
+  bundle (fixed in v1.0.5 / PR #90). Owner status is derived from the
+  server-persisted `UserProfile.is_super_admin` flag.
+
 ## [1.0.5] - 2026-06-04
 
 ### Security

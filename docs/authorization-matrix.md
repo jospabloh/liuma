@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-06-04 · Version 1.0.2**
+**Last updated: 2026-06-08 · Version 1.0.6**
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -45,11 +45,16 @@ Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
 | /GestionAusencias | Absence management (review/approve) |
 | /ResumenAsistencia | Attendance summary |
 
+### TEACHER + PARENT routes
+
+| Route | Description |
+|---|---|
+| /Asistencia | Attendance control: TEACHER records daily attendance for assigned classrooms; PARENT views their children's attendance records |
+
 ### PARENT-only routes
 
 | Route | Description |
 |---|---|
-| /Asistencia | Child attendance view |
 | /Avisos | Notices for linked children |
 | /Bitacora | Diary entries for linked children |
 | /EventosParaPadres | School events listing |
@@ -85,9 +90,13 @@ Source of truth: `src/lib/authorization/policy.js → POLICY`
 | Attendance | Read + Write | Read + Write | Read | school_id + classroom_id (teacher: only assigned classrooms); student_id (parent: only linked students) |
 | Homework | Read + Write | Read + Write | Read | school_id + classroom_id (teacher: only assigned classrooms; parent: classrooms of linked students) |
 | DiaryEntry | Read + Write | Read + Write | Read | school_id + classroom_id + student_id (teacher: assigned classrooms; parent: linked students) |
-| ChargeItem | Read + Write | No access | Read | school_id + student_id (parent: only linked students) |
+| ChargeItem | Read + Write | No access | Read + Create (EVENTO type, linked students only) | school_id + student_id (parent: only linked students) |
 | PaymentConcept | Read + Write | No access | No access | school_id |
 | PaymentRecord | Read + Write | No access | No access | school_id + student_id |
+| OfficialDocument | Read + Write + Delete | Read (audience TODOS or MAESTROS) | Read (audience TODOS or PADRES) | school_id + target_audience; UNIFORM_CATALOG is readable by all roles regardless of audience; create/update/delete admin-only |
+| NoticeDelivery | Read + Write + Delete | Read (assigned classrooms) + Create (assigned classrooms) + Update | Read + Update (own deliveries only) | school_id; recipient_user_id (users: own); classroom_id (teachers: assigned classrooms) |
+| PendingChange | Admin only | No access | No access | school_id + app_role == ADMIN; all operations restricted to school admins |
+| PermissionOverride | Admin only | No access | No access | school_id + app_role == ADMIN; all operations restricted to school admins |
 
 ---
 
@@ -148,6 +157,7 @@ Source of truth: `src/lib/authorization/policy.js` (`assertSameTenant`, `buildTe
 - `assertSameTenant` is called before any cross-tenant reference is processed.
 - `rejectsCrossTenantReference` returns true if source and target school IDs differ.
 - GuardedRoute resolves owner access with `actorSchoolId === targetSchoolId` — an owner cannot bypass isolation to access another school.
+- **Owner identity (v1.0.5+)**: `VITE_OWNER_EMAIL` and `VITE_OWNER_USER_ID` are no longer embedded in the client bundle. Owner status is derived exclusively from the server-persisted `UserProfile` (`is_super_admin: true`, `app_role: ADMIN`, `status: ACTIVE`) within the target tenant. This prevents client-side owner bypass and bundle leakage of the owner's email/ID.
 
 ---
 
@@ -200,6 +210,10 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 | No HTTP Content Security Policy headers | Medium | Open — requires hosting/deployment configuration outside app code |
 | `X-Frame-Options` / `Permissions-Policy` headers | Medium/Low | Open — host-level (Base44 edge) config; see `docs/rls-hardening-2026-06-04.md` |
 | No automated Node.js CI pipeline | High | Open — tests run manually; CI setup deferred |
+| `/Asistencia` route listed as PARENT-only in docs | Medium | Fixed (v1.0.6) — corrected to TEACHER + PARENT to match `routeAccess.js` |
+| `package.json` version behind CHANGELOG | Low | Fixed (v1.0.6) — synchronized to 1.0.6 |
+| Missing entity entries in this matrix | Low | Fixed (v1.0.6) — OfficialDocument, NoticeDelivery, PendingChange, PermissionOverride added |
+| `VITE_OWNER_EMAIL` / `VITE_OWNER_USER_ID` in client bundle | High | Fixed (v1.0.5 / PR #90) — owner identity moved to server-persisted UserProfile; env vars removed |
 
 > **2026-06-04 — Backend RLS hardening:** the Base44 entity-schema RLS rules were
 > tightened to fix 9 critical findings from the Base44 security scan (ChargeItem,

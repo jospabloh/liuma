@@ -5,6 +5,27 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.7] - 2026-06-08
+
+### CI / Tooling
+
+- **Automated Node.js CI pipeline added** (`.github/workflows/ci-node.yml`):
+  closes the release-readiness gap where the JavaScript/React frontend had no
+  automated checks (only the Deno backend was covered by `ci-deno.yml`). The new
+  workflow runs on every push and pull request and executes `npm ci`,
+  `npm run lint`, `npm test` (the full 87-test suite), and the
+  `npm run release:gate` permission gate on Node 22.
+
+### Notes on deferred items
+
+- **Security headers** (CSP / X-Frame-Options / Permissions-Policy) remain a
+  host-level concern: LIUMA is served from the Base44 edge, so these headers
+  cannot be enforced from the application repository and must be configured on
+  the hosting platform.
+- **`react-quill` / `quill` moderate advisory** remains an accepted, documented
+  risk: the only fix offered by `npm audit` is a breaking downgrade, and the rich
+  text editor is restricted to admin/teacher roles.
+
 ## [1.0.6] - 2026-06-08
 
 ### Documentation

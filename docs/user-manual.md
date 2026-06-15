@@ -1,6 +1,6 @@
 # LIUMA User Manual
 
-**Version 1.0.6 · Updated 2026-06-08**
+**Version 1.0.8 · Updated 2026-06-15**
 
 LIUMA is a school management platform connecting school administrators, teachers, and parents/guardians. This manual explains what each role can do, how permissions work, and how privacy is protected.
 

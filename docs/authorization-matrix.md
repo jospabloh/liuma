@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-06-08 · Version 1.0.6**
+**Last updated: 2026-06-15 · Version 1.0.8**
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -209,7 +209,8 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 | `react-quill` XSS (quill ≤ 1.3.7) | Moderate | Accepted — editor is admin/teacher only; breaking fix deferred |
 | No HTTP Content Security Policy headers | Medium | Open — requires hosting/deployment configuration outside app code |
 | `X-Frame-Options` / `Permissions-Policy` headers | Medium/Low | Open — host-level (Base44 edge) config; see `docs/rls-hardening-2026-06-04.md` |
-| No automated Node.js CI pipeline | High | Open — tests run manually; CI setup deferred |
+| No automated Node.js CI pipeline | High | Fixed (v1.0.7) — `.github/workflows/ci-node.yml` added; runs lint, full 87-test suite, and release gate on every push/PR |
+| `esbuild` GHSA-gv7w-rqvm-qjhr (build toolchain) | High | Accepted — build-tool supply-chain advisory; deployed runtime not directly exposed. Upstream fix (vite ≥ 8) is a breaking change; deferred to next planned dependency-update cycle. CI runs only on GitHub-hosted runners with no custom registry configured. |
 | `/Asistencia` route listed as PARENT-only in docs | Medium | Fixed (v1.0.6) — corrected to TEACHER + PARENT to match `routeAccess.js` |
 | `package.json` version behind CHANGELOG | Low | Fixed (v1.0.6) — synchronized to 1.0.6 |
 | Missing entity entries in this matrix | Low | Fixed (v1.0.6) — OfficialDocument, NoticeDelivery, PendingChange, PermissionOverride added |

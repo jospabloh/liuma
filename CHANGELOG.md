@@ -5,6 +5,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.8] - 2026-06-15
+
+### Documentation
+
+- **Authorization matrix corrected**: The open-gaps table still listed "No automated Node.js CI pipeline | High | Open" even though that gap was closed in v1.0.7 by adding `.github/workflows/ci-node.yml`. Updated to "Fixed (v1.0.7)".
+- **New security finding documented**: `esbuild` ≤ 0.28.0 (GHSA-gv7w-rqvm-qjhr) — Missing binary integrity verification in Deno module enables RCE via `NPM_CONFIG_REGISTRY`. This is a build-tool supply-chain advisory; the deployed runtime is not directly exposed. The upstream fix requires upgrading to vite ≥ 8 (a breaking major-version change). Risk accepted and deferred — documented in the authorization matrix open-gaps table and in this changelog.
+- **Version metadata synchronised**: `docs/authorization-matrix.md` header and `docs/user-manual.md` header updated from 1.0.6 to 1.0.8 to match `package.json`.
+
+### Security — CI / Build toolchain
+
+- **`esbuild` GHSA-gv7w-rqvm-qjwr** (High — build toolchain only): `esbuild` ≤ 0.28.0 ships a Deno entry-point that performs binary downloads without integrity verification, enabling RCE if `NPM_CONFIG_REGISTRY` is pointed at a malicious registry during `npm install`. This affects only the build and CI environment, not the deployed application bundle. Mitigation: CI runs only on GitHub-hosted runners against the pinned `package-lock.json`; no custom registry is configured. The upstream fix (vite ≥ 8) is a breaking major-version change — deferred to the next planned dependency-update cycle.
+
+---
+
 ## [1.0.7] - 2026-06-08
 
 ### CI / Tooling

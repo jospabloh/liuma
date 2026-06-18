@@ -95,6 +95,10 @@ from the support page via the `lumi:open` window event.
 
 ## 7. Base44 setup (required before go-live)
 
+> **Copy-paste runbook:** see [`docs/base44-entity-setup.md`](base44-entity-setup.md)
+> for an AI-chat prompt and manual field/RLS tables. A live check on 2026-06-18
+> (app `696e967c430ceb6a2232ffd8`) confirmed neither entity exists yet.
+
 The app references two entities that must be created in the Base44 builder with
 RLS. Until they exist, the support pages will load but ticket reads/writes will
 fail.

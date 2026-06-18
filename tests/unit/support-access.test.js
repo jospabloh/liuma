@@ -9,6 +9,7 @@ import {
   buildCapabilityRequest,
   evaluateCapabilityAccess,
 } from '../../src/lib/lumi/capabilities.js';
+import { isPlatformOwner } from '../../src/lib/support/owner.js';
 
 // --- Entity policy --------------------------------------------------------
 
@@ -63,4 +64,20 @@ test('a request without tenant scope is denied a safe message', () => {
   const access = evaluateCapabilityAccess({ intent: LUMI_INTENTS.SUPPORT_REQUEST, request });
   assert.equal(access.allowed, false);
   assert.ok(access.denial.safe_message);
+});
+
+// --- Platform-owner detection (cross-tenant support queue) -----------------
+
+test('is_super_admin profile is recognized as the platform owner', () => {
+  assert.equal(isPlatformOwner({ userProfile: { is_super_admin: true } }), true);
+});
+
+test('Base44 User.role admin is the fallback owner signal when is_super_admin is absent', () => {
+  assert.equal(isPlatformOwner({ userProfile: { app_role: 'ADMIN' }, user: { role: 'admin' } }), true);
+});
+
+test('a regular school director is not the platform owner', () => {
+  assert.equal(isPlatformOwner({ userProfile: { app_role: 'ADMIN' }, user: { role: 'user' } }), false);
+  assert.equal(isPlatformOwner({ userProfile: {}, user: {} }), false);
+  assert.equal(isPlatformOwner({}), false);
 });

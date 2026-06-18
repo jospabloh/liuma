@@ -299,12 +299,18 @@ export async function listMyTickets(user) {
 
 /**
  * Management-queue tickets. A school director sees their school's tickets; the
- * super-admin owner sees every ticket across all tenants. The owner branch
- * relies on Base44 RLS allowing super-admin to read all rows.
+ * platform owner sees every ticket across all tenants.
+ *
+ * Ownership is passed in explicitly because it can't be derived from
+ * `UserProfile` alone: the deployed Base44 schema may not expose an
+ * `is_super_admin` field, so the caller also considers the authenticated
+ * Base44 `User.role` (the app creator is `admin`). The owner branch relies on
+ * Base44 RLS allowing the owner to read all rows.
  */
-export async function listQueueTickets(userProfile) {
+export async function listQueueTickets(userProfile, { isOwner } = {}) {
   if (!userProfile) return [];
-  if (userProfile.is_super_admin) {
+  const ownerAccess = isOwner ?? !!userProfile.is_super_admin;
+  if (ownerAccess) {
     const all = await base44.entities.SupportTicket.list('-created_date');
     return all || [];
   }

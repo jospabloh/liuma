@@ -7,6 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Support owner detection hardened**: the cross-tenant support queue
+  (`SoporteAdmin`) no longer depends solely on `UserProfile.is_super_admin` —
+  which a live schema check (app `696e967c…`) showed is not a field on the
+  deployed `UserProfile`. Ownership now also falls back to the authenticated
+  Base44 `User.role === 'admin'` via a new pure helper
+  `src/lib/support/owner.js` (`isPlatformOwner`), covered by 3 new tests (111
+  total). `listQueueTickets` takes an explicit `isOwner` flag.
+
+### Documentation
+
+- **`docs/base44-entity-setup.md`**: copy-paste runbook (AI-chat prompt +
+  manual field/RLS tables) to create the `SupportTicket` / `SupportTicketMessage`
+  entities in the Base44 Builder, which a live entity-list check confirmed do
+  not exist yet.
+
 ### Added
 
 - **Support desk (two-tier help desk)**: parents, teachers and directors can now

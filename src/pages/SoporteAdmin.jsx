@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
@@ -61,6 +61,20 @@ export default function SoporteAdmin() {
     queryFn: () => listQueueTickets(userProfile, { isOwner }),
     enabled: !!userProfile,
   });
+
+  // Deep link: open a ticket directly when arriving from the triage panel
+  // (PanelSoporte) with ?ticketId=. Runs once per id after tickets load.
+  const [openedDeepLink, setOpenedDeepLink] = useState(false);
+  useEffect(() => {
+    if (openedDeepLink || activeTicket || tickets.length === 0) return;
+    const requestedId = new URLSearchParams(window.location.search).get('ticketId');
+    if (!requestedId) return;
+    const match = tickets.find((t) => t.id === requestedId);
+    if (match) {
+      setActiveTicket(match);
+      setOpenedDeepLink(true);
+    }
+  }, [tickets, activeTicket, openedDeepLink]);
 
   const { data: messages = [] } = useQuery({
     queryKey: ['supportTicketMessages', activeTicket?.id],

@@ -16,6 +16,8 @@ import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { notificationService } from '@/lib/notifications/service';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -33,6 +35,8 @@ import {
 
 export default function PagosAdmin() {
   const queryClient = useQueryClient();
+  const { canWrite } = useCanWrite();
+  const blockReadOnly = () => toast.error('Tu licencia está en modo solo lectura. Reactívala para registrar pagos o cargos.');
   const [activeTab, setActiveTab] = useState('pending');
   const [showConceptForm, setShowConceptForm] = useState(false);
   const [showChargeForm, setShowChargeForm] = useState(false);
@@ -165,6 +169,7 @@ export default function PagosAdmin() {
 
   const handleCreateConcept = (e) => {
     e.preventDefault();
+    if (!guardWrite(canWrite, blockReadOnly)) return;
     createConceptMutation.mutate({
       ...conceptForm,
       default_amount: parseFloat(conceptForm.default_amount),
@@ -175,6 +180,7 @@ export default function PagosAdmin() {
 
   const handleCreateCharge = async (e) => {
     e.preventDefault();
+    if (!guardWrite(canWrite, blockReadOnly)) return;
     if (concepts.length === 0) {
       toast.error('Debes configurar al menos un concepto de pago antes de crear cargos.');
       return;
@@ -225,6 +231,7 @@ export default function PagosAdmin() {
 
   const handleRecordPayment = (e) => {
     e.preventDefault();
+    if (!guardWrite(canWrite, blockReadOnly)) return;
     recordPaymentMutation.mutate({
       school_id: userProfile.school_id,
       charge_id: selectedCharge.id,
@@ -316,6 +323,7 @@ export default function PagosAdmin() {
         showBack
         backTo={createPageUrl('Home')}
       />
+      <ReadOnlyBanner />
       {concepts.length === 0 && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           Primero crea al menos un concepto de pago; después podrás generar cargos para los alumnos.

@@ -16,6 +16,8 @@ import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { loadHomeworkByClassroomIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +34,7 @@ import {
 
 export default function TareaMaestro() {
   const queryClient = useQueryClient();
+  const { canWrite } = useCanWrite();
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     classroom_id: '',
@@ -91,6 +94,7 @@ export default function TareaMaestro() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!guardWrite(canWrite, () => toast.error('Tu licencia está en modo solo lectura. Reactívala para crear tareas.'))) return;
     createHomeworkMutation.mutate({
       ...formData,
       school_id: userProfile.school_id,
@@ -118,11 +122,13 @@ export default function TareaMaestro() {
         showBack
         backTo={createPageUrl('Home')}
         action={
-          <Button onClick={() => setShowForm(true)} className="bg-blue-600 hover:bg-blue-700 gap-1">
+          <Button onClick={() => setShowForm(true)} disabled={!canWrite} className="bg-blue-600 hover:bg-blue-700 gap-1">
             <Plus className="w-4 h-4" /> Crear
           </Button>
         }
       />
+
+      <ReadOnlyBanner />
 
       {homework.length === 0 ? (
         <EmptyState

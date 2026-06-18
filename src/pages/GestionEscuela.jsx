@@ -28,12 +28,15 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UpgradePlansModal from '@/components/subscription/UpgradePlansModal';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useStudentQuota } from '@/hooks/useStudentQuota';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
 export default function GestionEscuela() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const studentQuota = useStudentQuota();
+  const { canWrite } = useCanWrite();
   const [activeTab, setActiveTab] = useState('classrooms');
   const [showClassroomForm, setShowClassroomForm] = useState(false);
   const [showStudentForm, setShowStudentForm] = useState(false);
@@ -124,8 +127,11 @@ export default function GestionEscuela() {
     }
   });
 
+  const blockReadOnly = () => toast.error('Tu licencia está en modo solo lectura. Reactívala para hacer cambios.');
+
   const handleCreateClassroom = (e) => {
     e.preventDefault();
+    if (!guardWrite(canWrite, blockReadOnly)) return;
     createClassroomMutation.mutate({
       ...classroomForm,
       school_id: userProfile.school_id,
@@ -134,6 +140,7 @@ export default function GestionEscuela() {
   };
 
   const handleOpenStudentForm = () => {
+    if (!guardWrite(canWrite, blockReadOnly)) return;
     // Enforce the licensed student capacity before letting the admin add more.
     if (studentQuota.exceeded) {
       toast.error(`Alcanzaste el límite de ${studentQuota.limit} alumnos de tu plan.`);
@@ -145,6 +152,7 @@ export default function GestionEscuela() {
 
   const handleCreateStudent = (e) => {
     e.preventDefault();
+    if (!guardWrite(canWrite, blockReadOnly)) return;
     // Guard again at submit time in case the count changed while the form was open.
     if (studentQuota.exceeded) {
       setShowStudentForm(false);
@@ -179,6 +187,8 @@ export default function GestionEscuela() {
         backTo={createPageUrl('Home')}
       />
 
+      <ReadOnlyBanner />
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full mb-6">
           <TabsTrigger value="classrooms" className="flex-1">Salones</TabsTrigger>
@@ -187,7 +197,7 @@ export default function GestionEscuela() {
 
         <TabsContent value="classrooms">
           <div className="flex justify-end mb-4">
-            <Button onClick={() => setShowClassroomForm(true)} className="bg-blue-600 hover:bg-blue-700 gap-1">
+            <Button onClick={() => setShowClassroomForm(true)} disabled={!canWrite} className="bg-blue-600 hover:bg-blue-700 gap-1">
               <Plus className="w-4 h-4" /> Nuevo salón
             </Button>
           </div>
@@ -234,7 +244,7 @@ export default function GestionEscuela() {
                 {studentQuota.used} / {studentQuota.limit} alumnos licenciados
               </p>
             ) : <span />}
-            <Button onClick={handleOpenStudentForm} className="bg-green-600 hover:bg-green-700 gap-1">
+            <Button onClick={handleOpenStudentForm} disabled={!canWrite} className="bg-green-600 hover:bg-green-700 gap-1">
               <Plus className="w-4 h-4" /> Nuevo alumno
             </Button>
           </div>

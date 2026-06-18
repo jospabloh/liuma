@@ -15,8 +15,11 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
 export default function GestionDescuentos() {
+  const { canWrite } = useCanWrite();
   const [showForm, setShowForm] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(null);
   const [formData, setFormData] = useState({
@@ -89,7 +92,8 @@ export default function GestionDescuentos() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+    if (!guardWrite(canWrite, () => toast.error('Tu licencia está en modo solo lectura. Reactívala para gestionar descuentos.'))) return;
+
     const data = {
       ...formData,
       discount_value: parseFloat(formData.discount_value),
@@ -147,6 +151,7 @@ export default function GestionDescuentos() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
       <div className="max-w-4xl mx-auto">
+        <ReadOnlyBanner />
         <PageHeader
           title="Gestión de Descuentos"
           subtitle="Configura descuentos para pagos escolares"

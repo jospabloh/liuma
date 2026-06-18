@@ -15,8 +15,11 @@ import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
 export default function GestionAusencias() {
+  const { canWrite } = useCanWrite();
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
@@ -104,6 +107,7 @@ export default function GestionAusencias() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!guardWrite(canWrite, () => toast.error('Tu licencia está en modo solo lectura. Reactívala para gestionar solicitudes.'))) return;
     updateNotificationMutation.mutate({
       notificationId: selectedNotification.id,
       data: {
@@ -145,6 +149,8 @@ export default function GestionAusencias() {
           subtitle={`${pendingCount} pendientes de revisión`}
           showBack
         />
+
+        <ReadOnlyBanner />
 
         <div className="space-y-3">
           {notifications?.length === 0 ? (

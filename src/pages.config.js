@@ -75,6 +75,7 @@ const LicenseAdmin = React.lazy(() => import('./pages/LicenseAdmin'));
 const MisHijos = React.lazy(() => import('./pages/MisHijos'));
 const Pagos = React.lazy(() => import('./pages/Pagos'));
 const PagosAdmin = React.lazy(() => import('./pages/PagosAdmin'));
+const PanelSoporte = React.lazy(() => import('./pages/PanelSoporte'));
 const PedidosUniformes = React.lazy(() => import('./pages/PedidosUniformes'));
 const PermisosRoles = React.lazy(() => import('./pages/PermisosRoles'));
 const Reportes = React.lazy(() => import('./pages/Reportes'));
@@ -116,6 +117,7 @@ export const PAGES = {
     "OperacionDiaria": OperacionDiaria,
     "Pagos": Pagos,
     "PagosAdmin": PagosAdmin,
+    "PanelSoporte": PanelSoporte,
     "PermisosRoles": PermisosRoles,
     "PedidosUniformes": PedidosUniformes,
     "Reportes": Reportes,

@@ -17,6 +17,7 @@ export const LUMI_INTENTS = {
   PAYMENT_REMINDERS: 'payment_reminders',
   BEHAVIOR_RECAP: 'behavior_recap',
   SCHEDULE_APPOINTMENTS: 'schedule_appointments',
+  SUPPORT_REQUEST: 'support_request',
 };
 
 export const CAPABILITY_RULES = {
@@ -26,6 +27,7 @@ export const CAPABILITY_RULES = {
   [LUMI_INTENTS.PAYMENT_REMINDERS]: { entity: 'ChargeItem', allowed_roles: ['ADMIN','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo dar seguimiento de pagos con este acceso.' },
   [LUMI_INTENTS.BEHAVIOR_RECAP]: { entity: 'DiaryEntry', allowed_roles: ['ADMIN','TEACHER','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo compartir reportes de conducta con este acceso.' },
   [LUMI_INTENTS.SCHEDULE_APPOINTMENTS]: { entity: 'Notice', allowed_roles: ['ADMIN','TEACHER','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo revisar anuncios o eventos con este acceso.' },
+  [LUMI_INTENTS.SUPPORT_REQUEST]: { entity: 'SupportTicket', allowed_roles: ['ADMIN','TEACHER','PARENT'], required_entity_filters: ['school_id'], safe_denial_response: 'No puedo abrir una solicitud de soporte con este acceso.' },
 };
 
 function toLinkedStudentIds(userProfile) {

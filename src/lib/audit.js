@@ -9,6 +9,7 @@ export const AUDIT_ENTITIES = {
   DIARY_ENTRY: 'DiaryEntry',
   AI_INTERACTION: 'AiInteraction',
   PERMISSION_CHANGE: 'PermissionChange',
+  SUPPORT_TICKET: 'SupportTicket',
 };
 
 export const AUDIT_ACTIONS = {

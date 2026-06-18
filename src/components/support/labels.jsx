@@ -1,0 +1,66 @@
+import React from 'react';
+import { Badge } from '@/components/ui/badge';
+import {
+  SUPPORT_STATUS,
+  SUPPORT_PRIORITIES,
+  SUPPORT_CATEGORIES,
+} from '@/lib/support/constants';
+
+export const STATUS_LABELS = {
+  [SUPPORT_STATUS.OPEN]: 'Abierto',
+  [SUPPORT_STATUS.AI_RESOLVED]: 'Resuelto por Lumi',
+  [SUPPORT_STATUS.ESCALATED]: 'Escalado',
+  [SUPPORT_STATUS.IN_PROGRESS]: 'En proceso',
+  [SUPPORT_STATUS.WAITING_USER]: 'Esperando tu respuesta',
+  [SUPPORT_STATUS.RESOLVED]: 'Resuelto',
+  [SUPPORT_STATUS.CLOSED]: 'Cerrado',
+};
+
+const STATUS_COLORS = {
+  [SUPPORT_STATUS.OPEN]: 'bg-slate-100 text-slate-700',
+  [SUPPORT_STATUS.AI_RESOLVED]: 'bg-violet-100 text-violet-800',
+  [SUPPORT_STATUS.ESCALATED]: 'bg-amber-100 text-amber-800',
+  [SUPPORT_STATUS.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
+  [SUPPORT_STATUS.WAITING_USER]: 'bg-orange-100 text-orange-800',
+  [SUPPORT_STATUS.RESOLVED]: 'bg-green-100 text-green-800',
+  [SUPPORT_STATUS.CLOSED]: 'bg-slate-200 text-slate-600',
+};
+
+export const PRIORITY_LABELS = {
+  [SUPPORT_PRIORITIES.LOW]: 'Baja',
+  [SUPPORT_PRIORITIES.NORMAL]: 'Normal',
+  [SUPPORT_PRIORITIES.HIGH]: 'Alta',
+  [SUPPORT_PRIORITIES.URGENT]: 'Urgente',
+};
+
+const PRIORITY_COLORS = {
+  [SUPPORT_PRIORITIES.LOW]: 'bg-slate-100 text-slate-600',
+  [SUPPORT_PRIORITIES.NORMAL]: 'bg-blue-100 text-blue-800',
+  [SUPPORT_PRIORITIES.HIGH]: 'bg-amber-100 text-amber-800',
+  [SUPPORT_PRIORITIES.URGENT]: 'bg-red-100 text-red-800',
+};
+
+export const CATEGORY_LABELS = {
+  [SUPPORT_CATEGORIES.ACADEMIC]: 'Académico (tareas, asistencia, avisos)',
+  [SUPPORT_CATEGORIES.PAYMENTS]: 'Pagos y cargos',
+  [SUPPORT_CATEGORIES.ACCOUNT]: 'Cuenta y vinculación de alumnos',
+  [SUPPORT_CATEGORIES.TECHNICAL]: 'Problema técnico de la app',
+  [SUPPORT_CATEGORIES.BILLING]: 'Suscripción / facturación LIUMA',
+  [SUPPORT_CATEGORIES.OTHER]: 'Otro',
+};
+
+export function SupportStatusBadge({ status }) {
+  return (
+    <Badge className={`${STATUS_COLORS[status] || STATUS_COLORS.OPEN} border-0 font-medium`}>
+      {STATUS_LABELS[status] || status}
+    </Badge>
+  );
+}
+
+export function SupportPriorityBadge({ priority }) {
+  return (
+    <Badge className={`${PRIORITY_COLORS[priority] || PRIORITY_COLORS.NORMAL} border-0 font-medium`}>
+      {PRIORITY_LABELS[priority] || priority}
+    </Badge>
+  );
+}

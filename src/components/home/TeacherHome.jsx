@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { ClipboardList, BookOpen, Bell, CheckCircle, AlertCircle, Users, Calendar, ListChecks } from 'lucide-react';
+import { ClipboardList, BookOpen, Bell, CheckCircle, AlertCircle, Users, Calendar, ListChecks, LifeBuoy } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -237,6 +237,15 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             color="from-lime-50 to-white"
             iconColor="text-lime-600"
             delay={0.35}
+          />
+          <BigTile
+            icon={LifeBuoy}
+            title="Soporte y ayuda"
+            subtitle="Pregunta a Lumi o abre un ticket"
+            href={createPageUrl('Soporte')}
+            color="from-violet-50 to-white"
+            iconColor="text-violet-600"
+            delay={0.4}
           />
         </div>
 

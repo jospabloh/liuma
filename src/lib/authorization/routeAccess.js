@@ -27,6 +27,8 @@ export const ROUTE_ACCESS = {
   GestionEscuela: [ROLES.ADMIN],
   ConfiguracionInicial: [ROLES.ADMIN],
   CalendarioEscolar: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
+  Soporte: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
+  SoporteAdmin: [ROLES.ADMIN],
   GestionDocumentos: [ROLES.ADMIN],
   GestionDescuentos: [ROLES.ADMIN],
   PedidosUniformes: [ROLES.ADMIN, ROLES.PARENT],

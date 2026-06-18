@@ -79,6 +79,8 @@ const PermisosRoles = React.lazy(() => import('./pages/PermisosRoles'));
 const Reportes = React.lazy(() => import('./pages/Reportes'));
 const ResumenAsistencia = React.lazy(() => import('./pages/ResumenAsistencia'));
 const SolicitarAusencia = React.lazy(() => import('./pages/SolicitarAusencia'));
+const Soporte = React.lazy(() => import('./pages/Soporte'));
+const SoporteAdmin = React.lazy(() => import('./pages/SoporteAdmin'));
 const Tarea = React.lazy(() => import('./pages/Tarea'));
 const TareaMaestro = React.lazy(() => import('./pages/TareaMaestro'));
 const OperacionDiaria = React.lazy(() => import('./pages/OperacionDiaria'));
@@ -117,6 +119,8 @@ export const PAGES = {
     "Reportes": Reportes,
     "ResumenAsistencia": ResumenAsistencia,
     "SolicitarAusencia": SolicitarAusencia,
+    "Soporte": Soporte,
+    "SoporteAdmin": SoporteAdmin,
     "Tarea": Tarea,
     "TareaMaestro": TareaMaestro,
 }

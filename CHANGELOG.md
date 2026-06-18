@@ -5,6 +5,44 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Support desk (two-tier help desk)**: parents, teachers and directors can now
+  get help from inside the app.
+  - **L0 — Lumi deflection**: a new `SUPPORT_REQUEST` Lumi capability answers
+    common questions from the user manual before any ticket is created.
+  - **L1 — ticketing**: when the AI can't help, a `SupportTicket` is opened with
+    a human-friendly number (`LIUMA-2026-000042`), an SLA deadline, and a
+    threaded conversation. Two-tier routing sends school questions to the
+    requester's **director** and app/billing issues to the **platform owner**;
+    a director's own tickets go to the owner.
+  - **SLA (relaxed)**: first-response targets in business days — URGENT 1, HIGH 2,
+    NORMAL 3, LOW 5. The clock stops at the first staff reply; the management
+    console flags breaches.
+  - **Consoles**: requester view (`Soporte`, all roles) and management queue
+    (`SoporteAdmin`, ADMIN — owner sees all tenants) with status state machine,
+    priority filters, and email + in-app notifications on escalation, reply and
+    resolution.
+  - **Authorization & audit**: `SupportTicket` / `SupportTicketMessage` added to
+    the policy matrix and route-access map; ticket create/message/status changes
+    are written to `AuditLog`.
+  - **Backend dependency**: requires the `SupportTicket` and `SupportTicketMessage`
+    Base44 entities (schemas + RLS documented in `docs/support-system.md`) to be
+    created before go-live. App, lint and the test suite (108 tests) are green.
+
+### Removed
+
+- **Stripe dependencies removed**: `@stripe/react-stripe-js` and `@stripe/stripe-js`
+  were listed in `package.json` but never imported anywhere in `src/` — the payments
+  pages only read and display `ChargeItem` records, with no card-processing flow.
+  Payment collection is handled through Mercado Pago, so the unused Stripe packages
+  were dropped to slim the dependency tree and avoid implying a Stripe integration
+  exists. No application code changed; the full 87-test suite and build remain green.
+
+---
+
 ## [1.0.8] - 2026-06-15
 
 ### Documentation

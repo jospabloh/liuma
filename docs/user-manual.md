@@ -340,4 +340,39 @@ LIUMA sends notifications for school events such as:
 
 ---
 
-*For questions or support, contact your school administrator or the LIUMA support team.*
+## 13. Soporte y ayuda (Support)
+
+LIUMA includes a built-in support desk reachable from the **"Soporte y ayuda"**
+tile on the home screen (administrators open the **"Soporte"** console).
+
+**How to get help — two steps:**
+
+1. **Ask Lumi first.** From the support page tap **"Preguntar a Lumi"**. Lumi
+   answers common questions instantly using this manual (how to link a child,
+   where to see homework, how to read notices, etc.).
+2. **Open a ticket if Lumi can't help.** Tap **"Crear ticket"**, choose a
+   category and priority, and describe the problem. You'll get a **ticket number**
+   (e.g. `LIUMA-2026-000042`) and can follow the conversation until it's resolved.
+
+**Where your ticket goes:**
+
+- Questions about your school (homework, attendance, payments, account/child
+  linking) go to your **school's director**.
+- Problems with the app itself, or about the school's LIUMA subscription, go to
+  the **LIUMA team**.
+- A director's own tickets go to the LIUMA team.
+
+**Response times (first reply, business days):** Urgent 1 · High 2 · Normal 3 ·
+Low 5. You'll be notified in-app and by email when there's a reply, and again
+when the ticket is resolved. If your problem persists after a ticket is resolved,
+you can reopen it from the support page.
+
+**For administrators / directors:** the **Soporte** console shows every ticket
+from your school, with priority filters and an alert when a ticket is past its
+response-time commitment. Open a ticket to reply and to move it through
+*En proceso → Resuelto → Cerrado*.
+
+---
+
+*For questions or support, use the in-app Soporte page (Lumi + tickets), or
+contact your school administrator.*

@@ -12,9 +12,13 @@ export default function PaymentReminderBanner({ subscription }) {
     ? differenceInDays(new Date(subscription.trial_end_date), new Date())
     : 0;
   
-  // Show banner only in last 3 days of trial or if inactive
+  // Read-only / lapsed states that warrant a persistent banner. 'suspended' is
+  // intentionally excluded here — it gets its own blocking SuspendedAccountModal.
+  const lapsedStatuses = ['view_only', 'inactive', 'canceled'];
+
+  // Show banner only in last 3 days of trial or for a lapsed/read-only account.
   if (isTrialEnding && daysLeft > 3) return null;
-  if (!isTrialEnding && subscription.subscription_status !== 'inactive') return null;
+  if (!isTrialEnding && !lapsedStatuses.includes(subscription.subscription_status)) return null;
 
   const getBannerConfig = () => {
     if (isTrialEnding && daysLeft === 0) {
@@ -35,6 +39,16 @@ export default function PaymentReminderBanner({ subscription }) {
         icon: 'text-amber-600',
         message: `Tu período de prueba termina en ${daysLeft} día${daysLeft > 1 ? 's' : ''}`,
         description: 'Asegura el acceso continuo a LIUMA.'
+      };
+    }
+    if (subscription.subscription_status === 'view_only') {
+      return {
+        bg: 'bg-amber-50',
+        border: 'border-amber-200',
+        text: 'text-amber-800',
+        icon: 'text-amber-600',
+        message: 'Cuenta en modo solo lectura',
+        description: 'Tu licencia no está activa. Puedes consultar la información, pero no realizar cambios. Contáctanos para reactivarla.'
       };
     }
     return {

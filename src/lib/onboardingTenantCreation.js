@@ -1,5 +1,6 @@
 import { DEFAULT_THEME } from './tenantTheme.js';
 import { buildConsentRecordPayload } from './consent/privacyNotice.js';
+import { buildTrialSubscription } from './license/licenseModel.js';
 
 export const ONBOARDING_ERROR_CODES = {
   VALIDATION: 'validation_error',
@@ -185,17 +186,8 @@ async function ensureSchoolSubscription(SchoolSubscription, schoolId) {
   const existing = await SchoolSubscription.filter({ school_id: schoolId }, '-created_date', 1);
   if (existing[0]) return existing[0];
 
-  const trialEndDate = new Date();
-  trialEndDate.setDate(trialEndDate.getDate() + 30);
-
-  return SchoolSubscription.create({
-    school_id: schoolId,
-    subscription_status: 'trial',
-    subscription_plan: 'trial',
-    trial_start_date: new Date().toISOString(),
-    trial_end_date: trialEndDate.toISOString(),
-    welcome_message_shown: false,
-  });
+  // Seed the 30-day trial with its license tier/limit (mirrors FlowFin).
+  return SchoolSubscription.create(buildTrialSubscription(schoolId));
 }
 
 async function ensureMissingTenantRows(Entity, query, payload) {

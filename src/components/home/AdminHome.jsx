@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck, KeyRound, Headset } from 'lucide-react';
+import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck, KeyRound, Headset, BadgeCheck } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import { format } from 'date-fns';
@@ -339,6 +339,15 @@ export default function AdminHome({ user, userProfile, subscription }) {
             color="from-violet-50 to-white"
             iconColor="text-violet-600"
             delay={0.74}
+          />
+          <BigTile
+            icon={BadgeCheck}
+            title="Licencia"
+            subtitle="Plan y suscripción"
+            href={createPageUrl('LicenseAdmin')}
+            color="from-emerald-50 to-white"
+            iconColor="text-emerald-600"
+            delay={0.75}
           />
         </div>
 

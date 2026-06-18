@@ -35,29 +35,44 @@
     "body"
   ],
   "rls": {
-    "read": {
-      "$or": [
-        {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        },
+    "create": {
+      "$and": [
         {
           "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.author_user_id": "{{user.id}}"
+            },
+            {
+              "data.requester_user_id": "{{user.id}}"
+            }
+          ]
         }
       ]
     },
-    "create": {
-      "$or": [
-        {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        },
+    "read": {
+      "$and": [
         {
           "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.requester_user_id": "{{user.id}}"
+            }
+          ]
         }
       ]
     },

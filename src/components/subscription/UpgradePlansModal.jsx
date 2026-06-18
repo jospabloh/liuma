@@ -63,6 +63,11 @@ export default function UpgradePlansModal({ open, onClose, currentTier, reason }
                     </li>
                   ))}
                 </ul>
+                {plan.enterpriseNote && (
+                  <p className="mt-2 text-[11px] text-indigo-700 bg-indigo-50 rounded-lg px-2.5 py-1.5">
+                    {plan.enterpriseNote}
+                  </p>
+                )}
               </motion.div>
             );
           })}

@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,7 @@ import {
 
 export default function AvisosAdmin() {
   const queryClient = useQueryClient();
+  const { canWrite } = useCanWrite();
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -152,6 +155,7 @@ export default function AvisosAdmin() {
   };
 
   const handleSubmit = () => {
+    if (!guardWrite(canWrite, () => toast.error('Tu licencia está en modo solo lectura. Reactívala para enviar avisos.'))) return;
     createNoticeMutation.mutate({
       ...formData,
       school_id: userProfile.school_id,
@@ -183,11 +187,13 @@ export default function AvisosAdmin() {
         showBack
         backTo={createPageUrl('Home')}
         action={
-          <Button onClick={() => setShowWizard(true)} className="bg-violet-600 hover:bg-violet-700 gap-1">
+          <Button onClick={() => setShowWizard(true)} disabled={!canWrite} className="bg-violet-600 hover:bg-violet-700 gap-1">
             <Plus className="w-4 h-4" /> Crear
           </Button>
         }
       />
+
+      <ReadOnlyBanner />
 
       {notices.length === 0 ? (
         <EmptyState

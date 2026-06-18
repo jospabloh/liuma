@@ -68,6 +68,7 @@ automatically — do **not** define those.
 | --- | --- | --- |
 | `ticket_id` | string | yes |
 | `school_id` | string | yes |
+| `requester_user_id` | string | yes — denormalized from the parent ticket so RLS can scope per-requester |
 | `author_user_id` | string |  |
 | `author_role` | enum: REQUESTER, AI, SCHOOL_ADMIN, OWNER, SYSTEM | yes |
 | `body` | string | yes |
@@ -76,18 +77,20 @@ automatically — do **not** define those.
 
 `SupportTicket`
 - **read**: `requester_user_id == {{user.id}}` OR (`{{user.app_role}} == 'ADMIN'`
-  AND `school_id == {{user.school_id}}`) OR app owner.
+  AND `school_id == {{user.school_id}}`) OR app owner (`is_super_admin`).
 - **create**: signed-in, `requester_user_id == {{user.id}}`, `school_id ==
   {{user.school_id}}`.
 - **update**: (`{{user.app_role}} == 'ADMIN'` AND `school_id ==
   {{user.school_id}}`) OR app owner.
 - **delete**: app owner only.
 
-`SupportTicketMessage`
-- **read / create**: requester of the parent ticket, ADMIN of the same
-  `school_id`, or app owner. If cross-entity lookups are awkward in Base44, scope
-  by `school_id` and rely on the app layer (`policy.js`) for the finer checks —
-  note the choice here when applied.
+`SupportTicketMessage` — **do NOT scope by `school_id` alone**: that lets any
+in-school parent/teacher read every family's ticket thread (privacy leak). Scope
+by the denormalized `requester_user_id`.
+- **read / create**: `requester_user_id == {{user.id}}` (the ticket's own
+  requester) OR (`{{user.app_role}} == 'ADMIN'` AND `school_id ==
+  {{user.school_id}}`) OR app owner (`is_super_admin`). The app writes
+  `requester_user_id` onto every message (`src/lib/support/tickets.js`).
 
 ## After creating the entities
 

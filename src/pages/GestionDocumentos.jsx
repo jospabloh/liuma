@@ -15,8 +15,11 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
 export default function GestionDocumentos() {
+  const { canWrite } = useCanWrite();
   const [isUploading, setIsUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -105,11 +108,12 @@ export default function GestionDocumentos() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!guardWrite(canWrite, () => toast.error('Tu licencia está en modo solo lectura. Reactívala para subir documentos.'))) return;
     if (!selectedFile) {
       toast.error('Por favor selecciona un archivo PDF');
       return;
     }
-    
+
     setIsUploading(true);
     await uploadMutation.mutateAsync({ ...formData, file: selectedFile });
     setIsUploading(false);
@@ -129,6 +133,7 @@ export default function GestionDocumentos() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
       <div className="max-w-4xl mx-auto">
+        <ReadOnlyBanner />
         <PageHeader
           title="Documentos Oficiales"
           subtitle="Gestiona menús, comunicaciones, minutas y catálogos"

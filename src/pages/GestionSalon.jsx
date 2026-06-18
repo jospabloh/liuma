@@ -25,9 +25,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
 export default function GestionSalon() {
   const queryClient = useQueryClient();
+  const { canWrite } = useCanWrite();
   const navigate = useNavigate();
   const urlParams = new URLSearchParams(window.location.search);
   const classroomId = urlParams.get('classroomId');
@@ -112,6 +115,7 @@ export default function GestionSalon() {
   });
 
   const handleAssignTeacher = () => {
+    if (!guardWrite(canWrite, () => toast.error('Tu licencia está en modo solo lectura. Reactívala para asignar maestros.'))) return;
     assignTeacherMutation.mutate({
       school_id: userProfile.school_id,
       teacher_id: selectedTeacherId,
@@ -136,6 +140,8 @@ export default function GestionSalon() {
         showBack
         backTo={createPageUrl('GestionEscuela')}
       />
+
+      <ReadOnlyBanner />
 
       <div className="space-y-6">
         {/* Teachers Section */}

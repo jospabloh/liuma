@@ -33,7 +33,21 @@
   "rls": {
     "create": null,
     "read": {
-      "_id": "{{user.data.school_id}}"
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "data.is_super_admin": true
+          }
+        },
+        {
+          "_id": "{{user.data.school_id}}"
+        }
+      ]
     },
     "update": {
       "_id": "{{user.data.school_id}}",

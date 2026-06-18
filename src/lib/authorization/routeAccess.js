@@ -29,6 +29,9 @@ export const ROUTE_ACCESS = {
   CalendarioEscolar: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
   Soporte: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
   SoporteAdmin: [ROLES.ADMIN],
+  // School admins see their own read-only "Mi Licencia"; the ACACIA platform
+  // owner gets the full cross-tenant panel via the owner override in GuardedRoute.
+  LicenseAdmin: [ROLES.ADMIN],
   GestionDocumentos: [ROLES.ADMIN],
   GestionDescuentos: [ROLES.ADMIN],
   PedidosUniformes: [ROLES.ADMIN, ROLES.PARENT],

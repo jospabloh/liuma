@@ -22,10 +22,13 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
 export default function CrearBitacora() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { canWrite } = useCanWrite();
   const urlParams = new URLSearchParams(window.location.search);
   const classroomId = urlParams.get('classroomId');
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -181,6 +184,7 @@ export default function CrearBitacora() {
   };
 
   const handleSubmit = () => {
+    if (!guardWrite(canWrite, () => toast.error('Tu licencia está en modo solo lectura. Reactívala para crear bitácoras.'))) return;
     createDiaryMutation.mutate({
       school_id: userProfile.school_id,
       classroom_id: classroomId,
@@ -212,6 +216,8 @@ export default function CrearBitacora() {
         showBack
         backTo={createPageUrl('BitacorasMaestro')}
       />
+
+      <ReadOnlyBanner />
 
       {/* Progress Steps */}
       <div className="flex gap-2 mb-6">

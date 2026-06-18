@@ -1,0 +1,114 @@
+{
+  "name": "AbsenceNotification",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "student_id": {
+      "type": "string",
+      "description": "Reference to Student"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "User ID del padre que notifica"
+    },
+    "parent_name": {
+      "type": "string"
+    },
+    "absence_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de la ausencia"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Motivo de la ausencia"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED"
+      ],
+      "default": "PENDING",
+      "description": "Estado de la justificaci\u00f3n"
+    },
+    "admin_notes": {
+      "type": "string",
+      "description": "Notas del administrador"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "description": "User ID de quien revis\u00f3"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "school_id",
+    "student_id",
+    "parent_id",
+    "absence_date",
+    "reason"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "data.student_id": {
+            "$in": "{{user.data.linked_student_ids}}"
+          }
+        },
+        {
+          "data.parent_id": "{{user.id}}"
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.parent_id": "{{user.id}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "$and": [
+            {
+              "data.parent_id": "{{user.id}}"
+            },
+            {
+              "data.status": "PENDING"
+            }
+          ]
+        }
+      ]
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

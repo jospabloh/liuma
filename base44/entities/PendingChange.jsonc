@@ -1,0 +1,89 @@
+{
+  "name": "PendingChange",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string",
+      "description": "Reference to School"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "ROLE_CHANGE",
+        "PERMISSION_ROLLBACK"
+      ],
+      "description": "Tipo de solicitud de cambio"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING_ADMIN_APPROVAL",
+        "PENDING_SECOND_ADMIN_APPROVAL",
+        "APPROVED",
+        "REJECTED"
+      ],
+      "default": "PENDING_ADMIN_APPROVAL",
+      "description": "Estado de la solicitud"
+    },
+    "requester_profile_id": {
+      "type": "string",
+      "description": "UserProfile ID de quien solicita"
+    },
+    "requester_user_id": {
+      "type": "string",
+      "description": "User ID de quien solicita"
+    },
+    "target_profile_id": {
+      "type": "string",
+      "description": "UserProfile ID afectado por el cambio"
+    },
+    "approver_profile_id": {
+      "type": "string",
+      "description": "UserProfile ID de quien aprueba/rechaza"
+    },
+    "approver_user_id": {
+      "type": "string",
+      "description": "User ID de quien aprueba/rechaza"
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Cu\u00e1ndo se resolvi\u00f3"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Detalle del cambio solicitado (roles, m\u00f3dulo, nivel de riesgo, etc.)"
+    }
+  },
+  "required": [
+    "school_id",
+    "type",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

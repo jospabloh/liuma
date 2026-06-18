@@ -1,0 +1,72 @@
+{
+  "name": "PaymentRecord",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "charge_id": {
+      "type": "string"
+    },
+    "student_id": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "payment_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": [
+        "cash",
+        "transfer",
+        "card",
+        "other"
+      ]
+    },
+    "reference": {
+      "type": "string"
+    },
+    "recorded_by": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "school_id",
+    "student_id",
+    "amount",
+    "payment_date"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

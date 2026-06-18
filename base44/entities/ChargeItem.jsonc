@@ -1,0 +1,146 @@
+{
+  "name": "ChargeItem",
+  "properties": {
+    "amount": {
+      "description": "Monto final a pagar",
+      "type": "number"
+    },
+    "concept_id": {
+      "type": "string"
+    },
+    "concept_name": {
+      "type": "string"
+    },
+    "concept_type": {
+      "default": "OTRO",
+      "enum": [
+        "INSCRIPCION",
+        "COLEGIATURA",
+        "HORARIO_EXTENDIDO",
+        "EVENTO",
+        "OTRO"
+      ],
+      "type": "string"
+    },
+    "discount_amount": {
+      "default": 0,
+      "description": "Monto del descuento aplicado",
+      "type": "number"
+    },
+    "discount_id": {
+      "description": "Reference to Discount aplicado",
+      "type": "string"
+    },
+    "due_date": {
+      "format": "date",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Reference to Event si es pago de evento",
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "original_amount": {
+      "description": "Monto original sin descuentos",
+      "type": "number"
+    },
+    "reminder_sent": {
+      "default": false,
+      "description": "Si ya se envi\u00f3 recordatorio de pago",
+      "type": "boolean"
+    },
+    "school_id": {
+      "type": "string"
+    },
+    "status": {
+      "default": "PENDING",
+      "description": "OVERDUE se actualiza autom\u00e1ticamente",
+      "enum": [
+        "PENDING",
+        "PAID",
+        "OVERDUE",
+        "CANCELLED"
+      ],
+      "type": "string"
+    },
+    "student_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "school_id",
+    "student_id",
+    "concept_name",
+    "amount",
+    "due_date"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  }
+                },
+                {
+                  "data.student_id": {
+                    "$in": "{{user.data.linked_student_ids}}"
+                  }
+                },
+                {
+                  "data.concept_type": "EVENTO"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "data.student_id": {
+            "$in": "{{user.data.linked_student_ids}}"
+          },
+          "user_condition": {
+            "data.app_role": "PARENT"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  },
+  "type": "object"
+}

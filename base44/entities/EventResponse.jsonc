@@ -1,0 +1,114 @@
+{
+  "name": "EventResponse",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string",
+      "description": "Reference to Event"
+    },
+    "student_id": {
+      "type": "string",
+      "description": "Reference to Student"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "User ID del padre que responde"
+    },
+    "parent_name": {
+      "type": "string"
+    },
+    "response": {
+      "type": "string",
+      "enum": [
+        "ACCEPTED",
+        "DECLINED",
+        "PENDING"
+      ],
+      "default": "PENDING",
+      "description": "Respuesta del padre"
+    },
+    "payment_status": {
+      "type": "string",
+      "enum": [
+        "NOT_REQUIRED",
+        "PENDING",
+        "PAID"
+      ],
+      "default": "NOT_REQUIRED",
+      "description": "Estado del pago asociado"
+    },
+    "charge_id": {
+      "type": "string",
+      "description": "Reference to ChargeItem si hay pago"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas del padre"
+    }
+  },
+  "required": [
+    "school_id",
+    "event_id",
+    "student_id",
+    "parent_id"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "data.student_id": {
+            "$in": "{{user.data.linked_student_ids}}"
+          }
+        },
+        {
+          "data.parent_id": "{{user.id}}"
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.parent_id": "{{user.id}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "$and": [
+            {
+              "data.parent_id": "{{user.id}}"
+            },
+            {
+              "data.response": "PENDING"
+            }
+          ]
+        }
+      ]
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "name": "WeeklyMenu",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "week_number": {
+      "type": "number",
+      "description": "N\u00famero de semana (1-8 o m\u00e1s)"
+    },
+    "year": {
+      "type": "number",
+      "description": "A\u00f1o del men\u00fa"
+    },
+    "monday": {
+      "type": "string",
+      "description": "Men\u00fa del lunes"
+    },
+    "tuesday": {
+      "type": "string",
+      "description": "Men\u00fa del martes"
+    },
+    "wednesday": {
+      "type": "string",
+      "description": "Men\u00fa del mi\u00e9rcoles"
+    },
+    "thursday": {
+      "type": "string",
+      "description": "Men\u00fa del jueves"
+    },
+    "friday": {
+      "type": "string",
+      "description": "Men\u00fa del viernes"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "school_id",
+    "week_number",
+    "year"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "data.school_id": "{{user.data.school_id}}"
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

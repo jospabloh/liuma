@@ -1,0 +1,76 @@
+{
+  "name": "ParentProfile",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Reference to User"
+    },
+    "school_id": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "address": {
+      "type": "string"
+    },
+    "occupation": {
+      "type": "string"
+    },
+    "workplace": {
+      "type": "string"
+    },
+    "work_phone": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id",
+    "school_id"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "data.user_id": "{{user.id}}"
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

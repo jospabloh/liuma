@@ -1,0 +1,67 @@
+{
+  "name": "PermissionOverride",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string",
+      "description": "Reference to School"
+    },
+    "user_profile_id": {
+      "type": "string",
+      "description": "UserProfile ID al que aplica el override"
+    },
+    "resource": {
+      "type": "string",
+      "description": "Recurso/m\u00f3dulo afectado (ej. Notice, Attendance)"
+    },
+    "action": {
+      "type": "string",
+      "description": "Acci\u00f3n (view, add, edit, delete, approve, export, manage_permissions, read, write)"
+    },
+    "effect": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "deny"
+      ],
+      "description": "Efecto del override"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Justificaci\u00f3n del override"
+    }
+  },
+  "required": [
+    "school_id",
+    "user_profile_id",
+    "resource",
+    "action",
+    "effect"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

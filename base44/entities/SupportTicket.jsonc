@@ -1,0 +1,149 @@
+{
+  "name": "SupportTicket",
+  "type": "object",
+  "properties": {
+    "ticket_number": {
+      "type": "string",
+      "description": "Human-friendly ID like LIUMA-2026-000042"
+    },
+    "school_id": {
+      "type": "string",
+      "description": "Reference to School (tenant scope)"
+    },
+    "requester_user_id": {
+      "type": "string",
+      "description": "User ID of who opened the ticket"
+    },
+    "requester_profile_id": {
+      "type": "string",
+      "description": "UserProfile id of the requester"
+    },
+    "requester_role": {
+      "type": "string",
+      "enum": [
+        "ADMIN",
+        "TEACHER",
+        "PARENT"
+      ]
+    },
+    "requester_name": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "ACADEMIC",
+        "PAYMENTS",
+        "ACCOUNT",
+        "TECHNICAL",
+        "BILLING",
+        "OTHER"
+      ]
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "NORMAL",
+        "HIGH",
+        "URGENT"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "OPEN",
+        "AI_RESOLVED",
+        "ESCALATED",
+        "IN_PROGRESS",
+        "WAITING_USER",
+        "RESOLVED",
+        "CLOSED"
+      ]
+    },
+    "tier": {
+      "type": "string",
+      "enum": [
+        "SCHOOL_ADMIN",
+        "PLATFORM"
+      ]
+    },
+    "assignee_role": {
+      "type": "string"
+    },
+    "channel_origin": {
+      "type": "string",
+      "enum": [
+        "LUMI_AI",
+        "MANUAL"
+      ]
+    },
+    "ai_attempted": {
+      "type": "boolean"
+    },
+    "ai_resolution_summary": {
+      "type": "string"
+    },
+    "sla_due_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "first_response_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "escalated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "ticket_number",
+    "school_id",
+    "requester_user_id",
+    "requester_role",
+    "subject",
+    "category",
+    "priority",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.requester_user_id": "{{user.id}}"
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$and": [
+        {
+          "data.requester_user_id": "{{user.id}}"
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        }
+      ]
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": null
+  }
+}

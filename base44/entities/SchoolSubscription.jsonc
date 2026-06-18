@@ -1,0 +1,96 @@
+{
+  "name": "SchoolSubscription",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string",
+      "description": "Reference to School"
+    },
+    "subscription_status": {
+      "type": "string",
+      "enum": [
+        "trial",
+        "active",
+        "inactive",
+        "canceled",
+        "suspended"
+      ],
+      "default": "trial",
+      "description": "Estado de la suscripci\u00f3n"
+    },
+    "trial_start_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fecha de inicio del trial"
+    },
+    "trial_end_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fecha de fin del trial"
+    },
+    "subscription_plan": {
+      "type": "string",
+      "enum": [
+        "trial",
+        "monthly",
+        "annual"
+      ],
+      "default": "trial",
+      "description": "Plan de suscripci\u00f3n"
+    },
+    "subscription_start_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fecha de inicio de suscripci\u00f3n pagada"
+    },
+    "subscription_end_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fecha de fin de suscripci\u00f3n pagada"
+    },
+    "welcome_message_shown": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si ya se mostr\u00f3 el mensaje de bienvenida al trial"
+    },
+    "last_reminder_sent": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u00daltima vez que se envi\u00f3 recordatorio"
+    },
+    "suspension_reason": {
+      "type": "string",
+      "description": "Raz\u00f3n de suspensi\u00f3n"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas administrativas"
+    }
+  },
+  "required": [
+    "school_id",
+    "subscription_status",
+    "subscription_plan"
+  ],
+  "rls": {
+    "create": null,
+    "read": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

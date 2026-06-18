@@ -1,0 +1,80 @@
+{
+  "name": "AuditLog",
+  "properties": {
+    "action": {
+      "enum": [
+        "USER_APPROVED",
+        "USER_SUSPENDED",
+        "PARENT_LINKED",
+        "PARENT_UNLINKED",
+        "NOTICE_SENT",
+        "DIARY_CREATED",
+        "DIARY_SENT",
+        "PAYMENT_RECORDED",
+        "CHARGE_CREATED",
+        "EMERGENCY_ALERT",
+        "STUDENT_CREATED",
+        "CLASSROOM_CREATED"
+      ],
+      "type": "string"
+    },
+    "details": {
+      "type": "object"
+    },
+    "ip_address": {
+      "type": "string"
+    },
+    "school_id": {
+      "type": "string"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "target_type": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "school_id",
+    "user_id",
+    "action"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "user_condition": {
+                "data.app_role": "TEACHER"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "delete": null,
+    "read": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "update": null
+  },
+  "type": "object"
+}

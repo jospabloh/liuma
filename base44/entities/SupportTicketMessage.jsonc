@@ -1,0 +1,67 @@
+{
+  "name": "SupportTicketMessage",
+  "type": "object",
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "description": "Reference to SupportTicket"
+    },
+    "school_id": {
+      "type": "string",
+      "description": "Tenant scope"
+    },
+    "author_user_id": {
+      "type": "string",
+      "description": "Null for AI/SYSTEM messages"
+    },
+    "author_role": {
+      "type": "string",
+      "enum": [
+        "REQUESTER",
+        "AI",
+        "SCHOOL_ADMIN",
+        "OWNER",
+        "SYSTEM"
+      ]
+    },
+    "body": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "ticket_id",
+    "school_id",
+    "author_role",
+    "body"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        }
+      ]
+    },
+    "update": null,
+    "delete": null
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "name": "NoticeRead",
+  "properties": {
+    "school_id": {
+      "description": "Reference to School (tenant scope)",
+      "type": "string"
+    },
+    "notice_id": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "read_at": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "notice_id",
+    "user_id"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        }
+      ]
+    },
+    "read": {
+      "$and": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        }
+      ]
+    },
+    "update": null,
+    "delete": null
+  },
+  "type": "object"
+}

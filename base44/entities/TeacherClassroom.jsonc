@@ -1,0 +1,66 @@
+{
+  "name": "TeacherClassroom",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "teacher_id": {
+      "type": "string",
+      "description": "User ID of teacher"
+    },
+    "classroom_id": {
+      "type": "string"
+    },
+    "is_primary": {
+      "type": "boolean",
+      "default": false,
+      "description": "Primary teacher for classroom"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "school_id",
+    "teacher_id",
+    "classroom_id"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.teacher_id": "{{user.id}}",
+          "user_condition": {
+            "data.app_role": "TEACHER"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

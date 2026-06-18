@@ -1,0 +1,99 @@
+{
+  "name": "Discount",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "description": "Nombre del descuento"
+    },
+    "description": {
+      "type": "string"
+    },
+    "discount_type": {
+      "type": "string",
+      "enum": [
+        "PERCENTAGE",
+        "FIXED_AMOUNT"
+      ],
+      "default": "PERCENTAGE",
+      "description": "Tipo de descuento"
+    },
+    "discount_value": {
+      "type": "number",
+      "description": "Valor del descuento (% o monto fijo)"
+    },
+    "applies_to": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Conceptos a los que aplica (IDs de PaymentConcept)"
+    },
+    "applicable_to_concepts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "INSCRIPCION",
+          "COLEGIATURA",
+          "HORARIO_EXTENDIDO",
+          "EVENTO",
+          "OTRO"
+        ]
+      },
+      "description": "Tipos de conceptos a los que aplica"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "valid_from": {
+      "type": "string",
+      "format": "date"
+    },
+    "valid_until": {
+      "type": "string",
+      "format": "date"
+    },
+    "requires_approval": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si requiere aprobaci\u00f3n para aplicarse"
+    }
+  },
+  "required": [
+    "school_id",
+    "name",
+    "discount_type",
+    "discount_value"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "name": "PaymentConcept",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "concept_type": {
+      "type": "string",
+      "enum": [
+        "INSCRIPCION",
+        "COLEGIATURA",
+        "HORARIO_EXTENDIDO",
+        "EVENTO",
+        "OTRO"
+      ],
+      "default": "OTRO",
+      "description": "Tipo de concepto"
+    },
+    "default_amount": {
+      "type": "number"
+    },
+    "is_recurring": {
+      "type": "boolean",
+      "default": false
+    },
+    "recurrence": {
+      "type": "string",
+      "enum": [
+        "monthly",
+        "quarterly",
+        "yearly",
+        "once"
+      ]
+    },
+    "allows_discounts": {
+      "type": "boolean",
+      "default": true,
+      "description": "Si permite aplicar descuentos"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "school_id",
+    "name",
+    "default_amount"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

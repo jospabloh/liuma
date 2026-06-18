@@ -1,0 +1,112 @@
+{
+  "name": "SchoolSetupGuide",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string",
+      "description": "Reference to School"
+    },
+    "step_number": {
+      "type": "number",
+      "description": "Orden del paso"
+    },
+    "step_name": {
+      "type": "string",
+      "description": "Nombre del paso"
+    },
+    "description": {
+      "type": "string",
+      "description": "Descripci\u00f3n detallada del paso"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "GUARDERIA",
+        "ESCUELA",
+        "COLEGIO",
+        "GENERAL"
+      ],
+      "default": "GENERAL",
+      "description": "Categor\u00eda del paso"
+    },
+    "is_annual": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si es un paso que se revisa anualmente"
+    },
+    "school_year": {
+      "type": "string",
+      "description": "A\u00f1o escolar (ej: 2025-2026)"
+    },
+    "is_completed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si el paso est\u00e1 completado"
+    },
+    "completed_by": {
+      "type": "string",
+      "description": "User ID quien complet\u00f3"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_confirmed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "\u00daltima vez que se confirm\u00f3 que sigue vigente"
+    },
+    "confirmed_by": {
+      "type": "string",
+      "description": "User ID quien confirm\u00f3"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas adicionales"
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Documentos adjuntos para este paso"
+    }
+  },
+  "required": [
+    "school_id",
+    "step_number",
+    "step_name",
+    "category"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "data.school_id": "{{user.data.school_id}}"
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

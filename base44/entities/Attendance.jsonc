@@ -1,0 +1,165 @@
+{
+  "name": "Attendance",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string",
+      "description": "Reference to School"
+    },
+    "classroom_id": {
+      "type": "string",
+      "description": "Reference to Classroom"
+    },
+    "student_id": {
+      "type": "string",
+      "description": "Reference to Student"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de asistencia"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "present",
+        "absent",
+        "late",
+        "excused"
+      ],
+      "default": "present",
+      "description": "Estado de asistencia"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Raz\u00f3n de ausencia o retraso"
+    },
+    "recorded_by": {
+      "type": "string",
+      "description": "User ID who recorded attendance"
+    },
+    "recorded_by_name": {
+      "type": "string",
+      "description": "Name of user who recorded"
+    },
+    "parent_notified": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si se notific\u00f3 a los padres"
+    },
+    "notified_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Cu\u00e1ndo se notific\u00f3"
+    }
+  },
+  "required": [
+    "school_id",
+    "student_id",
+    "date",
+    "status",
+    "recorded_by"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "TEACHER"
+                  }
+                },
+                {
+                  "data.classroom_id": {
+                    "$in": "{{user.data.assigned_classroom_ids}}"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "data.classroom_id": {
+            "$in": "{{user.data.assigned_classroom_ids}}"
+          },
+          "user_condition": {
+            "data.app_role": "TEACHER"
+          }
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "data.student_id": {
+            "$in": "{{user.data.linked_student_ids}}"
+          },
+          "user_condition": {
+            "data.app_role": "PARENT"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "TEACHER"
+                  }
+                },
+                {
+                  "data.classroom_id": {
+                    "$in": "{{user.data.assigned_classroom_ids}}"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "delete": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        }
+      ]
+    }
+  }
+}

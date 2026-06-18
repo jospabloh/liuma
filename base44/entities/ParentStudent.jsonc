@@ -1,0 +1,82 @@
+{
+  "name": "ParentStudent",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "User ID of parent"
+    },
+    "student_id": {
+      "type": "string"
+    },
+    "relationship": {
+      "type": "string",
+      "enum": [
+        "madre",
+        "padre",
+        "tutor",
+        "abuelo",
+        "abuela",
+        "otro"
+      ],
+      "default": "tutor"
+    },
+    "is_primary": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "ACTIVE",
+        "REVOKED"
+      ],
+      "default": "PENDING"
+    }
+  },
+  "required": [
+    "school_id",
+    "parent_id",
+    "student_id"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.parent_id": "{{user.id}}",
+          "user_condition": {
+            "data.app_role": "PARENT"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

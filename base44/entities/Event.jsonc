@@ -1,0 +1,134 @@
+{
+  "name": "Event",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "time": {
+      "type": "string"
+    },
+    "end_time": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "SCHOOL",
+        "CLASSROOM"
+      ],
+      "default": "SCHOOL"
+    },
+    "classroom_id": {
+      "type": "string"
+    },
+    "requires_confirmation": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si requiere confirmaci\u00f3n de asistencia"
+    },
+    "has_cost": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si tiene costo asociado"
+    },
+    "cost_amount": {
+      "type": "number",
+      "description": "Monto del costo"
+    },
+    "cost_concept": {
+      "type": "string",
+      "description": "Concepto del pago"
+    },
+    "confirmation_deadline": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha l\u00edmite para confirmar"
+    },
+    "reminder_sent": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "school_id",
+    "title",
+    "date"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.scope": "SCHOOL"
+            },
+            {
+              "$and": [
+                {
+                  "data.scope": "CLASSROOM"
+                },
+                {
+                  "data.classroom_id": {
+                    "$in": "{{user.data.assigned_classroom_ids}}"
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "data.scope": "CLASSROOM"
+                },
+                {
+                  "data.classroom_id": {
+                    "$in": "{{user.data.linked_student_classroom_ids}}"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

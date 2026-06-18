@@ -1,0 +1,46 @@
+{
+  "name": "School",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "School name"
+    },
+    "address": {
+      "type": "string",
+      "description": "Physical address"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Contact phone"
+    },
+    "email": {
+      "type": "string",
+      "description": "Contact email"
+    },
+    "logo_url": {
+      "type": "string",
+      "description": "School logo URL"
+    },
+    "settings": {
+      "type": "object",
+      "description": "School configuration settings"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": null,
+    "read": {
+      "_id": "{{user.data.school_id}}"
+    },
+    "update": {
+      "_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": null
+  }
+}

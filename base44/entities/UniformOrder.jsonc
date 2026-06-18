@@ -1,0 +1,134 @@
+{
+  "name": "UniformOrder",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string",
+      "description": "Reference to School"
+    },
+    "student_id": {
+      "type": "string",
+      "description": "Reference to Student"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "User ID del padre que hace el pedido"
+    },
+    "parent_name": {
+      "type": "string",
+      "description": "Nombre del padre"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "type": "string",
+            "description": "Nombre del producto"
+          },
+          "size": {
+            "type": "string",
+            "description": "Talla"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Cantidad"
+          }
+        }
+      },
+      "description": "Lista de productos solicitados"
+    },
+    "measurements": {
+      "type": "object",
+      "description": "Medidas del estudiante (pecho, cintura, largo, etc.)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "PROCESSING",
+        "READY",
+        "DELIVERED",
+        "CANCELLED"
+      ],
+      "default": "PENDING",
+      "description": "Estado del pedido"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas adicionales del padre"
+    },
+    "admin_notes": {
+      "type": "string",
+      "description": "Notas del administrador"
+    },
+    "estimated_delivery": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha estimada de entrega"
+    }
+  },
+  "required": [
+    "school_id",
+    "student_id",
+    "parent_id",
+    "items"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "data.student_id": {
+            "$in": "{{user.data.linked_student_ids}}"
+          }
+        },
+        {
+          "data.parent_id": "{{user.id}}"
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "data.parent_id": "{{user.id}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "$and": [
+            {
+              "data.parent_id": "{{user.id}}"
+            },
+            {
+              "data.status": "PENDING"
+            }
+          ]
+        }
+      ]
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  }
+}

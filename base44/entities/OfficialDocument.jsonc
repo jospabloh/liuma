@@ -1,0 +1,146 @@
+{
+  "name": "OfficialDocument",
+  "properties": {
+    "description": {
+      "description": "Descripci\u00f3n del documento",
+      "type": "string"
+    },
+    "document_type": {
+      "description": "Tipo de documento",
+      "enum": [
+        "MENU",
+        "COMMUNICATION",
+        "MINUTA",
+        "UNIFORM_CATALOG"
+      ],
+      "type": "string"
+    },
+    "file_url": {
+      "description": "URL del archivo PDF",
+      "type": "string"
+    },
+    "is_current": {
+      "default": true,
+      "description": "Si es el documento actual/vigente",
+      "type": "boolean"
+    },
+    "school_id": {
+      "description": "Reference to School",
+      "type": "string"
+    },
+    "target_audience": {
+      "default": "TODOS",
+      "description": "Audiencia objetivo",
+      "enum": [
+        "TODOS",
+        "PADRES",
+        "MAESTROS",
+        "ADMINS"
+      ],
+      "type": "string"
+    },
+    "title": {
+      "description": "T\u00edtulo del documento",
+      "type": "string"
+    },
+    "uploaded_by": {
+      "description": "User ID que lo subi\u00f3",
+      "type": "string"
+    },
+    "uploaded_by_name": {
+      "description": "Nombre de quien lo subi\u00f3",
+      "type": "string"
+    },
+    "valid_from": {
+      "description": "Fecha de inicio de validez",
+      "format": "date",
+      "type": "string"
+    },
+    "valid_until": {
+      "description": "Fecha de fin de validez",
+      "format": "date",
+      "type": "string"
+    }
+  },
+  "required": [
+    "school_id",
+    "title",
+    "document_type",
+    "file_url",
+    "uploaded_by"
+  ],
+  "rls": {
+    "create": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "delete": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    },
+    "read": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.document_type": "UNIFORM_CATALOG"
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "TEACHER"
+                  }
+                },
+                {
+                  "data.target_audience": {
+                    "$in": [
+                      "TODOS",
+                      "MAESTROS"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  }
+                },
+                {
+                  "data.target_audience": {
+                    "$in": [
+                      "TODOS",
+                      "PADRES"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "update": {
+      "data.school_id": "{{user.data.school_id}}",
+      "user_condition": {
+        "data.app_role": "ADMIN"
+      }
+    }
+  },
+  "type": "object"
+}

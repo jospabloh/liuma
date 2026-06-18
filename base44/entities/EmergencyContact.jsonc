@@ -1,0 +1,164 @@
+{
+  "name": "EmergencyContact",
+  "type": "object",
+  "properties": {
+    "student_id": {
+      "type": "string"
+    },
+    "school_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "relationship": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "is_authorized_pickup": {
+      "type": "boolean",
+      "default": false
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "student_id",
+    "school_id",
+    "name",
+    "phone"
+  ],
+  "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  }
+                },
+                {
+                  "data.student_id": {
+                    "$in": "{{user.data.linked_student_ids}}"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "TEACHER"
+              }
+            },
+            {
+              "data.student_id": {
+                "$in": "{{user.data.assigned_student_ids}}"
+              }
+            }
+          ]
+        },
+        {
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "PARENT"
+              }
+            },
+            {
+              "data.student_id": {
+                "$in": "{{user.data.linked_student_ids}}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "update": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  }
+                },
+                {
+                  "data.student_id": {
+                    "$in": "{{user.data.linked_student_ids}}"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "delete": {
+      "$and": [
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  }
+                },
+                {
+                  "data.student_id": {
+                    "$in": "{{user.data.linked_student_ids}}"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

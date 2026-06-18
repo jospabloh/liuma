@@ -191,6 +191,42 @@ export function normalizeSubscription(subscription, now = new Date()) {
 }
 
 /**
+ * Effective licensed student capacity for a tenant. Trial previews the largest
+ * capacity (so trials are never blocked); paid tiers use their own limit.
+ * Returns a number, or null for unlimited.
+ */
+export function effectiveStudentLimit(licenseTier, billingStatus) {
+  if (billingStatus === 'trial') return PLAN_LIMITS.plus; // largest (null = unlimited)
+  return PLAN_LIMITS[licenseTier] ?? null;
+}
+
+/**
+ * Evaluate the student quota for a tenant. Gating only bites when `gatingEnabled`
+ * is on and the actor is not the ACACIA platform owner (who always bypasses).
+ *
+ * Returns:
+ *   - limit:      effective cap (null = unlimited)
+ *   - used:       current active student count
+ *   - remaining:  slots left (null = unlimited)
+ *   - exceeded:   true when a NEW student would breach the cap
+ *   - gatingActive: whether the cap is actually being enforced
+ */
+export function evaluateStudentQuota({
+  licenseTier,
+  billingStatus,
+  activeStudentCount = 0,
+  gatingEnabled = false,
+  isPlatformOwner = false,
+} = {}) {
+  const limit = effectiveStudentLimit(licenseTier, billingStatus);
+  const gatingActive = Boolean(gatingEnabled) && !isPlatformOwner && limit != null;
+  const remaining = limit == null ? null : Math.max(0, limit - activeStudentCount);
+  const exceeded = gatingActive && activeStudentCount >= limit;
+
+  return { limit, used: activeStudentCount, remaining, exceeded, gatingActive };
+}
+
+/**
  * Build the SchoolSubscription payload for a freshly-created school's 30-day
  * trial. Used by onboarding (mirrors FlowFin's trial seeding).
  */

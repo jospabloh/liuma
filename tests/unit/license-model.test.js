@@ -5,6 +5,7 @@ import {
   planRank, planLabel, isReadOnlyStatus, currentPeriod, computeTrialDaysLeft,
   calculateExpiry, normalizeSubscription, buildTrialSubscription,
   buildActivationUpdate, buildPaymentConfirmationUpdate,
+  effectiveStudentLimit, evaluateStudentQuota,
 } from '../../src/lib/license/licenseModel.js';
 
 test('tiers are ordered start < growth < plus and limits track the catalog', () => {
@@ -96,6 +97,41 @@ test('buildActivationUpdate sets activation metadata and derives the limit', () 
   assert.equal(update.activated_by_admin, 'owner@acaciaco.com.mx');
   assert.equal(update.license_activated_at, now.toISOString());
   assert.throws(() => buildActivationUpdate({ license_tier: 'bogus' }), /Tier inválido/);
+});
+
+test('effectiveStudentLimit: trial previews the largest capacity; paid tiers use their own', () => {
+  assert.equal(effectiveStudentLimit('start', 'trial'), PLAN_LIMITS.plus); // null (unlimited)
+  assert.equal(effectiveStudentLimit('start', 'active'), PLAN_LIMITS.start);
+  assert.equal(effectiveStudentLimit('growth', 'active'), PLAN_LIMITS.growth);
+  assert.equal(effectiveStudentLimit('plus', 'active'), null);
+});
+
+test('evaluateStudentQuota only bites when gating is on and actor is not the owner', () => {
+  // Gating off → never exceeded.
+  let q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 200, gatingEnabled: false });
+  assert.equal(q.exceeded, false);
+  assert.equal(q.gatingActive, false);
+
+  // Gating on, start tier (150), at/over limit → exceeded.
+  q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 150, gatingEnabled: true });
+  assert.equal(q.exceeded, true);
+  assert.equal(q.remaining, 0);
+
+  // Under the limit → allowed, remaining reflects slots left.
+  q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 149, gatingEnabled: true });
+  assert.equal(q.exceeded, false);
+  assert.equal(q.remaining, 1);
+
+  // Platform owner bypasses gating entirely.
+  q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 999, gatingEnabled: true, isPlatformOwner: true });
+  assert.equal(q.exceeded, false);
+  assert.equal(q.gatingActive, false);
+
+  // Trial previews unlimited capacity → never exceeded.
+  q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'trial', activeStudentCount: 999, gatingEnabled: true });
+  assert.equal(q.exceeded, false);
+  assert.equal(q.limit, null);
+  assert.equal(q.remaining, null);
 });
 
 test('buildPaymentConfirmationUpdate activates, records payment, computes expiry', () => {

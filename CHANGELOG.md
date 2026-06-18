@@ -5,6 +5,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Removed
+
+- **Stripe dependencies removed**: `@stripe/react-stripe-js` and `@stripe/stripe-js`
+  were listed in `package.json` but never imported anywhere in `src/` — the payments
+  pages only read and display `ChargeItem` records, with no card-processing flow.
+  Payment collection is handled through Mercado Pago, so the unused Stripe packages
+  were dropped to slim the dependency tree and avoid implying a Stripe integration
+  exists. No application code changed; the full 87-test suite and build remain green.
+
+---
+
 ## [1.0.8] - 2026-06-15
 
 ### Documentation

@@ -1,4 +1,5 @@
 import { DEFAULT_THEME } from './tenantTheme.js';
+import { buildConsentRecordPayload } from './consent/privacyNotice.js';
 
 export const ONBOARDING_ERROR_CODES = {
   VALIDATION: 'validation_error',
@@ -239,6 +240,51 @@ async function ensureTenantBootstrapRecords(base44, schoolId, ownerProfileId) {
   return created;
 }
 
+/**
+ * Persist the privacy-notice consent the user gave during onboarding. Required
+ * by the LFPDPPP for processing minors' sensitive data. Best-effort: a missing
+ * ConsentRecord entity (not yet created in Base44) must never block onboarding,
+ * so both writes are guarded. The AuditLog write provides a durable trail using
+ * an entity that already exists.
+ */
+async function persistOnboardingConsent({ base44, logAuditEvent, user, schoolId, role, consent }) {
+  if (!consent) return;
+
+  const payload = buildConsentRecordPayload({
+    user,
+    schoolId,
+    role,
+    acceptances: consent.acceptances,
+    noticeVersion: consent.noticeVersion,
+    at: consent.acceptedAt,
+    userAgent: consent.userAgent,
+  });
+
+  try {
+    if (base44?.entities?.ConsentRecord?.create) {
+      await base44.entities.ConsentRecord.create(payload);
+    }
+  } catch (error) {
+    console.error('consent_record_persist_failed', { message: String(error?.message || error) });
+  }
+
+  try {
+    if (typeof logAuditEvent === 'function') {
+      await logAuditEvent({
+        user,
+        userProfile: { school_id: schoolId, app_role: role },
+        entity: 'ConsentRecord',
+        entityId: user?.id || 'unknown',
+        action: 'PRIVACY_CONSENT_ACCEPTED',
+        reason: `aviso_de_privacidad ${payload.notice_version}`,
+        context: payload,
+      });
+    }
+  } catch (error) {
+    console.error('consent_audit_persist_failed', { message: String(error?.message || error) });
+  }
+}
+
 async function upsertUserProfile(UserProfile, profilePayload) {
   const existingProfiles = await UserProfile.filter({
     user_id: profilePayload.user_id,
@@ -262,6 +308,7 @@ export async function completeOnboardingTenantCreation({
   formData,
   logoFile,
   themePreview,
+  consent,
 }) {
   const validation = validateOnboardingPayload({ formData, user });
   if (!validation.valid) {
@@ -300,6 +347,8 @@ export async function completeOnboardingTenantCreation({
 
   const profilePayload = buildUserProfilePayload({ formData, user, schoolId });
   const profileId = await upsertUserProfile(base44.entities.UserProfile, profilePayload);
+
+  await persistOnboardingConsent({ base44, logAuditEvent, user, schoolId, role: formData.role, consent });
 
   if (formData.role === 'ADMIN') {
     await ensureTenantBootstrapRecords(base44, schoolId, profileId);

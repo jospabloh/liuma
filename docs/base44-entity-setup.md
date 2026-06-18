@@ -92,6 +92,33 @@ by the denormalized `requester_user_id`.
   {{user.school_id}}`) OR app owner (`is_super_admin`). The app writes
   `requester_user_id` onto every message (`src/lib/support/tickets.js`).
 
+## Optional — `ConsentRecord` (privacy-consent artifact)
+
+Onboarding now captures express LFPDPPP consent (general Aviso de Privacidad +
+sensitive minors' data) and **persists it best-effort** to a `ConsentRecord`
+entity, falling back to an `AuditLog` event (`PRIVACY_CONSENT_ACCEPTED`) so the
+proof is stored even if this entity doesn't exist yet. Create it for a clean,
+queryable consent log:
+
+| Field | Type | Required |
+| --- | --- | --- |
+| `user_id` | string | yes |
+| `school_id` | string | yes |
+| `app_role` | enum: ADMIN, TEACHER, PARENT |  |
+| `notice_version` | string | yes — pins the Aviso de Privacidad version accepted |
+| `accepted_general` | boolean | yes |
+| `accepted_sensitive_minor_data` | boolean | yes |
+| `accepted_scopes` | array |  |
+| `accepted_at` | datetime | yes |
+| `user_agent` | string |  |
+
+RLS: **read** = the subject (`user_id == {{user.id}}`) OR same-school ADMIN OR
+app owner; **create** = signed-in user where `user_id == {{user.id}}`; **update
+/ delete** = none (consent records are immutable evidence).
+
+Also: publish the actual Aviso de Privacidad and update `PRIVACY_NOTICE_URL` /
+`PRIVACY_NOTICE_VERSION` in `src/lib/consent/privacyNotice.js`.
+
 ## After creating the entities
 
 1. Attach `docs/user-manual.md` as the knowledge source for the `lumi` agent so

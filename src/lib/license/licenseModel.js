@@ -80,6 +80,7 @@ export const PLAN_CATALOG = {
       'Mejor soporte para crecimiento',
       'Alumnos ilimitados',
     ],
+    enterpriseNote: 'Más de 2,000 alumnos: contáctanos para un plan a medida.',
   },
 };
 
@@ -191,6 +192,27 @@ export function normalizeSubscription(subscription, now = new Date()) {
 }
 
 /**
+ * Grace buffer applied over a tier's licensed cap before a NEW student is hard
+ * blocked. Within the buffer the admin can keep adding (e.g. mid-year
+ * enrollment) but sees an "over your plan — upgrade" warning. 0.10 = +10%.
+ */
+export const GRACE_BUFFER_RATIO = 0.10;
+
+/**
+ * Soft enterprise threshold for unlimited (Plus) tenants. Past this we suggest
+ * contacting sales for a tailored plan — protects against a very large
+ * institution sitting on a flat unlimited price.
+ */
+export const ENTERPRISE_CONTACT_THRESHOLD = 2000;
+
+/** Next tier up, or null if already on the top tier. */
+export function nextTier(tier) {
+  const idx = PLAN_TIERS.indexOf(tier);
+  if (idx < 0 || idx >= PLAN_TIERS.length - 1) return null;
+  return PLAN_TIERS[idx + 1];
+}
+
+/**
  * Effective licensed student capacity for a tenant. Trial previews the largest
  * capacity (so trials are never blocked); paid tiers use their own limit.
  * Returns a number, or null for unlimited.
@@ -200,16 +222,27 @@ export function effectiveStudentLimit(licenseTier, billingStatus) {
   return PLAN_LIMITS[licenseTier] ?? null;
 }
 
+/** Hard cap (licensed limit + grace buffer). Null when the plan is unlimited. */
+export function hardStudentLimit(limit, graceRatio = GRACE_BUFFER_RATIO) {
+  if (limit == null) return null;
+  // Subtract a tiny epsilon so floating-point noise (e.g. 400*1.1 = 440.0000…6)
+  // doesn't round a whole-number result up by one.
+  return Math.ceil(limit * (1 + graceRatio) - 1e-9);
+}
+
 /**
  * Evaluate the student quota for a tenant. Gating only bites when `gatingEnabled`
  * is on and the actor is not the ACACIA platform owner (who always bypasses).
  *
  * Returns:
- *   - limit:      effective cap (null = unlimited)
- *   - used:       current active student count
- *   - remaining:  slots left (null = unlimited)
- *   - exceeded:   true when a NEW student would breach the cap
+ *   - limit:        effective licensed cap (null = unlimited)
+ *   - hardLimit:    cap + grace buffer; new students are blocked at/after this
+ *   - used:         current active student count
+ *   - remaining:    slots left until the licensed cap (null = unlimited)
+ *   - overLimit:    at/over the licensed cap but still within grace (warn, allow)
+ *   - exceeded:     at/over the hard limit — a NEW student is blocked
  *   - gatingActive: whether the cap is actually being enforced
+ *   - salesContactSuggested: unlimited tenant past the enterprise threshold
  */
 export function evaluateStudentQuota({
   licenseTier,
@@ -220,10 +253,15 @@ export function evaluateStudentQuota({
 } = {}) {
   const limit = effectiveStudentLimit(licenseTier, billingStatus);
   const gatingActive = Boolean(gatingEnabled) && !isPlatformOwner && limit != null;
+  const hardLimit = hardStudentLimit(limit);
   const remaining = limit == null ? null : Math.max(0, limit - activeStudentCount);
-  const exceeded = gatingActive && activeStudentCount >= limit;
+  const overLimit = gatingActive && activeStudentCount >= limit;
+  const exceeded = gatingActive && hardLimit != null && activeStudentCount >= hardLimit;
 
-  return { limit, used: activeStudentCount, remaining, exceeded, gatingActive };
+  // Advisory only (independent of gating): a very large unlimited tenant.
+  const salesContactSuggested = limit == null && activeStudentCount >= ENTERPRISE_CONTACT_THRESHOLD;
+
+  return { limit, hardLimit, used: activeStudentCount, remaining, overLimit, exceeded, gatingActive, salesContactSuggested };
 }
 
 /**

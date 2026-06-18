@@ -6,6 +6,7 @@ import {
   calculateExpiry, normalizeSubscription, buildTrialSubscription,
   buildActivationUpdate, buildPaymentConfirmationUpdate,
   effectiveStudentLimit, evaluateStudentQuota,
+  hardStudentLimit, nextTier, GRACE_BUFFER_RATIO, ENTERPRISE_CONTACT_THRESHOLD,
 } from '../../src/lib/license/licenseModel.js';
 
 test('tiers are ordered start < growth < plus and limits track the catalog', () => {
@@ -107,24 +108,22 @@ test('effectiveStudentLimit: trial previews the largest capacity; paid tiers use
 });
 
 test('evaluateStudentQuota only bites when gating is on and actor is not the owner', () => {
-  // Gating off → never exceeded.
+  // Gating off → never exceeded/over.
   let q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 200, gatingEnabled: false });
   assert.equal(q.exceeded, false);
+  assert.equal(q.overLimit, false);
   assert.equal(q.gatingActive, false);
 
-  // Gating on, start tier (150), at/over limit → exceeded.
-  q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 150, gatingEnabled: true });
-  assert.equal(q.exceeded, true);
-  assert.equal(q.remaining, 0);
-
-  // Under the limit → allowed, remaining reflects slots left.
+  // Under the limit → allowed, remaining reflects slots left, not over.
   q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 149, gatingEnabled: true });
+  assert.equal(q.overLimit, false);
   assert.equal(q.exceeded, false);
   assert.equal(q.remaining, 1);
 
   // Platform owner bypasses gating entirely.
   q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 999, gatingEnabled: true, isPlatformOwner: true });
   assert.equal(q.exceeded, false);
+  assert.equal(q.overLimit, false);
   assert.equal(q.gatingActive, false);
 
   // Trial previews unlimited capacity → never exceeded.
@@ -132,6 +131,48 @@ test('evaluateStudentQuota only bites when gating is on and actor is not the own
   assert.equal(q.exceeded, false);
   assert.equal(q.limit, null);
   assert.equal(q.remaining, null);
+});
+
+test('grace buffer: over the cap warns but allows; only the hard limit blocks', () => {
+  assert.equal(GRACE_BUFFER_RATIO, 0.10);
+  assert.equal(hardStudentLimit(150), 165); // 150 * 1.10
+  assert.equal(hardStudentLimit(400), 440);
+  assert.equal(hardStudentLimit(null), null);
+
+  // At the licensed cap (150): within grace → warn, still allowed.
+  let q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 150, gatingEnabled: true });
+  assert.equal(q.overLimit, true);
+  assert.equal(q.exceeded, false);
+  assert.equal(q.hardLimit, 165);
+
+  // Inside the buffer (164): still allowed.
+  q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 164, gatingEnabled: true });
+  assert.equal(q.overLimit, true);
+  assert.equal(q.exceeded, false);
+
+  // At the hard limit (165): blocked.
+  q = evaluateStudentQuota({ licenseTier: 'start', billingStatus: 'active', activeStudentCount: 165, gatingEnabled: true });
+  assert.equal(q.exceeded, true);
+});
+
+test('enterprise threshold flags very large unlimited tenants for sales (advisory)', () => {
+  assert.equal(ENTERPRISE_CONTACT_THRESHOLD, 2000);
+  // Plus / unlimited under the threshold → no nudge, no gating.
+  let q = evaluateStudentQuota({ licenseTier: 'plus', billingStatus: 'active', activeStudentCount: 1999, gatingEnabled: true });
+  assert.equal(q.limit, null);
+  assert.equal(q.exceeded, false);
+  assert.equal(q.salesContactSuggested, false);
+  // Past the threshold → suggest contacting sales, but still never hard-blocked.
+  q = evaluateStudentQuota({ licenseTier: 'plus', billingStatus: 'active', activeStudentCount: 2000, gatingEnabled: true });
+  assert.equal(q.salesContactSuggested, true);
+  assert.equal(q.exceeded, false);
+});
+
+test('nextTier walks start → growth → plus → null', () => {
+  assert.equal(nextTier('start'), 'growth');
+  assert.equal(nextTier('growth'), 'plus');
+  assert.equal(nextTier('plus'), null);
+  assert.equal(nextTier('bogus'), null);
 });
 
 test('buildPaymentConfirmationUpdate activates, records payment, computes expiry', () => {

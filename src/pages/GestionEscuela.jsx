@@ -31,6 +31,9 @@ import UpgradePlansModal from '@/components/subscription/UpgradePlansModal';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useStudentQuota } from '@/hooks/useStudentQuota';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { ENTERPRISE_CONTACT_THRESHOLD } from '@/lib/license/licenseModel';
+
+const CONTACT_FORM_URL = 'https://forms.gle/jLQ4EtWmQhkSsahy9';
 
 export default function GestionEscuela() {
   const queryClient = useQueryClient();
@@ -141,9 +144,9 @@ export default function GestionEscuela() {
 
   const handleOpenStudentForm = () => {
     if (!guardWrite(canWrite, blockReadOnly)) return;
-    // Enforce the licensed student capacity before letting the admin add more.
+    // Hard-block only past the grace buffer; within grace adding is still allowed.
     if (studentQuota.exceeded) {
-      toast.error(`Alcanzaste el límite de ${studentQuota.limit} alumnos de tu plan.`);
+      toast.error(`Alcanzaste el máximo de tu plan (${studentQuota.limit} + margen). Mejora tu licencia para agregar más alumnos.`);
       setShowUpgrade(true);
       return;
     }
@@ -238,10 +241,25 @@ export default function GestionEscuela() {
         </TabsContent>
 
         <TabsContent value="students">
+          {/* Over-plan warning while within the grace buffer (still allowed). */}
+          {studentQuota.overLimit && !studentQuota.exceeded && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-center justify-between gap-3">
+              <span>Estás por encima de tu plan ({studentQuota.used}/{studentQuota.limit} alumnos). Mejora tu licencia para más capacidad.</span>
+              <Button size="sm" variant="outline" className="border-amber-300 text-amber-800 shrink-0" onClick={() => setShowUpgrade(true)}>Mejorar</Button>
+            </div>
+          )}
+          {/* Enterprise nudge for very large unlimited (Plus) schools. */}
+          {studentQuota.salesContactSuggested && (
+            <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800">
+              Tienes más de {ENTERPRISE_CONTACT_THRESHOLD.toLocaleString('es-MX')} alumnos.{' '}
+              <a href={CONTACT_FORM_URL} target="_blank" rel="noreferrer" className="font-semibold underline">Contáctanos</a>{' '}
+              para un plan a medida.
+            </div>
+          )}
           <div className="flex items-center justify-between mb-4 gap-3">
             {studentQuota.gatingActive && studentQuota.limit != null ? (
-              <p className={`text-xs font-medium ${studentQuota.exceeded ? 'text-red-600' : 'text-slate-500'}`}>
-                {studentQuota.used} / {studentQuota.limit} alumnos licenciados
+              <p className={`text-xs font-medium ${studentQuota.exceeded ? 'text-red-600' : studentQuota.overLimit ? 'text-amber-600' : 'text-slate-500'}`}>
+                {studentQuota.used} / {studentQuota.limit} alumnos licenciados{studentQuota.exceeded ? ' · límite alcanzado' : ''}
               </p>
             ) : <span />}
             <Button onClick={handleOpenStudentForm} disabled={!canWrite} className="bg-green-600 hover:bg-green-700 gap-1">

@@ -25,6 +25,7 @@ import {
 } from '@/lib/support/tickets';
 import { isSlaBreached } from '@/lib/support/sla';
 import { nextStatusesFor } from '@/lib/support/statusMachine';
+import { isPlatformOwner } from '@/lib/support/owner';
 import { SUPPORT_AUTHOR_ROLE, SUPPORT_STATUS, TERMINAL_STATUSES } from '@/lib/support/constants';
 import TicketThread from '@/components/support/TicketThread';
 import { SupportStatusBadge, SupportPriorityBadge, STATUS_LABELS } from '@/components/support/labels.jsx';
@@ -49,12 +50,15 @@ export default function SoporteAdmin() {
     enabled: !!user,
   });
 
-  const isOwner = !!userProfile?.is_super_admin;
+  // Platform-owner detection: prefer the server-persisted super-admin flag, but
+  // fall back to the authenticated Base44 User.role (the app creator is `admin`)
+  // since the deployed UserProfile schema may not expose `is_super_admin`.
+  const isOwner = isPlatformOwner({ userProfile, user });
   const staffRole = isOwner ? SUPPORT_AUTHOR_ROLE.OWNER : SUPPORT_AUTHOR_ROLE.SCHOOL_ADMIN;
 
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ['supportQueue', userProfile?.id, isOwner],
-    queryFn: () => listQueueTickets(userProfile),
+    queryFn: () => listQueueTickets(userProfile, { isOwner }),
     enabled: !!userProfile,
   });
 

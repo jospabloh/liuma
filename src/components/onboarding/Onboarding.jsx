@@ -4,11 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { base44 } from '@/api/base44Client';
 import { notificationService } from '@/lib/notifications/service';
 import { Loader2, School, GraduationCap, Users, ArrowRight, Check, Upload } from 'lucide-react';
 import { extractPaletteFromFile, DEFAULT_THEME } from '@/lib/tenantTheme';
 import { logAuditEvent } from '@/lib/audit';
+import {
+  PRIVACY_NOTICE_VERSION,
+  PRIVACY_NOTICE_URL,
+  consentIsComplete,
+  sensitiveConsentLabel,
+} from '@/lib/consent/privacyNotice';
 import {
   captureOnboardingFailure,
   completeOnboardingTenantCreation,
@@ -32,6 +39,7 @@ export default function Onboarding({ user, onComplete }) {
   });
   const [logoFile, setLogoFile] = useState(null);
   const [themePreview, setThemePreview] = useState(DEFAULT_THEME);
+  const [consent, setConsent] = useState({ general: false, sensitive: false });
 
   const colorRoles = useMemo(() => ['primary', 'secondary', 'accent', 'neutral'], []);
 
@@ -61,6 +69,12 @@ export default function Onboarding({ user, onComplete }) {
         formData,
         logoFile,
         themePreview,
+        consent: {
+          acceptances: consent,
+          noticeVersion: PRIVACY_NOTICE_VERSION,
+          acceptedAt: new Date().toISOString(),
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        },
       });
       onComplete();
     } catch (error) {
@@ -299,19 +313,57 @@ export default function Onboarding({ user, onComplete }) {
                 
                 <div className="bg-slate-50 rounded-xl p-4 mt-4">
                   <p className="text-sm text-slate-600">
-                    {formData.role === 'ADMIN' 
+                    {formData.role === 'ADMIN'
                       ? 'Tu cuenta se activará inmediatamente y tendrás acceso completo.'
                       : 'Tu solicitud será enviada al administrador de la escuela para aprobación. Recibirás un correo cuando sea aprobada.'}
                   </p>
                 </div>
-                
+
+                {/* Privacy notice + express consent (LFPDPPP) */}
+                <div className="border border-slate-200 rounded-xl p-4 mt-4 space-y-3">
+                  <p className="text-sm font-medium text-slate-700">Aviso de Privacidad y consentimiento</p>
+
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={consent.general}
+                      onCheckedChange={(value) => setConsent((c) => ({ ...c, general: value === true }))}
+                      className="mt-0.5"
+                      aria-label="Acepto el Aviso de Privacidad"
+                    />
+                    <span className="text-sm text-slate-600">
+                      He leído y acepto el{' '}
+                      <a
+                        href={PRIVACY_NOTICE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 underline"
+                      >
+                        Aviso de Privacidad
+                      </a>{' '}
+                      y el tratamiento de mis datos personales.
+                    </span>
+                  </label>
+
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={consent.sensitive}
+                      onCheckedChange={(value) => setConsent((c) => ({ ...c, sensitive: value === true }))}
+                      className="mt-0.5"
+                      aria-label="Consentimiento expreso de datos sensibles"
+                    />
+                    <span className="text-sm text-slate-600">{sensitiveConsentLabel(formData.role)}</span>
+                  </label>
+
+                  <p className="text-xs text-slate-400">Versión del aviso: {PRIVACY_NOTICE_VERSION}</p>
+                </div>
+
                 <div className="flex gap-3 mt-6">
                   <Button variant="outline" onClick={() => setStep(2)} className="flex-1 h-12">
                     Atrás
                   </Button>
                   <Button
                     onClick={handleSubmit}
-                    disabled={isLoading}
+                    disabled={isLoading || !consentIsComplete(consent)}
                     className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12"
                   >
                     {isLoading ? (

@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Onboarding privacy consent (LFPDPPP)**: the final onboarding step now
+  requires two explicit acceptances before an account can be created — the
+  **Aviso de Privacidad** (general) and **express consent for processing minors'
+  sensitive data** (blood type, allergies, medical notes), with role-specific
+  wording for parents vs. staff. The accepted notice version, scopes, timestamp,
+  and user agent are persisted best-effort to a new `ConsentRecord` entity and,
+  as a durable fallback, to `AuditLog` (`PRIVACY_CONSENT_ACCEPTED`) — so consent
+  is recorded even before the entity exists in Base44. New pure module
+  `src/lib/consent/privacyNotice.js` (+4 tests, 115 total). Publish the real
+  Aviso de Privacidad and set `PRIVACY_NOTICE_URL` / `PRIVACY_NOTICE_VERSION`.
+
 ### Changed
 
 - **Support owner detection hardened**: the cross-tenant support queue

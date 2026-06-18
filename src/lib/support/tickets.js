@@ -139,9 +139,12 @@ export async function createSupportTicket({
   });
 
   // Seed the thread: the requester's description (and the AI attempt, if any).
+  // `requester_user_id` is denormalized onto every message so Base44 RLS can
+  // scope reads to the ticket's own requester (it can't join to the parent).
   await base44.entities.SupportTicketMessage.create({
     ticket_id: ticket.id,
     school_id: schoolId,
+    requester_user_id: user.id,
     author_user_id: user.id,
     author_role: SUPPORT_AUTHOR_ROLE.REQUESTER,
     body: description,
@@ -151,6 +154,7 @@ export async function createSupportTicket({
     await base44.entities.SupportTicketMessage.create({
       ticket_id: ticket.id,
       school_id: schoolId,
+      requester_user_id: user.id,
       author_user_id: null,
       author_role: SUPPORT_AUTHOR_ROLE.AI,
       body: aiResolutionSummary,
@@ -190,6 +194,7 @@ export async function addSupportMessage({ user, userProfile, ticket, body, autho
   const message = await base44.entities.SupportTicketMessage.create({
     ticket_id: ticket.id,
     school_id: ticket.school_id,
+    requester_user_id: ticket.requester_user_id,
     author_user_id: user.id,
     author_role: authorRole,
     body,
@@ -255,6 +260,7 @@ export async function transitionTicketStatus({ user, userProfile, ticket, toStat
     await base44.entities.SupportTicketMessage.create({
       ticket_id: ticket.id,
       school_id: ticket.school_id,
+      requester_user_id: ticket.requester_user_id,
       author_user_id: user.id,
       author_role: SUPPORT_AUTHOR_ROLE.SYSTEM,
       body: note,

@@ -27,13 +27,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import UpgradePlansModal from '@/components/subscription/UpgradePlansModal';
+import { useStudentQuota } from '@/hooks/useStudentQuota';
 
 export default function GestionEscuela() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const studentQuota = useStudentQuota();
   const [activeTab, setActiveTab] = useState('classrooms');
   const [showClassroomForm, setShowClassroomForm] = useState(false);
   const [showStudentForm, setShowStudentForm] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [classroomForm, setClassroomForm] = useState({ name: '', grade: '' });
   const [studentForm, setStudentForm] = useState({ 
     first_name: '', 
@@ -129,8 +133,24 @@ export default function GestionEscuela() {
     });
   };
 
+  const handleOpenStudentForm = () => {
+    // Enforce the licensed student capacity before letting the admin add more.
+    if (studentQuota.exceeded) {
+      toast.error(`Alcanzaste el límite de ${studentQuota.limit} alumnos de tu plan.`);
+      setShowUpgrade(true);
+      return;
+    }
+    setShowStudentForm(true);
+  };
+
   const handleCreateStudent = (e) => {
     e.preventDefault();
+    // Guard again at submit time in case the count changed while the form was open.
+    if (studentQuota.exceeded) {
+      setShowStudentForm(false);
+      setShowUpgrade(true);
+      return;
+    }
     createStudentMutation.mutate({
       ...studentForm,
       school_id: userProfile.school_id,
@@ -208,8 +228,13 @@ export default function GestionEscuela() {
         </TabsContent>
 
         <TabsContent value="students">
-          <div className="flex justify-end mb-4">
-            <Button onClick={() => setShowStudentForm(true)} className="bg-green-600 hover:bg-green-700 gap-1">
+          <div className="flex items-center justify-between mb-4 gap-3">
+            {studentQuota.gatingActive && studentQuota.limit != null ? (
+              <p className={`text-xs font-medium ${studentQuota.exceeded ? 'text-red-600' : 'text-slate-500'}`}>
+                {studentQuota.used} / {studentQuota.limit} alumnos licenciados
+              </p>
+            ) : <span />}
+            <Button onClick={handleOpenStudentForm} className="bg-green-600 hover:bg-green-700 gap-1">
               <Plus className="w-4 h-4" /> Nuevo alumno
             </Button>
           </div>
@@ -251,6 +276,13 @@ export default function GestionEscuela() {
           )}
         </TabsContent>
       </Tabs>
+
+      <UpgradePlansModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        currentTier={studentQuota.licenseTier}
+        reason={`Tu plan permite hasta ${studentQuota.limit} alumnos. Mejora tu licencia para agregar más.`}
+      />
 
       {/* Create Classroom Modal */}
       <Dialog open={showClassroomForm} onOpenChange={setShowClassroomForm}>

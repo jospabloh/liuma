@@ -40,8 +40,9 @@ export const FEATURE_TIERS = {
 };
 
 /**
- * Gating master switch — set VITE_PAYWALL_GATING_ENABLED=true in the build env
- * to enforce tier gates. Default off so the rollout is opt-in.
+ * Gating master switch. Tier gating is ON by default; set
+ * VITE_PAYWALL_GATING_ENABLED=false in the build env to disable it (e.g. for a
+ * sandbox tenant). The ACACIA platform owner always bypasses gating regardless.
  */
 export const PAYWALL_GATING_ENABLED =
-  import.meta.env.VITE_PAYWALL_GATING_ENABLED === 'true';
+  import.meta.env.VITE_PAYWALL_GATING_ENABLED !== 'false';

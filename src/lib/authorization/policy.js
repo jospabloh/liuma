@@ -68,6 +68,20 @@ const POLICY = {
     write: [ROLES.ADMIN],
     scope: ['school_id', 'student_id'],
   },
+  // Support desk. Any in-school role can open and read tickets; row-level
+  // scoping (own tickets for the requester, school tickets for the director,
+  // all tickets for the super-admin owner) is enforced in the support data
+  // layer and by Base44 RLS — see docs/support-system.md.
+  SupportTicket: {
+    read: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
+    write: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
+    scope: ['school_id', 'requester_user_id'],
+  },
+  SupportTicketMessage: {
+    read: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
+    write: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
+    scope: ['school_id', 'ticket_id'],
+  },
 };
 
 function resolvePolicyDecision({ role, entity, action }) {

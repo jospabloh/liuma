@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck, KeyRound } from 'lucide-react';
+import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck, KeyRound, Headset } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import { format } from 'date-fns';
@@ -330,6 +330,15 @@ export default function AdminHome({ user, userProfile, subscription }) {
             color="from-lime-50 to-white"
             iconColor="text-lime-600"
             delay={0.7}
+          />
+          <BigTile
+            icon={Headset}
+            title="Soporte"
+            subtitle="Tickets de tu escuela"
+            href={createPageUrl('SoporteAdmin')}
+            color="from-violet-50 to-white"
+            iconColor="text-violet-600"
+            delay={0.74}
           />
         </div>
 

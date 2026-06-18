@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -33,6 +33,13 @@ export default function GlobalLumiBubble() {
 
   const handleChatClose = useCallback(() => {
     setIsOpen(false);
+  }, []);
+
+  // Allow other parts of the app (e.g. the Soporte page) to open the assistant.
+  useEffect(() => {
+    const openLumi = () => setIsOpen(true);
+    window.addEventListener('lumi:open', openLumi);
+    return () => window.removeEventListener('lumi:open', openLumi);
   }, []);
 
   if (hidden) return null;

@@ -42,4 +42,50 @@ export const NOTIFICATION_TEMPLATES = {
     inAppTitle: () => '🚨 Alerta de emergencia',
     inAppContent: ({ message }) => message,
   },
+  support_ticket_escalated: {
+    subject: ({ ticketNumber, subjectText }) => `Nuevo ticket de soporte ${ticketNumber}: ${subjectText}`,
+    emailBody: ({ ticketNumber, subjectText, requesterName, categoryLabel, priorityLabel, slaDateLabel, description }) => `
+      <h2>Nuevo ticket de soporte escalado</h2>
+      <p>Se ha escalado una solicitud que requiere tu atención.</p>
+      <div style="background: #eef2ff; padding: 16px; border-radius: 8px; border: 1px solid #c7d2fe; margin: 16px 0;">
+        <p><strong>Ticket:</strong> ${ticketNumber}</p>
+        <p><strong>Asunto:</strong> ${subjectText}</p>
+        <p><strong>Solicitante:</strong> ${requesterName}</p>
+        <p><strong>Categoría:</strong> ${categoryLabel}</p>
+        <p><strong>Prioridad:</strong> ${priorityLabel}</p>
+        <p><strong>Compromiso de primera respuesta:</strong> ${slaDateLabel}</p>
+      </div>
+      <p>${description || ''}</p>
+      <p>Ingresa a LIUMA &gt; Soporte para responder.</p>
+    `,
+    inAppTitle: ({ ticketNumber }) => `Nuevo ticket ${ticketNumber}`,
+    inAppContent: ({ subjectText, priorityLabel }) => `${subjectText} (prioridad ${priorityLabel}).`,
+  },
+  support_ticket_reply: {
+    subject: ({ ticketNumber }) => `Respuesta a tu ticket de soporte ${ticketNumber}`,
+    emailBody: ({ ticketNumber, subjectText, replyBody }) => `
+      <h2>Tienes una respuesta en tu ticket de soporte</h2>
+      <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; border: 1px solid #bbf7d0; margin: 16px 0;">
+        <p><strong>Ticket:</strong> ${ticketNumber}</p>
+        <p><strong>Asunto:</strong> ${subjectText}</p>
+      </div>
+      <p>${replyBody || ''}</p>
+      <p>Ingresa a LIUMA &gt; Soporte para ver la conversación completa.</p>
+    `,
+    inAppTitle: ({ ticketNumber }) => `Respuesta en ${ticketNumber}`,
+    inAppContent: ({ subjectText }) => `Tu ticket "${subjectText}" tiene una nueva respuesta.`,
+  },
+  support_ticket_resolved: {
+    subject: ({ ticketNumber }) => `Ticket de soporte ${ticketNumber} resuelto`,
+    emailBody: ({ ticketNumber, subjectText, resolutionNote }) => `
+      <h2>Tu ticket de soporte fue marcado como resuelto</h2>
+      <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; border: 1px solid #bbf7d0; margin: 16px 0;">
+        <p><strong>Ticket:</strong> ${ticketNumber}</p>
+        <p><strong>Asunto:</strong> ${subjectText}</p>
+      </div>
+      <p>${resolutionNote || 'Si tu problema continúa, puedes reabrir el ticket desde la app.'}</p>
+    `,
+    inAppTitle: ({ ticketNumber }) => `Ticket ${ticketNumber} resuelto`,
+    inAppContent: ({ subjectText }) => `Tu ticket "${subjectText}" fue marcado como resuelto.`,
+  },
 };

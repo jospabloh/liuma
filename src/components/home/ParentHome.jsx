@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag, CheckSquare, CalendarX, ListChecks } from 'lucide-react';
+import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag, CheckSquare, CalendarX, ListChecks, LifeBuoy } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
 import NoticeCard from '@/components/notices/NoticeCard';
 import EventCard from '@/components/events/EventCard';
@@ -192,6 +192,15 @@ export default function ParentHome({ user, userProfile, subscription }) {
             color="from-lime-50 to-white"
             iconColor="text-lime-600"
             delay={0.55}
+          />
+          <BigTile
+            icon={LifeBuoy}
+            title="Soporte y ayuda"
+            subtitle="Pregunta a Lumi o abre un ticket"
+            href={createPageUrl('Soporte')}
+            color="from-violet-50 to-white"
+            iconColor="text-violet-600"
+            delay={0.6}
           />
         </div>
 

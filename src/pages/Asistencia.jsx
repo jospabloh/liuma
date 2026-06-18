@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 import { canWriteEntity } from '@/lib/authorization/policy';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
+import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
 const statusConfig = {
   present: { label: 'Presente', icon: CheckCircle2, color: 'bg-green-500', textColor: 'text-green-700', bgColor: 'bg-green-50' },
@@ -24,11 +26,13 @@ const statusConfig = {
   excused: { label: 'Justificado', icon: FileText, color: 'bg-blue-500', textColor: 'text-blue-700', bgColor: 'bg-blue-50' }
 };
 
-function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelectedClassroom, selectedDate, setSelectedDate, students, loadingStudents, attendanceRecords, markAllPresentMutation, markAttendanceMutation }) {
+function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelectedClassroom, selectedDate, setSelectedDate, students, loadingStudents, attendanceRecords, markAllPresentMutation, markAttendanceMutation, canWrite }) {
   const getStudentStatus = (studentId) => {
     const record = attendanceRecords.find(r => r.student_id === studentId);
     return record?.status || null;
   };
+
+  const blockReadOnly = () => toast.error('Tu licencia está en modo solo lectura. Reactívala para registrar asistencia.');
 
   return (
     <>
@@ -38,14 +42,16 @@ function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelected
         showBack
         action={
           <Button
-            onClick={() => markAllPresentMutation.mutate()}
-            disabled={students.length === 0 || markAllPresentMutation.isPending}
+            onClick={() => { if (guardWrite(canWrite, blockReadOnly)) markAllPresentMutation.mutate(); }}
+            disabled={students.length === 0 || markAllPresentMutation.isPending || !canWrite}
           >
             <CheckCircle2 className="w-4 h-4 mr-2" />
             Todos Presentes
           </Button>
         }
       />
+
+      <ReadOnlyBanner />
 
       <div className="max-w-6xl mx-auto space-y-6">
         <Card className="p-6">
@@ -128,8 +134,8 @@ function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelected
                               key={status}
                               size="sm"
                               variant={isActive ? 'default' : 'outline'}
-                              onClick={() => markAttendanceMutation.mutate({ student, status })}
-                              disabled={markAttendanceMutation.isPending}
+                              onClick={() => { if (guardWrite(canWrite, blockReadOnly)) markAttendanceMutation.mutate({ student, status }); }}
+                              disabled={markAttendanceMutation.isPending || !canWrite}
                               className={`${isActive ? `${cfg.color} text-white hover:opacity-90` : ''} min-h-11 min-w-11`}
                             >
                               <Icon className="w-4 h-4" />
@@ -278,6 +284,7 @@ export default function Asistencia() {
   const [selectedClassroom, setSelectedClassroom] = useState(null);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const queryClient = useQueryClient();
+  const { canWrite } = useCanWrite();
 
   const { isLoading: loadingUser } = useQuery({
     queryKey: ['currentUser'],
@@ -433,6 +440,7 @@ export default function Asistencia() {
           attendanceRecords={attendanceRecords}
           markAllPresentMutation={markAllPresentMutation}
           markAttendanceMutation={markAttendanceMutation}
+          canWrite={canWrite}
         />
       )}
     </div>

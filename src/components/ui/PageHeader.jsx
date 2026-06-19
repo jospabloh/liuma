@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
@@ -12,7 +12,8 @@ export default function PageHeader({
   action 
 }) {
   const navigate = useNavigate();
-  
+  const reduceMotion = useReducedMotion();
+
   const handleBack = () => {
     if (backTo) {
       navigate(backTo);
@@ -23,7 +24,7 @@ export default function PageHeader({
   
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10 }}
+      initial={reduceMotion ? false : { opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex items-center justify-between mb-6"
     >
@@ -39,8 +40,8 @@ export default function PageHeader({
           </Button>
         )}
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
-          {subtitle && <p className="text-slate-500 mt-0.5">{subtitle}</p>}
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+          {subtitle && <p className="text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
       </div>
       {action && <div>{action}</div>}

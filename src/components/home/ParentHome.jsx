@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag, CheckSquare, CalendarX, ListChecks, LifeBuoy } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
+import { HomeHeader, HomeSection } from '@/components/home/HomeChrome';
 import NoticeCard from '@/components/notices/NoticeCard';
 import EventCard from '@/components/events/EventCard';
 import { format } from 'date-fns';
@@ -79,129 +80,105 @@ export default function ParentHome({ user, userProfile, subscription }) {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-violet-600 to-indigo-700 px-6 pt-12 pb-8">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <p className="text-violet-200 text-sm">
-            {format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
-          </p>
-          <h1 className="text-2xl font-bold text-white mt-1">
-            Hola, {user.full_name?.split(' ')[0] || 'Padre'}
-          </h1>
-        </motion.div>
-      </div>
+    <div className="min-h-screen bg-background">
+      <HomeHeader
+        eyebrow={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+        title={`Hola, ${user.full_name?.split(' ')[0] || 'Padre'}`}
+      />
 
       {/* Main Content */}
-      <div className="px-6 -mt-4 pb-24">
-        {/* Main Tiles */}
-        <div className="space-y-3">
-          <BigTile
-            icon={Users}
-            title="Mis hijos"
-            subtitle={`${studentIds.length} vinculado${studentIds.length !== 1 ? 's' : ''}`}
-            href={createPageUrl('MisHijos')}
-            color="from-blue-50 to-white"
-            iconColor="text-blue-600"
-            delay={0.1}
-          />
-          <BigTile
-            icon={ClipboardList}
-            title="Bitácora"
-            subtitle="Ver el día de hoy"
-            href={createPageUrl('Bitacora')}
-            color="from-green-50 to-white"
-            iconColor="text-green-600"
-            delay={0.15}
-          />
-          <BigTile
-            icon={BookOpen}
-            title="Tarea"
-            subtitle="Revisar lo que deben entregar"
-            href={createPageUrl('Tarea')}
-            color="from-amber-50 to-white"
-            iconColor="text-amber-600"
-            delay={0.2}
-          />
-          <BigTile
-            icon={Bell}
-            title="Avisos"
-            subtitle="Leer mensajes de la escuela"
-            href={createPageUrl('Avisos')}
-            badge={unreadUrgentDeliveries.length}
-            badgeColor="bg-red-500"
-            color="from-violet-50 to-white"
-            iconColor="text-violet-600"
-            delay={0.25}
-          />
-          <BigTile
-            icon={CreditCard}
-            title="Pagos"
-            subtitle={overdueCharges.length > 0 ? 'Tienes pagos vencidos' : 'Ver estado de cuenta'}
-            href={createPageUrl('Pagos')}
-            badge={overdueCharges.length}
-            badgeColor="bg-red-500"
-            color="from-rose-50 to-white"
-            iconColor="text-rose-600"
-            delay={0.3}
-          />
-          <BigTile
-            icon={Calendar}
-            title="Calendario"
-            subtitle="Ver eventos escolares"
-            href={createPageUrl('CalendarioEscolar')}
-            color="from-blue-50 to-white"
-            iconColor="text-blue-600"
-            delay={0.35}
-          />
-          <BigTile
-            icon={ShoppingBag}
-            title="Uniformes"
-            subtitle="Hacer pedidos de uniformes"
-            href={createPageUrl('PedidosUniformes')}
-            color="from-teal-50 to-white"
-            iconColor="text-teal-600"
-            delay={0.4}
-          />
-          <BigTile
-            icon={CheckSquare}
-            title="Eventos"
-            subtitle="Confirmar asistencia a eventos"
-            href={createPageUrl('EventosParaPadres')}
-            color="from-purple-50 to-white"
-            iconColor="text-purple-600"
-            delay={0.45}
-          />
-          <BigTile
-            icon={CalendarX}
-            title="Solicitar Ausencia"
-            subtitle="Avisar cuando tu hijo faltará"
-            href={createPageUrl('SolicitarAusencia')}
-            color="from-orange-50 to-white"
-            iconColor="text-orange-600"
-            delay={0.5}
-          />
-          <BigTile
-            icon={ListChecks}
-            title="Operación Diaria"
-            subtitle="Resumen del día de tus hijos"
-            href={createPageUrl('OperacionDiaria')}
-            color="from-lime-50 to-white"
-            iconColor="text-lime-600"
-            delay={0.55}
-          />
-          <BigTile
-            icon={LifeBuoy}
-            title="Soporte y ayuda"
-            subtitle="Pregunta a Lumi o abre un ticket"
-            href={createPageUrl('Soporte')}
-            color="from-violet-50 to-white"
-            iconColor="text-violet-600"
-            delay={0.6}
-          />
+      <div className="mx-auto max-w-2xl px-6 -mt-6 pb-24">
+        <div className="space-y-7">
+          <HomeSection label="Día a día">
+            <BigTile
+              icon={Users}
+              title="Mis hijos"
+              subtitle={`${studentIds.length} vinculado${studentIds.length !== 1 ? 's' : ''}`}
+              href={createPageUrl('MisHijos')}
+              delay={0.05}
+            />
+            <BigTile
+              icon={ClipboardList}
+              title="Bitácora"
+              subtitle="Ver el día de hoy"
+              href={createPageUrl('Bitacora')}
+              delay={0.1}
+            />
+            <BigTile
+              icon={BookOpen}
+              title="Tarea"
+              subtitle="Revisar lo que deben entregar"
+              href={createPageUrl('Tarea')}
+              delay={0.15}
+            />
+            <BigTile
+              icon={ListChecks}
+              title="Operación Diaria"
+              subtitle="Resumen del día de tus hijos"
+              href={createPageUrl('OperacionDiaria')}
+              delay={0.2}
+            />
+          </HomeSection>
+
+          <HomeSection label="Comunicación">
+            <BigTile
+              icon={Bell}
+              title="Avisos"
+              subtitle="Leer mensajes de la escuela"
+              href={createPageUrl('Avisos')}
+              badge={unreadUrgentDeliveries.length}
+              delay={0.05}
+            />
+            <BigTile
+              icon={Calendar}
+              title="Calendario"
+              subtitle="Ver eventos escolares"
+              href={createPageUrl('CalendarioEscolar')}
+              delay={0.1}
+            />
+            <BigTile
+              icon={CheckSquare}
+              title="Eventos"
+              subtitle="Confirmar asistencia a eventos"
+              href={createPageUrl('EventosParaPadres')}
+              delay={0.15}
+            />
+          </HomeSection>
+
+          <HomeSection label="Trámites y pagos">
+            <BigTile
+              icon={CreditCard}
+              title="Pagos"
+              subtitle={overdueCharges.length > 0 ? 'Tienes pagos vencidos' : 'Ver estado de cuenta'}
+              href={createPageUrl('Pagos')}
+              badge={overdueCharges.length}
+              delay={0.05}
+            />
+            <BigTile
+              icon={ShoppingBag}
+              title="Uniformes"
+              subtitle="Hacer pedidos de uniformes"
+              href={createPageUrl('PedidosUniformes')}
+              delay={0.1}
+            />
+            <BigTile
+              icon={CalendarX}
+              title="Solicitar Ausencia"
+              subtitle="Avisar cuando tu hijo faltará"
+              href={createPageUrl('SolicitarAusencia')}
+              delay={0.15}
+            />
+          </HomeSection>
+
+          <HomeSection label="Ayuda">
+            <BigTile
+              icon={LifeBuoy}
+              title="Soporte y ayuda"
+              subtitle="Pregunta a Lumi o abre un ticket"
+              href={createPageUrl('Soporte')}
+              delay={0.05}
+            />
+          </HomeSection>
         </div>
 
         {/* Upcoming Events */}
@@ -212,8 +189,8 @@ export default function ParentHome({ user, userProfile, subscription }) {
             transition={{ delay: 0.4 }}
             className="mt-8"
           >
-            <h2 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-brand" />
               Próximos eventos
             </h2>
             <div className="space-y-3">
@@ -232,8 +209,8 @@ export default function ParentHome({ user, userProfile, subscription }) {
             transition={{ delay: 0.5 }}
             className="mt-8"
           >
-            <h2 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
-              <Bell className="w-5 h-5 text-violet-600" />
+            <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Bell className="w-5 h-5 text-brand" />
               Avisos importantes
             </h2>
             <div className="space-y-3">

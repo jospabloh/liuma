@@ -4,19 +4,8 @@ import GlobalLumiBubble from '@/components/lumi/GlobalLumiBubble';
 
 export default function Layout({ children, currentPageName }) {
   return (
-    <div className="min-h-screen bg-[color:var(--tenant-neutral)]/10">
+    <div className="min-h-screen bg-background">
       <style>{`
-        :root {
-          --primary: 99 102 241;
-          --primary-foreground: 255 255 255;
-        }
-        
-        body {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-        }
-        
         /* Mobile-first scrolling */
         * {
           -webkit-overflow-scrolling: touch;

@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { ClipboardList, BookOpen, Bell, CheckCircle, AlertCircle, Users, Calendar, ListChecks, LifeBuoy } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
+import { HomeHeader, HomeSection } from '@/components/home/HomeChrome';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
@@ -35,21 +36,21 @@ function UpcomingEventsSection({ schoolId, classroomIds }) {
       transition={{ delay: 0.35 }}
       className="mt-8"
     >
-      <h2 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
-        <Calendar className="w-5 h-5 text-blue-600" />
+      <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+        <Calendar className="w-5 h-5 text-brand" />
         Próximos eventos
       </h2>
       <div className="space-y-2">
         {events.map(event => (
-          <Card key={event.id} className="p-3 bg-blue-50 border-blue-200">
+          <Card key={event.id} className="p-3 bg-card border-border">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex flex-col items-center justify-center text-xs font-bold">
+              <div className="w-10 h-10 rounded-lg bg-brand text-white flex flex-col items-center justify-center text-xs font-bold">
                 <span>{format(new Date(event.date), 'd')}</span>
                 <span className="text-[10px]">{format(new Date(event.date), 'MMM', { locale: es })}</span>
               </div>
               <div className="flex-1">
-                <h4 className="font-semibold text-slate-800">{event.title}</h4>
-                <p className="text-xs text-slate-600">{event.time || 'Todo el día'}</p>
+                <h4 className="font-semibold text-card-foreground">{event.title}</h4>
+                <p className="text-xs text-muted-foreground">{event.time || 'Todo el día'}</p>
               </div>
             </div>
           </Card>
@@ -127,31 +128,21 @@ export default function TeacherHome({ user, userProfile, subscription }) {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 pt-12 pb-8">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <p className="text-emerald-200 text-sm">
-            {format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
-          </p>
-          <h1 className="text-2xl font-bold text-white mt-1">
-            Hola, {user.full_name?.split(' ')[0] || 'Maestro'}
-          </h1>
-        </motion.div>
-      </div>
+    <div className="min-h-screen bg-background">
+      <HomeHeader
+        eyebrow={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+        title={`Hola, ${user.full_name?.split(' ')[0] || 'Maestro'}`}
+      />
 
       {/* Diary Progress */}
-      <div className="px-6 -mt-4">
+      <div className="mx-auto max-w-2xl px-6 -mt-6">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-4 shadow-lg border border-slate-100"
+          className="bg-card rounded-2xl p-4 shadow-sm border border-border"
         >
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-slate-800">Bitácoras de hoy</h3>
+            <h3 className="font-display font-semibold text-card-foreground">Bitácoras de hoy</h3>
             <Badge className={diaryProgress === 100 ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
               {diaryProgress === 100 ? (
                 <><CheckCircle className="w-3 h-3 mr-1" /> Completo</>
@@ -160,7 +151,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
               )}
             </Badge>
           </div>
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-3 bg-muted rounded-full overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${diaryProgress}%` }}
@@ -170,83 +161,75 @@ export default function TeacherHome({ user, userProfile, subscription }) {
               }`}
             />
           </div>
-          <p className="text-sm text-slate-500 mt-2">
+          <p className="text-sm text-muted-foreground mt-2">
             {todayDiaries.length} de {students.length} alumnos
           </p>
         </motion.div>
       </div>
 
       {/* Main Content */}
-      <div className="px-6 mt-6 pb-24">
-        {/* Main Tiles */}
-        <div className="space-y-3">
-          <BigTile
-            icon={ClipboardList}
-            title="Bitácoras de hoy"
-            subtitle={`${classrooms.length} salón${classrooms.length !== 1 ? 'es' : ''}`}
-            badge={studentsMissingDiary.length}
-            badgeColor="bg-amber-500"
-            href={createPageUrl('BitacorasMaestro')}
-            color="from-emerald-50 to-white"
-            iconColor="text-emerald-600"
-            delay={0.1}
-          />
-          <BigTile
-            icon={BookOpen}
-            title="Tarea"
-            subtitle="Asignar tarea"
-            href={createPageUrl('TareaMaestro')}
-            color="from-blue-50 to-white"
-            iconColor="text-blue-600"
-            delay={0.15}
-          />
-          <BigTile
-            icon={Bell}
-            title="Avisos"
-            subtitle={unreadUrgentNotices.length > 0 ? `${unreadUrgentNotices.length} urgentes sin leer` : 'Enviar comunicado'}
-            href={createPageUrl('AvisosMaestro')}
-            badge={unreadUrgentNotices.length}
-            badgeColor="bg-red-500"
-            color="from-violet-50 to-white"
-            iconColor="text-violet-600"
-            delay={0.2}
-          />
-          <BigTile
-            icon={Users}
-            title="Asistencia"
-            subtitle="Registrar hoy"
-            href={createPageUrl('Asistencia')}
-            color="from-green-50 to-white"
-            iconColor="text-green-600"
-            delay={0.25}
-          />
-          <BigTile
-            icon={Calendar}
-            title="Calendario"
-            subtitle="Ver eventos escolares"
-            href={createPageUrl('CalendarioEscolar')}
-            color="from-blue-50 to-white"
-            iconColor="text-blue-600"
-            delay={0.3}
-          />
-          <BigTile
-            icon={ListChecks}
-            title="Operación Diaria"
-            subtitle="Mi timeline del día"
-            href={createPageUrl('OperacionDiaria')}
-            color="from-lime-50 to-white"
-            iconColor="text-lime-600"
-            delay={0.35}
-          />
-          <BigTile
-            icon={LifeBuoy}
-            title="Soporte y ayuda"
-            subtitle="Pregunta a Lumi o abre un ticket"
-            href={createPageUrl('Soporte')}
-            color="from-violet-50 to-white"
-            iconColor="text-violet-600"
-            delay={0.4}
-          />
+      <div className="mx-auto max-w-2xl px-6 mt-7 pb-24">
+        <div className="space-y-7">
+          <HomeSection label="Día a día">
+            <BigTile
+              icon={ClipboardList}
+              title="Bitácoras de hoy"
+              subtitle={`${classrooms.length} salón${classrooms.length !== 1 ? 'es' : ''}`}
+              badge={studentsMissingDiary.length}
+              badgeColor="bg-amber-500"
+              href={createPageUrl('BitacorasMaestro')}
+              delay={0.05}
+            />
+            <BigTile
+              icon={Users}
+              title="Asistencia"
+              subtitle="Registrar hoy"
+              href={createPageUrl('Asistencia')}
+              delay={0.1}
+            />
+            <BigTile
+              icon={BookOpen}
+              title="Tarea"
+              subtitle="Asignar tarea"
+              href={createPageUrl('TareaMaestro')}
+              delay={0.15}
+            />
+            <BigTile
+              icon={ListChecks}
+              title="Operación Diaria"
+              subtitle="Mi timeline del día"
+              href={createPageUrl('OperacionDiaria')}
+              delay={0.2}
+            />
+          </HomeSection>
+
+          <HomeSection label="Comunicación">
+            <BigTile
+              icon={Bell}
+              title="Avisos"
+              subtitle={unreadUrgentNotices.length > 0 ? `${unreadUrgentNotices.length} urgentes sin leer` : 'Enviar comunicado'}
+              href={createPageUrl('AvisosMaestro')}
+              badge={unreadUrgentNotices.length}
+              delay={0.05}
+            />
+            <BigTile
+              icon={Calendar}
+              title="Calendario"
+              subtitle="Ver eventos escolares"
+              href={createPageUrl('CalendarioEscolar')}
+              delay={0.1}
+            />
+          </HomeSection>
+
+          <HomeSection label="Ayuda">
+            <BigTile
+              icon={LifeBuoy}
+              title="Soporte y ayuda"
+              subtitle="Pregunta a Lumi o abre un ticket"
+              href={createPageUrl('Soporte')}
+              delay={0.05}
+            />
+          </HomeSection>
         </div>
 
         {/* Upcoming Events Section */}
@@ -260,26 +243,26 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             transition={{ delay: 0.3 }}
             className="mt-8"
           >
-            <h2 className="text-lg font-semibold text-slate-800 mb-3">
+            <h2 className="text-lg font-semibold text-foreground mb-3">
               Mis salones
             </h2>
             <div className="space-y-2">
               {classrooms.map((classroom) => {
                 const classStudents = students.filter(s => s.classroom_id === classroom.id);
                 const classDiaries = todayDiaries.filter(d => d.classroom_id === classroom.id);
-                const progress = classStudents.length > 0 
-                  ? Math.round((classDiaries.length / classStudents.length) * 100) 
+                const progress = classStudents.length > 0
+                  ? Math.round((classDiaries.length / classStudents.length) * 100)
                   : 0;
-                
+
                 return (
                   <div
                     key={classroom.id}
-                    className="bg-white rounded-xl p-4 border border-slate-100"
+                    className="bg-card rounded-xl p-4 border border-border"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium text-slate-800">{classroom.name}</h4>
-                        <p className="text-sm text-slate-500">
+                        <h4 className="font-medium text-card-foreground">{classroom.name}</h4>
+                        <p className="text-sm text-muted-foreground">
                           {classDiaries.length}/{classStudents.length} bitácoras
                         </p>
                       </div>

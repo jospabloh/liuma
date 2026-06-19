@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck, KeyRound, Headset, BadgeCheck, Inbox } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
+import { HomeHeader } from '@/components/home/HomeChrome';
 import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -136,46 +137,35 @@ export default function AdminHome({ user, userProfile, subscription }) {
   const emergencyCoverage = students.length > 0 ? Math.round((new Set(emergencyContacts.map((c) => c.student_id)).size / students.length) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 pt-12 pb-8">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <p className="text-slate-400 text-sm">
-            {format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
-          </p>
-          <h1 className="text-2xl font-bold text-white mt-1">
-            {school?.name || 'Administración'}
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">
-            {classrooms.length} salones · {students.length} alumnos
-          </p>
-          {tenantSelection.options.length > 1 && (
-            <div className="mt-4 flex flex-wrap gap-2" aria-label="Tenants administrados">
-              {tenantSelection.options.map((option) => (
-                <span
-                  key={option.profile_id}
-                  className={`rounded-full px-3 py-1 text-xs ${option.is_current ? 'bg-white text-slate-900' : 'bg-slate-700 text-slate-200'}`}
-                >
-                  {option.school_name}{option.is_current ? ' · actual' : ''}
-                </span>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      </div>
+    <div className="min-h-screen bg-background">
+      <HomeHeader
+        eyebrow={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+        title={school?.name || 'Administración'}
+        subtitle={`${classrooms.length} salones · ${students.length} alumnos`}
+      >
+        {tenantSelection.options.length > 1 && (
+          <div className="mt-4 flex flex-wrap gap-2" aria-label="Tenants administrados">
+            {tenantSelection.options.map((option) => (
+              <span
+                key={option.profile_id}
+                className={`rounded-full px-3 py-1 text-xs ${option.is_current ? 'bg-white text-slate-900' : 'bg-white/15 text-primary-foreground'}`}
+              >
+                {option.school_name}{option.is_current ? ' · actual' : ''}
+              </span>
+            ))}
+          </div>
+        )}
+      </HomeHeader>
 
       {/* Emergency Button */}
-      <div className="px-6 -mt-4">
+      <div className="mx-auto max-w-2xl px-6 -mt-6">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
         >
           <Button
             onClick={handleEmergencyAlert}
-            className="w-full h-14 bg-red-600 hover:bg-red-700 text-lg font-semibold gap-2 shadow-lg"
+            className="w-full h-14 bg-red-600 hover:bg-red-700 text-white text-lg font-semibold gap-2 shadow-lg"
           >
             <AlertTriangle className="w-6 h-6" />
             Enviar alerta de EMERGENCIA
@@ -184,180 +174,180 @@ export default function AdminHome({ user, userProfile, subscription }) {
       </div>
 
       {/* Main Content */}
-      <div className="px-6 mt-6 pb-24">
+      <div className="mx-auto max-w-2xl px-6 mt-7 pb-24">
         <PaymentReminderBanner subscription={subscription} />
-        
-        {/* Main Tiles */}
-        <div className="grid grid-cols-2 gap-3">
-          <BigTile
-            icon={UserCheck}
-            title="Aprobaciones"
-            subtitle="Usuarios pendientes"
-            badge={pendingUsers.length}
-            badgeColor="bg-amber-500"
-            href={createPageUrl('Aprobaciones')}
-            color="from-amber-50 to-white"
-            iconColor="text-amber-600"
-            delay={0.1}
-          />
-          <BigTile
-            icon={School}
-            title="Escuela"
-            subtitle="Salones y alumnos"
-            href={createPageUrl('GestionEscuela')}
-            color="from-blue-50 to-white"
-            iconColor="text-blue-600"
-            delay={0.15}
-          />
-          <BigTile
-            icon={Bell}
-            title="Avisos"
-            subtitle={unreadUrgentNotices.length > 0 ? `${unreadUrgentNotices.length} urgentes sin leer` : 'Enviar comunicados'}
-            href={createPageUrl('AvisosAdmin')}
-            badge={unreadUrgentNotices.length}
-            badgeColor="bg-red-500"
-            color="from-violet-50 to-white"
-            iconColor="text-violet-600"
-            delay={0.2}
-          />
-          <BigTile
-            icon={CreditCard}
-            title="Pagos"
-            subtitle={overdueCharges.length > 0 ? `${overdueCharges.length} vencidos` : 'Configurar conceptos y cargos'}
-            badge={overdueCharges.length}
-            badgeColor="bg-red-500"
-            href={createPageUrl('PagosAdmin')}
-            color="from-rose-50 to-white"
-            iconColor="text-rose-600"
-            delay={0.25}
-          />
-          <BigTile
-            icon={BarChart3}
-            title="Reportes"
-            subtitle="Ver resúmenes"
-            href={createPageUrl('Reportes')}
-            color="from-slate-100 to-white"
-            iconColor="text-slate-600"
-            delay={0.3}
-          />
-          <BigTile
-            icon={Users}
-            title="Asistencia"
-            subtitle="Control y resumen"
-            href={createPageUrl('ResumenAsistencia')}
-            color="from-green-50 to-white"
-            iconColor="text-green-600"
-            delay={0.35}
-          />
-          <BigTile
-            icon={Calendar}
-            title="Calendario"
-            subtitle="Eventos escolares"
-            href={createPageUrl('CalendarioEscolar')}
-            color="from-sky-50 to-white"
-            iconColor="text-sky-600"
-            delay={0.4}
-          />
-          <BigTile
-            icon={FileText}
-            title="Documentos Oficiales"
-            subtitle="Menús, comunicaciones y minutas"
-            href={createPageUrl('GestionDocumentos')}
-            color="from-purple-50 to-white"
-            iconColor="text-purple-600"
-            delay={0.45}
-          />
-          <BigTile
-            icon={ShoppingBag}
-            title="Pedidos de Uniformes"
-            subtitle="Gestionar pedidos de padres"
-            href={createPageUrl('GestionPedidosAdmin')}
-            color="from-teal-50 to-white"
-            iconColor="text-teal-600"
-            delay={0.5}
-          />
-          <BigTile
-            icon={Percent}
-            title="Descuentos"
-            subtitle="Configurar descuentos"
-            href={createPageUrl('GestionDescuentos')}
-            color="from-orange-50 to-white"
-            iconColor="text-orange-600"
-            delay={0.55}
-          />
-          <BigTile
-            icon={ClipboardCheck}
-            title="Solicitudes de Ausencias"
-            subtitle="Aprobar o rechazar"
-            href={createPageUrl('GestionAusencias')}
-            color="from-cyan-50 to-white"
-            iconColor="text-cyan-600"
-            delay={0.6}
-          />
-          <BigTile
-            icon={Settings}
-            title="Configuración Inicial"
-            subtitle="Guía paso a paso"
-            href={createPageUrl('ConfiguracionInicial')}
-            color="from-pink-50 to-white"
-            iconColor="text-pink-600"
-            delay={0.65}
-          />
 
-          <BigTile
-            icon={ShieldCheck}
-            title="Auditoría"
-            subtitle="Revisar trazabilidad"
-            href={createPageUrl('AuditoriaAdmin')}
-            color="from-emerald-50 to-white"
-            iconColor="text-emerald-600"
-            delay={0.72}
-          />
-          <BigTile
-            icon={KeyRound}
-            title="Permisos y Roles"
-            subtitle="Accesos administrativos"
-            href={createPageUrl('PermisosRoles')}
-            color="from-indigo-50 to-white"
-            iconColor="text-indigo-600"
-            delay={0.73}
-          />
-          <BigTile
-            icon={ListChecks}
-            title="Operación Diaria"
-            subtitle="Timeline combinado"
-            href={createPageUrl('OperacionDiaria')}
-            color="from-lime-50 to-white"
-            iconColor="text-lime-600"
-            delay={0.7}
-          />
-          <BigTile
-            icon={Headset}
-            title="Soporte"
-            subtitle="Tickets de tu escuela"
-            href={createPageUrl('SoporteAdmin')}
-            color="from-violet-50 to-white"
-            iconColor="text-violet-600"
-            delay={0.74}
-          />
-          <BigTile
-            icon={Inbox}
-            title="Panel de soporte"
-            subtitle="Pendientes por categoría y prioridad"
-            href={createPageUrl('PanelSoporte')}
-            color="from-fuchsia-50 to-white"
-            iconColor="text-fuchsia-600"
-            delay={0.76}
-          />
-          <BigTile
-            icon={BadgeCheck}
-            title="Licencia"
-            subtitle="Plan y suscripción"
-            href={createPageUrl('LicenseAdmin')}
-            color="from-emerald-50 to-white"
-            iconColor="text-emerald-600"
-            delay={0.75}
-          />
+        {/* Main Tiles, grouped so the section labels carry the structure. */}
+        <div className="space-y-7">
+          <section>
+            <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Personas y operación
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <BigTile
+                icon={UserCheck}
+                title="Aprobaciones"
+                subtitle="Usuarios pendientes"
+                badge={pendingUsers.length}
+                badgeColor="bg-amber-500"
+                href={createPageUrl('Aprobaciones')}
+                delay={0.05}
+              />
+              <BigTile
+                icon={School}
+                title="Escuela"
+                subtitle="Salones y alumnos"
+                href={createPageUrl('GestionEscuela')}
+                delay={0.1}
+              />
+              <BigTile
+                icon={Users}
+                title="Asistencia"
+                subtitle="Control y resumen"
+                href={createPageUrl('ResumenAsistencia')}
+                delay={0.15}
+              />
+              <BigTile
+                icon={ClipboardCheck}
+                title="Solicitudes de Ausencias"
+                subtitle="Aprobar o rechazar"
+                href={createPageUrl('GestionAusencias')}
+                delay={0.2}
+              />
+              <BigTile
+                icon={ListChecks}
+                title="Operación Diaria"
+                subtitle="Timeline combinado"
+                href={createPageUrl('OperacionDiaria')}
+                delay={0.25}
+              />
+            </div>
+          </section>
+
+          <section>
+            <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Comunicación
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <BigTile
+                icon={Bell}
+                title="Avisos"
+                subtitle={unreadUrgentNotices.length > 0 ? `${unreadUrgentNotices.length} urgentes sin leer` : 'Enviar comunicados'}
+                href={createPageUrl('AvisosAdmin')}
+                badge={unreadUrgentNotices.length}
+                delay={0.05}
+              />
+              <BigTile
+                icon={Calendar}
+                title="Calendario"
+                subtitle="Eventos escolares"
+                href={createPageUrl('CalendarioEscolar')}
+                delay={0.1}
+              />
+              <BigTile
+                icon={FileText}
+                title="Documentos Oficiales"
+                subtitle="Menús, comunicaciones y minutas"
+                href={createPageUrl('GestionDocumentos')}
+                delay={0.15}
+              />
+            </div>
+          </section>
+
+          <section>
+            <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Finanzas y servicios
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <BigTile
+                icon={CreditCard}
+                title="Pagos"
+                subtitle={overdueCharges.length > 0 ? `${overdueCharges.length} vencidos` : 'Configurar conceptos y cargos'}
+                badge={overdueCharges.length}
+                href={createPageUrl('PagosAdmin')}
+                delay={0.05}
+              />
+              <BigTile
+                icon={Percent}
+                title="Descuentos"
+                subtitle="Configurar descuentos"
+                href={createPageUrl('GestionDescuentos')}
+                delay={0.1}
+              />
+              <BigTile
+                icon={ShoppingBag}
+                title="Pedidos de Uniformes"
+                subtitle="Gestionar pedidos de padres"
+                href={createPageUrl('GestionPedidosAdmin')}
+                delay={0.15}
+              />
+              <BigTile
+                icon={BadgeCheck}
+                title="Licencia"
+                subtitle="Plan y suscripción"
+                href={createPageUrl('LicenseAdmin')}
+                delay={0.2}
+              />
+            </div>
+          </section>
+
+          <section>
+            <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Reportes y seguridad
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <BigTile
+                icon={BarChart3}
+                title="Reportes"
+                subtitle="Ver resúmenes"
+                href={createPageUrl('Reportes')}
+                delay={0.05}
+              />
+              <BigTile
+                icon={ShieldCheck}
+                title="Auditoría"
+                subtitle="Revisar trazabilidad"
+                href={createPageUrl('AuditoriaAdmin')}
+                delay={0.1}
+              />
+              <BigTile
+                icon={KeyRound}
+                title="Permisos y Roles"
+                subtitle="Accesos administrativos"
+                href={createPageUrl('PermisosRoles')}
+                delay={0.15}
+              />
+            </div>
+          </section>
+
+          <section>
+            <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Configuración y soporte
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <BigTile
+                icon={Settings}
+                title="Configuración Inicial"
+                subtitle="Guía paso a paso"
+                href={createPageUrl('ConfiguracionInicial')}
+                delay={0.05}
+              />
+              <BigTile
+                icon={Headset}
+                title="Soporte"
+                subtitle="Tickets de tu escuela"
+                href={createPageUrl('SoporteAdmin')}
+                delay={0.1}
+              />
+              <BigTile
+                icon={Inbox}
+                title="Panel de soporte"
+                subtitle="Pendientes por categoría y prioridad"
+                href={createPageUrl('PanelSoporte')}
+                delay={0.15}
+              />
+            </div>
+          </section>
         </div>
 
         {/* Quick Stats */}
@@ -367,37 +357,37 @@ export default function AdminHome({ user, userProfile, subscription }) {
           transition={{ delay: 0.4 }}
           className="mt-8 grid grid-cols-2 gap-3"
         >
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
-            <p className="text-3xl font-bold text-slate-800">{students.length}</p>
-            <p className="text-sm text-slate-500">Alumnos activos</p>
+          <div className="bg-card rounded-xl p-4 border border-border">
+            <p className="text-3xl font-bold text-card-foreground">{students.length}</p>
+            <p className="text-sm text-muted-foreground">Alumnos activos</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
-            <p className="text-3xl font-bold text-slate-800">{classrooms.length}</p>
-            <p className="text-sm text-slate-500">Salones</p>
+          <div className="bg-card rounded-xl p-4 border border-border">
+            <p className="text-3xl font-bold text-card-foreground">{classrooms.length}</p>
+            <p className="text-sm text-muted-foreground">Salones</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
+          <div className="bg-card rounded-xl p-4 border border-border">
             <p className="text-3xl font-bold text-amber-600">{pendingUsers.length}</p>
-            <p className="text-sm text-slate-500">Por aprobar</p>
+            <p className="text-sm text-muted-foreground">Por aprobar</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
+          <div className="bg-card rounded-xl p-4 border border-border">
             <p className="text-3xl font-bold text-red-600">{overdueCharges.length}</p>
-            <p className="text-sm text-slate-500">Pagos vencidos</p>
+            <p className="text-sm text-muted-foreground">Pagos vencidos</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
-            <p className="text-3xl font-bold text-indigo-600">{setupProgress}%</p>
-            <p className="text-sm text-slate-500">Setup general</p>
+          <div className="bg-card rounded-xl p-4 border border-border">
+            <p className="text-3xl font-bold text-brand">{setupProgress}%</p>
+            <p className="text-sm text-muted-foreground">Setup general</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
-            <p className="text-3xl font-bold text-sky-600">{teacherCoverage}%</p>
-            <p className="text-sm text-slate-500">Maestro-salón</p>
+          <div className="bg-card rounded-xl p-4 border border-border">
+            <p className="text-3xl font-bold text-brand">{teacherCoverage}%</p>
+            <p className="text-sm text-muted-foreground">Maestro-salón</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
-            <p className="text-3xl font-bold text-emerald-600">{parentCoverage}%</p>
-            <p className="text-sm text-slate-500">Alumno-padre</p>
+          <div className="bg-card rounded-xl p-4 border border-border">
+            <p className="text-3xl font-bold text-brand">{parentCoverage}%</p>
+            <p className="text-sm text-muted-foreground">Alumno-padre</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-100">
-            <p className="text-3xl font-bold text-orange-600">{emergencyCoverage}%</p>
-            <p className="text-sm text-slate-500">Contactos emergencia</p>
+          <div className="bg-card rounded-xl p-4 border border-border">
+            <p className="text-3xl font-bold text-amber-600">{emergencyCoverage}%</p>
+            <p className="text-sm text-muted-foreground">Contactos emergencia</p>
           </div>
         </motion.div>
 
@@ -407,10 +397,10 @@ export default function AdminHome({ user, userProfile, subscription }) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="mt-6 bg-indigo-50 rounded-xl p-4 border border-indigo-100"
+            className="mt-6 rounded-xl p-4 border border-brand/20 bg-brand/5"
           >
-            <p className="text-sm text-indigo-600 mb-1">Código de escuela para invitar usuarios:</p>
-            <p className="text-xl font-mono font-bold text-indigo-800">{school.id}</p>
+            <p className="text-sm text-brand mb-1">Código de escuela para invitar usuarios:</p>
+            <p className="text-xl font-mono font-bold text-foreground">{school.id}</p>
           </motion.div>
         )}
       </div>

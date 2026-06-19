@@ -9,6 +9,18 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Distinctive visual design system ("the school is the hero")**: replaced the
+  stock shadcn starter palette with a warm, calm surface system and a real type
+  pairing — **Bricolage Grotesque** (display, used on page-level headings only)
+  + **Inter** (body), loaded via `index.html` and exposed as `--font-display` /
+  `--font-sans`. The tenant's own brand color is now the single loud element:
+  the three home dashboards (parent/teacher/admin) lead with a branded greeting
+  band and their tiles are grouped into labeled sections instead of an
+  undifferentiated rainbow stack. New shared chrome in
+  `src/components/home/HomeChrome.jsx` (`HomeHeader`, `HomeSection`). Reduced
+  motion is now respected (global CSS floor + `useReducedMotion` in `BigTile` /
+  `PageHeader`), and the app is titled **liuma**.
+
 - **Onboarding privacy consent (LFPDPPP)**: the final onboarding step now
   requires two explicit acceptances before an account can be created — the
   **Aviso de Privacidad** (general) and **express consent for processing minors'
@@ -19,6 +31,18 @@ Versions follow [Semantic Versioning](https://semver.org/).
   is recorded even before the entity exists in Base44. New pure module
   `src/lib/consent/privacyNotice.js` (+4 tests, 115 total). Publish the real
   Aviso de Privacidad and set `PRIVACY_NOTICE_URL` / `PRIVACY_NOTICE_VERSION`.
+
+### Fixed
+
+- **White-label theming now actually reaches the UI**: every shadcn component
+  reads `--primary`, but `Layout.jsx` hardcoded it to indigo (`99 102 241`) as
+  an RGB triple fed into Tailwind's `hsl(var(--primary))` — invalid CSS that
+  disconnected each school's logo-extracted brand color from buttons, rings,
+  badges, etc. `buildThemeCssVars` now derives `--primary`/`--ring`
+  (HSL triplet), `--primary-foreground` (contrast-aware), and an RGB-channel
+  `--tenant-primary-rgb` from the tenant palette, surfaced as a first-class
+  Tailwind `brand` color so brand tints (`bg-brand/10`, `border-brand/40`)
+  compile correctly. The stale `--primary` override was removed from `Layout`.
 
 ### Changed
 

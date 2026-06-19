@@ -20,6 +20,37 @@ function rgbToHex({ r, g, b }) {
   return `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`;
 }
 
+// Returns a space-separated HSL triplet ("243 75% 59%") suitable for the
+// `hsl(var(--token))` consumption pattern used by the shadcn/Tailwind tokens.
+function hexToHslTriplet(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const delta = max - min;
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (delta !== 0) {
+    s = delta / (1 - Math.abs(2 * l - 1));
+    switch (max) {
+      case rn:
+        h = ((gn - bn) / delta) % 6;
+        break;
+      case gn:
+        h = (bn - rn) / delta + 2;
+        break;
+      default:
+        h = (rn - gn) / delta + 4;
+    }
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
+
 function luminance({ r, g, b }) {
   const chan = [r, g, b].map((v) => {
     const c = v / 255;
@@ -197,11 +228,27 @@ export async function extractPaletteFromFile(file) {
 
 export function buildThemeCssVars(themeSettings = DEFAULT_THEME) {
   const { palette } = enforcePaletteSafety(themeSettings.palette || DEFAULT_THEME.palette);
+  // Drive the shadcn `--primary`/`--ring` tokens (consumed as hsl(var(--token)))
+  // from the tenant brand color so the school's identity reaches every
+  // component, not just the few spots that read --tenant-primary directly.
+  const primaryTriplet = hexToHslTriplet(palette.primary);
+  const { r, g, b } = hexToRgb(palette.primary);
+  const primaryRgbChannels = `${r} ${g} ${b}`;
+  const primaryForeground = contrastRatio(hexToRgb(palette.primary), { r: 255, g: 255, b: 255 }) >= 3
+    ? '0 0% 100%'
+    : '30 10% 11%';
   return {
     '--tenant-primary': palette.primary,
+    '--tenant-primary-rgb': primaryRgbChannels,
     '--tenant-secondary': palette.secondary,
     '--tenant-accent': palette.accent,
     '--tenant-neutral': palette.neutral,
+    '--primary': primaryTriplet,
+    '--primary-foreground': primaryForeground,
+    '--ring': primaryTriplet,
+    '--sidebar-primary': primaryTriplet,
+    '--sidebar-primary-foreground': primaryForeground,
+    '--sidebar-ring': primaryTriplet,
   };
 }
 

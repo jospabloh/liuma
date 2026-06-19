@@ -56,7 +56,8 @@ export default function PanelSoporte() {
   if (isLoading) return <LoadingScreen message="Cargando tickets..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title={isOwner ? 'Panel de soporte — LIUMA' : 'Panel de soporte'}
         subtitle="Tickets pendientes por categoría y prioridad"
@@ -66,7 +67,7 @@ export default function PanelSoporte() {
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <SummaryCard icon={Inbox} value={summary.total} label="Pendientes" tone="text-slate-700 bg-white" />
+        <SummaryCard icon={Inbox} value={summary.total} label="Pendientes" tone="text-card-foreground bg-card" />
         <SummaryCard icon={Flag} value={summary.urgent} label="Urgentes" tone="text-red-700 bg-red-50" />
         <SummaryCard icon={AlertTriangle} value={summary.breached} label="Fuera de SLA" tone="text-amber-700 bg-amber-50" />
       </div>
@@ -88,11 +89,11 @@ export default function PanelSoporte() {
           {groups.map((group) => (
             <section key={group.key}>
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                   {groupMode === 'priority' && <SupportPriorityBadge priority={group.key} />}
                   {groupLabel(group.key)}
                 </h2>
-                <span className="text-xs font-semibold text-slate-400">{group.tickets.length}</span>
+                <span className="text-xs font-semibold text-muted-foreground">{group.tickets.length}</span>
               </div>
               <div className="space-y-2">
                 {group.tickets.map((ticket) => (
@@ -108,6 +109,7 @@ export default function PanelSoporte() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -136,25 +138,25 @@ function TicketRow({ ticket, groupMode, onClick }) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-slate-400">{ticket.ticket_number}</span>
+            <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
             {breached && <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">SLA</span>}
           </div>
-          <p className="font-medium text-slate-800 truncate">{ticket.subject}</p>
-          <p className="text-xs text-slate-500 mt-0.5">{ticket.requester_name} · {ticket.requester_role}</p>
+          <p className="font-medium text-card-foreground truncate">{ticket.subject}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{ticket.requester_name} · {ticket.requester_role}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <SupportStatusBadge status={ticket.status} />
             {/* Show the cross-axis chip: priority in category view, category in priority view. */}
             {groupMode === 'category'
               ? <SupportPriorityBadge priority={ticket.priority} />
-              : <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">{CATEGORY_LABELS[ticket.category] || ticket.category}</span>}
+              : <span className="text-[11px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{CATEGORY_LABELS[ticket.category] || ticket.category}</span>}
             {ticket.sla_due_at && (
-              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                 <Clock className="w-3 h-3" /> {format(new Date(ticket.sla_due_at), "d MMM HH:mm", { locale: es })}
               </span>
             )}
           </div>
         </div>
-        <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
+        <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
       </div>
     </Card>
   );

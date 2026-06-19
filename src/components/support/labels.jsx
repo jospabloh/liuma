@@ -17,13 +17,13 @@ export const STATUS_LABELS = {
 };
 
 const STATUS_COLORS = {
-  [SUPPORT_STATUS.OPEN]: 'bg-slate-100 text-slate-700',
-  [SUPPORT_STATUS.AI_RESOLVED]: 'bg-violet-100 text-violet-800',
+  [SUPPORT_STATUS.OPEN]: 'bg-muted text-muted-foreground',
+  [SUPPORT_STATUS.AI_RESOLVED]: 'bg-brand/10 text-brand',
   [SUPPORT_STATUS.ESCALATED]: 'bg-amber-100 text-amber-800',
   [SUPPORT_STATUS.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
   [SUPPORT_STATUS.WAITING_USER]: 'bg-orange-100 text-orange-800',
   [SUPPORT_STATUS.RESOLVED]: 'bg-green-100 text-green-800',
-  [SUPPORT_STATUS.CLOSED]: 'bg-slate-200 text-slate-600',
+  [SUPPORT_STATUS.CLOSED]: 'bg-muted text-muted-foreground',
 };
 
 export const PRIORITY_LABELS = {
@@ -34,7 +34,7 @@ export const PRIORITY_LABELS = {
 };
 
 const PRIORITY_COLORS = {
-  [SUPPORT_PRIORITIES.LOW]: 'bg-slate-100 text-slate-600',
+  [SUPPORT_PRIORITIES.LOW]: 'bg-muted text-muted-foreground',
   [SUPPORT_PRIORITIES.NORMAL]: 'bg-blue-100 text-blue-800',
   [SUPPORT_PRIORITIES.HIGH]: 'bg-amber-100 text-amber-800',
   [SUPPORT_PRIORITIES.URGENT]: 'bg-red-100 text-red-800',

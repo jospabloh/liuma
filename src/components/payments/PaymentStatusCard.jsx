@@ -43,20 +43,20 @@ export default function PaymentStatusCard({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full bg-white flex items-center justify-center ${config.iconColor}`}>
+          <div className={`w-10 h-10 rounded-full bg-card flex items-center justify-center ${config.iconColor}`}>
             <Icon className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-800">{studentName}</h3>
+            <h3 className="font-semibold text-foreground">{studentName}</h3>
             <p className={`text-sm font-medium ${config.textColor}`}>{status}</p>
           </div>
         </div>
         <div className="text-right">
           {totalPending > 0 && (
-            <p className="font-bold text-slate-800">${totalPending.toLocaleString()}</p>
+            <p className="font-bold text-foreground">${totalPending.toLocaleString()}</p>
           )}
           {nextDueDate && (
-            <p className="text-xs text-slate-500">Vence: {nextDueDate}</p>
+            <p className="text-xs text-muted-foreground">Vence: {nextDueDate}</p>
           )}
         </div>
       </div>

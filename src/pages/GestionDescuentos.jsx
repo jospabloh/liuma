@@ -149,8 +149,8 @@ export default function GestionDescuentos() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <ReadOnlyBanner />
         <PageHeader
           title="Gestión de Descuentos"
@@ -159,7 +159,7 @@ export default function GestionDescuentos() {
           action={
             <Dialog open={showForm} onOpenChange={(open) => { if (!open) resetForm(); setShowForm(open); }}>
               <DialogTrigger asChild>
-                <Button className="bg-indigo-600 hover:bg-indigo-700">
+                <Button>
                   <Plus className="w-4 h-4 mr-2" />
                   Nuevo Descuento
                 </Button>
@@ -265,7 +265,7 @@ export default function GestionDescuentos() {
 
                   <Button
                     type="submit"
-                    className="w-full bg-indigo-600 hover:bg-indigo-700"
+                    className="w-full"
                     disabled={createDiscountMutation.isPending || updateDiscountMutation.isPending}
                   >
                     {editingDiscount ? 'Actualizar' : 'Crear'} Descuento
@@ -280,8 +280,8 @@ export default function GestionDescuentos() {
           {discounts?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <Percent className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                <p className="text-slate-600">No hay descuentos configurados</p>
+                <Percent className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No hay descuentos configurados</p>
               </CardContent>
             </Card>
           ) : (
@@ -300,7 +300,7 @@ export default function GestionDescuentos() {
                           {discount.is_active ? (
                             <Badge className="bg-green-100 text-green-800">Activo</Badge>
                           ) : (
-                            <Badge className="bg-slate-100 text-slate-800">Inactivo</Badge>
+                            <Badge className="bg-muted text-muted-foreground">Inactivo</Badge>
                           )}
                         </div>
                         <CardDescription>
@@ -326,11 +326,11 @@ export default function GestionDescuentos() {
                   {(discount.description || discount.applicable_to_concepts?.length > 0) && (
                     <CardContent className="space-y-2">
                       {discount.description && (
-                        <p className="text-sm text-slate-600">{discount.description}</p>
+                        <p className="text-sm text-muted-foreground">{discount.description}</p>
                       )}
                       {discount.applicable_to_concepts?.length > 0 && (
                         <div>
-                          <p className="text-xs text-slate-500 mb-1">Aplica a:</p>
+                          <p className="text-xs text-muted-foreground mb-1">Aplica a:</p>
                           <div className="flex flex-wrap gap-1">
                             {discount.applicable_to_concepts.map(concept => (
                               <Badge key={concept} variant="outline" className="text-xs">

@@ -200,8 +200,8 @@ export default function EventosParaPadres() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <PageHeader
           title="Eventos"
           subtitle="Eventos que requieren confirmación"
@@ -212,8 +212,8 @@ export default function EventosParaPadres() {
           {events?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <Calendar className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                <p className="text-slate-600">No hay eventos pendientes de confirmación</p>
+                <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No hay eventos pendientes de confirmación</p>
               </CardContent>
             </Card>
           ) : (
@@ -237,7 +237,7 @@ export default function EventosParaPadres() {
                           </CardDescription>
                         </div>
                         {event.has_cost && (
-                          <Badge className="bg-purple-100 text-purple-800">
+                          <Badge className="bg-brand/10 text-brand">
                             ${event.cost_amount}
                           </Badge>
                         )}
@@ -245,10 +245,10 @@ export default function EventosParaPadres() {
                     </CardHeader>
                     <CardContent>
                       {event.description && (
-                        <p className="text-sm text-slate-600 mb-3">{event.description}</p>
+                        <p className="text-sm text-muted-foreground mb-3">{event.description}</p>
                       )}
-                      
-                      <div className="flex flex-wrap gap-3 text-xs text-slate-500 mb-4">
+
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-4">
                         {event.time && (
                           <div className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
@@ -279,7 +279,7 @@ export default function EventosParaPadres() {
                           const StatusIcon = config.icon;
                           
                           return (
-                            <div key={student.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                            <div key={student.id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-medium">
                                   {student.first_name} {student.last_name}
@@ -296,7 +296,6 @@ export default function EventosParaPadres() {
                                     openDialog(event);
                                     setSelectedStudent(student.id);
                                   }}
-                                  className="bg-indigo-600 hover:bg-indigo-700"
                                 >
                                   Responder
                                 </Button>
@@ -320,15 +319,15 @@ export default function EventosParaPadres() {
             </DialogHeader>
             {selectedEvent && (
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="p-4 bg-slate-50 rounded-lg">
+                <div className="p-4 bg-muted rounded-lg">
                   <p className="font-medium">{selectedEvent.title}</p>
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-muted-foreground">
                     {format(new Date(selectedEvent.date), "d 'de' MMMM", { locale: es })}
                   </p>
                   {selectedEvent.has_cost && (
                     <div className="flex items-center gap-2 mt-2 text-sm">
-                      <DollarSign className="w-4 h-4 text-purple-600" />
-                      <span className="text-purple-800 font-medium">
+                      <DollarSign className="w-4 h-4 text-brand" />
+                      <span className="text-brand font-medium">
                         Costo: ${selectedEvent.cost_amount}
                       </span>
                     </div>
@@ -365,7 +364,7 @@ export default function EventosParaPadres() {
                 </div>
 
                 {selectedEvent.has_cost && response === 'ACCEPTED' && (
-                  <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
+                  <div className="p-3 bg-brand/10 rounded-lg text-sm text-brand">
                     <p className="font-medium mb-1">Se generará un cargo de pago</p>
                     <p className="text-xs">
                       Al aceptar, se creará automáticamente un cargo por ${selectedEvent.cost_amount} 
@@ -386,7 +385,7 @@ export default function EventosParaPadres() {
 
                 <Button
                   type="submit"
-                  className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  className="w-full"
                   disabled={respondMutation.isPending}
                 >
                   Enviar Respuesta

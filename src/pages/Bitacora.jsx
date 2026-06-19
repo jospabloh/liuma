@@ -77,7 +77,8 @@ export default function Bitacora() {
   if (isLoading) return <LoadingScreen message="Cargando bitácora..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Bitácora"
         subtitle={isToday(selectedDate) ? 'Hoy' : format(selectedDate, "d 'de' MMMM", { locale: es })}
@@ -86,15 +87,15 @@ export default function Bitacora() {
       />
 
       {/* Date Navigation */}
-      <div className="flex items-center justify-between bg-white rounded-xl p-3 mb-6 shadow-sm">
+      <div className="flex items-center justify-between bg-card text-card-foreground border border-border rounded-2xl p-3 mb-6 shadow-sm">
         <Button variant="ghost" size="icon" onClick={() => navigateDate('prev')}>
           <ChevronLeft className="w-5 h-5" />
         </Button>
         <div className="text-center">
-          <p className="font-semibold text-slate-800">
+          <p className="font-semibold text-card-foreground">
             {isToday(selectedDate) ? 'Hoy' : format(selectedDate, "EEEE", { locale: es })}
           </p>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             {format(selectedDate, "d 'de' MMMM, yyyy", { locale: es })}
           </p>
         </div>
@@ -144,8 +145,8 @@ export default function Bitacora() {
           
           {selectedEntry && (
             <div className="space-y-4">
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-slate-700 whitespace-pre-wrap">{selectedEntry.notes_text}</p>
+              <div className="bg-muted rounded-xl p-4">
+                <p className="text-foreground whitespace-pre-wrap">{selectedEntry.notes_text}</p>
               </div>
 
               {selectedEntry.teacher_message && (
@@ -156,43 +157,43 @@ export default function Bitacora() {
               )}
 
               {selectedEntry.behavior && (
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-slate-500">Comportamiento</span>
-                  <span className="font-medium">{selectedEntry.behavior}</span>
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted-foreground">Comportamiento</span>
+                  <span className="font-medium text-foreground">{selectedEntry.behavior}</span>
                 </div>
               )}
               {selectedEntry.learning && (
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-slate-500">Aprendizaje</span>
-                  <span className="font-medium">{selectedEntry.learning}</span>
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted-foreground">Aprendizaje</span>
+                  <span className="font-medium text-foreground">{selectedEntry.learning}</span>
                 </div>
               )}
               {selectedEntry.mood && (
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-slate-500">Estado de ánimo</span>
-                  <span className="font-medium">{selectedEntry.mood}</span>
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted-foreground">Estado de ánimo</span>
+                  <span className="font-medium text-foreground">{selectedEntry.mood}</span>
                 </div>
               )}
               {selectedEntry.food && (
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-slate-500">Alimentación</span>
-                  <span className="font-medium">
-                    {selectedEntry.food === 'todo' ? 'Comió todo' : 
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted-foreground">Alimentación</span>
+                  <span className="font-medium text-foreground">
+                    {selectedEntry.food === 'todo' ? 'Comió todo' :
                      selectedEntry.food === 'casi_todo' ? 'Casi todo' :
                      selectedEntry.food === 'poco' ? 'Poco' : 'No comió'}
                   </span>
                 </div>
               )}
               {selectedEntry.naps && (
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-slate-500">Siesta</span>
-                  <span className="font-medium">{selectedEntry.naps}</span>
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted-foreground">Siesta</span>
+                  <span className="font-medium text-foreground">{selectedEntry.naps}</span>
                 </div>
               )}
               {selectedEntry.bathroom && (
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-slate-500">Baño</span>
-                  <span className="font-medium">{selectedEntry.bathroom}</span>
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted-foreground">Baño</span>
+                  <span className="font-medium text-foreground">{selectedEntry.bathroom}</span>
                 </div>
               )}
               {selectedEntry.incidents && (
@@ -201,14 +202,15 @@ export default function Bitacora() {
                   <p className="text-amber-700">{selectedEntry.incidents}</p>
                 </div>
               )}
-              
-              <p className="text-xs text-slate-400 text-center">
+
+              <p className="text-xs text-muted-foreground text-center">
                 Registrado por {selectedEntry.teacher_name}
               </p>
             </div>
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

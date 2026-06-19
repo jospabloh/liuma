@@ -113,7 +113,8 @@ export default function Aprobaciones() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Aprobaciones"
         subtitle={`${pendingUsers.length} usuario${pendingUsers.length !== 1 ? 's' : ''} pendiente${pendingUsers.length !== 1 ? 's' : ''}`}
@@ -135,7 +136,7 @@ export default function Aprobaciones() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100"
+              className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border"
             >
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
@@ -143,27 +144,27 @@ export default function Aprobaciones() {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-slate-800">
+                    <h3 className="font-semibold text-card-foreground">
                       {getUserName(profile.user_id)}
                     </h3>
                     <Badge className="bg-amber-100 text-amber-800">
                       <Clock className="w-3 h-3 mr-1" /> Pendiente
                     </Badge>
                   </div>
-                  <p className="text-sm text-slate-500 flex items-center gap-1">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
                     <Mail className="w-3 h-3" />
                     {getUserEmail(profile.user_id)}
                   </p>
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="outline">{roleLabels[profile.app_role] || profile.app_role}</Badge>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted-foreground">
                       Registrado: {format(new Date(profile.created_date), "d MMM, yyyy", { locale: es })}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-2 mt-4 pt-4 border-t">
+              <div className="flex gap-2 mt-4 pt-4 border-t border-border">
                 <Button
                   variant="outline"
                   onClick={() => handleAction(profile, 'reject')}
@@ -212,6 +213,7 @@ export default function Aprobaciones() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </div>
   );
 }

@@ -67,7 +67,7 @@ export default function GestionPedidosAdmin() {
     PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800' },
     PROCESSING: { label: 'En Proceso', color: 'bg-blue-100 text-blue-800' },
     READY: { label: 'Listo', color: 'bg-green-100 text-green-800' },
-    DELIVERED: { label: 'Entregado', color: 'bg-slate-100 text-slate-800' },
+    DELIVERED: { label: 'Entregado', color: 'bg-muted text-muted-foreground' },
     CANCELLED: { label: 'Cancelado', color: 'bg-red-100 text-red-800' },
   };
 
@@ -78,8 +78,8 @@ export default function GestionPedidosAdmin() {
   const pendingCount = orders?.filter(o => o.status === 'PENDING').length || 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
         <PageHeader
           title="Gestión de Pedidos"
           subtitle={`${orders?.length || 0} pedidos totales • ${pendingCount} pendientes`}
@@ -90,8 +90,8 @@ export default function GestionPedidosAdmin() {
           {orders?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <Package className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                <p className="text-slate-600">No hay pedidos de uniformes</p>
+                <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No hay pedidos de uniformes</p>
               </CardContent>
             </Card>
           ) : (
@@ -121,8 +121,8 @@ export default function GestionPedidosAdmin() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
-                        <p className="font-medium text-sm">Productos:</p>
-                        <ul className="text-sm text-slate-600 space-y-1">
+                        <p className="font-medium text-sm text-card-foreground">Productos:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1">
                           {order.items.map((item, idx) => (
                             <li key={idx}>
                               • {item.product} - Talla {item.size} (x{item.quantity})
@@ -130,8 +130,8 @@ export default function GestionPedidosAdmin() {
                           ))}
                         </ul>
                         {Object.keys(order.measurements).some(key => order.measurements[key]) && (
-                          <div className="mt-2 pt-2 border-t">
-                            <p className="text-xs text-slate-500">
+                          <div className="mt-2 pt-2 border-t border-border">
+                            <p className="text-xs text-muted-foreground">
                               <strong>Medidas:</strong>{' '}
                               {Object.entries(order.measurements)
                                 .filter(([_, value]) => value)
@@ -184,7 +184,7 @@ export default function GestionPedidosAdmin() {
 
                 <Button
                   onClick={handleUpdateOrder}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  className="w-full"
                   disabled={updateOrderMutation.isPending}
                 >
                   Actualizar Pedido

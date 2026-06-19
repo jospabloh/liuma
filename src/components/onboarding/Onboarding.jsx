@@ -116,7 +116,7 @@ export default function Onboarding({ user, onComplete }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-violet-50 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-muted flex items-center justify-center p-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -124,11 +124,11 @@ export default function Onboarding({ user, onComplete }) {
       >
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-brand flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl font-bold text-white">L</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">Bienvenido a LIUMA</h1>
-          <p className="text-slate-500 mt-1">Configuremos tu cuenta</p>
+          <h1 className="text-2xl font-bold text-foreground">Bienvenido a LIUMA</h1>
+          <p className="text-muted-foreground mt-1">Configuremos tu cuenta</p>
         </div>
 
         {/* Progress */}
@@ -137,13 +137,13 @@ export default function Onboarding({ user, onComplete }) {
             <div
               key={s}
               className={`flex-1 h-1.5 rounded-full transition-colors ${
-                s <= step ? 'bg-indigo-600' : 'bg-slate-200'
+                s <= step ? 'bg-brand' : 'bg-border'
               }`}
             />
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-6">
+        <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-xl p-6">
           <AnimatePresence mode="wait">
             {step === 1 && (
               <motion.div
@@ -152,10 +152,10 @@ export default function Onboarding({ user, onComplete }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <h2 className="text-lg font-semibold text-slate-800 mb-2">
+                <h2 className="text-lg font-semibold text-foreground mb-2">
                   ¿Cuál es tu rol?
                 </h2>
-                <p className="text-sm text-slate-500 mb-4">
+                <p className="text-sm text-muted-foreground mb-4">
                   Si eres directivo, puedes crear tu escuela con 30 días de prueba gratis
                 </p>
                 <div className="space-y-3">
@@ -169,22 +169,22 @@ export default function Onboarding({ user, onComplete }) {
                       onClick={() => handleRoleSelect(option.value)}
                       className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
                         formData.role === option.value
-                          ? 'border-indigo-600 bg-indigo-50'
-                          : 'border-slate-200 hover:border-slate-300'
+                          ? 'border-brand bg-brand/10'
+                          : 'border-border hover:border-brand/30'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          formData.role === option.value ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
+                          formData.role === option.value ? 'bg-brand text-white' : 'bg-muted text-muted-foreground'
                         }`}>
                           <option.icon className="w-5 h-5" />
                         </div>
                         <div>
-                          <p className="font-medium text-slate-800">{option.label}</p>
-                          <p className="text-sm text-slate-500">{option.desc}</p>
+                          <p className="font-medium text-foreground">{option.label}</p>
+                          <p className="text-sm text-muted-foreground">{option.desc}</p>
                         </div>
                         {formData.role === option.value && (
-                          <Check className="w-5 h-5 text-indigo-600 ml-auto" />
+                          <Check className="w-5 h-5 text-brand ml-auto" />
                         )}
                       </div>
                     </button>
@@ -193,7 +193,7 @@ export default function Onboarding({ user, onComplete }) {
                 <Button
                   onClick={() => setStep(2)}
                   disabled={!formData.role}
-                  className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 h-12 text-lg"
+                  className="w-full mt-6 bg-brand text-white hover:bg-brand/90 h-12 text-lg"
                 >
                   Continuar
                   <ArrowRight className="w-5 h-5 ml-2" />
@@ -208,17 +208,17 @@ export default function Onboarding({ user, onComplete }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <h2 className="text-lg font-semibold text-slate-800 mb-4">
+                <h2 className="text-lg font-semibold text-foreground mb-4">
                   {formData.role === 'ADMIN' ? 'Crea tu escuela' : 'Ingresa el código de tu escuela'}
                 </h2>
                 
                 {formData.role === 'ADMIN' ? (
                   <div className="space-y-4">
-                    <div className="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 rounded-xl p-4 mb-4">
-                      <p className="text-sm font-medium text-indigo-900 mb-1">
+                    <div className="bg-brand/10 border border-brand/30 rounded-xl p-4 mb-4">
+                      <p className="text-sm font-medium text-foreground mb-1">
                         🎉 Prueba LIUMA gratis por 30 días
                       </p>
-                      <p className="text-xs text-indigo-700">
+                      <p className="text-xs text-muted-foreground">
                         Sin tarjeta de crédito. Acceso completo a todas las funciones.
                       </p>
                     </div>
@@ -234,13 +234,13 @@ export default function Onboarding({ user, onComplete }) {
                     <div>
                       <Label>Logo (opcional)</Label>
                       <Input type="file" accept="image/*" onChange={handleLogoChange} className="mt-1 h-12" />
-                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Upload className="w-3 h-3" /> Extraemos colores automáticamente con fallback seguro.</p>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Upload className="w-3 h-3" /> Extraemos colores automáticamente con fallback seguro.</p>
                     </div>
-                    <div className="rounded-xl border p-3 bg-slate-50">
-                      <p className="text-sm font-medium text-slate-700 mb-2">Vista previa de paleta</p>
+                    <div className="rounded-xl border border-border p-3 bg-muted">
+                      <p className="text-sm font-medium text-foreground mb-2">Vista previa de paleta</p>
                       <div className="grid grid-cols-2 gap-2">
                         {colorRoles.map((role) => (
-                          <label key={role} className="text-xs text-slate-600">
+                          <label key={role} className="text-xs text-muted-foreground">
                             <span className="capitalize">{role}</span>
                             <Input type="color" value={themePreview.palette?.[role] || DEFAULT_THEME.palette[role]} onChange={(e) => updateThemeColor(role, e.target.value)} className="mt-1 h-10 p-1" />
                           </label>
@@ -264,8 +264,8 @@ export default function Onboarding({ user, onComplete }) {
                         required
                       />
                     </div>
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
-                      <p className="text-sm text-indigo-800">
+                    <div className="bg-brand/10 border border-brand/30 rounded-xl p-3">
+                      <p className="text-sm text-foreground">
                         💡 El administrador de tu escuela te debe proporcionar este código único. 
                         Sin él no podrás continuar.
                       </p>
@@ -280,7 +280,7 @@ export default function Onboarding({ user, onComplete }) {
                   <Button
                     onClick={() => setStep(3)}
                     disabled={formData.role === 'ADMIN' ? !formData.newSchoolName : !formData.schoolCode}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12"
+                    className="flex-1 bg-brand text-white hover:bg-brand/90 h-12"
                   >
                     Continuar
                   </Button>
@@ -295,7 +295,7 @@ export default function Onboarding({ user, onComplete }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <h2 className="text-lg font-semibold text-slate-800 mb-4">
+                <h2 className="text-lg font-semibold text-foreground mb-4">
                   Información de contacto
                 </h2>
                 <div className="space-y-4">
@@ -311,8 +311,8 @@ export default function Onboarding({ user, onComplete }) {
                   </div>
                 </div>
                 
-                <div className="bg-slate-50 rounded-xl p-4 mt-4">
-                  <p className="text-sm text-slate-600">
+                <div className="bg-muted rounded-xl p-4 mt-4">
+                  <p className="text-sm text-muted-foreground">
                     {formData.role === 'ADMIN'
                       ? 'Tu cuenta se activará inmediatamente y tendrás acceso completo.'
                       : 'Tu solicitud será enviada al administrador de la escuela para aprobación. Recibirás un correo cuando sea aprobada.'}
@@ -320,8 +320,8 @@ export default function Onboarding({ user, onComplete }) {
                 </div>
 
                 {/* Privacy notice + express consent (LFPDPPP) */}
-                <div className="border border-slate-200 rounded-xl p-4 mt-4 space-y-3">
-                  <p className="text-sm font-medium text-slate-700">Aviso de Privacidad y consentimiento</p>
+                <div className="border border-border rounded-xl p-4 mt-4 space-y-3">
+                  <p className="text-sm font-medium text-foreground">Aviso de Privacidad y consentimiento</p>
 
                   <label className="flex items-start gap-3 cursor-pointer">
                     <Checkbox
@@ -330,13 +330,13 @@ export default function Onboarding({ user, onComplete }) {
                       className="mt-0.5"
                       aria-label="Acepto el Aviso de Privacidad"
                     />
-                    <span className="text-sm text-slate-600">
+                    <span className="text-sm text-muted-foreground">
                       He leído y acepto el{' '}
                       <a
                         href={PRIVACY_NOTICE_URL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-indigo-600 underline"
+                        className="text-brand underline"
                       >
                         Aviso de Privacidad
                       </a>{' '}
@@ -351,10 +351,10 @@ export default function Onboarding({ user, onComplete }) {
                       className="mt-0.5"
                       aria-label="Consentimiento expreso de datos sensibles"
                     />
-                    <span className="text-sm text-slate-600">{sensitiveConsentLabel(formData.role)}</span>
+                    <span className="text-sm text-muted-foreground">{sensitiveConsentLabel(formData.role)}</span>
                   </label>
 
-                  <p className="text-xs text-slate-400">Versión del aviso: {PRIVACY_NOTICE_VERSION}</p>
+                  <p className="text-xs text-muted-foreground">Versión del aviso: {PRIVACY_NOTICE_VERSION}</p>
                 </div>
 
                 <div className="flex gap-3 mt-6">
@@ -364,7 +364,7 @@ export default function Onboarding({ user, onComplete }) {
                   <Button
                     onClick={handleSubmit}
                     disabled={isLoading || !consentIsComplete(consent)}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12"
+                    className="flex-1 bg-brand text-white hover:bg-brand/90 h-12"
                   >
                     {isLoading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />

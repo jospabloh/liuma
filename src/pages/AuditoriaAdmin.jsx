@@ -54,9 +54,10 @@ export default function AuditoriaAdmin() {
   if (isLoading) return <LoadingScreen message="Cargando auditoría..." />;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader title="Auditoría" subtitle="Eventos sensibles y decisiones de IA" showBack backTo={createPageUrl('Home')} />
-      <Card className="p-4 mb-4 grid md:grid-cols-4 gap-3">
+      <Card className="p-4 mb-4 grid md:grid-cols-4 gap-3 rounded-2xl">
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar actor, entidad o razón" />
         <Select value={entityFilter} onValueChange={setEntityFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Todas entidades</SelectItem><SelectItem value="Attendance">Attendance</SelectItem><SelectItem value="Notice">Notice</SelectItem><SelectItem value="DiaryEntry">DiaryEntry</SelectItem><SelectItem value="PaymentRecord">PaymentRecord</SelectItem><SelectItem value="ChargeItem">ChargeItem</SelectItem><SelectItem value="AiInteraction">AiInteraction</SelectItem></SelectContent></Select>
         <Select value={actionFilter} onValueChange={setActionFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Todas acciones</SelectItem>{[...new Set(rows.map((r) => r.action).filter(Boolean))].map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent></Select>
@@ -65,13 +66,14 @@ export default function AuditoriaAdmin() {
 
       <div className="space-y-3">
         {filtered.map((row) => (
-          <Card key={row.id} className="p-4 text-sm">
-            <p><strong>{row.action}</strong> · {row.entity} · {row.entity_id}</p>
-            <p className="text-slate-500">{row.timestamp || row.created_date} · {row.role} · {row.actor || row.user_id}</p>
-            {row.reason && <p className="mt-1">Razón: {row.reason}</p>}
-            {row.context && <pre className="mt-2 bg-slate-100 p-2 rounded overflow-auto">{JSON.stringify(maskAuditContext(row.context), null, 2)}</pre>}
+          <Card key={row.id} className="p-4 text-sm rounded-2xl">
+            <p className="text-card-foreground"><strong>{row.action}</strong> · {row.entity} · {row.entity_id}</p>
+            <p className="text-muted-foreground">{row.timestamp || row.created_date} · {row.role} · {row.actor || row.user_id}</p>
+            {row.reason && <p className="mt-1 text-card-foreground">Razón: {row.reason}</p>}
+            {row.context && <pre className="mt-2 bg-muted p-2 rounded-xl overflow-auto text-muted-foreground">{JSON.stringify(maskAuditContext(row.context), null, 2)}</pre>}
           </Card>
         ))}
+      </div>
       </div>
     </div>
   );

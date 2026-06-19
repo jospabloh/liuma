@@ -53,7 +53,8 @@ export default function MisHijos() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Mis hijos"
         showBack
@@ -74,37 +75,37 @@ export default function MisHijos() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100"
+              className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-5"
             >
               <div className="flex items-start gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center flex-shrink-0">
+                <div className="w-16 h-16 rounded-2xl bg-brand/10 flex items-center justify-center flex-shrink-0">
                   {student.photo_url ? (
-                    <img 
-                      src={student.photo_url} 
+                    <img
+                      src={student.photo_url}
                       alt={student.first_name}
                       className="w-full h-full rounded-2xl object-cover"
                     />
                   ) : (
-                    <User className="w-8 h-8 text-indigo-600" />
+                    <User className="w-8 h-8 text-brand" />
                   )}
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-slate-800">
+                  <h3 className="text-lg font-semibold text-card-foreground">
                     {student.first_name} {student.last_name}
                   </h3>
                   {getClassroomName(student.classroom_id) && (
-                    <Badge variant="secondary" className="mt-1 bg-indigo-100 text-indigo-800">
+                    <Badge variant="secondary" className="mt-1 bg-brand/10 text-brand">
                       {getClassroomName(student.classroom_id)}
                     </Badge>
                   )}
-                  
-                  <div className="mt-3 space-y-1 text-sm text-slate-600">
+
+                  <div className="mt-3 space-y-1 text-sm text-muted-foreground">
                     {student.birth_date && (
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <Calendar className="w-4 h-4 text-muted-foreground" />
                         {format(new Date(student.birth_date), "d 'de' MMMM, yyyy", { locale: es })}
                         {getAge(student.birth_date) && (
-                          <span className="text-slate-400">({getAge(student.birth_date)} años)</span>
+                          <span className="text-muted-foreground">({getAge(student.birth_date)} años)</span>
                         )}
                       </div>
                     )}
@@ -124,7 +125,7 @@ export default function MisHijos() {
                 </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-slate-100 flex gap-2">
+              <div className="mt-4 pt-4 border-t border-border flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -137,7 +138,7 @@ export default function MisHijos() {
                 <Button
                   size="sm"
                   onClick={() => navigate(createPageUrl(`Bitacora?studentId=${student.id}`))}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                  className="flex-1"
                 >
                   Ver bitácora
                 </Button>
@@ -146,6 +147,7 @@ export default function MisHijos() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

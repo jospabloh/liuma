@@ -87,7 +87,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
       />
 
       {/* Main Content */}
-      <div className="mx-auto max-w-2xl px-6 -mt-6 pb-24">
+      <div className="relative z-10 mx-auto max-w-2xl px-6 -mt-6 pb-24">
         <div className="space-y-7">
           <HomeSection label="Día a día">
             <BigTile

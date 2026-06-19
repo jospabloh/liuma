@@ -116,13 +116,14 @@ export default function TareaMaestro() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Tarea"
         showBack
         backTo={createPageUrl('Home')}
         action={
-          <Button onClick={() => setShowForm(true)} disabled={!canWrite} className="bg-blue-600 hover:bg-blue-700 gap-1">
+          <Button onClick={() => setShowForm(true)} disabled={!canWrite} className="gap-1">
             <Plus className="w-4 h-4" /> Crear
           </Button>
         }
@@ -136,7 +137,7 @@ export default function TareaMaestro() {
           title="Sin tareas"
           description="Crea la primera tarea para tus alumnos."
           action={
-            <Button onClick={() => setShowForm(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={() => setShowForm(true)}>
               <Plus className="w-4 h-4 mr-1" /> Crear tarea
             </Button>
           }
@@ -151,7 +152,7 @@ export default function TareaMaestro() {
               transition={{ delay: index * 0.05 }}
             >
               <div className="relative">
-                <div className="absolute top-2 right-2 text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                <div className="absolute top-2 right-2 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
                   {getClassroomName(hw.classroom_id)}
                 </div>
                 <HomeworkCard homework={hw} />
@@ -246,7 +247,7 @@ export default function TareaMaestro() {
               <Button
                 type="submit"
                 disabled={!formData.classroom_id || !formData.title || !formData.due_date || createHomeworkMutation.isPending}
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                className="flex-1"
               >
                 {createHomeworkMutation.isPending ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -258,6 +259,7 @@ export default function TareaMaestro() {
           </form>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

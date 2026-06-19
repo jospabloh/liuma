@@ -106,18 +106,18 @@ export default function ResumenAsistencia() {
   }).filter(item => item.absences > 0).sort((a, b) => b.absences - a.absences);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-      <PageHeader 
+    <div className="min-h-screen bg-background px-4 sm:px-6 py-6 pb-24">
+      <PageHeader
         title="Resumen de Asistencia"
         subtitle="Estadísticas y reportes"
         showBack
       />
 
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto space-y-6">
         <Card className="p-6">
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 <Calendar className="w-4 h-4 inline mr-1" />
                 Período
               </label>
@@ -134,7 +134,7 @@ export default function ResumenAsistencia() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 <Filter className="w-4 h-4 inline mr-1" />
                 Salón
               </label>
@@ -211,7 +211,7 @@ export default function ResumenAsistencia() {
 
         {absencesByStudent.length > 0 && (
           <Card className="p-6">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               <TrendingDown className="w-5 h-5 text-red-600" />
               Alumnos con Mayor Ausentismo
             </h3>
@@ -222,23 +222,23 @@ export default function ResumenAsistencia() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-muted rounded-lg"
                 >
                   <div className="flex items-center gap-3">
                     {item.student.photo_url ? (
                       <img src={item.student.photo_url} alt={item.student.first_name} className="w-10 h-10 rounded-full object-cover" />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                        <span className="text-indigo-600 font-semibold text-sm">
+                      <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+                        <span className="text-brand font-semibold text-sm">
                           {item.student.first_name[0]}{item.student.last_name[0]}
                         </span>
                       </div>
                     )}
                     <div>
-                      <p className="font-semibold text-slate-800">
+                      <p className="font-semibold text-foreground">
                         {item.student.first_name} {item.student.last_name}
                       </p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {item.absences} ausencia{item.absences > 1 ? 's' : ''} de {item.totalRecords} días registrados
                       </p>
                     </div>
@@ -254,8 +254,8 @@ export default function ResumenAsistencia() {
 
         {absencesByStudent.length === 0 && (
           <Card className="p-12 text-center">
-            <Users className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-            <p className="text-slate-600">No hay ausencias registradas en este período</p>
+            <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground">No hay ausencias registradas en este período</p>
           </Card>
         )}
       </div>

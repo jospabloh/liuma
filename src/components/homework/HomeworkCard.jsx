@@ -21,14 +21,14 @@ export default function HomeworkCard({ homework, onClick }) {
       animate={{ opacity: 1, y: 0 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className={`bg-white rounded-xl p-4 shadow-sm border cursor-pointer ${
-        isOverdue ? 'border-red-200 bg-red-50' : 'border-slate-100'
+      className={`bg-card text-card-foreground rounded-xl p-4 shadow-sm border cursor-pointer ${
+        isOverdue ? 'border-red-200 bg-red-50' : 'border-border'
       }`}
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           {homework.subject && (
-            <Badge variant="secondary" className="bg-indigo-100 text-indigo-800">
+            <Badge variant="secondary" className="bg-brand/10 text-brand">
               {homework.subject}
             </Badge>
           )}
@@ -41,13 +41,13 @@ export default function HomeworkCard({ homework, onClick }) {
         </div>
       </div>
       
-      <h3 className="font-semibold text-slate-800 mb-1">{homework.title}</h3>
-      
+      <h3 className="font-semibold text-card-foreground mb-1">{homework.title}</h3>
+
       {homework.description && (
-        <p className="text-sm text-slate-600 mb-3 line-clamp-2">{homework.description}</p>
+        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{homework.description}</p>
       )}
-      
-      <div className="flex items-center gap-4 text-xs text-slate-500">
+
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
         <span className={`flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : ''}`}>
           <Calendar className="w-3 h-3" />
           {getDueDateLabel()}

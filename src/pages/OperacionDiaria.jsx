@@ -119,10 +119,11 @@ export default function OperacionDiaria() {
   if (!data?.role) return <EmptyState icon={AlertCircle} title="Perfil no disponible" />;
 
   return (
-    <>
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader title="Operación Diaria" subtitle={`Vista por rol: ${roleDefaults[data.role]}`} showBack />
-      <div className="max-w-5xl mx-auto px-4 space-y-4 pb-12">
-        <Card className="p-4">
+      <div className="space-y-4">
+        <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4">
           <div className="flex flex-wrap gap-2 mb-3">
             {CATEGORIES.map((c) => (
               <Button key={c} size="sm" variant={category === c ? 'default' : 'outline'} onClick={() => setCategory(c)}>{c}</Button>
@@ -139,15 +140,15 @@ export default function OperacionDiaria() {
           <EmptyState icon={CalendarDays} title="Sin eventos para hoy" description="No hay elementos para los filtros seleccionados." />
         ) : (
           filteredItems.map((item) => (
-            <Card key={item.id} className="p-4">
+            <Card key={item.id} className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <Badge>{item.category}</Badge>
                     <Badge variant={item.urgency === 'URGENT' ? 'destructive' : 'secondary'}>{item.urgency}</Badge>
                   </div>
-                  <h3 className="font-semibold">{item.title}</h3>
-                  <p className="text-sm text-slate-600">{item.detail}</p>
+                  <h3 className="font-semibold text-card-foreground">{item.title}</h3>
+                  <p className="text-sm text-muted-foreground">{item.detail}</p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => navigate(createPageUrl(linkByCategory[item.category]))}>
                   Abrir <ArrowRight className="w-4 h-4 ml-1" />
@@ -157,6 +158,7 @@ export default function OperacionDiaria() {
           ))
         )}
       </div>
-    </>
+      </div>
+    </div>
   );
 }

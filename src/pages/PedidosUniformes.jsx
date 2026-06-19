@@ -126,7 +126,7 @@ export default function PedidosUniformes() {
     PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800' },
     PROCESSING: { label: 'En Proceso', color: 'bg-blue-100 text-blue-800' },
     READY: { label: 'Listo', color: 'bg-green-100 text-green-800' },
-    DELIVERED: { label: 'Entregado', color: 'bg-slate-100 text-slate-800' },
+    DELIVERED: { label: 'Entregado', color: 'bg-muted text-muted-foreground' },
     CANCELLED: { label: 'Cancelado', color: 'bg-red-100 text-red-800' },
   };
 
@@ -135,8 +135,8 @@ export default function PedidosUniformes() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <PageHeader
           title="Pedidos de Uniformes"
           subtitle="Gestiona los pedidos de uniformes para tus hijos"
@@ -144,11 +144,11 @@ export default function PedidosUniformes() {
         />
 
         {catalog && (
-          <Card className="mb-6 bg-indigo-50 border-indigo-200">
+          <Card className="mb-6 bg-brand/10 border-brand/30">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-indigo-900">Catálogo de Uniformes</CardTitle>
+                  <CardTitle className="text-brand">Catálogo de Uniformes</CardTitle>
                   <CardDescription>Consulta tallas, precios y tiempos de entrega</CardDescription>
                 </div>
                 <Button
@@ -167,7 +167,7 @@ export default function PedidosUniformes() {
         <div className="mb-6">
           <Dialog open={showOrderForm} onOpenChange={setShowOrderForm}>
             <DialogTrigger asChild>
-              <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
+              <Button className="w-full">
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Pedido
               </Button>
@@ -193,7 +193,7 @@ export default function PedidosUniformes() {
                   </Select>
                 </div>
 
-                <div className="border-t pt-4">
+                <div className="border-t border-border pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <Label className="text-base">Productos</Label>
                     <Button type="button" size="sm" variant="outline" onClick={addItem}>
@@ -236,7 +236,7 @@ export default function PedidosUniformes() {
                   ))}
                 </div>
 
-                <div className="border-t pt-4">
+                <div className="border-t border-border pt-4">
                   <Label className="text-base mb-2 block">Medidas (cm)</Label>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -294,7 +294,7 @@ export default function PedidosUniformes() {
 
                 <Button
                   type="submit"
-                  className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  className="w-full"
                   disabled={createOrderMutation.isPending}
                 >
                   Enviar Pedido
@@ -308,9 +308,9 @@ export default function PedidosUniformes() {
           {orders?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <ShoppingBag className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                <p className="text-slate-600">No tienes pedidos de uniformes</p>
-                <p className="text-sm text-slate-500 mt-1">Realiza tu primer pedido</p>
+                <ShoppingBag className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No tienes pedidos de uniformes</p>
+                <p className="text-sm text-muted-foreground mt-1">Realiza tu primer pedido</p>
               </CardContent>
             </Card>
           ) : (
@@ -340,8 +340,8 @@ export default function PedidosUniformes() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
-                        <p className="font-medium text-sm">Productos:</p>
-                        <ul className="text-sm text-slate-600 space-y-1">
+                        <p className="font-medium text-sm text-card-foreground">Productos:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1">
                           {order.items.map((item, idx) => (
                             <li key={idx}>
                               • {item.product} - Talla {item.size} (x{item.quantity})
@@ -349,13 +349,13 @@ export default function PedidosUniformes() {
                           ))}
                         </ul>
                         {order.notes && (
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-xs text-slate-500">Notas: {order.notes}</p>
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <p className="text-xs text-muted-foreground">Notas: {order.notes}</p>
                           </div>
                         )}
                         {order.admin_notes && (
-                          <div className="mt-2 p-2 bg-blue-50 rounded">
-                            <p className="text-xs text-blue-800">
+                          <div className="mt-2 p-2 bg-brand/10 rounded">
+                            <p className="text-xs text-brand">
                               <strong>Nota del administrador:</strong> {order.admin_notes}
                             </p>
                           </div>

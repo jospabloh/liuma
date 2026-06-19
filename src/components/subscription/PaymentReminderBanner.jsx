@@ -52,10 +52,10 @@ export default function PaymentReminderBanner({ subscription }) {
       };
     }
     return {
-      bg: 'bg-slate-50',
-      border: 'border-slate-200',
-      text: 'text-slate-800',
-      icon: 'text-slate-600',
+      bg: 'bg-muted',
+      border: 'border-border',
+      text: 'text-foreground',
+      icon: 'text-muted-foreground',
       message: 'Cuenta inactiva',
       description: 'Contáctanos para reactivar tu suscripción.'
     };
@@ -78,7 +78,7 @@ export default function PaymentReminderBanner({ subscription }) {
         <Button
           size="sm"
           variant="outline"
-          className={`${config.text} border-current hover:bg-white/50 flex-shrink-0`}
+          className={`${config.text} border-current hover:bg-card/50 flex-shrink-0`}
           onClick={() => window.open('https://forms.gle/jLQ4EtWmQhkSsahy9', '_blank')}
         >
           Contáctanos <ExternalLink className="w-3 h-3 ml-1" />

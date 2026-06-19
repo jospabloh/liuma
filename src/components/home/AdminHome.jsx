@@ -158,7 +158,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
       </HomeHeader>
 
       {/* Emergency Button */}
-      <div className="mx-auto max-w-2xl px-6 -mt-6">
+      <div className="relative z-10 mx-auto max-w-2xl px-6 -mt-6">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

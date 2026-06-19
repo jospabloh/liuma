@@ -119,7 +119,8 @@ export default function SoporteAdmin() {
   if (isLoading) return <LoadingScreen message="Cargando tickets..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title={isOwner ? 'Soporte — Consola LIUMA' : 'Soporte — Mi escuela'}
         showBack
@@ -170,17 +171,17 @@ export default function SoporteAdmin() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-slate-400">{ticket.ticket_number}</span>
+                      <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
                       {breached && <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">SLA</span>}
                     </div>
-                    <p className="font-medium text-slate-800 truncate">{ticket.subject}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{ticket.requester_name} · {ticket.requester_role}</p>
+                    <p className="font-medium text-card-foreground truncate">{ticket.subject}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{ticket.requester_name} · {ticket.requester_role}</p>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <SupportStatusBadge status={ticket.status} />
                       <SupportPriorityBadge priority={ticket.priority} />
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
+                  <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
                 </div>
               </Card>
             );
@@ -196,11 +197,11 @@ export default function SoporteAdmin() {
           {activeTicket && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 flex-wrap text-xs">
-                <span className="font-mono text-slate-400">{activeTicket.ticket_number}</span>
+                <span className="font-mono text-muted-foreground">{activeTicket.ticket_number}</span>
                 <SupportStatusBadge status={activeTicket.status} />
                 <SupportPriorityBadge priority={activeTicket.priority} />
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 Solicitante: {activeTicket.requester_name} ({activeTicket.requester_role})
                 {activeTicket.sla_due_at && (
                   <> · SLA: {format(new Date(activeTicket.sla_due_at), "d MMM HH:mm", { locale: es })}</>
@@ -228,6 +229,7 @@ export default function SoporteAdmin() {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

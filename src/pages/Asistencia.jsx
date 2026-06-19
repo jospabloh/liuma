@@ -53,11 +53,11 @@ function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelected
 
       <ReadOnlyBanner />
 
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto space-y-6">
         <Card className="p-6">
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 <Filter className="w-4 h-4 inline mr-1" />
                 Salón
               </label>
@@ -76,7 +76,7 @@ function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelected
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 <Calendar className="w-4 h-4 inline mr-1" />
                 Fecha
               </label>
@@ -84,7 +84,7 @@ function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelected
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
               />
             </div>
           </div>
@@ -92,7 +92,7 @@ function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelected
 
         {loadingStudents ? (
           <Card className="p-12 text-center">
-            <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto"></div>
+            <div className="animate-spin w-8 h-8 border-4 border-brand border-t-transparent rounded-full mx-auto"></div>
           </Card>
         ) : students.length === 0 ? (
           <EmptyState icon={Users} title="No hay alumnos en este salón" />
@@ -109,18 +109,18 @@ function TeacherAdminAttendanceView({ classrooms, selectedClassroom, setSelected
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
                 >
-                  <Card className={`p-4 ${config?.bgColor || 'bg-white'} border-2 border-slate-200`}>
+                  <Card className={`p-4 ${config?.bgColor || 'bg-card'} border-2 border-border`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         {student.photo_url ? (
                           <img src={student.photo_url} alt={student.first_name} className="w-10 h-10 rounded-full object-cover" />
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                            <span className="text-indigo-600 font-semibold">{student.first_name[0]}{student.last_name[0]}</span>
+                          <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+                            <span className="text-brand font-semibold">{student.first_name[0]}{student.last_name[0]}</span>
                           </div>
                         )}
                         <div>
-                          <p className="font-semibold text-slate-800">{student.first_name} {student.last_name}</p>
+                          <p className="font-semibold text-foreground">{student.first_name} {student.last_name}</p>
                           {config && <Badge className={`${config.color} text-white text-xs mt-1`}>{config.label}</Badge>}
                         </div>
                       </div>
@@ -222,11 +222,11 @@ function ParentAttendanceView({ user, userProfile }) {
     <>
       <PageHeader title="Asistencia" subtitle="Resumen y línea de tiempo" showBack />
 
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto space-y-6">
         <Card className="p-6">
           <div className="grid md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Alumno</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Alumno</label>
               <Select value={selectedStudent} onValueChange={setSelectedStudent}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -238,19 +238,19 @@ function ParentAttendanceView({ user, userProfile }) {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Desde</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-lg" />
+              <label className="block text-sm font-medium text-foreground mb-2">Desde</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Hasta</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-lg" />
+              <label className="block text-sm font-medium text-foreground mb-2">Hasta</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg" />
             </div>
           </div>
         </Card>
 
         <div className="grid md:grid-cols-2 gap-4">
-          <Card className="p-4"><p className="text-sm text-slate-500">Ausencias</p><p className="text-2xl font-semibold text-red-600">{absenceCount}</p></Card>
-          <Card className="p-4"><p className="text-sm text-slate-500">Tardanzas</p><p className="text-2xl font-semibold text-yellow-600">{lateCount}</p></Card>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Ausencias</p><p className="text-2xl font-semibold text-red-600">{absenceCount}</p></Card>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Tardanzas</p><p className="text-2xl font-semibold text-yellow-600">{lateCount}</p></Card>
         </div>
 
         {recentRecords.length === 0 ? (
@@ -260,13 +260,13 @@ function ParentAttendanceView({ user, userProfile }) {
             {recentRecords.map((record) => {
               const config = statusConfig[record.status];
               return (
-                <Card key={record.id} className={`p-4 border ${config?.bgColor || 'bg-white'}`}>
+                <Card key={record.id} className={`p-4 border ${config?.bgColor || 'bg-card'}`}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-semibold text-slate-800">{getStudentName(record.student_id)}</p>
-                      <p className="text-sm text-slate-500">{format(new Date(record.date), "d 'de' MMMM, yyyy", { locale: es })}</p>
+                      <p className="font-semibold text-foreground">{getStudentName(record.student_id)}</p>
+                      <p className="text-sm text-muted-foreground">{format(new Date(record.date), "d 'de' MMMM, yyyy", { locale: es })}</p>
                     </div>
-                    <Badge className={`${config?.color || 'bg-slate-400'} text-white`}>{config?.label || record.status}</Badge>
+                    <Badge className={`${config?.color || 'bg-muted-foreground'} text-white`}>{config?.label || record.status}</Badge>
                   </div>
                 </Card>
               );
@@ -425,7 +425,7 @@ export default function Asistencia() {
   if (loadingUser || loadingClassrooms) return <LoadingScreen message="Cargando asistencia..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
+    <div className="min-h-screen bg-background px-4 sm:px-6 py-6 pb-24">
       {userProfile?.app_role === 'PARENT' ? (
         <ParentAttendanceView user={user} userProfile={userProfile} />
       ) : (

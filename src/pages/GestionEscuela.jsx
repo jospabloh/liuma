@@ -183,13 +183,14 @@ export default function GestionEscuela() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
       <PageHeader
         title="Escuela"
         showBack
         backTo={createPageUrl('Home')}
       />
 
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <ReadOnlyBanner />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -200,7 +201,7 @@ export default function GestionEscuela() {
 
         <TabsContent value="classrooms">
           <div className="flex justify-end mb-4">
-            <Button onClick={() => setShowClassroomForm(true)} disabled={!canWrite} className="bg-blue-600 hover:bg-blue-700 gap-1">
+            <Button onClick={() => setShowClassroomForm(true)} disabled={!canWrite} className="gap-1">
               <Plus className="w-4 h-4" /> Nuevo salón
             </Button>
           </div>
@@ -220,20 +221,20 @@ export default function GestionEscuela() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => navigate(createPageUrl(`GestionSalon?classroomId=${classroom.id}`))}
-                  className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 cursor-pointer flex items-center justify-between"
+                  className="bg-card text-card-foreground rounded-2xl p-4 shadow-sm border border-border cursor-pointer flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <School className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                      <School className="w-5 h-5 text-brand" />
                     </div>
                     <div>
-                      <h3 className="font-medium text-slate-800">{classroom.name}</h3>
-                      <p className="text-sm text-slate-500">
+                      <h3 className="font-medium text-card-foreground">{classroom.name}</h3>
+                      <p className="text-sm text-muted-foreground">
                         {getStudentCount(classroom.id)} alumnos
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
                 </motion.div>
               ))}
             </div>
@@ -250,19 +251,19 @@ export default function GestionEscuela() {
           )}
           {/* Enterprise nudge for very large unlimited (Plus) schools. */}
           {studentQuota.salesContactSuggested && (
-            <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800">
+            <div className="mb-4 rounded-lg border border-brand/30 bg-brand/10 p-3 text-sm text-foreground">
               Tienes más de {ENTERPRISE_CONTACT_THRESHOLD.toLocaleString('es-MX')} alumnos.{' '}
-              <a href={CONTACT_FORM_URL} target="_blank" rel="noreferrer" className="font-semibold underline">Contáctanos</a>{' '}
+              <a href={CONTACT_FORM_URL} target="_blank" rel="noreferrer" className="font-semibold underline text-brand">Contáctanos</a>{' '}
               para un plan a medida.
             </div>
           )}
           <div className="flex items-center justify-between mb-4 gap-3">
             {studentQuota.gatingActive && studentQuota.limit != null ? (
-              <p className={`text-xs font-medium ${studentQuota.exceeded ? 'text-red-600' : studentQuota.overLimit ? 'text-amber-600' : 'text-slate-500'}`}>
+              <p className={`text-xs font-medium ${studentQuota.exceeded ? 'text-red-600' : studentQuota.overLimit ? 'text-amber-600' : 'text-muted-foreground'}`}>
                 {studentQuota.used} / {studentQuota.limit} alumnos licenciados{studentQuota.exceeded ? ' · límite alcanzado' : ''}
               </p>
             ) : <span />}
-            <Button onClick={handleOpenStudentForm} disabled={!canWrite} className="bg-green-600 hover:bg-green-700 gap-1">
+            <Button onClick={handleOpenStudentForm} disabled={!canWrite} className="gap-1">
               <Plus className="w-4 h-4" /> Nuevo alumno
             </Button>
           </div>
@@ -282,14 +283,14 @@ export default function GestionEscuela() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => navigate(createPageUrl(`GestionAlumno?studentId=${student.id}`))}
-                  className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 cursor-pointer flex items-center justify-between"
+                  className="bg-card text-card-foreground rounded-2xl p-4 shadow-sm border border-border cursor-pointer flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
-                      <User className="w-5 h-5 text-slate-500" />
+                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                      <User className="w-5 h-5 text-muted-foreground" />
                     </div>
                     <div>
-                      <h3 className="font-medium text-slate-800">
+                      <h3 className="font-medium text-card-foreground">
                         {student.first_name} {student.last_name}
                       </h3>
                       <Badge variant="secondary" className="mt-1">
@@ -297,7 +298,7 @@ export default function GestionEscuela() {
                       </Badge>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
                 </motion.div>
               ))}
             </div>
@@ -344,7 +345,7 @@ export default function GestionEscuela() {
               <Button 
                 type="submit" 
                 disabled={!classroomForm.name || createClassroomMutation.isPending}
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                className="flex-1"
               >
                 {createClassroomMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear'}
               </Button>
@@ -412,7 +413,7 @@ export default function GestionEscuela() {
               <Button 
                 type="submit" 
                 disabled={!studentForm.first_name || !studentForm.last_name || !studentForm.classroom_id || createStudentMutation.isPending}
-                className="flex-1 bg-green-600 hover:bg-green-700"
+                className="flex-1"
               >
                 {createStudentMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Agregar'}
               </Button>
@@ -420,6 +421,7 @@ export default function GestionEscuela() {
           </form>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

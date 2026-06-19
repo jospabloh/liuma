@@ -133,7 +133,8 @@ export default function GestionSalon() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title={classroom?.name || 'Salón'}
         subtitle={`${students.length} alumnos`}
@@ -148,11 +149,11 @@ export default function GestionSalon() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border"
+          className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-5"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-              <GraduationCap className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-brand" />
               Maestros asignados
             </h3>
             <Button
@@ -166,21 +167,21 @@ export default function GestionSalon() {
           </div>
 
           {teacherAssignments.length === 0 ? (
-            <p className="text-slate-500 text-center py-4">Sin maestros asignados</p>
+            <p className="text-muted-foreground text-center py-4">Sin maestros asignados</p>
           ) : (
             <div className="space-y-2">
               {teacherAssignments.map((assignment) => (
                 <div
                   key={assignment.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-xl"
+                  className="flex items-center justify-between p-3 bg-muted rounded-xl"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <GraduationCap className="w-4 h-4 text-emerald-600" />
+                    <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center">
+                      <GraduationCap className="w-4 h-4 text-brand" />
                     </div>
                     <span className="font-medium">{getUserName(assignment.teacher_id)}</span>
                     {assignment.is_primary && (
-                      <Badge className="bg-emerald-100 text-emerald-800">Principal</Badge>
+                      <Badge className="bg-brand/10 text-brand">Principal</Badge>
                     )}
                   </div>
                   <Button
@@ -202,10 +203,10 @@ export default function GestionSalon() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border"
+          className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-5"
         >
-          <h3 className="font-semibold text-slate-800 flex items-center gap-2 mb-4">
-            <Users className="w-5 h-5 text-blue-600" />
+          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
+            <Users className="w-5 h-5 text-brand" />
             Alumnos ({students.length})
           </h3>
 
@@ -221,15 +222,15 @@ export default function GestionSalon() {
                 <div
                   key={student.id}
                   onClick={() => navigate(createPageUrl(`GestionAlumno?studentId=${student.id}`))}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors"
+                  className="flex items-center justify-between p-3 bg-muted rounded-xl cursor-pointer hover:bg-muted/70 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
-                      <User className="w-4 h-4 text-slate-500" />
+                    <div className="w-8 h-8 rounded-full bg-brand/10 flex items-center justify-center">
+                      <User className="w-4 h-4 text-brand" />
                     </div>
                     <span className="font-medium">{student.first_name} {student.last_name}</span>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </div>
               ))}
             </div>
@@ -274,7 +275,7 @@ export default function GestionSalon() {
               <Button
                 onClick={handleAssignTeacher}
                 disabled={!selectedTeacherId || assignTeacherMutation.isPending}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1"
               >
                 {assignTeacherMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Asignar'}
               </Button>
@@ -282,6 +283,7 @@ export default function GestionSalon() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

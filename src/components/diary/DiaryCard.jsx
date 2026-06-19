@@ -22,7 +22,7 @@ const behaviorLabels = {
 
 export default function DiaryCard({ entry, studentName, onClick }) {
   const MoodIcon = entry.mood ? moodIcons[entry.mood]?.icon || Meh : Meh;
-  const moodColor = entry.mood ? moodIcons[entry.mood]?.color || 'text-slate-400' : 'text-slate-400';
+  const moodColor = entry.mood ? moodIcons[entry.mood]?.color || 'text-muted-foreground' : 'text-muted-foreground';
   
   return (
     <motion.div
@@ -30,14 +30,14 @@ export default function DiaryCard({ entry, studentName, onClick }) {
       animate={{ opacity: 1, y: 0 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 cursor-pointer"
+      className="bg-card text-card-foreground rounded-xl p-4 shadow-sm border border-border cursor-pointer"
     >
       <div className="flex items-start justify-between mb-3">
         <div>
           {studentName && (
-            <h3 className="font-semibold text-slate-800">{studentName}</h3>
+            <h3 className="font-semibold text-card-foreground">{studentName}</h3>
           )}
-          <div className="flex items-center gap-2 text-sm text-slate-500 mt-1">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
             <Calendar className="w-3 h-3" />
             {format(new Date(entry.date), "EEEE d 'de' MMMM", { locale: es })}
           </div>
@@ -45,7 +45,7 @@ export default function DiaryCard({ entry, studentName, onClick }) {
         <MoodIcon className={`w-6 h-6 ${moodColor}`} />
       </div>
       
-      <p className="text-slate-700 text-sm mb-3 line-clamp-3">{entry.notes_text}</p>
+      <p className="text-card-foreground text-sm mb-3 line-clamp-3">{entry.notes_text}</p>
       
       {entry.teacher_message && (
         <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-2 mb-2 border border-pink-200">
@@ -56,7 +56,7 @@ export default function DiaryCard({ entry, studentName, onClick }) {
       
       <div className="flex flex-wrap gap-2">
         {entry.behavior && (
-          <Badge className={behaviorLabels[entry.behavior]?.color || 'bg-slate-100'}>
+          <Badge className={behaviorLabels[entry.behavior]?.color || 'bg-muted'}>
             {behaviorLabels[entry.behavior]?.label || entry.behavior}
           </Badge>
         )}
@@ -77,7 +77,7 @@ export default function DiaryCard({ entry, studentName, onClick }) {
       </div>
       
       {entry.teacher_name && (
-        <div className="flex items-center gap-1 mt-3 text-xs text-slate-500">
+        <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
           <User className="w-3 h-3" />
           {entry.teacher_name}
         </div>

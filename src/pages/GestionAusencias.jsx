@@ -142,8 +142,8 @@ export default function GestionAusencias() {
   const pendingCount = notifications?.filter(n => n.status === 'PENDING').length || 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <PageHeader
           title="Solicitudes de Ausencias"
           subtitle={`${pendingCount} pendientes de revisión`}
@@ -156,8 +156,8 @@ export default function GestionAusencias() {
           {notifications?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <Clock className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                <p className="text-slate-600">No hay solicitudes de ausencia</p>
+                <Clock className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No hay solicitudes de ausencia</p>
               </CardContent>
             </Card>
           ) : (
@@ -196,16 +196,16 @@ export default function GestionAusencias() {
                     <CardContent>
                       <div className="space-y-2">
                         <div>
-                          <p className="text-xs text-slate-500">Solicitado por:</p>
+                          <p className="text-xs text-muted-foreground">Solicitado por:</p>
                           <p className="text-sm">{notification.parent_name}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">Motivo:</p>
+                          <p className="text-xs text-muted-foreground">Motivo:</p>
                           <p className="text-sm">{notification.reason}</p>
                         </div>
                         {notification.admin_notes && (
-                          <div className="mt-3 p-2 bg-slate-50 rounded">
-                            <p className="text-xs text-slate-500">Respuesta:</p>
+                          <div className="mt-3 p-2 bg-muted rounded">
+                            <p className="text-xs text-muted-foreground">Respuesta:</p>
                             <p className="text-sm">{notification.admin_notes}</p>
                           </div>
                         )}
@@ -225,22 +225,22 @@ export default function GestionAusencias() {
             </DialogHeader>
             {selectedNotification && (
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="p-4 bg-slate-50 rounded-lg space-y-2">
+                <div className="p-4 bg-muted rounded-lg space-y-2">
                   <div>
-                    <p className="text-xs text-slate-500">Estudiante:</p>
+                    <p className="text-xs text-muted-foreground">Estudiante:</p>
                     <p className="font-medium">
                       {students?.find(s => s.id === selectedNotification.student_id)?.first_name}{' '}
                       {students?.find(s => s.id === selectedNotification.student_id)?.last_name}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500">Fecha de ausencia:</p>
+                    <p className="text-xs text-muted-foreground">Fecha de ausencia:</p>
                     <p className="text-sm">
                       {format(new Date(selectedNotification.absence_date), "EEEE d 'de' MMMM", { locale: es })}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500">Motivo:</p>
+                    <p className="text-xs text-muted-foreground">Motivo:</p>
                     <p className="text-sm">{selectedNotification.reason}</p>
                   </div>
                 </div>
@@ -279,7 +279,7 @@ export default function GestionAusencias() {
 
                 <Button
                   type="submit"
-                  className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  className="w-full"
                   disabled={updateNotificationMutation.isPending || !newStatus}
                 >
                   Guardar Decisión

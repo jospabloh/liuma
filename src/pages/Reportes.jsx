@@ -97,24 +97,25 @@ export default function Reportes() {
   if (isLoading) return <LoadingScreen message="Cargando reportes..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader title="Reportes" subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })} showBack backTo={createPageUrl('Home')} />
 
-      <div className="bg-white border rounded-2xl p-4 mb-4">
-        <p className="text-xs text-slate-500 mb-2">Filtros</p>
+      <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4 mb-4">
+        <p className="text-xs text-muted-foreground mb-2">Filtros</p>
         <div className="grid md:grid-cols-4 gap-3">
-          <input className="border rounded-lg px-3 py-2 text-sm" type="date" value={filters.dateFrom} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
-          <input className="border rounded-lg px-3 py-2 text-sm" type="date" value={filters.dateTo} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
-          <select className="border rounded-lg px-3 py-2 text-sm" value={filters.classroomId} onChange={(e) => setFilters((f) => ({ ...f, classroomId: e.target.value }))}>
+          <input className="bg-card border border-border rounded-lg px-3 py-2 text-sm" type="date" value={filters.dateFrom} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
+          <input className="bg-card border border-border rounded-lg px-3 py-2 text-sm" type="date" value={filters.dateTo} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
+          <select className="bg-card border border-border rounded-lg px-3 py-2 text-sm" value={filters.classroomId} onChange={(e) => setFilters((f) => ({ ...f, classroomId: e.target.value }))}>
             <option value="ALL">Todos los salones</option>
             {classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select className="border rounded-lg px-3 py-2 text-sm" value={filters.studentStatus} onChange={(e) => setFilters((f) => ({ ...f, studentStatus: e.target.value }))}>
+          <select className="bg-card border border-border rounded-lg px-3 py-2 text-sm" value={filters.studentStatus} onChange={(e) => setFilters((f) => ({ ...f, studentStatus: e.target.value }))}>
             <option value="ALL">Todos los estados</option><option value="ACTIVE">Activos</option><option value="INACTIVE">Inactivos</option>
           </select>
         </div>
         <div className="grid md:grid-cols-2 gap-3 mt-3">
-          <select className="border rounded-lg px-3 py-2 text-sm" value={filters.roleScope} onChange={(e) => setFilters((f) => ({ ...f, roleScope: e.target.value }))}>
+          <select className="bg-card border border-border rounded-lg px-3 py-2 text-sm" value={filters.roleScope} onChange={(e) => setFilters((f) => ({ ...f, roleScope: e.target.value }))}>
             <option value="ALL">Alcance: todos</option><option value="SCHOOL">Escuela</option><option value="CLASSROOM">Salón</option><option value="STUDENT">Alumno</option>
           </select>
           <div className="flex gap-2 justify-end">
@@ -122,41 +123,42 @@ export default function Reportes() {
             <Button variant="outline" disabled={!canExport} onClick={() => canExport && exportReportPDF({ element: reportRef.current, fileName: `reportes-${today}.pdf` })}><Download className="w-4 h-4 mr-2" />PDF</Button>
           </div>
         </div>
-        <p className="text-xs text-slate-500 mt-3">Datos actualizados: {freshnessLabel}</p>
+        <p className="text-xs text-muted-foreground mt-3">Datos actualizados: {freshnessLabel}</p>
         {!canExport && <p className="text-xs text-red-600 mt-1">No tienes permisos para exportar reportes.</p>}
       </div>
 
       <div className="space-y-4" ref={reportRef}>
-        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><Users className="w-5 h-5 text-blue-600" /></div><div><h3 className="font-semibold text-slate-800">Asistencia</h3><p className="text-sm text-slate-500">{filteredAttendance.length} registros</p></div><div className="ml-auto text-2xl font-bold text-blue-600">{attendanceRate}%</div></div>
-          <button className="text-sm text-blue-700 flex items-center gap-1" onClick={() => togglePanel('attendance')}>Ver detalle {openPanel === 'attendance' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-          {openPanel === 'attendance' && <div className="mt-3 text-sm text-slate-600">Presentes: {filteredAttendance.filter((a) => a.status === 'PRESENT').length} · Ausentes: {filteredAttendance.filter((a) => a.status === 'ABSENT').length}</div>}
+        <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Users className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Asistencia</h3><p className="text-sm text-muted-foreground">{filteredAttendance.length} registros</p></div><div className="ml-auto text-2xl font-bold text-brand">{attendanceRate}%</div></div>
+          <button className="text-sm text-brand flex items-center gap-1" onClick={() => togglePanel('attendance')}>Ver detalle {openPanel === 'attendance' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          {openPanel === 'attendance' && <div className="mt-3 text-sm text-muted-foreground">Presentes: {filteredAttendance.filter((a) => a.status === 'PRESENT').length} · Ausentes: {filteredAttendance.filter((a) => a.status === 'ABSENT').length}</div>}
         </motion.div>
 
-        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><ClipboardList className="w-5 h-5 text-emerald-600" /></div><div><h3 className="font-semibold text-slate-800">Bitácoras</h3><p className="text-sm text-slate-500">{filteredDiaries.length} de {filteredStudents.length}</p></div><div className="ml-auto text-2xl font-bold text-emerald-600">{diaryProgress}%</div></div>
+        <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><ClipboardList className="w-5 h-5 text-emerald-600" /></div><div><h3 className="font-semibold text-card-foreground">Bitácoras</h3><p className="text-sm text-muted-foreground">{filteredDiaries.length} de {filteredStudents.length}</p></div><div className="ml-auto text-2xl font-bold text-emerald-600">{diaryProgress}%</div></div>
           <button className="text-sm text-emerald-700 flex items-center gap-1" onClick={() => togglePanel('diary')}>Ver detalle {openPanel === 'diary' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'diary' && classrooms.map((classroom) => <div key={classroom.id} className="flex justify-between text-sm mt-2"><span>{classroom.name}</span><span>{filteredDiaries.filter((d) => d.classroom_id === classroom.id).length}</span></div>)}
         </motion.div>
 
-        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600" /></div><div><h3 className="font-semibold text-slate-800">Pagos pendientes</h3><p className="text-sm text-slate-500">{pendingCharges.length} cargos</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-slate-800">${totalPending.toLocaleString()}</p><p className="text-xs text-red-600">{overdueCharges.length} vencidos</p></div></div>
+        <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600" /></div><div><h3 className="font-semibold text-card-foreground">Pagos pendientes</h3><p className="text-sm text-muted-foreground">{pendingCharges.length} cargos</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-card-foreground">${totalPending.toLocaleString()}</p><p className="text-xs text-red-600">{overdueCharges.length} vencidos</p></div></div>
           <button className="text-sm text-rose-700 flex items-center gap-1" onClick={() => togglePanel('payments')}>Ver detalle {openPanel === 'payments' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-          {openPanel === 'payments' && <div className="mt-3 text-sm text-slate-600">Por vencer: {pendingCharges.length - overdueCharges.length} · Vencidos: {overdueCharges.length}</div>}
+          {openPanel === 'payments' && <div className="mt-3 text-sm text-muted-foreground">Por vencer: {pendingCharges.length - overdueCharges.length} · Vencidos: {overdueCharges.length}</div>}
         </motion.div>
 
-        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center"><Bell className="w-5 h-5 text-violet-600" /></div><div><h3 className="font-semibold text-slate-800">Avisos</h3><p className="text-sm text-slate-500">{weekNotices.length} enviados</p></div><div className="ml-auto bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">{urgentNotices} urgentes</div></div>
-          <button className="text-sm text-violet-700 flex items-center gap-1" onClick={() => togglePanel('notices')}>Ver detalle {openPanel === 'notices' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-          {openPanel === 'notices' && weekNotices.slice(0, 5).map((n) => <div key={n.id} className="text-sm border-t pt-2 mt-2">{n.title}</div>)}
+        <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Bell className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Avisos</h3><p className="text-sm text-muted-foreground">{weekNotices.length} enviados</p></div><div className="ml-auto bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">{urgentNotices} urgentes</div></div>
+          <button className="text-sm text-brand flex items-center gap-1" onClick={() => togglePanel('notices')}>Ver detalle {openPanel === 'notices' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          {openPanel === 'notices' && weekNotices.slice(0, 5).map((n) => <div key={n.id} className="text-sm border-t border-border pt-2 mt-2">{n.title}</div>)}
         </motion.div>
 
-        <motion.div className="bg-white rounded-2xl p-5 shadow-sm border">
-          <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><Calendar className="w-5 h-5 text-blue-600" /></div><div><h3 className="font-semibold text-slate-800">Próximos eventos</h3><p className="text-sm text-slate-500">{upcomingEvents.length} programados</p></div></div>
-          {upcomingEvents.slice(0, 3).map((event) => <div key={event.id} className="flex items-center gap-3 py-2 border-t border-slate-100"><div className="w-10 h-10 rounded-lg bg-slate-100 flex flex-col items-center justify-center text-xs"><span className="font-bold">{format(new Date(event.date), 'd')}</span><span className="text-slate-500">{format(new Date(event.date), 'MMM', { locale: es })}</span></div><div><p className="font-medium text-slate-800">{event.title}</p>{event.time && <p className="text-xs text-slate-500">{event.time}</p>}</div></div>)}
+        <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
+          <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Calendar className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Próximos eventos</h3><p className="text-sm text-muted-foreground">{upcomingEvents.length} programados</p></div></div>
+          {upcomingEvents.slice(0, 3).map((event) => <div key={event.id} className="flex items-center gap-3 py-2 border-t border-border"><div className="w-10 h-10 rounded-lg bg-muted flex flex-col items-center justify-center text-xs"><span className="font-bold">{format(new Date(event.date), 'd')}</span><span className="text-muted-foreground">{format(new Date(event.date), 'MMM', { locale: es })}</span></div><div><p className="font-medium text-card-foreground">{event.title}</p>{event.time && <p className="text-xs text-muted-foreground">{event.time}</p>}</div></div>)}
         </motion.div>
 
-        <motion.div className="grid grid-cols-2 gap-3"><div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl p-4 text-white"><Users className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{filteredStudents.length}</p><p className="text-sm opacity-80">Alumnos filtrados</p></div><div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white"><BarChart3 className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{classrooms.length}</p><p className="text-sm opacity-80">Salones</p></div></motion.div>
+        <motion.div className="grid grid-cols-2 gap-3"><div className="bg-brand rounded-2xl p-4 text-white"><Users className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{filteredStudents.length}</p><p className="text-sm opacity-80">Alumnos filtrados</p></div><div className="bg-emerald-600 rounded-2xl p-4 text-white"><BarChart3 className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{classrooms.length}</p><p className="text-sm opacity-80">Salones</p></div></motion.div>
+      </div>
       </div>
     </div>
   );

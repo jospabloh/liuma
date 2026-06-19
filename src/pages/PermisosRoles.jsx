@@ -149,11 +149,13 @@ export default function PermisosRoles() {
 
   if (userProfile?.app_role !== 'ADMIN') {
     return (
-      <div className="min-h-screen bg-slate-50 p-6">
+      <div className="min-h-screen bg-background">
         <PageHeader title="Permisos y Roles" subtitle="Acceso restringido" showBack backTo={createPageUrl('Home')} />
-        <Card className="p-4 mt-4">
-          <p className="text-slate-700">Esta página está disponible solo para administradores.</p>
-        </Card>
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
+          <Card className="p-4">
+            <p className="text-card-foreground">Esta página está disponible solo para administradores.</p>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -573,17 +575,18 @@ export default function PermisosRoles() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-background">
       <PageHeader title="Permisos y Roles" subtitle="Configuración de acceso" showBack backTo={createPageUrl('Home')} />
-      <Card className="p-4 mt-4 space-y-4">
-        <p className="text-slate-700">Matriz de permisos por recurso y acción.</p>
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
+      <Card className="p-4 space-y-4">
+        <p className="text-card-foreground">Matriz de permisos por recurso y acción.</p>
 
-        <div className="space-y-3 border rounded bg-white p-3">
-          <p className="font-medium text-slate-800">Cambio de rol de usuario</p>
-          <p className="text-xs text-slate-500">El dueño de la app está exento del maker-checker y aplica el cambio directo.</p>
+        <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
+          <p className="font-medium text-card-foreground">Cambio de rol de usuario</p>
+          <p className="text-xs text-muted-foreground">El dueño de la app está exento del maker-checker y aplica el cambio directo.</p>
           <div className="grid gap-3 md:grid-cols-2">
             <select
-              className="h-10 rounded-md border border-slate-200 px-3 text-sm"
+              className="h-10 rounded-md border border-border px-3 text-sm"
               value={selectedProfileId}
               onChange={(event) => setSelectedProfileId(event.target.value)}
             >
@@ -596,7 +599,7 @@ export default function PermisosRoles() {
             </select>
 
             <select
-              className="h-10 rounded-md border border-slate-200 px-3 text-sm"
+              className="h-10 rounded-md border border-border px-3 text-sm"
               value={selectedRole}
               onChange={(event) => setSelectedRole(event.target.value)}
             >
@@ -612,28 +615,28 @@ export default function PermisosRoles() {
             {isUpdatingRole ? 'Guardando...' : isAdminRoleChange ? 'Solicitar cambio de rol (alto riesgo)' : 'Solicitar cambio de rol'}
           </Button>
         </div>
-        <div className="space-y-3 border rounded bg-white p-3">
-          <p className="font-medium text-slate-800">Rollback por módulo</p>
+        <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
+          <p className="font-medium text-card-foreground">Rollback por módulo</p>
           <div className="grid gap-3 md:grid-cols-2">
-            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={rollbackModule} onChange={(event) => { setRollbackModule(event.target.value); setRollbackOverrideId(''); }}>
+            <select className="h-10 rounded-md border border-border px-3 text-sm" value={rollbackModule} onChange={(event) => { setRollbackModule(event.target.value); setRollbackOverrideId(''); }}>
               {ROLLBACK_MODULES.map((module) => <option key={module} value={module}>{module}</option>)}
             </select>
-            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={rollbackOverrideId} onChange={(event) => setRollbackOverrideId(event.target.value)}>
+            <select className="h-10 rounded-md border border-border px-3 text-sm" value={rollbackOverrideId} onChange={(event) => setRollbackOverrideId(event.target.value)}>
               <option value="">Selecciona override</option>
               {rollbackCandidates.map((entry) => <option key={entry.id} value={entry.id}>{entry.action} / {entry.effect} / {entry.user_profile_id}</option>)}
             </select>
           </div>
-          {rollbackOverride ? <pre className="rounded bg-slate-50 p-2 text-xs">{JSON.stringify({ before: rollbackOverride, after: null }, null, 2)}</pre> : null}
+          {rollbackOverride ? <pre className="rounded bg-muted p-2 text-xs">{JSON.stringify({ before: rollbackOverride, after: null }, null, 2)}</pre> : null}
           {rollbackOverride?.action === 'manage_permissions' ? <p className="text-sm text-red-700">Alto riesgo: requiere maker-checker.</p> : null}
           <Button variant={rollbackOverride?.action === 'manage_permissions' ? 'destructive' : 'outline'} onClick={handleApplyRollback} disabled={isApplyingRollback}>
             {isApplyingRollback ? 'Aplicando...' : rollbackOverride?.action === 'manage_permissions' ? 'Solicitar rollback (alto riesgo)' : 'Aplicar rollback controlado'}
           </Button>
         </div>
-        <div className="space-y-3 border rounded bg-white p-3">
-          <p className="font-medium text-slate-800">Solicitudes pendientes de cambio de rol</p>
-          <div className="overflow-auto border rounded">
+        <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
+          <p className="font-medium text-card-foreground">Solicitudes pendientes de cambio de rol</p>
+          <div className="overflow-auto border border-border rounded-2xl">
             <table className="min-w-full text-sm">
-              <thead><tr className="bg-slate-100"><th className="sticky top-0 bg-slate-100 p-2 text-left">Usuario objetivo</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Desde</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Hacia</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Estado</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Acciones</th></tr></thead>
+              <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Usuario objetivo</th><th className="sticky top-0 bg-muted p-2 text-left">Desde</th><th className="sticky top-0 bg-muted p-2 text-left">Hacia</th><th className="sticky top-0 bg-muted p-2 text-left">Estado</th><th className="sticky top-0 bg-muted p-2 text-left">Acciones</th></tr></thead>
               <tbody>
                 {pendingRoleChanges.map((change) => {
                   const targetProfile = schoolProfiles.find((profile) => profile.id === change.target_profile_id);
@@ -662,12 +665,12 @@ export default function PermisosRoles() {
           {errorText ? <p className="text-sm text-red-600">{errorText}</p> : null}
         </div>
 
-        <div className="space-y-3 border rounded bg-white p-3">
-          <p className="font-medium text-slate-800">Danger Zone (Permisos y Roles)</p>
+        <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
+          <p className="font-medium text-card-foreground">Danger Zone (Permisos y Roles)</p>
           <p className="text-xs text-red-700">Todas las operaciones son de alto riesgo, irreversibles en algunos casos, y usan maker-checker con segundo ADMIN (excepto app owner).</p>
-          <div className="overflow-auto border rounded">
+          <div className="overflow-auto border border-border rounded-2xl">
             <table className="min-w-full text-sm">
-              <thead><tr className="bg-slate-100"><th className="sticky top-0 bg-slate-100 p-2 text-left">Operación</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Riesgo</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Confirmación requerida</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Rollback/Compensación</th></tr></thead>
+              <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Operación</th><th className="sticky top-0 bg-muted p-2 text-left">Riesgo</th><th className="sticky top-0 bg-muted p-2 text-left">Confirmación requerida</th><th className="sticky top-0 bg-muted p-2 text-left">Rollback/Compensación</th></tr></thead>
               <tbody>
                 {dangerZoneOperations.map((operation) => (
                   <tr key={operation.key} className="border-t">
@@ -680,24 +683,24 @@ export default function PermisosRoles() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-slate-600">Guardrails backend: verificación de tenant, verificación de rol ADMIN, y deny-by-default si falta contexto.</p>
-          <p className="text-xs text-slate-600">Auditoría obligatoria por acción: requested_by, approved_by, reason, before/after, timestamp, outcome.</p>
+          <p className="text-xs text-muted-foreground">Guardrails backend: verificación de tenant, verificación de rol ADMIN, y deny-by-default si falta contexto.</p>
+          <p className="text-xs text-muted-foreground">Auditoría obligatoria por acción: requested_by, approved_by, reason, before/after, timestamp, outcome.</p>
         </div>
 
-        <div className="space-y-3 border rounded bg-white p-3">
-          <p className="font-medium text-slate-800">Overrides por usuario</p>
+        <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
+          <p className="font-medium text-card-foreground">Overrides por usuario</p>
           <div className="grid gap-3 md:grid-cols-4">
-            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={overrideForm.user_profile_id} onChange={(event) => setOverrideForm((prev) => ({ ...prev, user_profile_id: event.target.value }))}>
+            <select className="h-10 rounded-md border border-border px-3 text-sm" value={overrideForm.user_profile_id} onChange={(event) => setOverrideForm((prev) => ({ ...prev, user_profile_id: event.target.value }))}>
               <option value="">Selecciona usuario</option>
               {schoolProfiles.map((profile) => <option key={profile.id} value={profile.id}>{getUserName(profile.user_id)} ({profile.app_role})</option>)}
             </select>
-            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={overrideForm.resource} onChange={(event) => setOverrideForm((prev) => ({ ...prev, resource: event.target.value }))}>
+            <select className="h-10 rounded-md border border-border px-3 text-sm" value={overrideForm.resource} onChange={(event) => setOverrideForm((prev) => ({ ...prev, resource: event.target.value }))}>
               {['Notice', 'Attendance', 'Homework', 'DiaryEntry', 'ChargeItem', 'PaymentConcept', 'PaymentRecord'].map((resource) => <option key={resource} value={resource}>{resource}</option>)}
             </select>
-            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={overrideForm.action} onChange={(event) => setOverrideForm((prev) => ({ ...prev, action: event.target.value }))}>
+            <select className="h-10 rounded-md border border-border px-3 text-sm" value={overrideForm.action} onChange={(event) => setOverrideForm((prev) => ({ ...prev, action: event.target.value }))}>
               {POLICY_ACTIONS.map((action) => <option key={action} value={action}>{action}</option>)}
             </select>
-            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={overrideForm.effect} onChange={(event) => setOverrideForm((prev) => ({ ...prev, effect: event.target.value }))}>
+            <select className="h-10 rounded-md border border-border px-3 text-sm" value={overrideForm.effect} onChange={(event) => setOverrideForm((prev) => ({ ...prev, effect: event.target.value }))}>
               <option value="deny">deny</option>
               <option value="allow">allow</option>
             </select>
@@ -705,9 +708,9 @@ export default function PermisosRoles() {
           {isOverrideTargetAdmin ? <p className="text-sm text-red-700">Bloqueado: no se permiten overrides para ADMIN.</p> : null}
           {overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id ? <p className="text-sm text-red-700">Bloqueado: no puedes cambiar tu propio manage_permissions.</p> : null}
           <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar override de permisos' : 'Crear override de permisos'}</Button>
-          <div className="overflow-auto border rounded">
+          <div className="overflow-auto border border-border rounded-2xl">
             <table className="min-w-full text-sm">
-              <thead><tr className="bg-slate-100"><th className="sticky top-0 bg-slate-100 p-2 text-left">Usuario</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Recurso</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Acción</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Efecto</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Preview</th><th className="sticky top-0 bg-slate-100 p-2 text-left">Acciones</th></tr></thead>
+              <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Usuario</th><th className="sticky top-0 bg-muted p-2 text-left">Recurso</th><th className="sticky top-0 bg-muted p-2 text-left">Acción</th><th className="sticky top-0 bg-muted p-2 text-left">Efecto</th><th className="sticky top-0 bg-muted p-2 text-left">Preview</th><th className="sticky top-0 bg-muted p-2 text-left">Acciones</th></tr></thead>
               <tbody>
                 {permissionOverrides.map((override) => {
                   const profile = schoolProfiles.find((entry) => entry.id === override.user_profile_id);
@@ -737,7 +740,7 @@ export default function PermisosRoles() {
               key={`${template.name}-${index}`}
               type="button"
               onClick={() => setActiveTemplateIndex(index)}
-              className={`rounded border p-2 text-left ${index === activeTemplateIndex ? 'border-slate-900 bg-white' : 'border-slate-200 bg-slate-100'}`}
+              className={`rounded-2xl border p-2 text-left ${index === activeTemplateIndex ? 'border-brand/30 bg-brand/10 text-foreground' : 'border-border bg-muted text-muted-foreground'}`}
             >
               {template.name}
             </button>
@@ -752,10 +755,10 @@ export default function PermisosRoles() {
               <Button variant="destructive" onClick={handleDeleteTemplate}>Eliminar plantilla</Button>
             </div>
 
-            <div className="overflow-auto border rounded bg-white">
+            <div className="overflow-auto border border-border rounded-2xl bg-card">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-100">
+                  <tr className="bg-muted">
                     <th className="p-2 text-left">Recurso</th>
                     {ACTIONS.map((action) => (
                       <th key={action} className="p-2 text-left">{action}</th>
@@ -782,9 +785,9 @@ export default function PermisosRoles() {
             </div>
 
 
-            <div className="overflow-auto border rounded bg-white">
+            <div className="overflow-auto border border-border rounded-2xl bg-card">
               <table className="min-w-full text-sm">
-                <thead><tr className="bg-slate-100"><th className="p-2 text-left">Capacidad AI</th><th className="p-2 text-left">allow</th></tr></thead>
+                <thead><tr className="bg-muted"><th className="p-2 text-left">Capacidad AI</th><th className="p-2 text-left">allow</th></tr></thead>
                 <tbody>
                   {AI_CAPABILITIES.map((capability) => (
                     <tr key={capability} className="border-t">
@@ -799,6 +802,7 @@ export default function PermisosRoles() {
           </div>
         ) : null}
       </Card>
+      </div>
     </div>
   );
 }

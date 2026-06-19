@@ -317,7 +317,8 @@ export default function PagosAdmin() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Pagos"
         showBack
@@ -332,20 +333,20 @@ export default function PagosAdmin() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="bg-white rounded-xl p-3 text-center border">
+        <div className="bg-card text-card-foreground rounded-2xl p-3 text-center border border-border shadow-sm">
           <Clock className="w-5 h-5 text-amber-500 mx-auto mb-1" />
           <p className="text-lg font-bold">{pendingCharges.length}</p>
-          <p className="text-xs text-slate-500">Pendientes</p>
+          <p className="text-xs text-muted-foreground">Pendientes</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border">
+        <div className="bg-card text-card-foreground rounded-2xl p-3 text-center border border-border shadow-sm">
           <AlertTriangle className="w-5 h-5 text-red-500 mx-auto mb-1" />
           <p className="text-lg font-bold">{overdueCharges.length}</p>
-          <p className="text-xs text-slate-500">Vencidos</p>
+          <p className="text-xs text-muted-foreground">Vencidos</p>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border">
+        <div className="bg-card text-card-foreground rounded-2xl p-3 text-center border border-border shadow-sm">
           <CheckCircle className="w-5 h-5 text-green-500 mx-auto mb-1" />
           <p className="text-lg font-bold">{paidCharges.length}</p>
-          <p className="text-xs text-slate-500">Pagados</p>
+          <p className="text-xs text-muted-foreground">Pagados</p>
         </div>
       </div>
 
@@ -354,7 +355,7 @@ export default function PagosAdmin() {
         <Button onClick={() => setShowConceptForm(true)} variant="outline" size="sm" className="gap-1">
           <Receipt className="w-4 h-4" /> Concepto
         </Button>
-        <Button onClick={() => setShowChargeForm(true)} className="bg-rose-600 hover:bg-rose-700 gap-1" size="sm">
+        <Button onClick={() => setShowChargeForm(true)} className="gap-1" size="sm">
           <Plus className="w-4 h-4" /> Nuevo cargo
         </Button>
       </div>
@@ -533,7 +534,7 @@ export default function PagosAdmin() {
               <Button 
                 type="submit" 
                 disabled={!chargeForm.student_id || !chargeForm.concept_id || !chargeForm.amount || !chargeForm.due_date || createChargeMutation.isPending}
-                className="flex-1 bg-rose-600 hover:bg-rose-700"
+                className="flex-1"
               >
                 {createChargeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear cargo'}
               </Button>
@@ -550,9 +551,9 @@ export default function PagosAdmin() {
           </DialogHeader>
           {selectedCharge && (
             <form onSubmit={handleRecordPayment} className="space-y-4">
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="font-medium">{getStudentName(selectedCharge.student_id)}</p>
-                <p className="text-sm text-slate-500">{selectedCharge.concept_name}</p>
+              <div className="bg-muted rounded-xl p-4">
+                <p className="font-medium text-foreground">{getStudentName(selectedCharge.student_id)}</p>
+                <p className="text-sm text-muted-foreground">{selectedCharge.concept_name}</p>
               </div>
               <div>
                 <Label>Monto recibido *</Label>
@@ -605,6 +606,7 @@ export default function PagosAdmin() {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
@@ -614,18 +616,18 @@ function ChargeCard({ charge, studentName, onRecordPayment, isOverdue, isPaid })
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-white rounded-xl p-4 border ${
-        isPaid ? 'border-green-200' : isOverdue ? 'border-red-200' : 'border-slate-200'
+      className={`bg-card text-card-foreground rounded-2xl p-4 border shadow-sm ${
+        isPaid ? 'border-green-200' : isOverdue ? 'border-red-200' : 'border-border'
       }`}
     >
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-slate-400" />
-            <span className="font-medium text-slate-800">{studentName}</span>
+            <User className="w-4 h-4 text-muted-foreground" />
+            <span className="font-medium text-card-foreground">{studentName}</span>
           </div>
-          <p className="text-sm text-slate-600 mt-1">{charge.concept_name}</p>
-          <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
+          <p className="text-sm text-muted-foreground mt-1">{charge.concept_name}</p>
+          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
             <Calendar className="w-3 h-3" />
             Vence: {format(new Date(charge.due_date), "d MMM, yyyy", { locale: es })}
           </div>

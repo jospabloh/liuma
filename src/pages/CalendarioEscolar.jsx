@@ -106,8 +106,9 @@ export default function CalendarioEscolar() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-      <PageHeader 
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
+      <PageHeader
         title="Calendario Escolar"
         subtitle={format(selectedDate, "MMMM yyyy", { locale: es })}
         showBack
@@ -121,10 +122,10 @@ export default function CalendarioEscolar() {
         }
       />
 
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6">
         {/* Calendar */}
         <div className="lg:col-span-2">
-          <Card className="p-6">
+          <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-6">
             {/* Month Navigation */}
             <div className="flex items-center justify-between mb-6">
               <Button
@@ -134,7 +135,7 @@ export default function CalendarioEscolar() {
               >
                 ←
               </Button>
-              <h3 className="text-lg font-semibold text-slate-800 capitalize">
+              <h3 className="text-lg font-semibold text-foreground capitalize">
                 {format(selectedDate, "MMMM yyyy", { locale: es })}
               </h3>
               <Button
@@ -150,7 +151,7 @@ export default function CalendarioEscolar() {
             <div className="grid grid-cols-7 gap-2">
               {/* Day Headers */}
               {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, i) => (
-                <div key={i} className="text-center text-sm font-medium text-slate-500 py-2">
+                <div key={i} className="text-center text-sm font-medium text-muted-foreground py-2">
                   {day}
                 </div>
               ))}
@@ -176,14 +177,14 @@ export default function CalendarioEscolar() {
                     onKeyDown={(event) => handleDayKeyDown(event, day)}
                     className={`
                       min-h-20 p-2 rounded-lg border cursor-pointer transition-all duration-200
-                      hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-md
-                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2
-                      ${!isCurrentMonth ? 'bg-slate-50 text-slate-400' : 'bg-white'}
-                      ${isToday ? 'border-indigo-500 border-2' : 'border-slate-200'}
-                      ${isSelected ? 'bg-indigo-100 border-indigo-600 ring-2 ring-indigo-200 shadow-md' : ''}
+                      hover:-translate-y-0.5 hover:border-brand/30 hover:bg-brand/10 hover:shadow-md
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2
+                      ${!isCurrentMonth ? 'bg-muted text-muted-foreground' : 'bg-card'}
+                      ${isToday ? 'border-brand border-2' : 'border-border'}
+                      ${isSelected ? 'bg-brand/10 border-brand ring-2 ring-brand/30 shadow-md' : ''}
                     `}
                   >
-                    <div className={`text-sm font-medium mb-1 ${isToday ? 'text-indigo-600' : ''}`}>
+                    <div className={`text-sm font-medium mb-1 ${isToday ? 'text-brand' : ''}`}>
                       {format(day, 'd')}
                     </div>
                     <div className="space-y-1">
@@ -191,9 +192,9 @@ export default function CalendarioEscolar() {
                         <div
                           key={event.id}
                           onClick={(clickEvent) => { clickEvent.stopPropagation(); handleEventClick(event); }}
-                          className={`text-xs px-1.5 py-0.5 rounded truncate transition-colors hover:ring-2 hover:ring-indigo-300 ${
-                            event.scope === 'SCHOOL' 
-                              ? 'bg-indigo-100 text-indigo-700' 
+                          className={`text-xs px-1.5 py-0.5 rounded truncate transition-colors hover:ring-2 hover:ring-brand/30 ${
+                            event.scope === 'SCHOOL'
+                              ? 'bg-brand/10 text-brand'
                               : 'bg-emerald-100 text-emerald-700'
                           }`}
                         >
@@ -201,7 +202,7 @@ export default function CalendarioEscolar() {
                         </div>
                       ))}
                       {dayEvents.length > 2 && (
-                        <div className="text-xs text-slate-500 px-1.5">
+                        <div className="text-xs text-muted-foreground px-1.5">
                           +{dayEvents.length - 2} más
                         </div>
                       )}
@@ -215,16 +216,16 @@ export default function CalendarioEscolar() {
 
         {/* Upcoming Events Sidebar */}
         <div className="space-y-4">
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-indigo-600" />
+          <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-brand" />
               Agenda del día
             </h3>
-            <p className="text-sm font-medium text-slate-600 capitalize mb-4">
+            <p className="text-sm font-medium text-muted-foreground capitalize mb-4">
               {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
             </p>
             {selectedDayEvents.length === 0 ? (
-              <p className="text-slate-500 text-sm text-center py-8">
+              <p className="text-muted-foreground text-sm text-center py-8">
                 No hay eventos para este día
               </p>
             ) : (
@@ -234,11 +235,11 @@ export default function CalendarioEscolar() {
                     key={event.id}
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="p-3 rounded-lg bg-indigo-50 border border-indigo-200 hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer"
+                    className="p-3 rounded-lg bg-brand/10 border border-brand/30 hover:shadow-md hover:border-brand/30 transition-all cursor-pointer"
                     onClick={() => handleEventClick(event)}
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-slate-800 text-sm">{event.title}</h4>
+                      <h4 className="font-semibold text-card-foreground text-sm">{event.title}</h4>
                       {isAdmin && (
                         <Button
                           variant="ghost"
@@ -250,7 +251,7 @@ export default function CalendarioEscolar() {
                         </Button>
                       )}
                     </div>
-                    <div className="text-xs text-slate-600 space-y-1">
+                    <div className="text-xs text-muted-foreground space-y-1">
                       {event.time && (
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
@@ -264,15 +265,15 @@ export default function CalendarioEscolar() {
                         </div>
                       )}
                       <Badge className={`text-xs ${
-                        event.scope === 'SCHOOL' 
-                          ? 'bg-indigo-100 text-indigo-700' 
+                        event.scope === 'SCHOOL'
+                          ? 'bg-brand/10 text-brand'
                           : 'bg-emerald-100 text-emerald-700'
                       }`}>
                         {event.scope === 'SCHOOL' ? 'Toda la escuela' : 'Por salón'}
                       </Badge>
                     </div>
                     {event.description && (
-                      <p className="text-xs text-slate-500 mt-2">{event.description}</p>
+                      <p className="text-xs text-muted-foreground mt-2">{event.description}</p>
                     )}
                   </motion.div>
                 ))}
@@ -280,13 +281,13 @@ export default function CalendarioEscolar() {
             )}
           </Card>
 
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-indigo-600" />
+          <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-brand" />
               Próximos Eventos
             </h3>
             {upcomingEvents.length === 0 ? (
-              <p className="text-slate-500 text-sm text-center py-8">
+              <p className="text-muted-foreground text-sm text-center py-8">
                 No hay eventos próximos
               </p>
             ) : (
@@ -296,11 +297,11 @@ export default function CalendarioEscolar() {
                     key={event.id}
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="p-3 rounded-lg bg-slate-50 border border-slate-200 hover:shadow-md transition-all cursor-pointer"
+                    className="p-3 rounded-lg bg-muted border border-border hover:shadow-md transition-all cursor-pointer"
                     onClick={() => handleEventClick(event)}
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-slate-800 text-sm">{event.title}</h4>
+                      <h4 className="font-semibold text-card-foreground text-sm">{event.title}</h4>
                       {isAdmin && (
                         <Button
                           variant="ghost"
@@ -312,7 +313,7 @@ export default function CalendarioEscolar() {
                         </Button>
                       )}
                     </div>
-                    <div className="text-xs text-slate-600 space-y-1">
+                    <div className="text-xs text-muted-foreground space-y-1">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
                         {format(new Date(event.date), "d 'de' MMMM", { locale: es })}
@@ -330,15 +331,15 @@ export default function CalendarioEscolar() {
                         </div>
                       )}
                       <Badge className={`text-xs ${
-                        event.scope === 'SCHOOL' 
-                          ? 'bg-indigo-100 text-indigo-700' 
+                        event.scope === 'SCHOOL'
+                          ? 'bg-brand/10 text-brand'
                           : 'bg-emerald-100 text-emerald-700'
                       }`}>
                         {event.scope === 'SCHOOL' ? 'Toda la escuela' : 'Por salón'}
                       </Badge>
                     </div>
                     {event.description && (
-                      <p className="text-xs text-slate-500 mt-2">{event.description}</p>
+                      <p className="text-xs text-muted-foreground mt-2">{event.description}</p>
                     )}
                   </motion.div>
                 ))}
@@ -361,6 +362,7 @@ export default function CalendarioEscolar() {
           classrooms={classrooms}
         />
       )}
+      </div>
     </div>
   );
 }

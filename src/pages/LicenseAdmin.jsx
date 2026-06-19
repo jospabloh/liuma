@@ -27,8 +27,8 @@ const STATUS_CONFIG = {
   trial:     { label: 'Prueba',      color: 'text-blue-600 bg-blue-50',     icon: Clock },
   active:    { label: 'Activo',      color: 'text-emerald-600 bg-emerald-50', icon: CheckCircle },
   view_only: { label: 'Solo lectura', color: 'text-amber-600 bg-amber-50',   icon: AlertCircle },
-  inactive:  { label: 'Inactivo',    color: 'text-slate-600 bg-slate-100',  icon: AlertCircle },
-  canceled:  { label: 'Cancelado',   color: 'text-slate-600 bg-slate-100',  icon: AlertCircle },
+  inactive:  { label: 'Inactivo',    color: 'text-muted-foreground bg-muted',  icon: AlertCircle },
+  canceled:  { label: 'Cancelado',   color: 'text-muted-foreground bg-muted',  icon: AlertCircle },
   suspended: { label: 'Suspendido',  color: 'text-red-600 bg-red-50',       icon: AlertCircle },
 };
 
@@ -53,8 +53,8 @@ function SchoolLicenseView() {
   if (!isSchoolAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Shield className="w-10 h-10 text-slate-400" />
-        <p className="text-slate-500 text-sm">Acceso restringido.</p>
+        <Shield className="w-10 h-10 text-muted-foreground" />
+        <p className="text-muted-foreground text-sm">Acceso restringido.</p>
       </div>
     );
   }
@@ -63,7 +63,8 @@ function SchoolLicenseView() {
   const StatusIcon = cfg.icon;
 
   return (
-    <div className="p-6 pb-24 max-w-lg mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader title="Mi Licencia" subtitle={subscription ? 'Información de tu plan LIUMA' : 'Sin suscripción registrada'} />
 
       <div className="space-y-4">
@@ -79,16 +80,16 @@ function SchoolLicenseView() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Detalles del plan</p>
+        <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4 space-y-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Detalles del plan</p>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Tipo de licencia</p>
-              <p className="text-sm font-bold text-slate-800">{planLabel(licenseTier)}</p>
+            <div className="bg-muted rounded-xl p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Tipo de licencia</p>
+              <p className="text-sm font-bold text-card-foreground">{planLabel(licenseTier)}</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Alumnos</p>
-              <p className="text-sm font-bold text-slate-800">{licensedStudentLimit ?? 'Ilimitado'}</p>
+            <div className="bg-muted rounded-xl p-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Alumnos</p>
+              <p className="text-sm font-bold text-card-foreground">{licensedStudentLimit ?? 'Ilimitado'}</p>
             </div>
           </div>
 
@@ -100,8 +101,8 @@ function SchoolLicenseView() {
           </div>
         </div>
 
-        <div className="bg-slate-50 rounded-2xl px-4 py-3 border border-slate-200">
-          <p className="text-[11px] text-slate-500 text-center">
+        <div className="bg-muted rounded-2xl px-4 py-3 border border-border">
+          <p className="text-[11px] text-muted-foreground text-center">
             Tu suscripción se gestiona vía Mercado Pago. Para cambios en tu plan, contacta al soporte de LIUMA.
           </p>
         </div>
@@ -109,10 +110,11 @@ function SchoolLicenseView() {
           href={CONTACT_FORM_URL}
           target="_blank"
           rel="noreferrer"
-          className="block w-full text-center py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold text-sm"
+          className="block w-full text-center py-3 rounded-2xl bg-brand text-primary-foreground font-semibold text-sm"
         >
           Contactar soporte
         </a>
+      </div>
       </div>
     </div>
   );
@@ -121,8 +123,8 @@ function SchoolLicenseView() {
 function DetailRow({ icon: Icon, label, value }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-slate-500 flex items-center gap-1.5"><Icon className="w-3.5 h-3.5" /> {label}</span>
-      <span className="font-medium text-slate-700">{value}</span>
+      <span className="text-muted-foreground flex items-center gap-1.5"><Icon className="w-3.5 h-3.5" /> {label}</span>
+      <span className="font-medium text-card-foreground">{value}</span>
     </div>
   );
 }
@@ -274,7 +276,8 @@ export default function LicenseAdmin() {
   }
 
   return (
-    <div className="p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader title="Licencias LIUMA" subtitle="Panel interno ACACIA" />
 
       <div className="space-y-4 max-w-2xl mx-auto">
@@ -301,20 +304,20 @@ export default function LicenseAdmin() {
         )}
 
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre o ID de escuela..."
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-violet-300"
+            className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
+          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
         ) : filtered.length === 0 ? (
-          <p className="text-center text-sm text-slate-500 py-8">No se encontraron escuelas.</p>
+          <p className="text-center text-sm text-muted-foreground py-8">No se encontraron escuelas.</p>
         ) : (
           <div className="space-y-2">
             {filtered.map((row) => {
@@ -329,10 +332,10 @@ export default function LicenseAdmin() {
                 <button
                   key={school.id}
                   onClick={() => handleSelect(row)}
-                  className="w-full text-left bg-white border border-slate-200 rounded-2xl p-4 hover:border-violet-300 transition-colors shadow-sm"
+                  className="w-full text-left bg-card text-card-foreground border border-border rounded-2xl p-4 hover:border-brand/30 transition-colors shadow-sm"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <p className="font-semibold text-sm text-slate-800">{school.name}</p>
+                    <p className="font-semibold text-sm text-card-foreground">{school.name}</p>
                     <div className="flex items-center gap-2">
                       {sub?.auto_renewal && (
                         <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-emerald-600 bg-emerald-50">
@@ -342,25 +345,25 @@ export default function LicenseAdmin() {
                       <span className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${cfg.color}`}>
                         <StatusIcon className="w-3 h-3" /> {cfg.label}
                       </span>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Users className="w-3 h-3" /> {sub?.licensed_student_limit ?? '—'} alumnos lic.
                     </span>
-                    <span>Tier: <span className="font-medium text-slate-700">{planLabel(sub?.license_tier)}</span></span>
+                    <span>Tier: <span className="font-medium text-card-foreground">{planLabel(sub?.license_tier)}</span></span>
                     {daysLeft !== null && (
                       <span className={daysLeft <= 7 ? 'text-orange-500 font-semibold' : ''}>{daysLeft}d restantes</span>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-x-4 text-[11px] text-slate-400 mt-1">
-                    <span>ID: <span className="font-mono text-slate-600 break-all">{school.id}</span></span>
+                  <div className="flex flex-wrap gap-x-4 text-[11px] text-muted-foreground mt-1">
+                    <span>ID: <span className="font-mono text-muted-foreground break-all">{school.id}</span></span>
                     {sub?.license_expires_at && (
-                      <span>Vence: <span className="font-medium text-slate-600">{fmt(sub.license_expires_at)}</span></span>
+                      <span>Vence: <span className="font-medium text-card-foreground">{fmt(sub.license_expires_at)}</span></span>
                     )}
                     {sub?.last_payment_period && (
-                      <span>Último pago: <span className="font-medium text-slate-600">{sub.last_payment_period}</span></span>
+                      <span>Último pago: <span className="font-medium text-card-foreground">{sub.last_payment_period}</span></span>
                     )}
                   </div>
                   {!sub && (
@@ -377,17 +380,17 @@ export default function LicenseAdmin() {
         <>
           <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setSelected(null)} />
           <div
-            className="fixed inset-x-4 top-[3%] z-[51] max-w-md mx-auto bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-y-auto"
+            className="fixed inset-x-4 top-[3%] z-[51] max-w-md mx-auto bg-card text-card-foreground rounded-3xl border border-border shadow-2xl overflow-y-auto"
             style={{ maxHeight: '94vh' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
+            <div className="p-5 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
               <div className="min-w-0 pr-2">
-                <h3 className="font-bold text-slate-800 truncate">{selected.school.name}</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">ID: <span className="font-mono break-all">{selected.school.id}</span></p>
+                <h3 className="font-bold text-card-foreground truncate">{selected.school.name}</h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">ID: <span className="font-mono break-all">{selected.school.id}</span></p>
               </div>
-              <button onClick={() => setSelected(null)} className="p-1.5 rounded-xl bg-slate-100">
-                <X className="w-4 h-4 text-slate-500" />
+              <button onClick={() => setSelected(null)} className="p-1.5 rounded-xl bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
 
@@ -412,7 +415,7 @@ export default function LicenseAdmin() {
                 </Field>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 mb-2 block">Tipo de licencia</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-2 block">Tipo de licencia</label>
                   <div className="space-y-2">
                     {PLAN_OPTIONS.map((p) => (
                       <button
@@ -420,15 +423,15 @@ export default function LicenseAdmin() {
                         onClick={() => setPayForm((f) => ({ ...f, license_tier: p.id }))}
                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-all ${
                           payForm.license_tier === p.id
-                            ? 'bg-violet-50 border-violet-400 text-violet-700 font-semibold'
-                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                            ? 'bg-brand/10 border-brand/30 text-brand font-semibold'
+                            : 'bg-card border-border text-card-foreground hover:bg-muted'
                         }`}
                       >
                         <div className="text-left">
                           <p className="font-semibold text-sm">{p.label}</p>
-                          <p className="text-[11px] text-slate-400">{p.desc}</p>
+                          <p className="text-[11px] text-muted-foreground">{p.desc}</p>
                         </div>
-                        <span className={`text-xs font-bold ${payForm.license_tier === p.id ? 'text-violet-600' : 'text-slate-400'}`}>{p.price}</span>
+                        <span className={`text-xs font-bold ${payForm.license_tier === p.id ? 'text-brand' : 'text-muted-foreground'}`}>{p.price}</span>
                       </button>
                     ))}
                   </div>
@@ -489,12 +492,12 @@ export default function LicenseAdmin() {
               </div>
 
               {/* SECTION 2: Ajuste general */}
-              <div className="border border-slate-200 rounded-2xl p-4 space-y-4">
-                <h4 className="text-sm font-bold text-slate-800">Ajuste general de licencia</h4>
-                <p className="text-[11px] text-slate-400 -mt-2">Cambia el estado o datos administrativos sin confirmar un pago.</p>
+              <div className="border border-border rounded-2xl p-4 space-y-4">
+                <h4 className="text-sm font-bold text-card-foreground">Ajuste general de licencia</h4>
+                <p className="text-[11px] text-muted-foreground -mt-2">Cambia el estado o datos administrativos sin confirmar un pago.</p>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 mb-2 block">Estado</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-2 block">Estado</label>
                   <div className="grid grid-cols-3 gap-2">
                     {Object.entries(STATUS_CONFIG).map(([s, cfg]) => (
                       <button
@@ -502,8 +505,8 @@ export default function LicenseAdmin() {
                         onClick={() => setForm((f) => ({ ...f, subscription_status: s }))}
                         className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all ${
                           form.subscription_status === s
-                            ? 'bg-violet-600 text-white border-violet-600'
-                            : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'
+                            ? 'bg-brand text-primary-foreground border-brand'
+                            : 'bg-muted text-muted-foreground border-transparent hover:bg-secondary'
                         }`}
                       >
                         {cfg.label}
@@ -513,7 +516,7 @@ export default function LicenseAdmin() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 mb-2 block">Tipo de licencia</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-2 block">Tipo de licencia</label>
                   <div className="grid grid-cols-3 gap-2">
                     {PLAN_OPTIONS.map((p) => (
                       <button
@@ -521,8 +524,8 @@ export default function LicenseAdmin() {
                         onClick={() => setForm((f) => ({ ...f, license_tier: p.id }))}
                         className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all ${
                           form.license_tier === p.id
-                            ? 'bg-violet-600 text-white border-violet-600'
-                            : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'
+                            ? 'bg-brand text-primary-foreground border-brand'
+                            : 'bg-muted text-muted-foreground border-transparent hover:bg-secondary'
                         }`}
                       >
                         {p.label.replace('LIUMA ', '')}
@@ -561,7 +564,7 @@ export default function LicenseAdmin() {
                 <button
                   onClick={() => activateMutation.mutate()}
                   disabled={activateMutation.isPending}
-                  className="w-full py-3.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2 min-h-[52px] transition-colors"
+                  className="w-full py-3.5 rounded-2xl bg-brand hover:bg-brand/90 text-primary-foreground font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2 min-h-[52px] transition-colors"
                 >
                   {activateMutation.isPending
                     ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
@@ -572,16 +575,17 @@ export default function LicenseAdmin() {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
 
-const INPUT_CLASS = 'w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-violet-300';
+const INPUT_CLASS = 'w-full bg-card border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand/30';
 
 function Field({ label, children }) {
   return (
     <div>
-      <label className="text-xs font-semibold text-slate-500 mb-1.5 block">{label}</label>
+      <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">{label}</label>
       {children}
     </div>
   );
@@ -592,18 +596,18 @@ function ToggleField({ active, onToggle, onLabel, offLabel, hint }) {
     <button
       onClick={onToggle}
       className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left ${
-        active ? 'bg-emerald-100 border-emerald-300' : 'bg-white border-slate-200'
+        active ? 'bg-emerald-100 border-emerald-300' : 'bg-card border-border'
       }`}
     >
       <div>
-        <p className={`text-sm font-semibold ${active ? 'text-emerald-700' : 'text-slate-500'}`}>
+        <p className={`text-sm font-semibold ${active ? 'text-emerald-700' : 'text-muted-foreground'}`}>
           {active ? onLabel : offLabel}
         </p>
-        {hint && <p className="text-[11px] text-slate-400 mt-0.5">{hint}</p>}
+        {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
       </div>
       {active
         ? <ToggleRight className="w-6 h-6 text-emerald-600 flex-shrink-0" />
-        : <ToggleLeft className="w-6 h-6 text-slate-400 flex-shrink-0" />}
+        : <ToggleLeft className="w-6 h-6 text-muted-foreground flex-shrink-0" />}
     </button>
   );
 }

@@ -151,13 +151,14 @@ export default function AvisosMaestro() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Avisos"
         showBack
         backTo={createPageUrl('Home')}
         action={
-          <Button onClick={() => setShowWizard(true)} className="bg-violet-600 hover:bg-violet-700 gap-1">
+          <Button onClick={() => setShowWizard(true)} className="gap-1">
             <Plus className="w-4 h-4" /> Crear
           </Button>
         }
@@ -169,7 +170,7 @@ export default function AvisosMaestro() {
           title="Sin avisos"
           description="Crea el primer aviso para tus alumnos y sus padres."
           action={
-            <Button onClick={() => setShowWizard(true)} className="bg-violet-600 hover:bg-violet-700">
+            <Button onClick={() => setShowWizard(true)}>
               <Plus className="w-4 h-4 mr-1" /> Crear aviso
             </Button>
           }
@@ -210,7 +211,7 @@ export default function AvisosMaestro() {
               <div
                 key={s}
                 className={`flex-1 h-1.5 rounded-full transition-colors ${
-                  s <= wizardStep ? 'bg-violet-600' : 'bg-slate-200'
+                  s <= wizardStep ? 'bg-brand' : 'bg-muted'
                 }`}
               />
             ))}
@@ -226,7 +227,7 @@ export default function AvisosMaestro() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-4"
               >
-                <h3 className="font-medium text-slate-800">¿A quién va dirigido?</h3>
+                <h3 className="font-medium text-foreground">¿A quién va dirigido?</h3>
                 
                 <div>
                   <Label>Salón</Label>
@@ -267,7 +268,7 @@ export default function AvisosMaestro() {
                 <Button
                   onClick={() => setWizardStep(2)}
                   disabled={!formData.classroom_id}
-                  className="w-full bg-violet-600 hover:bg-violet-700"
+                  className="w-full"
                 >
                   Continuar <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
@@ -283,7 +284,7 @@ export default function AvisosMaestro() {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-4"
               >
-                <h3 className="font-medium text-slate-800">Escribe tu mensaje</h3>
+                <h3 className="font-medium text-foreground">Escribe tu mensaje</h3>
                 
                 <div>
                   <Label>Título *</Label>
@@ -312,7 +313,7 @@ export default function AvisosMaestro() {
                   <Button
                     onClick={() => setWizardStep(3)}
                     disabled={!formData.title || !formData.content}
-                    className="flex-1 bg-violet-600 hover:bg-violet-700"
+                    className="flex-1"
                   >
                     Revisar <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
@@ -330,24 +331,24 @@ export default function AvisosMaestro() {
                 className="space-y-4"
               >
                 <div className="text-center mb-4">
-                  <Send className="w-12 h-12 text-violet-600 mx-auto mb-2" />
-                  <h3 className="font-medium text-slate-800">Confirmar y enviar</h3>
+                  <Send className="w-12 h-12 text-brand mx-auto mb-2" />
+                  <h3 className="font-medium text-foreground">Confirmar y enviar</h3>
                 </div>
-                
-                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+
+                <div className="bg-muted rounded-xl p-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Para:</span>
+                    <span className="text-muted-foreground">Para:</span>
                     <span className="font-medium">{classrooms.find(c => c.id === formData.classroom_id)?.name}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Prioridad:</span>
+                    <span className="text-muted-foreground">Prioridad:</span>
                     <span className="font-medium">{formData.priority}</span>
                   </div>
                 </div>
 
-                <div className="bg-white border rounded-xl p-4">
-                  <h4 className="font-semibold text-slate-800">{formData.title}</h4>
-                  <p className="text-sm text-slate-600 mt-2 whitespace-pre-wrap">{formData.content}</p>
+                <div className="bg-card border border-border rounded-xl p-4">
+                  <h4 className="font-semibold text-card-foreground">{formData.title}</h4>
+                  <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">{formData.content}</p>
                 </div>
 
                 <div className="flex gap-3">
@@ -357,7 +358,7 @@ export default function AvisosMaestro() {
                   <Button
                     onClick={handleSubmit}
                     disabled={createNoticeMutation.isPending}
-                    className="flex-1 bg-violet-600 hover:bg-violet-700"
+                    className="flex-1"
                   >
                     {createNoticeMutation.isPending ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -373,6 +374,7 @@ export default function AvisosMaestro() {
           </AnimatePresence>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

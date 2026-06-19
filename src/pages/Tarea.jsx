@@ -75,7 +75,8 @@ export default function Tarea() {
   if (isLoading) return <LoadingScreen message="Cargando tareas..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Tarea"
         subtitle="Sigue tareas por hijo sin confusiones"
@@ -83,8 +84,8 @@ export default function Tarea() {
         backTo={createPageUrl('Home')}
       />
       {students.length > 1 && (
-        <div className="mb-4 bg-white border border-slate-200 rounded-xl p-3">
-          <p className="text-xs font-medium text-slate-500 mb-2">Hijo activo</p>
+        <div className="mb-4 bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-3">
+          <p className="text-xs font-medium text-muted-foreground mb-2">Hijo activo</p>
           <Select value={activeStudentId} onValueChange={setActiveStudentId}>
             <SelectTrigger>
               <SelectValue placeholder="Todos mis hijos" />
@@ -168,18 +169,18 @@ export default function Tarea() {
           {selectedHomework && (
             <div className="space-y-4">
               {selectedHomework.subject && (
-                <div className="flex items-center gap-2 text-indigo-600">
+                <div className="flex items-center gap-2 text-brand">
                   <BookOpen className="w-4 h-4" />
                   <span className="font-medium">{selectedHomework.subject}</span>
                 </div>
               )}
               {activeStudent && (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                <Badge variant="secondary" className="bg-brand/10 text-brand">
                   Hijo activo: {activeStudent.first_name} {activeStudent.last_name}
                 </Badge>
               )}
-              
-              <div className="flex items-center gap-2 text-slate-600">
+
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
                 <span>
                   Entregar: {format(new Date(selectedHomework.due_date), "EEEE d 'de' MMMM", { locale: es })}
@@ -187,14 +188,14 @@ export default function Tarea() {
               </div>
 
               {selectedHomework.description && (
-                <div className="bg-slate-50 rounded-xl p-4">
-                  <p className="text-slate-700 whitespace-pre-wrap">{selectedHomework.description}</p>
+                <div className="bg-muted rounded-xl p-4">
+                  <p className="text-card-foreground whitespace-pre-wrap">{selectedHomework.description}</p>
                 </div>
               )}
 
               {selectedHomework.attachments?.length > 0 && (
                 <div>
-                  <p className="font-medium text-slate-700 mb-2">Archivos adjuntos</p>
+                  <p className="font-medium text-card-foreground mb-2">Archivos adjuntos</p>
                   <div className="space-y-2">
                     {selectedHomework.attachments.map((url, i) => (
                       <a
@@ -202,7 +203,7 @@ export default function Tarea() {
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block bg-indigo-50 text-indigo-700 rounded-lg p-3 text-sm hover:bg-indigo-100"
+                        className="block bg-brand/10 text-brand rounded-lg p-3 text-sm hover:bg-brand/20"
                       >
                         Ver archivo {i + 1}
                       </a>
@@ -210,14 +211,15 @@ export default function Tarea() {
                   </div>
                 </div>
               )}
-              
-              <p className="text-xs text-slate-400 text-center">
+
+              <p className="text-xs text-muted-foreground text-center">
                 Asignada por {selectedHomework.teacher_name}
               </p>
             </div>
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

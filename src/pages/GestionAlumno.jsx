@@ -166,7 +166,8 @@ export default function GestionAlumno() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Gestión de alumno"
         showBack
@@ -179,21 +180,21 @@ export default function GestionAlumno() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100"
+            className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-5"
           >
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center">
-                <User className="w-8 h-8 text-indigo-600" />
+              <div className="w-16 h-16 rounded-2xl bg-brand/10 flex items-center justify-center">
+                <User className="w-8 h-8 text-brand" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-800">
+                <h2 className="text-xl font-bold text-card-foreground">
                   {student.first_name} {student.last_name}
                 </h2>
                 <Badge variant="secondary" className="mt-1">
                   {classroom?.name || 'Sin salón'}
                 </Badge>
                 {student.birth_date && (
-                  <p className="text-sm text-slate-500 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {format(new Date(student.birth_date), "d 'de' MMMM, yyyy", { locale: es })}
                   </p>
                 )}
@@ -206,21 +207,21 @@ export default function GestionAlumno() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100"
+            className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-5"
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-800">Padres vinculados</h3>
-              <Button 
-                onClick={() => setShowLinkForm(true)} 
+              <h3 className="text-lg font-semibold text-foreground">Padres vinculados</h3>
+              <Button
+                onClick={() => setShowLinkForm(true)}
                 size="sm"
-                className="bg-indigo-600 hover:bg-indigo-700 gap-1"
+                className="gap-1"
               >
                 <UserPlus className="w-4 h-4" /> Vincular
               </Button>
             </div>
 
             {parentLinks.filter(l => l.status === 'ACTIVE').length === 0 ? (
-              <div className="text-center py-6 text-slate-500">
+              <div className="text-center py-6 text-muted-foreground">
                 <Link className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p>Sin padres vinculados</p>
               </div>
@@ -229,11 +230,11 @@ export default function GestionAlumno() {
                 {parentLinks.filter(l => l.status === 'ACTIVE').map((link) => (
                   <div
                     key={link.id}
-                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl"
+                    className="flex items-center justify-between p-3 bg-muted rounded-xl"
                   >
                     <div>
-                      <p className="font-medium text-slate-800">{getUserName(link.parent_id)}</p>
-                      <p className="text-sm text-slate-500 flex items-center gap-1">
+                      <p className="font-medium text-foreground">{getUserName(link.parent_id)}</p>
+                      <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Mail className="w-3 h-3" />
                         {getUserEmail(link.parent_id)}
                       </p>
@@ -314,7 +315,7 @@ export default function GestionAlumno() {
               <Button
                 onClick={handleLinkParent}
                 disabled={!selectedParentId || linkParentMutation.isPending}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                className="flex-1"
               >
                 {linkParentMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -328,6 +329,7 @@ export default function GestionAlumno() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

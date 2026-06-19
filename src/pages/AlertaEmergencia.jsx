@@ -121,7 +121,7 @@ export default function AlertaEmergencia() {
 
   if (sent) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -130,10 +130,10 @@ export default function AlertaEmergencia() {
           <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-10 h-10 text-green-600" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">
+          <h1 className="text-2xl font-bold text-foreground mb-2">
             Alerta enviada
           </h1>
-          <p className="text-slate-600 mb-6">
+          <p className="text-muted-foreground mb-6">
             Todos los padres y maestros han sido notificados.
           </p>
           <Button onClick={() => navigate(createPageUrl('Home'))} className="gap-2">
@@ -145,7 +145,7 @@ export default function AlertaEmergencia() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 p-6">
+    <div className="min-h-screen bg-background p-6">
       <PageHeader
         title="Alerta de emergencia"
         showBack
@@ -157,15 +157,15 @@ export default function AlertaEmergencia() {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md mx-auto"
       >
-        <div className="bg-white rounded-2xl shadow-xl p-6">
+        <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-6">
           <div className="text-center mb-6">
             <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-red-600" />
             </div>
-            <h2 className="text-xl font-bold text-slate-800">
+            <h2 className="text-xl font-bold text-card-foreground">
               Enviar alerta URGENTE
             </h2>
-            <p className="text-slate-500 mt-1">
+            <p className="text-muted-foreground mt-1">
               Esta alerta se enviará a TODA la comunidad de {school?.name}.
             </p>
           </div>
@@ -185,7 +185,7 @@ export default function AlertaEmergencia() {
               placeholder="Describe la situación de emergencia..."
               className="mt-1 min-h-[100px]"
             />
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Si no escribes un mensaje, se enviará un texto genérico de alerta.
             </p>
           </div>

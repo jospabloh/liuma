@@ -14,7 +14,7 @@ export default function WelcomeTrialModal({ subscription, onClose }) {
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-md p-0 overflow-hidden">
-        <div className="relative bg-gradient-to-br from-violet-500 via-purple-500 to-pink-500 p-8 text-white">
+        <div className="relative bg-brand p-8 text-white">
           <button
             onClick={onClose}
             className="absolute top-4 right-4 text-white/80 hover:text-white"
@@ -40,22 +40,22 @@ export default function WelcomeTrialModal({ subscription, onClose }) {
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-4 border border-violet-200">
+          <div className="bg-brand/10 rounded-xl p-4 border border-brand/30">
             <div className="flex items-center gap-3 mb-2">
-              <Calendar className="w-5 h-5 text-violet-600" />
-              <p className="font-semibold text-violet-800">Período de prueba</p>
+              <Calendar className="w-5 h-5 text-brand" />
+              <p className="font-semibold text-foreground">Período de prueba</p>
             </div>
-            <p className="text-sm text-slate-600">
-              Tienes <strong className="text-violet-600">{daysLeft} días</strong> para explorar todas las funcionalidades de LIUMA sin costo.
+            <p className="text-sm text-muted-foreground">
+              Tienes <strong className="text-brand">{daysLeft} días</strong> para explorar todas las funcionalidades de LIUMA sin costo.
             </p>
-            <p className="text-xs text-slate-500 mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               Vence: {format(new Date(subscription.trial_end_date), "d 'de' MMMM, yyyy", { locale: es })}
             </p>
           </div>
 
           <div className="space-y-2">
-            <h3 className="font-semibold text-slate-800">¿Qué incluye?</h3>
-            <ul className="space-y-2 text-sm text-slate-600">
+            <h3 className="font-semibold text-foreground">¿Qué incluye?</h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">
                 <span className="text-green-500 mt-0.5">✓</span>
                 <span>Bitácoras diarias ilimitadas</span>
@@ -81,12 +81,12 @@ export default function WelcomeTrialModal({ subscription, onClose }) {
 
           <Button
             onClick={onClose}
-            className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700"
+            className="w-full bg-brand text-white hover:bg-brand/90"
           >
             Comenzar a usar LIUMA
           </Button>
 
-          <p className="text-xs text-center text-slate-500">
+          <p className="text-xs text-center text-muted-foreground">
             © 2026 ACACIA Consultoría. Todos los derechos reservados.
           </p>
         </div>

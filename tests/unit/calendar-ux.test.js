@@ -23,9 +23,9 @@ test('calendar days expose visible hover, selected, and keyboard focus states', 
   assert.match(calendar, /tabIndex=\{0\}/);
   assert.match(calendar, /aria-pressed=\{isSelected\}/);
   assert.match(calendar, /onKeyDown=\{\(event\) => handleDayKeyDown\(event, day\)\}/);
-  assert.match(calendar, /hover:-translate-y-0\.5 hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-md/);
-  assert.match(calendar, /focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2/);
-  assert.match(calendar, /isSelected \? 'bg-indigo-100 border-indigo-600 ring-2 ring-indigo-200 shadow-md'/);
+  assert.match(calendar, /hover:-translate-y-0\.5 hover:border-brand\/30 hover:bg-brand\/10 hover:shadow-md/);
+  assert.match(calendar, /focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2/);
+  assert.match(calendar, /isSelected \? 'bg-brand\/10 border-brand ring-2 ring-brand\/30 shadow-md'/);
 });
 
 test('buttons and global interactive controls have visible hover and focus affordances', () => {

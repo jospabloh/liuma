@@ -101,14 +101,15 @@ export default function ContactosEmergencia() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Contactos de emergencia"
         subtitle={student ? `${student.first_name} ${student.last_name}` : ''}
         showBack
         backTo={createPageUrl('MisHijos')}
         action={
-          <Button onClick={() => setShowForm(true)} className="bg-indigo-600 hover:bg-indigo-700 gap-1">
+          <Button onClick={() => setShowForm(true)} className="gap-1">
             <Plus className="w-4 h-4" /> Agregar
           </Button>
         }
@@ -120,7 +121,7 @@ export default function ContactosEmergencia() {
           title="Sin contactos de emergencia"
           description="Agrega contactos para casos de emergencia."
           action={
-            <Button onClick={() => setShowForm(true)} className="bg-indigo-600 hover:bg-indigo-700">
+            <Button onClick={() => setShowForm(true)}>
               <Plus className="w-4 h-4 mr-1" /> Agregar contacto
             </Button>
           }
@@ -133,19 +134,19 @@ export default function ContactosEmergencia() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="bg-white rounded-xl p-4 shadow-sm border border-slate-100"
+              className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4"
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
-                    <User className="w-5 h-5 text-slate-500" />
+                  <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+                    <User className="w-5 h-5 text-brand" />
                   </div>
                   <div>
-                    <h3 className="font-medium text-slate-800">{contact.name}</h3>
-                    <p className="text-sm text-slate-500">{contact.relationship}</p>
-                    <a 
+                    <h3 className="font-medium text-card-foreground">{contact.name}</h3>
+                    <p className="text-sm text-muted-foreground">{contact.relationship}</p>
+                    <a
                       href={`tel:${contact.phone}`}
-                      className="flex items-center gap-1 text-indigo-600 font-medium mt-1"
+                      className="flex items-center gap-1 text-brand font-medium mt-1"
                     >
                       <Phone className="w-4 h-4" />
                       {contact.phone}
@@ -156,7 +157,7 @@ export default function ContactosEmergencia() {
                       </Badge>
                     )}
                     {contact.notes && (
-                      <p className="text-sm text-slate-500 mt-2">{contact.notes}</p>
+                      <p className="text-sm text-muted-foreground mt-2">{contact.notes}</p>
                     )}
                   </div>
                 </div>
@@ -210,7 +211,7 @@ export default function ContactosEmergencia() {
                 className="mt-1"
               />
             </div>
-            <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-4">
+            <div className="flex items-center gap-3 bg-muted rounded-xl p-4">
               <Switch
                 checked={formData.is_authorized_pickup}
                 onCheckedChange={(checked) => setFormData({ ...formData, is_authorized_pickup: checked })}
@@ -218,7 +219,7 @@ export default function ContactosEmergencia() {
               />
               <Label htmlFor="authorized-pickup" className="cursor-pointer">
                 <span className="font-medium">Autorizado para recoger</span>
-                <p className="text-sm text-slate-500">Esta persona puede recoger al alumno de la escuela</p>
+                <p className="text-sm text-muted-foreground">Esta persona puede recoger al alumno de la escuela</p>
               </Label>
             </div>
             <div>
@@ -237,7 +238,7 @@ export default function ContactosEmergencia() {
               <Button
                 type="submit"
                 disabled={!formData.name || !formData.relationship || !formData.phone || createContactMutation.isPending}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                className="flex-1"
               >
                 {createContactMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -249,6 +250,7 @@ export default function ContactosEmergencia() {
           </form>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

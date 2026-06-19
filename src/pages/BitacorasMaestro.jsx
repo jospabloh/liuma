@@ -89,7 +89,8 @@ export default function BitacorasMaestro() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Bitácoras de hoy"
         subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
@@ -112,12 +113,12 @@ export default function BitacorasMaestro() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
               onClick={() => handleSelectClassroom(classroom.id)}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 cursor-pointer"
+              className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border cursor-pointer"
             >
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800">{classroom.name}</h3>
-                  <p className="text-sm text-slate-500">{total} alumnos</p>
+                  <h3 className="text-lg font-semibold text-card-foreground">{classroom.name}</h3>
+                  <p className="text-sm text-muted-foreground">{total} alumnos</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className={isComplete ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
@@ -127,12 +128,12 @@ export default function BitacorasMaestro() {
                       <><AlertCircle className="w-3 h-3 mr-1" /> {total - completed} pendientes</>
                     )}
                   </Badge>
-                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
                 </div>
               </div>
 
               {/* Progress bar */}
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${progress}%` }}
@@ -140,7 +141,7 @@ export default function BitacorasMaestro() {
                   className={`h-full rounded-full ${isComplete ? 'bg-green-500' : 'bg-amber-500'}`}
                 />
               </div>
-              <p className="text-xs text-slate-500 mt-2">{completed} de {total} bitácoras</p>
+              <p className="text-xs text-muted-foreground mt-2">{completed} de {total} bitácoras</p>
 
               {/* Students preview */}
               <div className="mt-4 flex flex-wrap gap-2">
@@ -159,7 +160,7 @@ export default function BitacorasMaestro() {
                   );
                 })}
                 {classStudents.length > 6 && (
-                  <div className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-600">
+                  <div className="px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground">
                     +{classStudents.length - 6} más
                   </div>
                 )}
@@ -167,6 +168,7 @@ export default function BitacorasMaestro() {
             </motion.div>
           );
         })}
+      </div>
       </div>
     </div>
   );

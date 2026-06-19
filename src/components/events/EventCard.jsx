@@ -22,14 +22,14 @@ export default function EventCard({ event, onClick }) {
       animate={{ opacity: 1, y: 0 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 cursor-pointer"
+      className="bg-card text-card-foreground rounded-xl p-4 shadow-sm border border-border cursor-pointer"
     >
       <div className="flex gap-4">
-        <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-indigo-100 flex flex-col items-center justify-center">
-          <span className="text-xs font-medium text-indigo-600 uppercase">
+        <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-brand/10 flex flex-col items-center justify-center">
+          <span className="text-xs font-medium text-brand uppercase">
             {format(eventDate, 'MMM', { locale: es })}
           </span>
-          <span className="text-xl font-bold text-indigo-700">
+          <span className="text-xl font-bold text-brand">
             {format(eventDate, 'd')}
           </span>
         </div>
@@ -41,8 +41,8 @@ export default function EventCard({ event, onClick }) {
               </Badge>
             )}
           </div>
-          <h3 className="font-semibold text-slate-800">{event.title}</h3>
-          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-slate-500">
+          <h3 className="font-semibold text-card-foreground">{event.title}</h3>
+          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-muted-foreground">
             {event.time && (
               <span className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />

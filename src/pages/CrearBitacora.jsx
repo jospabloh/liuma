@@ -209,7 +209,8 @@ export default function CrearBitacora() {
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Crear bitácora"
         subtitle={classroom?.name}
@@ -225,7 +226,7 @@ export default function CrearBitacora() {
           <div
             key={s}
             className={`flex-1 h-1.5 rounded-full transition-colors ${
-              s <= step ? 'bg-emerald-600' : 'bg-slate-200'
+              s <= step ? 'bg-brand' : 'bg-muted'
             }`}
           />
         ))}
@@ -240,7 +241,7 @@ export default function CrearBitacora() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">
+            <h2 className="text-lg font-semibold text-foreground mb-4">
               Selecciona un alumno
             </h2>
             <div className="space-y-2">
@@ -251,13 +252,13 @@ export default function CrearBitacora() {
                     setSelectedStudent(student);
                     setStep(2);
                   }}
-                  className="w-full flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 transition-colors text-left"
+                  className="w-full flex items-center gap-3 p-4 bg-card text-card-foreground rounded-2xl border border-border hover:border-brand/30 hover:bg-brand/10 transition-colors text-left"
                 >
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
-                    <User className="w-5 h-5 text-slate-500" />
+                  <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+                    <User className="w-5 h-5 text-brand" />
                   </div>
                   <div>
-                    <p className="font-medium text-slate-800">
+                    <p className="font-medium text-card-foreground">
                       {student.first_name} {student.last_name}
                     </p>
                     <p className="text-xs text-amber-600 flex items-center gap-1">
@@ -266,12 +267,12 @@ export default function CrearBitacora() {
                   </div>
                 </button>
               ))}
-              
+
               {studentsWithoutDiary.length === 0 && (
                 <div className="text-center py-8">
                   <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                  <p className="text-lg font-medium text-slate-800">¡Todas las bitácoras completas!</p>
-                  <p className="text-slate-500">Todos los alumnos tienen su bitácora de hoy.</p>
+                  <p className="text-lg font-medium text-foreground">¡Todas las bitácoras completas!</p>
+                  <p className="text-muted-foreground">Todos los alumnos tienen su bitácora de hoy.</p>
                 </div>
               )}
             </div>
@@ -287,13 +288,13 @@ export default function CrearBitacora() {
             exit={{ opacity: 0, x: -20 }}
             className="space-y-4"
           >
-            <div className="bg-emerald-50 rounded-xl p-4 flex items-center gap-3">
-              <User className="w-8 h-8 text-emerald-600" />
+            <div className="bg-brand/10 rounded-2xl p-4 flex items-center gap-3">
+              <User className="w-8 h-8 text-brand" />
               <div>
-                <p className="font-semibold text-emerald-800">
+                <p className="font-semibold text-foreground">
                   {selectedStudent?.first_name} {selectedStudent?.last_name}
                 </p>
-                <p className="text-sm text-emerald-600">{format(new Date(), "d 'de' MMMM", { locale: es })}</p>
+                <p className="text-sm text-muted-foreground">{format(new Date(), "d 'de' MMMM", { locale: es })}</p>
               </div>
             </div>
 
@@ -311,7 +312,7 @@ export default function CrearBitacora() {
                   {isGenerating ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Sparkles className="w-4 h-4 text-violet-600" />
+                    <Sparkles className="w-4 h-4 text-brand" />
                   )}
                   Ayúdame con Lumi
                 </Button>
@@ -423,7 +424,7 @@ export default function CrearBitacora() {
               <Button
                 onClick={() => setStep(3)}
                 disabled={!formData.notes_text}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1"
               >
                 Revisar <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
@@ -439,19 +440,19 @@ export default function CrearBitacora() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Revisa la bitácora</h2>
-            
-            <div className="bg-white rounded-2xl p-5 shadow-sm border space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b">
-                <User className="w-10 h-10 text-emerald-600 bg-emerald-50 rounded-full p-2" />
+            <h2 className="text-lg font-semibold text-foreground mb-4">Revisa la bitácora</h2>
+
+            <div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-border">
+                <User className="w-10 h-10 text-brand bg-brand/10 rounded-full p-2" />
                 <div>
-                  <p className="font-semibold">{selectedStudent?.first_name} {selectedStudent?.last_name}</p>
-                  <p className="text-sm text-slate-500">{format(new Date(), "d 'de' MMMM, yyyy", { locale: es })}</p>
+                  <p className="font-semibold text-card-foreground">{selectedStudent?.first_name} {selectedStudent?.last_name}</p>
+                  <p className="text-sm text-muted-foreground">{format(new Date(), "d 'de' MMMM, yyyy", { locale: es })}</p>
                 </div>
               </div>
 
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-slate-700 whitespace-pre-wrap">{formData.notes_text}</p>
+              <div className="bg-muted rounded-xl p-4">
+                <p className="text-card-foreground whitespace-pre-wrap">{formData.notes_text}</p>
               </div>
 
               {formData.teacher_message && (
@@ -465,26 +466,26 @@ export default function CrearBitacora() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {formData.behavior && (
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Comportamiento:</span>
-                      <span className="font-medium">{formData.behavior}</span>
+                      <span className="text-muted-foreground">Comportamiento:</span>
+                      <span className="font-medium text-card-foreground">{formData.behavior}</span>
                     </div>
                   )}
                   {formData.mood && (
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Ánimo:</span>
-                      <span className="font-medium">{formData.mood}</span>
+                      <span className="text-muted-foreground">Ánimo:</span>
+                      <span className="font-medium text-card-foreground">{formData.mood}</span>
                     </div>
                   )}
                   {formData.food && (
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Comida:</span>
-                      <span className="font-medium">{formData.food}</span>
+                      <span className="text-muted-foreground">Comida:</span>
+                      <span className="font-medium text-card-foreground">{formData.food}</span>
                     </div>
                   )}
                   {formData.learning && (
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Aprendizaje:</span>
-                      <span className="font-medium">{formData.learning}</span>
+                      <span className="text-muted-foreground">Aprendizaje:</span>
+                      <span className="font-medium text-card-foreground">{formData.learning}</span>
                     </div>
                   )}
                 </div>
@@ -504,7 +505,7 @@ export default function CrearBitacora() {
               </Button>
               <Button
                 onClick={() => setStep(4)}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1"
               >
                 Confirmar <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
@@ -521,16 +522,16 @@ export default function CrearBitacora() {
             exit={{ opacity: 0, x: -20 }}
             className="text-center"
           >
-            <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
-              <Send className="w-10 h-10 text-emerald-600" />
+            <div className="w-20 h-20 rounded-full bg-brand/10 flex items-center justify-center mx-auto mb-6">
+              <Send className="w-10 h-10 text-brand" />
             </div>
-            
-            <h2 className="text-xl font-semibold text-slate-800 mb-2">¿Enviar a los papás?</h2>
-            <p className="text-slate-500 mb-6">
+
+            <h2 className="text-xl font-semibold text-foreground mb-2">¿Enviar a los papás?</h2>
+            <p className="text-muted-foreground mb-6">
               La bitácora se guardará y se enviará notificación a los padres de {selectedStudent?.first_name}.
             </p>
 
-            <div className="flex items-center justify-center gap-3 bg-slate-50 rounded-xl p-4 mb-6">
+            <div className="flex items-center justify-center gap-3 bg-muted rounded-xl p-4 mb-6">
               <Switch
                 checked={sendToParents}
                 onCheckedChange={setSendToParents}
@@ -548,7 +549,7 @@ export default function CrearBitacora() {
               <Button
                 onClick={handleSubmit}
                 disabled={createDiaryMutation.isPending}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                className="flex-1"
               >
                 {createDiaryMutation.isPending ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -562,6 +563,7 @@ export default function CrearBitacora() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }

@@ -131,8 +131,8 @@ export default function GestionDocumentos() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 pb-20">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <ReadOnlyBanner />
         <PageHeader
           title="Documentos Oficiales"
@@ -141,7 +141,7 @@ export default function GestionDocumentos() {
           action={
             <Dialog open={showForm} onOpenChange={setShowForm}>
               <DialogTrigger asChild>
-                <Button className="bg-indigo-600 hover:bg-indigo-700">
+                <Button>
                   <Upload className="w-4 h-4 mr-2" />
                   Subir Documento
                 </Button>
@@ -239,7 +239,7 @@ export default function GestionDocumentos() {
                   <Button
                     type="submit"
                     disabled={isUploading}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700"
+                    className="w-full"
                   >
                     {isUploading ? (
                       <>
@@ -263,9 +263,9 @@ export default function GestionDocumentos() {
           {documents?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <FileText className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                <p className="text-slate-600">No hay documentos oficiales</p>
-                <p className="text-sm text-slate-500 mt-1">Comienza subiendo tu primer documento</p>
+                <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No hay documentos oficiales</p>
+                <p className="text-sm text-muted-foreground mt-1">Comienza subiendo tu primer documento</p>
               </CardContent>
             </Card>
           ) : (
@@ -311,9 +311,9 @@ export default function GestionDocumentos() {
                   </CardHeader>
                   <CardContent>
                     {doc.description && (
-                      <p className="text-sm text-slate-600 mb-2">{doc.description}</p>
+                      <p className="text-sm text-muted-foreground mb-2">{doc.description}</p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
                         {format(new Date(doc.valid_from), 'dd MMM yyyy', { locale: es })}

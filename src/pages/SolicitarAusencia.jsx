@@ -107,8 +107,8 @@ export default function SolicitarAusencia() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <PageHeader
           title="Solicitar Ausencia"
           subtitle="Notifica con anticipación las ausencias de tus hijos"
@@ -162,7 +162,7 @@ export default function SolicitarAusencia() {
 
               <Button
                 type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700"
+                className="w-full"
                 disabled={createNotificationMutation.isPending}
               >
                 {createNotificationMutation.isPending ? (
@@ -179,12 +179,12 @@ export default function SolicitarAusencia() {
         </Card>
 
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-slate-800">Solicitudes Enviadas</h2>
+          <h2 className="text-lg font-semibold text-foreground">Solicitudes Enviadas</h2>
           {notifications?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <Calendar className="w-12 h-12 mx-auto text-slate-400 mb-4" />
-                <p className="text-slate-600">No has enviado solicitudes de ausencia</p>
+                <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No has enviado solicitudes de ausencia</p>
               </CardContent>
             </Card>
           ) : (
@@ -217,13 +217,13 @@ export default function SolicitarAusencia() {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-slate-600 mb-2">
+                      <p className="text-sm text-muted-foreground mb-2">
                         <strong>Motivo:</strong> {notification.reason}
                       </p>
                       {notification.admin_notes && (
-                        <div className="mt-3 p-3 bg-slate-50 rounded-lg">
-                          <p className="text-xs text-slate-500 mb-1">Respuesta de dirección:</p>
-                          <p className="text-sm text-slate-700">{notification.admin_notes}</p>
+                        <div className="mt-3 p-3 bg-muted rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-1">Respuesta de dirección:</p>
+                          <p className="text-sm text-card-foreground">{notification.admin_notes}</p>
                         </div>
                       )}
                     </CardContent>

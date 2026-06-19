@@ -262,27 +262,28 @@ export default function ConfiguracionInicial() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
-      <PageHeader 
+    <div className="min-h-screen bg-background">
+      <PageHeader
         title="Configuración Inicial"
         subtitle="Guía paso a paso para configurar tu escuela"
         showBack
       />
 
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       {/* Progress */}
       <Card className="mb-6">
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-slate-600">Progreso general</p>
-            <p className="text-2xl font-bold text-indigo-600">{progress}%</p>
+            <p className="text-sm font-medium text-muted-foreground">Progreso general</p>
+            <p className="text-2xl font-bold text-brand">{progress}%</p>
           </div>
-          <div className="w-full bg-slate-200 rounded-full h-3">
-            <div 
-              className="bg-gradient-to-r from-indigo-600 to-violet-600 h-3 rounded-full transition-all"
+          <div className="w-full bg-muted rounded-full h-3">
+            <div
+              className="bg-brand h-3 rounded-full transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-xs text-slate-500 mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             {completedSteps} de {steps.length} pasos completados
           </p>
         </CardContent>
@@ -295,11 +296,11 @@ export default function ConfiguracionInicial() {
           {setupChecklist.map((item) => (
             <div key={item.key}>
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-slate-700">{item.label}</span>
-                <span className="font-semibold text-slate-900">{item.value}%</span>
+                <span className="text-card-foreground">{item.label}</span>
+                <span className="font-semibold text-card-foreground">{item.value}%</span>
               </div>
-              <div className="w-full bg-slate-200 rounded-full h-2">
-                <div className="bg-indigo-600 h-2 rounded-full transition-all" style={{ width: `${item.value}%` }} />
+              <div className="w-full bg-muted rounded-full h-2">
+                <div className="bg-brand h-2 rounded-full transition-all" style={{ width: `${item.value}%` }} />
               </div>
             </div>
           ))}
@@ -310,7 +311,7 @@ export default function ConfiguracionInicial() {
       <div className="flex gap-3 mb-6">
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
-            <Button className="bg-indigo-600 hover:bg-indigo-700">
+            <Button>
               <Plus className="w-4 h-4 mr-2" />
               Agregar Paso
             </Button>
@@ -398,7 +399,7 @@ export default function ConfiguracionInicial() {
 
         return (
           <div key={category} className="mb-8">
-            <h2 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
               {category}
               <Badge variant="outline">{categorySteps.length}</Badge>
             </h2>
@@ -420,7 +421,7 @@ export default function ConfiguracionInicial() {
                           {step.is_completed ? (
                             <CheckCircle2 className="w-6 h-6 text-green-600" />
                           ) : (
-                            <Circle className="w-6 h-6 text-slate-300" />
+                            <Circle className="w-6 h-6 text-muted-foreground" />
                           )}
                         </button>
                         <div className="flex-1">
@@ -433,9 +434,9 @@ export default function ConfiguracionInicial() {
                               <Badge variant="outline" className="text-xs">Revisar anualmente</Badge>
                             )}
                           </CardTitle>
-                          <p className="text-sm text-slate-600 mt-1">{step.description}</p>
+                          <p className="text-sm text-muted-foreground mt-1">{step.description}</p>
                           {step.notes && (
-                            <div className="mt-2 p-2 bg-slate-100 rounded text-xs text-slate-700">
+                            <div className="mt-2 p-2 bg-muted rounded text-xs text-card-foreground">
                               📝 {step.notes}
                             </div>
                           )}
@@ -445,7 +446,7 @@ export default function ConfiguracionInicial() {
                             </div>
                           )}
                           {step.completed_at && (
-                            <div className="mt-2 text-xs text-slate-500">
+                            <div className="mt-2 text-xs text-muted-foreground">
                               Completado por {step.completed_by || 'N/D'} el {new Date(step.completed_at).toLocaleDateString('es-MX')}
                             </div>
                           )}
@@ -533,14 +534,14 @@ export default function ConfiguracionInicial() {
 
                       {step.documents && step.documents.length > 0 && (
                         <div className="mt-3 space-y-2">
-                          <p className="text-xs font-medium text-slate-600">Documentos adjuntos:</p>
+                          <p className="text-xs font-medium text-muted-foreground">Documentos adjuntos:</p>
                           {step.documents.map((doc, docIdx) => (
-                            <div key={docIdx} className="flex items-center justify-between p-2 bg-slate-50 rounded">
+                            <div key={docIdx} className="flex items-center justify-between p-2 bg-muted rounded">
                               <a
                                 href={doc.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm text-indigo-600 hover:underline flex items-center gap-2"
+                                className="text-sm text-brand hover:underline flex items-center gap-2"
                               >
                                 <FileText className="w-4 h-4" />
                                 {doc.name}
@@ -567,12 +568,13 @@ export default function ConfiguracionInicial() {
 
       {steps.length === 0 && (
         <Card className="p-12 text-center">
-          <p className="text-slate-500 mb-4">No hay pasos configurados aún</p>
+          <p className="text-muted-foreground mb-4">No hay pasos configurados aún</p>
           <Button onClick={initializeDefaultSteps}>
             Cargar Pasos por Defecto
           </Button>
         </Card>
       )}
+      </div>
     </div>
   );
 }

@@ -72,15 +72,16 @@ export default function Soporte() {
   if (isLoading) return <LoadingScreen message="Cargando soporte..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader title="Soporte y ayuda" showBack backTo={createPageUrl('Home')} />
 
       {/* How it works */}
-      <Card className="p-4 mb-4 bg-violet-50 border-violet-100">
+      <Card className="p-4 mb-4 bg-brand/10 border-brand/30">
         <div className="flex items-start gap-3">
-          <Sparkles className="w-5 h-5 text-violet-600 mt-0.5 shrink-0" />
-          <div className="text-sm text-slate-700 space-y-1">
-            <p className="font-semibold text-slate-800">¿Cómo funciona?</p>
+          <Sparkles className="w-5 h-5 text-brand mt-0.5 shrink-0" />
+          <div className="text-sm text-foreground space-y-1">
+            <p className="font-semibold text-foreground">¿Cómo funciona?</p>
             <p>1. Pregúntale a <strong>Lumi</strong>: resuelve muchas dudas al instante con el manual de la app.</p>
             <p>2. Si Lumi no puede ayudarte, crea un <strong>ticket</strong>: se asigna un número y se envía a la dirección de tu escuela o al equipo LIUMA según el caso.</p>
             <p>3. Da seguimiento aquí mismo hasta que se resuelva.</p>
@@ -90,7 +91,7 @@ export default function Soporte() {
 
       <div className="grid grid-cols-2 gap-3 mb-6">
         <Button variant="outline" className="h-auto py-3 flex-col gap-1" onClick={() => window.dispatchEvent(new CustomEvent('lumi:open'))}>
-          <Sparkles className="w-5 h-5 text-violet-600" />
+          <Sparkles className="w-5 h-5 text-brand" />
           <span className="text-sm">Preguntar a Lumi</span>
         </Button>
         <Button className="h-auto py-3 flex-col gap-1" onClick={() => setNewOpen(true)}>
@@ -99,7 +100,7 @@ export default function Soporte() {
         </Button>
       </div>
 
-      <h2 className="text-sm font-semibold text-slate-500 mb-2">Mis tickets</h2>
+      <h2 className="text-sm font-semibold text-muted-foreground mb-2">Mis tickets</h2>
 
       {tickets.length === 0 ? (
         <EmptyState icon={LifeBuoy} title="Sin tickets" description="Cuando crees una solicitud de soporte aparecerá aquí." />
@@ -110,14 +111,14 @@ export default function Soporte() {
               <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTicket(ticket)}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-mono text-slate-400">{ticket.ticket_number}</p>
-                    <p className="font-medium text-slate-800 truncate">{ticket.subject}</p>
+                    <p className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</p>
+                    <p className="font-medium text-card-foreground truncate">{ticket.subject}</p>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <SupportStatusBadge status={ticket.status} />
                       <SupportPriorityBadge priority={ticket.priority} />
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
+                  <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
                 </div>
               </Card>
             </motion.div>
@@ -131,18 +132,18 @@ export default function Soporte() {
         <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-violet-600" />
+              <MessageSquare className="w-5 h-5 text-brand" />
               {activeTicket?.subject}
             </DialogTitle>
           </DialogHeader>
           {activeTicket && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 flex-wrap text-xs">
-                <span className="font-mono text-slate-400">{activeTicket.ticket_number}</span>
+                <span className="font-mono text-muted-foreground">{activeTicket.ticket_number}</span>
                 <SupportStatusBadge status={activeTicket.status} />
                 <SupportPriorityBadge priority={activeTicket.priority} />
                 {activeTicket.created_date && (
-                  <span className="text-slate-400">{format(new Date(activeTicket.created_date), "d MMM yyyy", { locale: es })}</span>
+                  <span className="text-muted-foreground">{format(new Date(activeTicket.created_date), "d MMM yyyy", { locale: es })}</span>
                 )}
               </div>
               <TicketThread
@@ -155,6 +156,7 @@ export default function Soporte() {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

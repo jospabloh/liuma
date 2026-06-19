@@ -116,7 +116,8 @@ export default function Avisos() {
   if (isLoading) return <LoadingScreen message="Cargando avisos..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Avisos"
         showBack
@@ -208,14 +209,14 @@ export default function Avisos() {
           
           {selectedNotice && (
             <div className="space-y-4">
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-muted-foreground">
                 {format(new Date(selectedNotice.created_date), "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
               </div>
-              
-              <div className="bg-slate-50 rounded-xl p-4">
-                <p className="text-slate-700 whitespace-pre-wrap">{selectedNotice.content}</p>
+
+              <div className="bg-muted rounded-xl p-4">
+                <p className="text-foreground whitespace-pre-wrap">{selectedNotice.content}</p>
               </div>
-              
+
               {selectedNotice.delivery?.escalation_status === 'ESCALATED' && (
                 <p className="text-xs text-red-600 text-center font-medium">
                   Aviso urgente escalado por falta de acuse
@@ -223,7 +224,7 @@ export default function Avisos() {
               )}
 
               {selectedNotice.author_name && (
-                <p className="text-xs text-slate-400 text-center">
+                <p className="text-xs text-muted-foreground text-center">
                   Enviado por {selectedNotice.author_name}
                 </p>
               )}
@@ -231,6 +232,7 @@ export default function Avisos() {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

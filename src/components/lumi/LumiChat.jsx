@@ -258,7 +258,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="absolute bottom-0 left-0 right-0 h-[100dvh] max-h-[100dvh] md:h-[600px] md:max-h-[600px] md:w-[400px] md:right-6 md:bottom-6 md:left-auto md:rounded-2xl bg-white shadow-2xl flex flex-col overflow-hidden"
+        className="absolute bottom-0 left-0 right-0 h-[100dvh] max-h-[100dvh] md:h-[600px] md:max-h-[600px] md:w-[400px] md:right-6 md:bottom-6 md:left-auto md:rounded-2xl bg-card shadow-2xl flex flex-col overflow-hidden"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -304,11 +304,11 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 && (
             <div className="text-center py-8">
-              <div className="w-16 h-16 rounded-full bg-violet-100 flex items-center justify-center mx-auto mb-4">
-                <Sparkles className="w-8 h-8 text-violet-600" />
+              <div className="w-16 h-16 rounded-full bg-brand/10 flex items-center justify-center mx-auto mb-4">
+                <Sparkles className="w-8 h-8 text-brand" />
               </div>
-              <h4 className="font-semibold text-slate-800 mb-2">¡Hola! Soy Lumi</h4>
-              <p className="text-slate-500 text-sm mb-6">
+              <h4 className="font-semibold text-foreground mb-2">¡Hola! Soy Lumi</h4>
+              <p className="text-muted-foreground text-sm mb-6">
                 ¿En qué te puedo ayudar hoy?
               </p>
               <p className="text-xs font-medium text-muted-foreground mb-2">
@@ -319,7 +319,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
                   <button
                     key={action.intent}
                     onClick={() => handleSend({ intent: action.intent, prompt: action.label })}
-                    className="mobile-touch-target block w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm transition-colors"
+                    className="mobile-touch-target block w-full text-left px-4 py-3 rounded-xl bg-muted hover:bg-muted/80 text-foreground text-sm transition-colors"
                   >
                     {action.label}
                   </button>
@@ -339,8 +339,8 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                     msg.role === 'user'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-100 text-slate-800'
+                      ? 'bg-brand text-white'
+                      : 'bg-muted text-foreground'
                   }`}
                 >
                   {(() => {
@@ -353,7 +353,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
                           <ReactMarkdown>{payload.text}</ReactMarkdown>
                         </div>
                         {Array.isArray(payload.meta?.sources) && payload.meta.sources.length > 0 && (
-                          <p className="text-xs text-slate-500 mt-2">
+                          <p className="text-xs text-muted-foreground mt-2">
                             Fuente: {payload.meta.sources.join(', ')}
                           </p>
                         )}
@@ -367,10 +367,10 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
           
           {isLoading && (
             <div className="flex justify-start" role="status" aria-live="polite">
-              <div className="bg-slate-100 rounded-2xl px-4 py-3">
+              <div className="bg-muted rounded-2xl px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                  <span className="text-sm text-slate-500">Lumi está escribiendo...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-brand" />
+                  <span className="text-sm text-muted-foreground">Lumi está escribiendo...</span>
                 </div>
               </div>
             </div>
@@ -381,7 +381,7 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
 
         {/* Input */}
         <div
-          className="p-4 border-t bg-white"
+          className="p-4 border-t border-border bg-card"
           style={{ paddingBottom: `calc(1rem + env(safe-area-inset-bottom) + ${keyboardInset}px)` }}
         >
           <form
@@ -396,14 +396,14 @@ export default function LumiChat({ isOpen, onClose, userProfile }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Escribe tu pregunta..."
-              className="mobile-touch-target mobile-input-no-zoom flex-1 rounded-full bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="mobile-touch-target mobile-input-no-zoom flex-1 rounded-full bg-muted border-0 focus-visible:ring-2 focus-visible:ring-brand"
               disabled={isLoading}
             />
             <Button
               type="submit"
               aria-label="Enviar mensaje"
               disabled={!input.trim() || isLoading}
-              className="mobile-touch-target rounded-full w-12 h-12 bg-indigo-600 hover:bg-indigo-700"
+              className="mobile-touch-target rounded-full w-12 h-12 bg-brand text-white hover:bg-brand/90"
             >
               <Send className="w-5 h-5" />
             </Button>

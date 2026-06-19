@@ -100,7 +100,8 @@ export default function Pagos() {
   if (isLoading) return <LoadingScreen message="Cargando pagos..." />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 pb-24">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Pagos"
         showBack
@@ -116,8 +117,8 @@ export default function Pagos() {
       ) : (
         <div className="space-y-4">
           {students.length > 1 && (
-            <div className="bg-white border border-slate-200 rounded-xl p-3">
-              <p className="text-xs font-medium text-slate-500 mb-2">Hijo activo</p>
+            <div className="bg-card text-card-foreground border border-border rounded-2xl p-3 shadow-sm">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Hijo activo</p>
               <Select value={activeStudentId} onValueChange={setActiveStudentId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todos mis hijos" />
@@ -164,7 +165,7 @@ export default function Pagos() {
               {getStudentCharges(selectedStudent.id).length === 0 ? (
                 <div className="text-center py-6">
                   <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-2" />
-                  <p className="text-slate-600">Sin cargos pendientes</p>
+                  <p className="text-muted-foreground">Sin cargos pendientes</p>
                 </div>
               ) : (
                 getStudentCharges(selectedStudent.id).map((charge) => {
@@ -175,13 +176,13 @@ export default function Pagos() {
                       className={`p-4 rounded-xl border ${
                         charge.status === 'PAID' ? 'bg-green-50 border-green-200' :
                         isOverdue ? 'bg-red-50 border-red-200' :
-                        'bg-white border-slate-200'
+                        'bg-card border-border'
                       }`}
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <h4 className="font-medium text-slate-800">{charge.concept_name}</h4>
-                          <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+                          <h4 className="font-medium text-card-foreground">{charge.concept_name}</h4>
+                          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                             <Calendar className="w-3 h-3" />
                             Vence: {format(new Date(charge.due_date), "d 'de' MMM, yyyy", { locale: es })}
                           </div>
@@ -205,6 +206,7 @@ export default function Pagos() {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

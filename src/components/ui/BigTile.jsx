@@ -34,6 +34,11 @@ export default function BigTile({
   const focusRing =
     'block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2';
 
+  // Fold the badge count into the accessible name so screen-reader users hear
+  // "Avisos, 3 pendientes" instead of just "Avisos" with no hint of the count.
+  const hasBadge = badge !== undefined && badge > 0;
+  const accessibleName = hasBadge ? `${title}, ${badge} pendientes` : title;
+
   const content = (
     <motion.div
       initial={reduceMotion ? false : { opacity: 0, y: 12 }}
@@ -72,7 +77,7 @@ export default function BigTile({
 
   if (href) {
     return (
-      <Link to={href} className={focusRing} aria-label={title}>
+      <Link to={href} className={focusRing} aria-label={accessibleName}>
         {content}
       </Link>
     );
@@ -84,7 +89,7 @@ export default function BigTile({
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
-      aria-label={title}
+      aria-label={accessibleName}
       className={`${focusRing} cursor-pointer`}
     >
       {content}

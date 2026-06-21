@@ -34,6 +34,15 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Home navigation tiles are now keyboard operable**: `BigTile` — the primary
+  navigation control on every home dashboard (parent/teacher/admin) — rendered
+  its non-link variant as a bare `<div role="button">` with no key handler, so
+  Enter/Space did nothing and keyboard/AT users could not activate it. It now
+  handles Enter/Space (with `preventDefault`), exposes an `aria-label` from its
+  title on both the link and button branches, and shows a `focus-visible` brand
+  ring — matching the accessible day-cell pattern already used in
+  `CalendarioEscolar`. Covered by `tests/unit/bigtile-a11y.test.js`.
+
 - **White-label theming now actually reaches the UI**: every shadcn component
   reads `--primary`, but `Layout.jsx` hardcoded it to indigo (`99 102 241`) as
   an RGB triple fed into Tailwind's `hsl(var(--primary))` — invalid CSS that

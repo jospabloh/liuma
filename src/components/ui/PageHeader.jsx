@@ -33,6 +33,7 @@ export default function PageHeader({
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Volver"
             onClick={handleBack}
             className="mobile-touch-target rounded-full"
           >

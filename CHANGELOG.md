@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Accessibility sweep (round 2) — icon-only controls and reduced motion**:
+  every icon-only button flagged by the navigation audit now has a Spanish
+  `aria-label` so screen-reader users know what it does — the app-wide
+  `PageHeader` back button ("Volver"), calendar month navigation ("Mes
+  anterior"/"Mes siguiente") and event delete ("Eliminar evento"), the Avisos
+  filter toggle, the Bitácora day navigation, the uniform-order remove-item
+  button, and the emergency-contact delete button. The arrow glyphs in the
+  calendar month nav are now `aria-hidden`. `EmptyState` now respects
+  `prefers-reduced-motion` like the rest of the app's animated chrome. Covered
+  by `tests/unit/icon-button-a11y.test.js`.
+
 ## [1.1.0] - 2026-06-21
 
 ### Added

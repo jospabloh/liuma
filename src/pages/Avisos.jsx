@@ -123,9 +123,10 @@ export default function Avisos() {
         showBack
         backTo={createPageUrl('Home')}
         action={
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="icon"
+            aria-label="Filtrar avisos"
             onClick={() => setShowFilters(!showFilters)}
           >
             <Filter className="w-4 h-4" />

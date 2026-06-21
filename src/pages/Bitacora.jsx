@@ -88,7 +88,7 @@ export default function Bitacora() {
 
       {/* Date Navigation */}
       <div className="flex items-center justify-between bg-card text-card-foreground border border-border rounded-2xl p-3 mb-6 shadow-sm">
-        <Button variant="ghost" size="icon" onClick={() => navigateDate('prev')}>
+        <Button variant="ghost" size="icon" aria-label="Día anterior" onClick={() => navigateDate('prev')}>
           <ChevronLeft className="w-5 h-5" />
         </Button>
         <div className="text-center">
@@ -99,9 +99,10 @@ export default function Bitacora() {
             {format(selectedDate, "d 'de' MMMM, yyyy", { locale: es })}
           </p>
         </div>
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Día siguiente"
           onClick={() => navigateDate('next')}
           disabled={isToday(selectedDate)}
         >

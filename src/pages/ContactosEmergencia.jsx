@@ -164,6 +164,7 @@ export default function ContactosEmergencia() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Eliminar contacto"
                   onClick={() => deleteContactMutation.mutate(contact.id)}
                   disabled={deleteContactMutation.isPending}
                   className="text-red-500 hover:text-red-700 hover:bg-red-50"

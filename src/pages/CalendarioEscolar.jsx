@@ -131,9 +131,10 @@ export default function CalendarioEscolar() {
               <Button
                 variant="outline"
                 size="sm"
+                aria-label="Mes anterior"
                 onClick={() => setSelectedDate(subMonths(selectedDate, 1))}
               >
-                ←
+                <span aria-hidden="true">←</span>
               </Button>
               <h3 className="text-lg font-semibold text-foreground capitalize">
                 {format(selectedDate, "MMMM yyyy", { locale: es })}
@@ -141,9 +142,10 @@ export default function CalendarioEscolar() {
               <Button
                 variant="outline"
                 size="sm"
+                aria-label="Mes siguiente"
                 onClick={() => setSelectedDate(addMonths(selectedDate, 1))}
               >
-                →
+                <span aria-hidden="true">→</span>
               </Button>
             </div>
 
@@ -244,6 +246,7 @@ export default function CalendarioEscolar() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Eliminar evento"
                           className="h-6 w-6 text-red-500 hover:text-red-600"
                           onClick={(e) => handleDeleteEvent(event.id, e)}
                         >
@@ -306,6 +309,7 @@ export default function CalendarioEscolar() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Eliminar evento"
                           className="h-6 w-6 text-red-500 hover:text-red-600"
                           onClick={(e) => handleDeleteEvent(event.id, e)}
                         >

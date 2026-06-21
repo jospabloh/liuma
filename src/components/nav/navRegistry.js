@@ -29,7 +29,7 @@ export function getPrimaryTabs(role) {
     { key: 'home', label: 'Inicio', page: 'Home', icon: 'Home' },
     { key: 'today', label: 'Hoy', page: 'OperacionDiaria', icon: 'CalendarCheck' },
     { key: 'avisos', label: 'Avisos', page: getAvisosPage(role), icon: 'Bell' },
-    { key: 'menu', label: 'Menú', action: 'palette', icon: 'LayoutGrid' },
+    { key: 'menu', label: 'Más', action: 'palette', icon: 'LayoutGrid' },
   ];
 }
 

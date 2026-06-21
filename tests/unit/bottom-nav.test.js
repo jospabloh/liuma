@@ -64,13 +64,33 @@ test('Layout mounts the persistent bottom nav', () => {
   assert.match(src, /<BottomNav \/>/);
 });
 
-test('BottomNav wires the palette, the ⌘K shortcut, and hides without a role', () => {
-  const src = read('src/components/nav/BottomNav.jsx');
+test('NavContext wires the ⌘K shortcut and renders the palette once', () => {
+  const src = read('src/components/nav/NavContext.jsx');
   assert.match(src, /e\.metaKey \|\| e\.ctrlKey/);
   assert.match(src, /key\.toLowerCase\(\) === 'k'/);
+  assert.match(src, /<CommandPalette/);
+  assert.match(src, /openPalette: \(\) => \{\}/); // useNav safe outside a provider
+});
+
+test('BottomNav opens the palette via context and hides without a role', () => {
+  const src = read('src/components/nav/BottomNav.jsx');
+  assert.match(src, /useNav\(\)/);
+  assert.match(src, /openPalette\(\)/);
   assert.match(src, /if \(!role\) return null/);
   assert.match(src, /md:hidden/); // mobile-only bar
-  assert.match(src, /<CommandPalette/);
+});
+
+test('Layout wraps content in the nav provider', () => {
+  const src = read('src/Layout.jsx');
+  assert.match(src, /import \{ NavProvider \}/);
+  assert.match(src, /<NavProvider>/);
+});
+
+test('every page header exposes a visible search trigger', () => {
+  const src = read('src/components/ui/PageHeader.jsx');
+  assert.match(src, /useNav/);
+  assert.match(src, /aria-label="Buscar"/);
+  assert.match(src, /onClick=\{openPalette\}/);
 });
 
 test('CommandPalette uses cmdk and navigates on select', () => {

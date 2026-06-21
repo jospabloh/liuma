@@ -9,14 +9,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Mobile bottom navigation + ⌘K command palette** (UX simplicity): a
-  persistent 4-tab bottom bar — Inicio · Hoy · Avisos · Menú — so any screen is
-  one tap away instead of bouncing back to the home grid. "Menú" (and ⌘K / a
-  keyboard shortcut) opens a command palette to search or browse the role's full
-  menu. Both read a single role-aware destination registry
-  (`src/components/nav/navRegistry.js`, pure + unit-tested); the bar mounts once
-  from `Layout.jsx` and hides itself until a profile/role is available (keeping
-  it off login/onboarding). The "Avisos" tab resolves to the role's notices page
+- **Mobile bottom navigation + command palette** (UX simplicity): a persistent
+  4-tab bottom bar — Inicio · Hoy · Avisos · Más — so any screen is one tap away
+  instead of bouncing back to the home grid. The palette (search or browse the
+  role's full menu) opens three ways: the **Más** tab, a visible **search button
+  in every page header**, and the **⌘K** shortcut. Palette state lives in a
+  `NavProvider` (mounted once from `Layout.jsx`) so the header, the tab and the
+  shortcut all drive a single palette; `useNav` is safe to call without the
+  provider. Tabs and palette share one pure, unit-tested role-aware registry
+  (`src/components/nav/navRegistry.js`). The bar hides until a profile/role is
+  available (keeping it off login/onboarding); the Avisos tab resolves per role
   (`Avisos`/`AvisosMaestro`/`AvisosAdmin`). Mobile-only (`md:hidden`); desktop is
   unchanged. First step toward thinning the 18-tile admin home.
 - **Sequential L1 → L2 support handoff (director → soporte)**: completes the

@@ -21,6 +21,7 @@ import { SUPPORT_AUTHOR_ROLE, SUPPORT_STATUS } from '@/lib/support/constants';
 import NewTicketDialog from '@/components/support/NewTicketDialog';
 import TicketThread from '@/components/support/TicketThread';
 import { SupportStatusBadge, SupportPriorityBadge } from '@/components/support/labels.jsx';
+import { SUPPORT_EMAIL, SUPPORT_EMAIL_HREF } from '@/lib/config';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -85,6 +86,13 @@ export default function Soporte() {
             <p>1. Pregúntale a <strong>Lumi</strong>: resuelve muchas dudas al instante con el manual de la app.</p>
             <p>2. Si Lumi no puede ayudarte, crea un <strong>ticket</strong>: se asigna un número y se envía a la dirección de tu escuela o al equipo LIUMA según el caso.</p>
             <p>3. Da seguimiento aquí mismo hasta que se resuelva.</p>
+            <p className="pt-1 text-muted-foreground">
+              ¿Prefieres correo? Escríbenos a{' '}
+              <a href={SUPPORT_EMAIL_HREF} className="font-medium text-brand underline">
+                {SUPPORT_EMAIL}
+              </a>
+              .
+            </p>
           </div>
         </div>
       </Card>

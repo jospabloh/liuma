@@ -40,11 +40,6 @@
           }
         },
         {
-          "user_condition": {
-            "data.is_super_admin": true
-          }
-        },
-        {
           "_id": "{{user.data.school_id}}"
         }
       ]

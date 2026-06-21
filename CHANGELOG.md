@@ -7,7 +7,64 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-21
+
 ### Added
+
+- **In-app User Manual (`USER_MANUAL.md`)**: a truthful, role-organized manual
+  generated from the actual application — every page in `src/pages/` with its
+  route and who can access it (cross-referenced against
+  `src/lib/authorization/routeAccess.js`), the core data entities, and a
+  corrected description of the Lumi AI assistant. Notably corrects the prior
+  claim that Lumi "only provides information": per `base44/agents/lumi.jsonc`,
+  Lumi can **create `DiaryEntry` and create/update `Attendance`** in the teacher
+  dictation flow.
+- **Security audit (`docs/security-audit-2026-06-21.md`)**: a documented audit of
+  the authorization layer and base44 RLS, ranking findings by whether RLS
+  actually backs each client-side check. Captures four Critical server-side
+  privilege-escalation paths (self-elevation to ADMIN, self-grant of the
+  cross-tenant `is_super_admin` flag, self-activation of `SchoolSubscription`,
+  and self-approval of `PendingChange`) with concrete remediation. These RLS
+  changes are intentionally **not** auto-applied — they require staged review.
+- **`VERSION_CONTROL.json`**: a versioning manifest describing the build
+  architecture, page/entity/test inventory, roles, and quality gates.
+
+### Fixed
+
+- **Audit-trail integrity — `AuditLog.action` enum completed**: the enum listed
+  only 12 operational actions, but the code emits ~20 more, including the
+  security-critical `PERMISSION_CHANGE`, `POLICY_DECISION`, `owner_override`,
+  `access_denied`, and the `ROLE_CHANGE*` family (from `src/lib/audit.js`,
+  `GuardedRoute.jsx`, `PermisosRoles.jsx`). If base44 enforces the enum, those
+  audit writes were failing silently, leaving security events untraced. The enum
+  now covers every action string the app writes, guarded by
+  `tests/unit/audit-action-enum.test.js`.
+- **Scroll position resets on navigation**: navigating from a long dashboard into
+  a deep page (or back) preserved the previous scroll offset, landing users
+  mid-page. `App.jsx` now resets scroll to the top on every route change
+  (`ScrollToTopOnNavigate`).
+- **404 page no longer hard-reloads the app**: the "go home" control used
+  `window.location.href = '/'` (a full page reload that drops the SPA, router
+  state, and React Query cache). It now uses a client-side `<Link to="/">`. The
+  page copy was also translated to Spanish (`Página no encontrada` / `Ir al
+  inicio`) and the build-tooling hint is gated to development only.
+- **Login redirect moved out of render**: `AuthenticatedApp` called
+  `navigateToLogin()` directly in the render body (a side effect during render
+  that can double-fire under StrictMode/concurrent rendering); it now runs in a
+  `useEffect`.
+- **Screen-reader badge counts on home tiles**: `BigTile`'s accessible name now
+  folds in the pending count (e.g. "Avisos, 3 pendientes") instead of exposing
+  only the title.
+
+### Changed
+
+- **Paywall master-switch documentation corrected**: `useFeatureGate.js` and
+  `featureGates.js` comments described `VITE_PAYWALL_GATING_ENABLED` as
+  off-by-default, but the code (`!== 'false'`) is **on-by-default**. The docs now
+  match the code; whether on-by-default is the intended billing behavior is
+  flagged for the owner in the security audit (no runtime behavior was changed).
+
+### Added (1.0.x → 1.1.0 carried from prior unreleased work)
 
 - **Distinctive visual design system ("the school is the hero")**: replaced the
   stock shadcn starter palette with a warm, calm surface system and a real type

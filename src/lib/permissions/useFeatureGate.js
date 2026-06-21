@@ -12,7 +12,8 @@ import { FEATURE_TIERS, PAYWALL_GATING_ENABLED, planRank } from '@/lib/featureGa
  *
  * Resolution order (highest priority first):
  *   1. Platform owner (ACACIA) → always allowed.
- *   2. Master switch off (VITE_PAYWALL_GATING_ENABLED !== 'true') → allowed.
+ *   2. Master switch off (VITE_PAYWALL_GATING_ENABLED === 'false') → allowed.
+ *      NOTE: gating is ON by default (see featureGates.js → PAYWALL_GATING_ENABLED).
  *   3. billing_status read-only (view_only/suspended/inactive/canceled) → denied.
  *   4. billing_status === 'trial' → allowed (preview window).
  *   5. licenseTier rank >= required rank → allowed; else denied.

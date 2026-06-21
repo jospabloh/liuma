@@ -12,9 +12,10 @@
  * validate the product before paying. `view_only` / `suspended` (and the legacy
  * `inactive` / `canceled`) block premium features regardless of `license_tier`.
  *
- * Gating stays behind VITE_PAYWALL_GATING_ENABLED until the owner flips it on
- * after manual validation in a sandbox tenant (same rollout approach as FlowFin,
- * so existing trial/active tenants see no change by default).
+ * Gating is controlled by VITE_PAYWALL_GATING_ENABLED and is ON by default
+ * (see PAYWALL_GATING_ENABLED below); set it to `false` in the build env to
+ * disable it for a sandbox tenant. `trial` previews all features, so existing
+ * trial tenants are unaffected even with gating on.
  */
 
 import { PLAN_LIMITS, PLAN_TIERS, planRank } from '@/lib/license/licenseModel';

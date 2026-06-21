@@ -1,0 +1,41 @@
+{
+  "product": "LIUMA",
+  "version": "1.1.0",
+  "previousVersion": "1.0.8",
+  "releaseDate": "2026-06-21",
+  "semverBump": "minor",
+  "bumpRationale": "Additive, backward-compatible: truthful in-app User Manual, audit-trail integrity fix (AuditLog action enum), navigation/accessibility hardening, and a documented security audit. No breaking API or data changes.",
+  "architecture": {
+    "type": "single-page application",
+    "runtime": "browser (client-side only; no application server)",
+    "framework": "React 18 + Vite",
+    "router": "react-router-dom v6",
+    "styling": "Tailwind CSS + shadcn/ui",
+    "platform": "base44 SDK",
+    "enforcementBoundary": "base44 Row-Level Security (RLS) in base44/entities/*.jsonc",
+    "language": "JavaScript / JSX (type-checked via jsconfig)"
+  },
+  "inventory": {
+    "pages": 37,
+    "entities": 31,
+    "agents": 1,
+    "tests": 150,
+    "loadedSkills": {
+      "note": "These are generic Anthropic platform/example skills available to the assistant, NOT features of the Liuma application and not integrated into it.",
+      "public": 8,
+      "examples": 24
+    }
+  },
+  "roles": ["ADMIN", "TEACHER", "PARENT", "PLATFORM_OWNER"],
+  "qualityGates": {
+    "test": "node --test tests/**/*.test.js",
+    "lint": "eslint . --quiet",
+    "typecheck": "tsc -p ./jsconfig.json"
+  },
+  "artifacts": {
+    "changelog": "CHANGELOG.md",
+    "userManual": "USER_MANUAL.md",
+    "securityAudit": "docs/security-audit-2026-06-21.md",
+    "authorizationMatrix": "docs/authorization-matrix.md"
+  }
+}

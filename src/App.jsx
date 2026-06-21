@@ -3,8 +3,8 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
-import { Suspense } from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { Suspense, useEffect } from 'react';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -32,8 +32,28 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
 
+// Reset scroll to the top on every route change. Without this, navigating from
+// a long dashboard into a deep page (or back) preserves the previous scroll
+// offset and users can land mid-page. Renders nothing.
+const ScrollToTopOnNavigate = () => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname]);
+  return null;
+};
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+
+  // Redirect to login as a side effect, not during render. Calling
+  // navigateToLogin() in the render body is a React anti-pattern that can
+  // double-fire under StrictMode / concurrent rendering.
+  useEffect(() => {
+    if (authError?.type === 'auth_required') {
+      navigateToLogin();
+    }
+  }, [authError, navigateToLogin]);
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -49,8 +69,7 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
+      // Redirect handled by the effect above; render nothing meanwhile.
       return null;
     }
   }
@@ -88,6 +107,7 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
+          <ScrollToTopOnNavigate />
           <NavigationTracker />
           <TenantThemeRuntime />
           <AuthenticatedApp />

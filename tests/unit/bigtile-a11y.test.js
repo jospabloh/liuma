@@ -26,11 +26,20 @@ test('BigTile button branch is keyboard operable', () => {
 test('BigTile exposes an accessible name and a visible focus ring', () => {
   const source = read('src/components/ui/BigTile.jsx');
 
-  // Both the link and button branches get an aria-label from the title.
-  const ariaLabels = source.match(/aria-label=\{title\}/g) || [];
+  // Both the link and button branches get an aria-label from the computed
+  // accessible name (title, plus pending count when a badge is present).
+  const ariaLabels = source.match(/aria-label=\{accessibleName\}/g) || [];
   assert.ok(ariaLabels.length >= 2, 'both link and button branches label themselves');
 
   // Keyboard focus is visible via a focus-visible ring.
   assert.match(source, /focus-visible:ring-2/);
   assert.match(source, /focus-visible:ring-brand/);
+});
+
+test('BigTile folds the badge count into the accessible name', () => {
+  const source = read('src/components/ui/BigTile.jsx');
+
+  // Screen-reader users hear the pending count, not just the title.
+  assert.match(source, /const accessibleName = hasBadge/);
+  assert.match(source, /\$\{badge\} pendientes/);
 });

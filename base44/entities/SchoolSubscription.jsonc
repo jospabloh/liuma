@@ -164,34 +164,14 @@
       ]
     },
     "update": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }

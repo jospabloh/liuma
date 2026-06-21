@@ -22,35 +22,36 @@ export default function Home() {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       const profiles = await base44.entities.UserProfile.filter({ user_id: currentUser.id }, '-created_date');
-      return selectCurrentUserProfile(profiles);
+      const profile = selectCurrentUserProfile(profiles);
+      // The trial welcome modal is admin-only; its "seen" state lives on the
+      // user's own profile (self-writable) rather than the billing
+      // SchoolSubscription entity, which is owner-write-only.
+      if (profile?.app_role === 'ADMIN' && !profile?.welcome_message_shown) {
+        setShowWelcome(true);
+      }
+      return profile;
     },
   });
 
   const { data: subscription } = useQuery({
     queryKey: ['schoolSubscription', userProfile?.school_id],
     queryFn: async () => {
-      const subs = await base44.entities.SchoolSubscription.filter({ 
-        school_id: userProfile.school_id 
+      const subs = await base44.entities.SchoolSubscription.filter({
+        school_id: userProfile.school_id
       });
-      if (subs.length > 0) {
-        if (!subs[0].welcome_message_shown) {
-          setShowWelcome(true);
-        }
-        return subs[0];
-      }
-      return null;
+      return subs.length > 0 ? subs[0] : null;
     },
     enabled: !!userProfile?.school_id,
   });
 
   const markWelcomeShownMutation = useMutation({
     mutationFn: async () => {
-      await base44.entities.SchoolSubscription.update(subscription.id, {
+      await base44.entities.UserProfile.update(userProfile.id, {
         welcome_message_shown: true
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['schoolSubscription']);
+      queryClient.invalidateQueries(['userProfile']);
       setShowWelcome(false);
     }
   });

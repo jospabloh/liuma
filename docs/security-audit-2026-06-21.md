@@ -66,7 +66,14 @@ and become a platform owner across tenants.
 admins (settable only by the base44 platform role / backend). Audit existing
 profiles for the flag.
 
-### C4 · Any school admin can self-activate their subscription
+### C4 · Any school admin can self-activate their subscription *(FIXED)*
+> **Resolved**: `SchoolSubscription` `update`/`delete` RLS is now owner-only
+> (`role: admin`); tenant admins keep read-only access. The only field a tenant
+> admin used to write there — `welcome_message_shown` — moved to the
+> self-writable `UserProfile`, so the welcome modal still works. Guarded by
+> `tests/unit/rls-subscription-owner-only.test.js`. Verify on staging that the
+> owner can still manage licenses and that a tenant admin cannot.
+
 **`SchoolSubscription.jsonc` (update RLS)**
 `update` RLS allows any ADMIN whose `school_id` matches. The license model backs
 the read-only write-guard and the paywall, so an admin in

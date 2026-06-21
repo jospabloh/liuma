@@ -7,6 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **C3 — RLS no longer trusts the self-grantable `is_super_admin` flag**: that
+  field is undeclared and self-writable by any school admin, yet `School` and
+  `SchoolSubscription` RLS used it to grant cross-tenant read/write/delete. All
+  `is_super_admin` branches were removed; the real ACACIA owner retains access
+  via the base44 account role (`role: admin`), which tenants cannot self-assign.
+- **C4 — `SchoolSubscription` writes are now owner-only**: a school admin could
+  set their own `subscription_status`/`license_tier`/expiry to bypass the
+  paywall and read-only write-guard. `update`/`delete` RLS is restricted to the
+  platform owner (`role: admin`); tenant admins keep read access. The only field
+  a tenant admin legitimately wrote there — `welcome_message_shown` — moved to
+  the self-writable `UserProfile`, so the admin-only trial welcome modal still
+  works (now tracked per-user instead of per-school). Covered by
+  `tests/unit/rls-super-admin-hardening.test.js` and
+  `tests/unit/rls-subscription-owner-only.test.js`.
+
 ### Fixed
 
 - **Accessibility sweep (round 2) — icon-only controls and reduced motion**:

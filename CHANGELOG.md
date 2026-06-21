@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`useCurrentProfile` hook** (maintenance / de-duplication): the authenticated
+  user + `UserProfile` two-query pattern was copy-pasted verbatim into ~26 pages.
+  Extracted into `src/hooks/useCurrentProfile.js` and adopted across the seven
+  Avisos/Pagos/Soporte pages (–69 net lines). The hook reuses the existing
+  `['currentUser']` / `['userProfile', user.id]` query keys, so the react-query
+  cache is shared with not-yet-migrated pages and there is **no behavior change**;
+  remaining pages can adopt it incrementally. (Note: these role pages are
+  genuinely different views — consume vs. author, view vs. configure, file-ticket
+  vs. triage-console — not duplicates, so they were intentionally *not* collapsed
+  into single role-branched pages, which would have added complexity.)
+
 ### Added
 
 - **Mobile bottom navigation + command palette** (UX simplicity): a persistent

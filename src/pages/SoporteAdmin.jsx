@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { toast } from 'sonner';
 import { Headset, AlertTriangle, ChevronRight, ArrowUpCircle } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -45,12 +45,7 @@ export default function SoporteAdmin() {
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [activeTicket, setActiveTicket] = useState(null);
 
-  const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0],
-    enabled: !!user,
-  });
+  const { user, userProfile } = useCurrentProfile();
 
   // Platform-owner detection: prefer the server-persisted super-admin flag, but
   // fall back to the authenticated Base44 User.role (the app creator is `admin`)

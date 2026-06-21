@@ -72,3 +72,27 @@ export function hoursUntilSla({ slaDueAt, now = new Date() } = {}) {
   const current = now instanceof Date ? now : new Date(now);
   return Math.round((new Date(slaDueAt).getTime() - current.getTime()) / (1000 * 60 * 60));
 }
+
+/**
+ * From a list of tickets, pick the director-tier (SCHOOL_ADMIN / L1) ones whose
+ * SLA has lapsed without a first response. These are the tickets that should
+ * roll up to soporte (L2) automatically: the director had their window and did
+ * not respond. Platform-tier and terminal tickets are never selected.
+ *
+ * Pure function so the auto-escalation decision is unit-testable without hitting
+ * the backend; the orchestration that actually writes the escalation lives in
+ * `tickets.js`.
+ */
+export function selectTicketsToAutoEscalate(tickets, now = new Date()) {
+  if (!Array.isArray(tickets)) return [];
+  return tickets.filter(
+    (t) =>
+      t?.tier === SUPPORT_TIER.SCHOOL_ADMIN &&
+      isSlaBreached({
+        slaDueAt: t.sla_due_at,
+        status: t.status,
+        firstResponseAt: t.first_response_at,
+        now,
+      }),
+  );
+}

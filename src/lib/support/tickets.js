@@ -7,11 +7,12 @@ import {
   SUPPORT_CHANNEL,
   SUPPORT_TIER,
   SUPPORT_EMAIL,
+  TERMINAL_STATUSES,
   DEFAULT_CATEGORY,
   DEFAULT_PRIORITY,
 } from './constants.js';
 import { resolveSupportRouting } from './routing.js';
-import { computeSlaDueAt } from './sla.js';
+import { computeSlaDueAt, selectTicketsToAutoEscalate } from './sla.js';
 import { generateTicketNumber } from './ticketNumber.js';
 import { assertTransition } from './statusMachine.js';
 
@@ -311,6 +312,100 @@ export async function transitionTicketStatus({ user, userProfile, ticket, toStat
   });
 
   return { ...ticket, ...patch };
+}
+
+/**
+ * Escalate a director-tier (SCHOOL_ADMIN / L1) ticket up to soporte (the
+ * platform owner, L2). This is the sequential handoff: Lumi (L0) → director
+ * (L1) → soporte (L2). It re-tiers the ticket, restarts the SLA clock at the
+ * fixed 48-hour platform target, drops a system note in the thread, emails the
+ * Tier-2 inbox (soporte@…) and audit-logs the handoff.
+ *
+ * Cross-tier escalation intentionally bypasses the status state machine and
+ * sets the ticket back to ESCALATED ("awaiting staff"), because soporte now
+ * owns it regardless of where the director left it (in progress, waiting, …).
+ *
+ * @param {{ trigger?: 'manual'|'sla_lapse', note?: string }} opts
+ */
+export async function escalateTicketToSupport({ user, userProfile, ticket, trigger = 'manual', note } = {}) {
+  if (!ticket) throw new Error('escalateTicketToSupport requires a ticket');
+  if (ticket.tier === SUPPORT_TIER.PLATFORM) return ticket; // already with soporte
+  if (TERMINAL_STATUSES.includes(ticket.status)) {
+    throw new Error('No se puede escalar un ticket cerrado o resuelto.');
+  }
+
+  const nowIso = new Date().toISOString();
+  const patch = {
+    tier: SUPPORT_TIER.PLATFORM,
+    assignee_role: SUPPORT_AUTHOR_ROLE.OWNER,
+    status: SUPPORT_STATUS.ESCALATED,
+    // Soporte gets a fresh 48-hour clock; the director's response window is over.
+    sla_due_at: computeSlaDueAt({ priority: ticket.priority, tier: SUPPORT_TIER.PLATFORM, from: new Date() }),
+    first_response_at: null,
+    escalated_at: nowIso,
+  };
+  const updated = { ...ticket, ...patch };
+  await base44.entities.SupportTicket.update(ticket.id, patch);
+
+  const systemNote =
+    note ||
+    (trigger === 'sla_lapse'
+      ? 'Escalado automáticamente a soporte: el director no respondió dentro del SLA.'
+      : 'Escalado a soporte por la dirección de la escuela.');
+  await base44.entities.SupportTicketMessage.create({
+    ticket_id: ticket.id,
+    school_id: ticket.school_id,
+    requester_user_id: ticket.requester_user_id,
+    author_user_id: user?.id || null,
+    author_role: SUPPORT_AUTHOR_ROLE.SYSTEM,
+    body: systemNote,
+  });
+
+  // Notify soporte: the fixed Tier-2 inbox always, plus any owner profiles.
+  const recipients = await resolveAssigneeRecipients({ tier: SUPPORT_TIER.PLATFORM, schoolId: ticket.school_id });
+  await notifyAssignees({
+    recipients,
+    schoolId: ticket.school_id,
+    actorUserId: user?.id || null,
+    ticket: updated,
+    description: systemNote,
+    tier: SUPPORT_TIER.PLATFORM,
+  });
+
+  if (user && userProfile) {
+    await logAuditEvent({
+      user,
+      userProfile,
+      entity: AUDIT_ENTITIES.SUPPORT_TICKET,
+      entityId: ticket.id,
+      action: 'SUPPORT_TICKET_STATUS_CHANGE',
+      reason: `Ticket ${ticket.ticket_number} escalado a soporte (${trigger})`,
+      context: { ticket_number: ticket.ticket_number, trigger, from_tier: ticket.tier, to_tier: SUPPORT_TIER.PLATFORM },
+    });
+  }
+
+  return updated;
+}
+
+/**
+ * Opportunistic auto-escalation: given the director's queue, roll up every
+ * director-tier ticket whose SLA has lapsed without a first response to soporte.
+ * Called when the support queue loads (the app has no cron), so the handoff
+ * happens the next time anyone with access opens the panel. Returns the number
+ * escalated.
+ */
+export async function autoEscalateBreachedTickets({ user, userProfile, tickets, now = new Date() } = {}) {
+  const due = selectTicketsToAutoEscalate(tickets, now);
+  let escalated = 0;
+  for (const ticket of due) {
+    try {
+      await escalateTicketToSupport({ user, userProfile, ticket, trigger: 'sla_lapse' });
+      escalated += 1;
+    } catch (error) {
+      console.error('Auto-escalation to soporte failed for ticket', ticket?.id, error);
+    }
+  }
+  return escalated;
 }
 
 /** Tickets opened by the current user (requester view). */

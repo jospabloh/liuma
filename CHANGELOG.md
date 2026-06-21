@@ -9,6 +9,17 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Sequential L1 → L2 support handoff (director → soporte)**: completes the
+  escalation chain so a ticket the school director can't resolve rolls up to
+  soporte. Two triggers, both landing in the existing Tier-2 email + 48 h SLA:
+  a manual **"Escalar a soporte"** action in the director's queue
+  (`SoporteAdmin.jsx`, hidden for owners and non-school-tier tickets), and
+  **automatic escalation** when a director-tier ticket's SLA lapses with no
+  first response (`autoEscalateBreachedTickets`, run opportunistically on queue
+  load since the app has no cron). `escalateTicketToSupport` re-tiers the ticket
+  to PLATFORM, restarts the 48 h clock, posts a system note, emails soporte and
+  audit-logs the handoff; the breach-selection logic
+  (`selectTicketsToAutoEscalate`) is a pure, unit-tested function.
 - **Tier-2 support escalation email**: the help desk escalates Lumi (L0) →
   school director (L1) → platform owner "soporte" (L2). The platform tier
   previously resolved its recipient via `UserProfile.filter({ is_super_admin })`,

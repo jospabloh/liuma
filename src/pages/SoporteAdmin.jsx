@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { Headset, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Headset, AlertTriangle, ChevronRight, ArrowUpCircle } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -22,11 +22,13 @@ import {
   listTicketMessages,
   addSupportMessage,
   transitionTicketStatus,
+  escalateTicketToSupport,
+  autoEscalateBreachedTickets,
 } from '@/lib/support/tickets';
 import { isSlaBreached } from '@/lib/support/sla';
 import { nextStatusesFor } from '@/lib/support/statusMachine';
 import { isPlatformOwner } from '@/lib/support/owner';
-import { SUPPORT_AUTHOR_ROLE, SUPPORT_STATUS, TERMINAL_STATUSES } from '@/lib/support/constants';
+import { SUPPORT_AUTHOR_ROLE, SUPPORT_STATUS, SUPPORT_TIER, TERMINAL_STATUSES } from '@/lib/support/constants';
 import TicketThread from '@/components/support/TicketThread';
 import { SupportStatusBadge, SupportPriorityBadge, STATUS_LABELS } from '@/components/support/labels.jsx';
 import { format } from 'date-fns';
@@ -115,6 +117,36 @@ export default function SoporteAdmin() {
       toast.error(error.message || 'No se pudo cambiar el estado.');
     }
   };
+
+  // Manual L1→L2 handoff: the director sends an unresolved ticket to soporte.
+  const handleEscalateToSupport = async () => {
+    try {
+      const updated = await escalateTicketToSupport({ user, userProfile, ticket: activeTicket, trigger: 'manual' });
+      setActiveTicket(updated);
+      toast.success('Ticket escalado a soporte LIUMA (48 h de respuesta).');
+      refresh();
+    } catch (error) {
+      toast.error(error.message || 'No se pudo escalar a soporte.');
+    }
+  };
+
+  // Auto L1→L2 handoff: when the director opens their queue, any ticket whose
+  // SLA lapsed without a first response rolls up to soporte automatically. The
+  // app has no cron, so this is the opportunistic trigger. Owners are already
+  // L2, so it only runs for directors, and once per queue load.
+  const [autoEscalateDone, setAutoEscalateDone] = useState(false);
+  useEffect(() => {
+    if (autoEscalateDone || isOwner || !user || !userProfile || tickets.length === 0) return;
+    setAutoEscalateDone(true);
+    (async () => {
+      const count = await autoEscalateBreachedTickets({ user, userProfile, tickets });
+      if (count > 0) {
+        toast.info(`${count} ticket${count !== 1 ? 's' : ''} sin respuesta escalado${count !== 1 ? 's' : ''} a soporte.`);
+        refresh();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tickets, isOwner, user, userProfile, autoEscalateDone]);
 
   if (isLoading) return <LoadingScreen message="Cargando tickets..." />;
 
@@ -216,6 +248,24 @@ export default function SoporteAdmin() {
                       {STATUS_LABELS[status] || status}
                     </Button>
                   ))}
+                </div>
+              )}
+
+              {/* L1→L2 handoff: a director escalates an unresolved school ticket
+                  up to soporte LIUMA. Hidden for owners (already L2) and once
+                  the ticket has reached the platform tier or a terminal state. */}
+              {!isOwner
+                && activeTicket.tier === SUPPORT_TIER.SCHOOL_ADMIN
+                && !TERMINAL_STATUSES.includes(activeTicket.status) && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs text-amber-800 mb-2">
+                    ¿No puedes resolver este ticket en tu escuela? Escálalo a soporte LIUMA;
+                    el equipo responderá en un máximo de 48 horas.
+                  </p>
+                  <Button size="sm" variant="outline" className="border-amber-300" onClick={handleEscalateToSupport}>
+                    <ArrowUpCircle className="w-4 h-4 mr-1.5" />
+                    Escalar a soporte
+                  </Button>
                 </div>
               )}
 

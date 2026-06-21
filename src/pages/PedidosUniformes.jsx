@@ -227,6 +227,7 @@ export default function PedidosUniformes() {
                           type="button"
                           size="icon"
                           variant="outline"
+                          aria-label="Quitar artículo"
                           onClick={() => removeItem(index)}
                         >
                           <Trash2 className="w-4 h-4 text-red-600" />

@@ -1,15 +1,16 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
-export default function EmptyState({ 
-  icon: Icon, 
-  title, 
+export default function EmptyState({
+  icon: Icon,
+  title,
   description,
-  action 
+  action
 }) {
+  const reduceMotion = useReducedMotion();
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center py-12 px-6 text-center space-y-2"
     >

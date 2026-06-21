@@ -25,7 +25,9 @@ test('absence request pages resolve school context from profiles instead of user
   const adminAbsences = read('src/pages/GestionAusencias.jsx');
   const parentAbsenceRequest = read('src/pages/SolicitarAusencia.jsx');
 
-  assert.match(adminAbsences, /UserProfile\.filter\(\{ user_id: user\.id \}\)/);
+  // School context comes from the profile (now resolved via useCurrentProfile),
+  // never from user.data.
+  assert.match(adminAbsences, /useCurrentProfile\(\)/);
   assert.doesNotMatch(adminAbsences, /user\??\.data|user\.data/);
   assert.match(parentAbsenceRequest, /student\?\.school_id \|\| userProfile\?\.school_id/);
   assert.doesNotMatch(parentAbsenceRequest, /school_id: user\.data\.school_id/);

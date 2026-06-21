@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { Card } from '@/components/ui/card';
@@ -15,12 +16,7 @@ export default function AuditoriaAdmin() {
   const [actionFilter, setActionFilter] = useState('ALL');
   const [search, setSearch] = useState('');
 
-  const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0],
-    enabled: !!user,
-  });
+  const { user, userProfile } = useCurrentProfile();
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['auditLogs', userProfile?.school_id],

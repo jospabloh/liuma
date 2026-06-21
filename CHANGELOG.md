@@ -11,14 +11,21 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - **`useCurrentProfile` hook** (maintenance / de-duplication): the authenticated
   user + `UserProfile` two-query pattern was copy-pasted verbatim into ~26 pages.
-  Extracted into `src/hooks/useCurrentProfile.js` and adopted across the seven
-  Avisos/Pagos/Soporte pages (–69 net lines). The hook reuses the existing
-  `['currentUser']` / `['userProfile', user.id]` query keys, so the react-query
-  cache is shared with not-yet-migrated pages and there is **no behavior change**;
-  remaining pages can adopt it incrementally. (Note: these role pages are
+  Extracted into `src/hooks/useCurrentProfile.js` and adopted across **25 pages**
+  (net −218/+54 lines). The hook reuses the existing `['currentUser']` /
+  `['userProfile', user.id]` query keys, so the react-query cache is shared and
+  there is **no behavior change**. Pages that destructure differently were
+  preserved exactly: `Aprobaciones` keeps its `currentUser` name via
+  `const { user: currentUser } = useCurrentProfile()`, and `PermisosRoles` maps
+  its split loading flags to the hook's combined `isLoading`. Intentionally left
+  untouched: pages with a different architecture (`Home`, `Asistencia`,
+  `ResumenAsistencia`, `CalendarioEscolar` set state imperatively inside the
+  query fn) and pages that never needed the profile query. (Note on the original
+  "merge duplicate pages" request: the role-split Avisos/Pagos/Soporte pages are
   genuinely different views — consume vs. author, view vs. configure, file-ticket
-  vs. triage-console — not duplicates, so they were intentionally *not* collapsed
-  into single role-branched pages, which would have added complexity.)
+  vs. triage-console — *not* duplicates, so they were deliberately not collapsed
+  into single role-branched pages, which would have added complexity. Only the
+  shared boilerplate was de-duplicated.)
 
 ### Added
 

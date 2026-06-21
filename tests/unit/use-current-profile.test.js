@@ -16,16 +16,24 @@ test('useCurrentProfile reuses the shared cache keys', () => {
   assert.match(src, /export function useCurrentProfile/);
 });
 
-test('the Avisos/Pagos/Soporte pages adopt the shared hook', () => {
-  for (const page of [
-    'Avisos', 'AvisosMaestro', 'AvisosAdmin',
-    'Pagos', 'PagosAdmin',
-    'Soporte', 'SoporteAdmin',
-  ]) {
+// Every page migrated onto the shared hook. They must import it, call it, and
+// no longer inline the ['currentUser'] query boilerplate.
+const MIGRATED_PAGES = [
+  // Avisos / Pagos / Soporte families
+  'Avisos', 'AvisosMaestro', 'AvisosAdmin', 'Pagos', 'PagosAdmin', 'Soporte', 'SoporteAdmin',
+  // Second wave
+  'BitacorasMaestro', 'GestionSalon', 'ContactosEmergencia', 'GestionAlumno',
+  'CrearBitacora', 'TareaMaestro', 'Bitacora', 'Tarea', 'AlertaEmergencia',
+  'GestionEscuela', 'ConfiguracionInicial', 'SolicitarAusencia', 'GestionAusencias',
+  'AuditoriaAdmin', 'PanelSoporte', 'Reportes', 'Aprobaciones', 'PermisosRoles',
+];
+
+test('migrated pages adopt the shared hook and drop the inline boilerplate', () => {
+  for (const page of MIGRATED_PAGES) {
     const src = read(`src/pages/${page}.jsx`);
-    assert.match(src, /useCurrentProfile/, `${page} should import the hook`);
-    assert.match(src, /const \{ user, userProfile \} = useCurrentProfile\(\);/, `${page} should use the hook`);
-    // The copy-pasted boilerplate should be gone.
+    assert.match(src, /import \{ useCurrentProfile \} from '@\/hooks\/useCurrentProfile'/, `${page} should import the hook`);
+    assert.match(src, /useCurrentProfile\(\)/, `${page} should call the hook`);
     assert.doesNotMatch(src, /queryKey: \['currentUser'\]/, `${page} should no longer inline the currentUser query`);
+    assert.doesNotMatch(src, /queryKey: \['userProfile'/, `${page} should no longer inline the userProfile query`);
   }
 });

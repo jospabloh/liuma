@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { Card } from '@/components/ui/card';
@@ -70,16 +71,7 @@ function requireExplicitConfirmation(message) {
 }
 
 export default function PermisosRoles() {
-  const { data: user, isLoading: userLoading } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
-
-  const { data: userProfile, isLoading: profileLoading } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0],
-    enabled: !!user,
-  });
+  const { user, userProfile, isLoading: profileLoading } = useCurrentProfile();
 
   const [templates, setTemplates] = React.useState([DEFAULT_TEMPLATE]);
   const [newTemplateName, setNewTemplateName] = React.useState('');
@@ -143,7 +135,7 @@ export default function PermisosRoles() {
     { key: DANGER_ZONE_OPERATIONS.TRANSFER_TENANT_OWNERSHIP, label: 'transfer tenant ownership' },
   ];
 
-  if (userLoading || profileLoading) {
+  if (profileLoading) {
     return <LoadingScreen message="Validando permisos..." />;
   }
 

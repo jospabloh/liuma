@@ -19,6 +19,21 @@ export default function BigTile({
 }) {
   const reduceMotion = useReducedMotion();
 
+  // Keyboard parity with native controls: Enter/Space activate the tile when it
+  // is rendered as a custom button (the `onClick` branch below). Mirrors the
+  // day-cell pattern already used in CalendarioEscolar.
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      onClick?.(event);
+    }
+  };
+
+  // Shared focus ring so keyboard users can see where they are, regardless of
+  // whether the tile is a link or a button.
+  const focusRing =
+    'block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2';
+
   const content = (
     <motion.div
       initial={reduceMotion ? false : { opacity: 0, y: 12 }}
@@ -56,11 +71,22 @@ export default function BigTile({
   );
 
   if (href) {
-    return <Link to={href}>{content}</Link>;
+    return (
+      <Link to={href} className={focusRing} aria-label={title}>
+        {content}
+      </Link>
+    );
   }
 
   return (
-    <div onClick={onClick} role="button" tabIndex={0}>
+    <div
+      onClick={onClick}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={title}
+      className={`${focusRing} cursor-pointer`}
+    >
       {content}
     </div>
   );

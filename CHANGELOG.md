@@ -9,6 +9,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Mobile bottom navigation + ⌘K command palette** (UX simplicity): a
+  persistent 4-tab bottom bar — Inicio · Hoy · Avisos · Menú — so any screen is
+  one tap away instead of bouncing back to the home grid. "Menú" (and ⌘K / a
+  keyboard shortcut) opens a command palette to search or browse the role's full
+  menu. Both read a single role-aware destination registry
+  (`src/components/nav/navRegistry.js`, pure + unit-tested); the bar mounts once
+  from `Layout.jsx` and hides itself until a profile/role is available (keeping
+  it off login/onboarding). The "Avisos" tab resolves to the role's notices page
+  (`Avisos`/`AvisosMaestro`/`AvisosAdmin`). Mobile-only (`md:hidden`); desktop is
+  unchanged. First step toward thinning the 18-tile admin home.
 - **Sequential L1 → L2 support handoff (director → soporte)**: completes the
   escalation chain so a ticket the school director can't resolve rolls up to
   soporte. Two triggers, both landing in the existing Tier-2 email + 48 h SLA:

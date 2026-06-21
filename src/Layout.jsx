@@ -1,6 +1,7 @@
 import React from 'react';
 import { Toaster } from "sonner";
 import GlobalLumiBubble from '@/components/lumi/GlobalLumiBubble';
+import BottomNav from '@/components/nav/BottomNav';
 
 export default function Layout({ children, currentPageName }) {
   return (
@@ -60,6 +61,7 @@ export default function Layout({ children, currentPageName }) {
         </a>
       </footer>
       <GlobalLumiBubble />
+      <BottomNav />
     </div>
   );
 }

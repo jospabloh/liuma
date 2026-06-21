@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Tier-2 support escalation email**: the help desk escalates Lumi (L0) →
+  school director (L1) → platform owner "soporte" (L2). The platform tier
+  previously resolved its recipient via `UserProfile.filter({ is_super_admin })`,
+  which returns nobody on deployments without that field — so Tier-2 escalations
+  notified no one. Platform-tier escalations now always send an automated email
+  to a fixed Tier-2 inbox (`SUPPORT_EMAIL = soporte@acaciaco.com.mx`, a committed
+  constant in `src/lib/support/constants.js`) via a new
+  `notificationService.sendEventEmailTo` helper, and platform-tier tickets get a
+  fixed **48-hour SLA** (`computeSlaDueAt` is now tier-aware). Covered by
+  `tests/unit/support-escalation-email.test.js`. Owner contact stays server-side;
+  see `.env.example`.
+
 ### Security
 
 - **C3 — RLS no longer trusts the self-grantable `is_super_admin` flag**: that

@@ -93,6 +93,24 @@ export const notificationService = {
     });
   },
 
+  /**
+   * Send an event-templated email to a fixed address (not a user profile).
+   * Used for the Tier-2 support inbox, which may not correspond to any
+   * registered user. Returns false if the event has no email template.
+   */
+  async sendEventEmailTo({ eventType, email, schoolId, actorUserId, templateContext }) {
+    const template = NOTIFICATION_TEMPLATES[eventType];
+    if (!template || !email) return false;
+    return this.sendEmail({
+      schoolId,
+      email,
+      subject: template.subject(templateContext),
+      body: template.emailBody(templateContext),
+      eventType,
+      actorUserId,
+    });
+  },
+
   async sendHighPriorityAlert({ schoolId, title, content, actorUserId }) {
     return deliverWithRetry({
       schoolId,

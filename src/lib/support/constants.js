@@ -66,3 +66,15 @@ export const TERMINAL_STATUSES = [
 
 export const DEFAULT_PRIORITY = SUPPORT_PRIORITIES.NORMAL;
 export const DEFAULT_CATEGORY = SUPPORT_CATEGORIES.OTHER;
+
+/**
+ * Tier-2 (platform owner) support inbox. When a ticket escalates to the
+ * PLATFORM tier — i.e. Lumi (L0) and the school director (L1) could not resolve
+ * it — an automated email is sent here so the platform owner ("soporte") is
+ * notified even if no owner profile is registered in the user directory.
+ * Public business address; safe to ship in the bundle.
+ */
+export const SUPPORT_EMAIL = 'soporte@acaciaco.com.mx';
+
+/** First-response/resolution target for Tier-2 (platform) tickets: 48 hours. */
+export const PLATFORM_SLA_HOURS = 48;

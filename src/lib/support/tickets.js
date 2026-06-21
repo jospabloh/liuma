@@ -6,6 +6,7 @@ import {
   SUPPORT_AUTHOR_ROLE,
   SUPPORT_CHANNEL,
   SUPPORT_TIER,
+  SUPPORT_EMAIL,
   DEFAULT_CATEGORY,
   DEFAULT_PRIORITY,
 } from './constants.js';
@@ -63,26 +64,42 @@ async function resolveAssigneeRecipients({ tier, schoolId }) {
   }
 }
 
-async function notifyAssignees({ recipients, schoolId, actorUserId, ticket, description }) {
-  if (!recipients.length) return;
+async function notifyAssignees({ recipients, schoolId, actorUserId, ticket, description, tier }) {
+  const templateContext = {
+    ticketNumber: ticket.ticket_number,
+    subjectText: ticket.subject,
+    requesterName: ticket.requester_name || 'Usuario',
+    categoryLabel: ticket.category,
+    priorityLabel: ticket.priority,
+    slaDateLabel: ticket.sla_due_at ? new Date(ticket.sla_due_at).toLocaleString('es-MX') : 'N/D',
+    description,
+  };
+
   try {
-    await notificationService.sendByEvent({
-      eventType: 'support_ticket_escalated',
-      schoolId,
-      actorUserId,
-      recipients,
-      channels: ['in_app', 'email'],
-      priority: ticket.priority,
-      templateContext: {
-        ticketNumber: ticket.ticket_number,
-        subjectText: ticket.subject,
-        requesterName: ticket.requester_name || 'Usuario',
-        categoryLabel: ticket.category,
-        priorityLabel: ticket.priority,
-        slaDateLabel: ticket.sla_due_at ? new Date(ticket.sla_due_at).toLocaleString('es-MX') : 'N/D',
-        description,
-      },
-    });
+    if (recipients.length) {
+      await notificationService.sendByEvent({
+        eventType: 'support_ticket_escalated',
+        schoolId,
+        actorUserId,
+        recipients,
+        channels: ['in_app', 'email'],
+        priority: ticket.priority,
+        templateContext,
+      });
+    }
+
+    // Tier-2 (platform) escalations always email the fixed support inbox, so
+    // "soporte" is notified even when no owner profile exists in the directory
+    // (the is_super_admin lookup can legitimately return nobody).
+    if (tier === SUPPORT_TIER.PLATFORM) {
+      await notificationService.sendEventEmailTo({
+        eventType: 'support_ticket_escalated',
+        email: SUPPORT_EMAIL,
+        schoolId,
+        actorUserId,
+        templateContext,
+      });
+    }
   } catch (error) {
     // Notification failures are logged inside the service; never block ticket creation.
     console.error('Error notifying support assignees:', error);
@@ -112,7 +129,7 @@ export async function createSupportTicket({
 
   const schoolId = userProfile.school_id;
   const routing = resolveSupportRouting({ requesterRole: userProfile.app_role, category });
-  const slaDueAt = computeSlaDueAt({ priority });
+  const slaDueAt = computeSlaDueAt({ priority, tier: routing.tier });
   const ticketNumber = await allocateTicketNumber(schoolId);
   const nowIso = new Date().toISOString();
 
@@ -162,7 +179,7 @@ export async function createSupportTicket({
   }
 
   const recipients = await resolveAssigneeRecipients({ tier: routing.tier, schoolId });
-  await notifyAssignees({ recipients, schoolId, actorUserId: user.id, ticket, description });
+  await notifyAssignees({ recipients, schoolId, actorUserId: user.id, ticket, description, tier: routing.tier });
 
   await logAuditEvent({
     user,

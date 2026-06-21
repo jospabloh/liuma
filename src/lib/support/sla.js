@@ -1,4 +1,4 @@
-import { SUPPORT_PRIORITIES, TERMINAL_STATUSES } from './constants.js';
+import { SUPPORT_PRIORITIES, TERMINAL_STATUSES, SUPPORT_TIER, PLATFORM_SLA_HOURS } from './constants.js';
 
 /**
  * First-response SLA targets, expressed in business days (weekends excluded).
@@ -37,12 +37,20 @@ export function addBusinessDays(date, businessDays) {
 }
 
 /**
- * Compute the first-response SLA deadline for a ticket of a given priority.
+ * Compute the first-response SLA deadline for a ticket.
+ *
+ * Tier-2 (PLATFORM) tickets — the ones that reach "soporte" after Lumi and the
+ * school director could not resolve them — get a fixed 48-hour target. All
+ * other tickets use the priority-based business-day targets above.
+ *
  * @returns {string} ISO timestamp.
  */
-export function computeSlaDueAt({ priority, from = new Date() } = {}) {
-  const days = SLA_BUSINESS_DAYS[priority] ?? SLA_BUSINESS_DAYS[SUPPORT_PRIORITIES.NORMAL];
+export function computeSlaDueAt({ priority, tier, from = new Date() } = {}) {
   const base = from instanceof Date ? from : new Date(from);
+  if (tier === SUPPORT_TIER.PLATFORM) {
+    return new Date(base.getTime() + PLATFORM_SLA_HOURS * 60 * 60 * 1000).toISOString();
+  }
+  const days = SLA_BUSINESS_DAYS[priority] ?? SLA_BUSINESS_DAYS[SUPPORT_PRIORITIES.NORMAL];
   return addBusinessDays(base, days).toISOString();
 }
 

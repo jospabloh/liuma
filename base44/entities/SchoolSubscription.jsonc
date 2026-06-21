@@ -156,11 +156,6 @@
           }
         },
         {
-          "user_condition": {
-            "data.is_super_admin": true
-          }
-        },
-        {
           "data.school_id": "{{user.data.school_id}}",
           "user_condition": {
             "data.app_role": "ADMIN"
@@ -176,11 +171,6 @@
           }
         },
         {
-          "user_condition": {
-            "data.is_super_admin": true
-          }
-        },
-        {
           "data.school_id": "{{user.data.school_id}}",
           "user_condition": {
             "data.app_role": "ADMIN"
@@ -193,11 +183,6 @@
         {
           "user_condition": {
             "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "data.is_super_admin": true
           }
         },
         {

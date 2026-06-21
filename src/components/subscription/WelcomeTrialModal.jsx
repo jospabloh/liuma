@@ -7,7 +7,9 @@ import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export default function WelcomeTrialModal({ subscription, onClose }) {
-  if (!subscription || subscription.welcome_message_shown) return null;
+  // "Seen" state now lives on the user profile (see Home.jsx); this modal only
+  // needs the subscription for the trial details it displays.
+  if (!subscription) return null;
 
   const daysLeft = differenceInDays(new Date(subscription.trial_end_date), new Date());
 

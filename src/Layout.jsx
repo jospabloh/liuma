@@ -60,7 +60,7 @@ export default function Layout({ children, currentPageName }) {
         {/* Persistent desktop rail (md+); mobile uses the BottomNav below. The
             content is offset on desktop so the fixed rail never covers it. */}
         <SideNav />
-        <div className="md:pl-60">
+        <div className="md:pl-64">
           {children}
           <footer className="py-4 text-center text-sm text-slate-500">
             <a

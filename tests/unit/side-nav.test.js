@@ -54,7 +54,7 @@ test('Layout mounts SideNav and offsets desktop content', () => {
   const src = read('src/Layout.jsx');
   assert.match(src, /import SideNav from '@\/components\/nav\/SideNav'/);
   assert.match(src, /<SideNav \/>/);
-  assert.match(src, /md:pl-60/);
+  assert.match(src, /md:pl-64/);
 });
 
 // Sanity: every destination the rail will render resolves to a real URL and

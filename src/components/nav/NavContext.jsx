@@ -39,7 +39,7 @@ export function NavProvider({ children }) {
   }, []);
 
   return (
-    <NavContext.Provider value={{ role, paletteOpen, openPalette, closePalette }}>
+    <NavContext.Provider value={{ role, user, profile, paletteOpen, openPalette, closePalette }}>
       {children}
       {role && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} role={role} />}
     </NavContext.Provider>
@@ -55,6 +55,8 @@ export function useNav() {
   return (
     useContext(NavContext) || {
       role: null,
+      user: null,
+      profile: null,
       paletteOpen: false,
       openPalette: () => {},
       closePalette: () => {},

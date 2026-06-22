@@ -154,6 +154,32 @@ html, body, #root {
     @apply sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80;
   }
 
+  /* Premium loading shimmer — a soft highlight sweeps across a skeleton block,
+     keyed off the theme foreground so it reads in light and dark. The global
+     reduced-motion rule neutralizes the sweep for users who opt out. */
+  @keyframes ui-shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  .ui-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .ui-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.06),
+      transparent
+    );
+    animation: ui-shimmer 1.6s infinite;
+  }
+
   /* Premium card elevation — a two-layer soft shadow keyed off the foreground
      color (with alpha), so it adapts to light and dark themes instead of a flat
      grey drop shadow. Used as the default Card surface. */

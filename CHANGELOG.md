@@ -5,6 +5,35 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.3] - 2026-06-22
+
+Premium polish on the **empty & loading states** — the fourth leg of the UI
+elevation work. Cosmetic only; no behavior, API, or data changes.
+
+### Changed
+
+- **On-brand `LoadingScreen`:** the full-screen loader (shown on ~10 pages) was
+  hardcoded to a violet/indigo mark on a slate gradient. It now rides the tenant
+  **`brand`** token and theme surfaces — the mark mirrors the desktop nav rail's
+  brand chip — so it re-skins per school. Spinner now honors reduced motion.
+- **`EmptyState`:** flat grey icon circle replaced with a brand-tinted rounded
+  chip (`bg-brand/10` + inset brand ring), matching the nav rail and home tiles.
+- **`Skeleton`:** flat pulse replaced with a premium `ui-shimmer` sweep — a soft
+  highlight keyed off the theme foreground (adapts to light/dark; neutralized
+  under reduced motion).
+
+### Added
+
+- `ui-shimmer` utility + `@keyframes ui-shimmer` (theme-aware loading sweep).
+
+### Tests
+
+- `tests/unit/premium-empty-loading.test.js` — LoadingScreen is on-brand (no
+  hardcoded hues) and honors reduced motion, EmptyState uses the brand chip, and
+  Skeleton uses the theme-aware shimmer utility.
+
+---
+
 ## [1.3.2] - 2026-06-22
 
 Premium polish pass on the **form & dialog surfaces** — the third leg of the

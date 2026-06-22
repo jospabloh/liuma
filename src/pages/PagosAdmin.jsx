@@ -309,6 +309,7 @@ export default function PagosAdmin() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
+        eyebrow="Administración"
         title="Pagos"
         showBack
         backTo={createPageUrl('Home')}

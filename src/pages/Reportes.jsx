@@ -99,7 +99,7 @@ export default function Reportes() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
-      <PageHeader title="Reportes" subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })} showBack backTo={createPageUrl('Home')} />
+      <PageHeader eyebrow="Administración" title="Reportes" subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })} showBack backTo={createPageUrl('Home')} />
 
       <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4 mb-4">
         <p className="text-xs text-muted-foreground mb-2">Filtros</p>

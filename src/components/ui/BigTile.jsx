@@ -46,7 +46,7 @@ export default function BigTile({
       transition={{ delay: reduceMotion ? 0 : delay, duration: 0.3 }}
       whileHover={reduceMotion ? undefined : { y: -2 }}
       whileTap={reduceMotion ? undefined : { scale: 0.99 }}
-      className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-brand/40 sm:p-5"
+      className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/70 bg-card p-4 ui-elevation transition-[colors,box-shadow] hover:border-brand/40 sm:p-5"
     >
       {/* Brand accent rail — the tenant color, used as a quiet signature. */}
       <span

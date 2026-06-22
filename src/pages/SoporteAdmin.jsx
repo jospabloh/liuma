@@ -144,6 +144,7 @@ export default function SoporteAdmin() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
+        eyebrow={isOwner ? 'Plataforma' : 'Soporte'}
         title={isOwner ? 'Soporte — Consola LIUMA' : 'Soporte — Mi escuela'}
         showBack
         backTo={createPageUrl('Home')}

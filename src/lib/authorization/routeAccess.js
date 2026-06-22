@@ -44,6 +44,7 @@ export const ROUTE_ACCESS = {
   AvisosAdmin: [ROLES.ADMIN],
   AlertaEmergencia: [ROLES.ADMIN],
   Reportes: [ROLES.ADMIN],
+  SeedTestData: [ROLES.ADMIN],
 };
 
 export function getRouteAccessMatrix() {

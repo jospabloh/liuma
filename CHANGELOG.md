@@ -5,6 +5,41 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.0] - 2026-06-22
+
+Adds a **test-data seeder**: a connected, role-isolated sample dataset across
+every entity, generated through the app so Base44 tags it `is_sample:true`
+(hidden when Test Data mode is off).
+
+### Added
+
+- **`src/lib/testData/`** — a pure, deterministic `blueprint.js` describing the
+  full graph (30 seeded entities; `School` reused, `User` provisioned
+  separately) with symbolic foreign keys; `isolation.js` deriving per-role
+  scopes from the RLS rules; and `seedTestData.js` which resolves refs, persists
+  via the app SDK, attempts to provision fictitious role users, and reports the
+  derived `User.data` scope fields.
+- **`SeedTestData` page** (ADMIN-only route) — one-click seeding with safety
+  warnings (must enable Test Data first) and an on-screen report; guards against
+  double-seeding since the data API has no delete.
+- **`docs/test-data-report.md`** — coverage matrix, role-isolation results,
+  impersonation steps, and a pre-mortem (failure modes + proposed fixes).
+
+### Tests
+
+- `tests/integration/test-data-blueprint.test.js` (13) — referential integrity,
+  required-field/single-tenant invariants, and role isolation (teachers limited
+  to assigned classrooms, parents to linked children, classroom-notice scoping,
+  admin sees all).
+
+### Notes
+
+- The Base44 data API cannot set `is_sample`, create `User` records, or delete —
+  so the data must be generated in-app with Test Data ON, and the three role
+  accounts are invited in Base44 (steps in the report).
+
+---
+
 ## [1.3.6] - 2026-06-22
 
 Rolls the `.ui-table` / `.ui-field` treatment (introduced in 1.3.5) across the

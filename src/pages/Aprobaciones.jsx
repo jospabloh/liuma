@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
@@ -29,19 +30,7 @@ export default function Aprobaciones() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [actionType, setActionType] = useState(null);
 
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', currentUser?.id],
-    queryFn: async () => {
-      const profiles = await base44.entities.UserProfile.filter({ user_id: currentUser.id });
-      return profiles[0];
-    },
-    enabled: !!currentUser,
-  });
+  const { user: currentUser, userProfile } = useCurrentProfile();
 
   const { data: pendingUsers = [], isLoading } = useQuery({
     queryKey: ['pendingUsers', userProfile?.school_id],

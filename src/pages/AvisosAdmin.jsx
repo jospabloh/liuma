@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -44,19 +45,7 @@ export default function AvisosAdmin() {
     priority: 'NORMAL',
   });
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => {
-      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
-      return profiles[0];
-    },
-    enabled: !!user,
-  });
+  const { user, userProfile } = useCurrentProfile();
 
   const { data: classrooms = [] } = useQuery({
     queryKey: ['allClassrooms', userProfile?.school_id],

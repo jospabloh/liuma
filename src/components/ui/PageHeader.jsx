@@ -1,8 +1,9 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Search } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
+import { useNav } from '@/components/nav/NavContext';
 
 export default function PageHeader({ 
   title, 
@@ -13,6 +14,7 @@ export default function PageHeader({
 }) {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
+  const { openPalette } = useNav();
 
   const handleBack = () => {
     if (backTo) {
@@ -45,7 +47,18 @@ export default function PageHeader({
           {subtitle && <p className="text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
       </div>
-      {action && <div>{action}</div>}
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Buscar"
+          onClick={openPalette}
+          className="mobile-touch-target rounded-full"
+        >
+          <Search className="w-5 h-5" />
+        </Button>
+        {action && <div>{action}</div>}
+      </div>
     </motion.div>
   );
 }

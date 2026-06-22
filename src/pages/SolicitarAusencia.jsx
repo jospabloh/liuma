@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -24,19 +25,7 @@ export default function SolicitarAusencia() {
 
   const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => {
-      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
-      return profiles[0];
-    },
-    enabled: !!user?.id,
-  });
+  const { user, userProfile } = useCurrentProfile();
 
   const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
     queryKey: ['linkedStudents', user?.id],

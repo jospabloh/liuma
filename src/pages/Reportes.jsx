@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -18,8 +19,7 @@ export default function Reportes() {
   const [filters, setFilters] = useState({ dateFrom: today, dateTo: today, classroomId: 'ALL', studentStatus: 'ACTIVE', roleScope: 'ALL' });
   const [openPanel, setOpenPanel] = useState(null);
 
-  const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-  const { data: userProfile } = useQuery({ queryKey: ['userProfile', user?.id], queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0], enabled: !!user });
+  const { user, userProfile } = useCurrentProfile();
   const role = userProfile?.app_role || 'PARENT';
 
   const { data: students = [] } = useQuery({

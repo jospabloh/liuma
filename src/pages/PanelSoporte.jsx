@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { Headset, AlertTriangle, ChevronRight, Inbox, LayoutGrid, Flag, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -29,12 +29,7 @@ export default function PanelSoporte() {
   const navigate = useNavigate();
   const [groupMode, setGroupMode] = useState('category');
 
-  const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0],
-    enabled: !!user,
-  });
+  const { user, userProfile } = useCurrentProfile();
 
   const isOwner = isPlatformOwner({ userProfile, user });
 

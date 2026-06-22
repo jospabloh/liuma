@@ -7,8 +7,51 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`useCurrentProfile` hook** (maintenance / de-duplication): the authenticated
+  user + `UserProfile` two-query pattern was copy-pasted verbatim into ~26 pages.
+  Extracted into `src/hooks/useCurrentProfile.js` and adopted across **25 pages**
+  (net −218/+54 lines). The hook reuses the existing `['currentUser']` /
+  `['userProfile', user.id]` query keys, so the react-query cache is shared and
+  there is **no behavior change**. Pages that destructure differently were
+  preserved exactly: `Aprobaciones` keeps its `currentUser` name via
+  `const { user: currentUser } = useCurrentProfile()`, and `PermisosRoles` maps
+  its split loading flags to the hook's combined `isLoading`. Intentionally left
+  untouched: pages with a different architecture (`Home`, `Asistencia`,
+  `ResumenAsistencia`, `CalendarioEscolar` set state imperatively inside the
+  query fn) and pages that never needed the profile query. (Note on the original
+  "merge duplicate pages" request: the role-split Avisos/Pagos/Soporte pages are
+  genuinely different views — consume vs. author, view vs. configure, file-ticket
+  vs. triage-console — *not* duplicates, so they were deliberately not collapsed
+  into single role-branched pages, which would have added complexity. Only the
+  shared boilerplate was de-duplicated.)
+
 ### Added
 
+- **Mobile bottom navigation + command palette** (UX simplicity): a persistent
+  4-tab bottom bar — Inicio · Hoy · Avisos · Más — so any screen is one tap away
+  instead of bouncing back to the home grid. The palette (search or browse the
+  role's full menu) opens three ways: the **Más** tab, a visible **search button
+  in every page header**, and the **⌘K** shortcut. Palette state lives in a
+  `NavProvider` (mounted once from `Layout.jsx`) so the header, the tab and the
+  shortcut all drive a single palette; `useNav` is safe to call without the
+  provider. Tabs and palette share one pure, unit-tested role-aware registry
+  (`src/components/nav/navRegistry.js`). The bar hides until a profile/role is
+  available (keeping it off login/onboarding); the Avisos tab resolves per role
+  (`Avisos`/`AvisosMaestro`/`AvisosAdmin`). Mobile-only (`md:hidden`); desktop is
+  unchanged. First step toward thinning the 18-tile admin home.
+- **Sequential L1 → L2 support handoff (director → soporte)**: completes the
+  escalation chain so a ticket the school director can't resolve rolls up to
+  soporte. Two triggers, both landing in the existing Tier-2 email + 48 h SLA:
+  a manual **"Escalar a soporte"** action in the director's queue
+  (`SoporteAdmin.jsx`, hidden for owners and non-school-tier tickets), and
+  **automatic escalation** when a director-tier ticket's SLA lapses with no
+  first response (`autoEscalateBreachedTickets`, run opportunistically on queue
+  load since the app has no cron). `escalateTicketToSupport` re-tiers the ticket
+  to PLATFORM, restarts the 48 h clock, posts a system note, emails soporte and
+  audit-logs the handoff; the breach-selection logic
+  (`selectTicketsToAutoEscalate`) is a pure, unit-tested function.
 - **Tier-2 support escalation email**: the help desk escalates Lumi (L0) →
   school director (L1) → platform owner "soporte" (L2). The platform tier
   previously resolved its recipient via `UserProfile.filter({ is_super_admin })`,

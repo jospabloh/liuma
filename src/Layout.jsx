@@ -1,6 +1,8 @@
 import React from 'react';
 import { Toaster } from "sonner";
 import GlobalLumiBubble from '@/components/lumi/GlobalLumiBubble';
+import BottomNav from '@/components/nav/BottomNav';
+import { NavProvider } from '@/components/nav/NavContext';
 
 export default function Layout({ children, currentPageName }) {
   return (
@@ -48,18 +50,21 @@ export default function Layout({ children, currentPageName }) {
         }}
       />
       
-      {children}
-      <footer className="py-4 text-center text-sm text-slate-500">
-        <a
-          href="https://acaciaco.com.mx"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-slate-700 underline"
-        >
-          creado con cariño ❤ por ACACIA Consultoría
-        </a>
-      </footer>
-      <GlobalLumiBubble />
+      <NavProvider>
+        {children}
+        <footer className="py-4 text-center text-sm text-slate-500">
+          <a
+            href="https://acaciaco.com.mx"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-slate-700 underline"
+          >
+            creado con cariño ❤ por ACACIA Consultoría
+          </a>
+        </footer>
+        <GlobalLumiBubble />
+        <BottomNav />
+      </NavProvider>
     </div>
   );
 }

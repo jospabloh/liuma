@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { LifeBuoy, Plus, Sparkles, MessageSquare, ChevronRight } from 'lucide-react';
@@ -29,16 +29,7 @@ export default function Soporte() {
   const [newOpen, setNewOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
 
-  const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => {
-      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
-      return profiles[0];
-    },
-    enabled: !!user,
-  });
+  const { user, userProfile } = useCurrentProfile();
 
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ['mySupportTickets', user?.id],

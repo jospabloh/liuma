@@ -1,10 +1,10 @@
 {
   "product": "LIUMA",
-  "version": "1.1.0",
-  "previousVersion": "1.0.8",
-  "releaseDate": "2026-06-21",
+  "version": "1.2.0",
+  "previousVersion": "1.1.0",
+  "releaseDate": "2026-06-22",
   "semverBump": "minor",
-  "bumpRationale": "Additive, backward-compatible: truthful in-app User Manual, audit-trail integrity fix (AuditLog action enum), navigation/accessibility hardening, and a documented security audit. No breaking API or data changes.",
+  "bumpRationale": "Additive, backward-compatible: mobile bottom nav + command palette, sequential L1→L2 support handoff, rebuilt event-confirmation reminders, useCurrentProfile/useCurrentUser rollout (25 pages), security fixes C3+C4 (is_super_admin removed, SchoolSubscription owner-only), and accessibility/quality pass. No breaking API or data changes.",
   "architecture": {
     "type": "single-page application",
     "runtime": "browser (client-side only; no application server)",
@@ -19,7 +19,7 @@
     "pages": 37,
     "entities": 31,
     "agents": 1,
-    "tests": 150,
+    "tests": 198,
     "loadedSkills": {
       "note": "These are generic Anthropic platform/example skills available to the assistant, NOT features of the Liuma application and not integrated into it.",
       "public": 8,

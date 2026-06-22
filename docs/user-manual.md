@@ -1,6 +1,6 @@
 # LIUMA User Manual
 
-**Version 1.0.8 · Updated 2026-06-15**
+**Version 1.2.0 · Updated 2026-06-22**
 
 LIUMA is a school management platform connecting school administrators, teachers, and parents/guardians. This manual explains what each role can do, how permissions work, and how privacy is protected.
 
@@ -63,7 +63,9 @@ Administrators have full access to their own school's data and management tools.
 - **Reports** – View consolidated school reports.
 - **Approvals** – Approve or reject pending user registrations.
 - **Audit Log** – View the school's audit trail of permission changes, access events, and admin overrides.
-- **Lumi AI** – Use the Lumi AI assistant for attendance summaries, payment follow-ups, behavior recaps, homework lookups, and school notices.
+- **Lumi AI** – Use the Lumi AI assistant for attendance summaries, payment follow-ups, behavior recaps, homework lookups, school notices, and support routing.
+- **Support** – Open help tickets with a ticket number, SLA deadline, and threaded conversation. Manage the school's support queue and escalate to platform support when needed.
+- **License** – View the school's current subscription status, trial expiry, and license tier (read-only for school admins; full management available to the platform owner).
 
 ### What admins cannot do
 
@@ -87,7 +89,8 @@ Teachers can access modules related to their assigned classrooms.
 - **Attendance** – Record and view attendance for their classrooms. View attendance summaries.
 - **Absence Management** – View absence requests for their students. Approve or reject absences.
 - **School Calendar** – View the school calendar.
-- **Lumi AI** – Use Lumi for attendance summaries, behavior recaps, homework lookups, and school notices within their classrooms.
+- **Lumi AI** – Use Lumi for attendance summaries, behavior recaps, homework lookups, and school notices within their classrooms. Lumi can create diary entries and record attendance via voice dictation in the Create Diary Entry flow.
+- **Support** – Open help tickets for school or technical issues; track the ticket status and communicate with the support assignee.
 
 ### What teachers cannot do
 
@@ -116,6 +119,7 @@ Parents can see information related to their linked children only.
 - **Events** – View school events for parents.
 - **School Calendar** – View the school calendar.
 - **Lumi AI** – Use Lumi for homework lookups, attendance status, payment reminders, behavior recaps, and school notices — scoped to their linked children.
+- **Support** – Open help tickets for any school or technical issue; track ticket status and communicate with the support team.
 
 ### What parents cannot do
 
@@ -200,6 +204,15 @@ Lumi is LIUMA's built-in AI assistant. It helps users get quick answers about sc
 | Payment reminders | Admin, Parent |
 | Behavior recap (diary) | Admin, Teacher, Parent |
 | Schedule / appointment info | Admin, Teacher, Parent |
+| Support request routing | Admin, Teacher, Parent |
+
+### Write actions Lumi can perform
+
+In the teacher dictation flow (Create Diary Entry), Lumi can:
+- **Create a `DiaryEntry`** for a student in the teacher's assigned classroom.
+- **Create or update `Attendance`** records for the teacher's assigned classroom.
+
+No other write operations are available through Lumi.
 
 ### Privacy and safety in Lumi
 
@@ -209,14 +222,14 @@ Lumi is LIUMA's built-in AI assistant. It helps users get quick answers about sc
 - Lumi cannot access data from another school.
 - Lumi does not share one student's data with an unrelated parent.
 - All Lumi interactions (allowed and denied requests) are logged in the audit trail.
-- Lumi does not send notifications or make administrative changes on behalf of the user — it provides information only.
+- Lumi does not send notifications or make administrative changes outside the documented write actions above.
 
 ### What Lumi cannot do
 
 - Access data the current user is not authorized to view.
 - Retrieve information from another school.
 - Send emails or push notifications without explicit user action.
-- Make changes to student records, settings, or permissions.
+- Make changes to student records, payment records, school settings, or permissions.
 
 ---
 
@@ -226,6 +239,8 @@ LIUMA sends notifications for school events such as:
 - New user pending approval.
 - Payment reminders.
 - Emergency alerts.
+- Event confirmation reminders (sent 3 days before an event's RSVP deadline to parents who have not yet responded).
+- Support ticket updates (escalation, reply, resolution).
 
 ### Notification channels
 
@@ -258,6 +273,9 @@ LIUMA sends notifications for school events such as:
 | Admin Payments | Manage payment concepts and charge records. |
 | Permissions & Roles | Configure per-user access permissions. |
 | Reports | View school-wide reports. |
+| Support Console (SoporteAdmin) | Manage the school's support ticket queue; respond to tickets, update status, escalate to platform support if needed. |
+| Support Panel (PanelSoporte) | Overview dashboard showing pending tickets, urgent cases, and SLA breaches. |
+| License (LicenseAdmin) | View the school's subscription status and license tier. Platform owner can manage all schools' licenses from here. |
 
 ### Teacher-only modules
 
@@ -300,6 +318,7 @@ LIUMA sends notifications for school events such as:
 | Request Absence | Admin, Parent |
 | Emergency Contacts | Admin, Parent |
 | Lumi AI | Admin, Teacher, Parent |
+| Support (Soporte) | Admin, Teacher, Parent |
 
 ---
 
@@ -310,7 +329,8 @@ LIUMA sends notifications for school events such as:
 1. Sign in with your account.
 2. Select **Soy Directivo** (I am an Administrator).
 3. Enter your school's name and configure the school theme.
-4. Your account is activated immediately as the school administrator.
+4. Accept the Privacy Notice (Aviso de Privacidad) and provide explicit consent for processing minors' sensitive data. This is required before your account can be created.
+5. Your account is activated immediately as the school administrator.
 
 ### Joining an existing school (Teacher or Parent)
 

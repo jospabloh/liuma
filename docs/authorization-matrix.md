@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-06-15 · Version 1.0.8**
+**Last updated: 2026-06-22 · Version 1.2.0**
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -23,9 +23,12 @@ Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
 | /GestionDocumentos | Document management |
 | /GestionEscuela | School settings |
 | /GestionPedidosAdmin | Uniform order fulfillment |
+| /LicenseAdmin | School subscription / license management (admin sees own school read-only; platform owner sees all tenants via owner override) |
 | /PagosAdmin | Payment concept and record management |
+| /PanelSoporte | Support triage dashboard (pending/urgent/SLA breached) |
 | /PermisosRoles | Roles and permissions configuration |
 | /Reportes | School reports |
+| /SoporteAdmin | Support ticket management console (school admin sees own school; platform owner sees all via owner override) |
 
 ### TEACHER-only routes
 
@@ -77,6 +80,7 @@ Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
 | /Home | Dashboard (role-specific home component) |
 | /OperacionDiaria | Daily operations |
 | /CalendarioEscolar | School calendar |
+| /Soporte | Help desk: Lumi AI deflection (L0) + ticket creation and tracking (L1) |
 
 ---
 
@@ -97,6 +101,8 @@ Source of truth: `src/lib/authorization/policy.js → POLICY`
 | NoticeDelivery | Read + Write + Delete | Read (assigned classrooms) + Create (assigned classrooms) + Update | Read + Update (own deliveries only) | school_id; recipient_user_id (users: own); classroom_id (teachers: assigned classrooms) |
 | PendingChange | Admin only | No access | No access | school_id + app_role == ADMIN; all operations restricted to school admins |
 | PermissionOverride | Admin only | No access | No access | school_id + app_role == ADMIN; all operations restricted to school admins |
+| SupportTicket | Read + Write | Read + Write | Read + Write | school_id + requester_user_id; requesters see own tickets; school admins see all school tickets; platform owner sees all tickets; row-level enforcement in support data layer + Base44 RLS (see docs/support-system.md) |
+| SupportTicketMessage | Read + Write | Read + Write | Read + Write | school_id + ticket_id; access tied to ticket access; write permitted for ticket participants only |
 
 ---
 
@@ -112,11 +118,20 @@ Source of truth: `src/lib/lumi/capabilities.js → CAPABILITY_RULES`
 | payment_reminders | ChargeItem | ADMIN, PARENT | school_id (+ student_id for PARENT) |
 | behavior_recap | DiaryEntry | ADMIN, TEACHER, PARENT | school_id (+ student_id for PARENT) |
 | schedule_appointments | Notice | ADMIN, TEACHER, PARENT | school_id |
+| support_request | SupportTicket | ADMIN, TEACHER, PARENT | school_id |
 
 Additional AI rules enforced in `evaluateCapabilityAccess`:
 - PARENT access is further restricted: if a `student_id` is specified in the request, it must match the user's `linked_students` list.
 - Requests without a `school_id` are denied regardless of role.
 - All AI interactions (allowed and denied) are logged to AuditLog with capability intent, role, and school scope.
+
+### Lumi write capabilities
+
+Lumi can perform write operations in the following flows (TEACHER-only dictation flow in CrearBitacora):
+- **Create `DiaryEntry`** — teacher dictation flow; scoped to the teacher's assigned classrooms.
+- **Create / update `Attendance`** — teacher voice attendance; scoped to the teacher's assigned classrooms.
+
+No other write operations are performed by Lumi. Lumi does not write to payments, permissions, student records, school settings, support tickets, or any other entity.
 
 ---
 
@@ -215,6 +230,12 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 | `package.json` version behind CHANGELOG | Low | Fixed (v1.0.6) — synchronized to 1.0.6 |
 | Missing entity entries in this matrix | Low | Fixed (v1.0.6) — OfficialDocument, NoticeDelivery, PendingChange, PermissionOverride added |
 | `VITE_OWNER_EMAIL` / `VITE_OWNER_USER_ID` in client bundle | High | Fixed (v1.0.5 / PR #90) — owner identity moved to server-persisted UserProfile; env vars removed |
+| C3 — `is_super_admin` self-grantable field enabled cross-tenant bypass | Critical | Fixed (v1.2.0 / PR #109) — all `is_super_admin` branches removed from `School` and `SchoolSubscription` RLS; platform owner identified via base44 account `role: admin` which tenants cannot self-assign |
+| C4 — `SchoolSubscription` writes were tenant-admin-writeable (paywall bypass) | Critical | Fixed (v1.2.0 / PR #109) — update/delete restricted to platform owner (`role: admin`); tenant admins retain read access; `welcome_message_shown` moved to `UserProfile` (self-writable) |
+| C1 — Single admin can self-elevate any profile to ADMIN via direct `UserProfile.update` | Critical | Open — requires a base44 backend function to validate an approved `PendingChange` before applying; naive RLS deny breaks the legitimate flow. See `docs/security-audit-2026-06-21.md`. |
+| C2 — Requester can approve their own `PendingChange` | Critical | Open — `update` RLS only checks `school_id + app_role == ADMIN`; approver ≠ requester rule is client-only. Fix requires RLS field check or backend function. See `docs/security-audit-2026-06-21.md`. |
+| `ConsentRecord` entity referenced in code but not created in Base44 | Low | Open — `privacyNotice.js` writes consent to `ConsentRecord` best-effort with `AuditLog` as fallback; consent is recorded even before the entity exists. Owner action: create `ConsentRecord` entity in Base44 Builder (schema in `src/lib/consent/privacyNotice.js`). |
+| Support routes / SupportTicket entity missing from authorization matrix | Low | Fixed (v1.2.0) — Soporte/SoporteAdmin/PanelSoporte/LicenseAdmin routes added; SupportTicket/SupportTicketMessage entities added; support_request Lumi capability added |
 
 > **2026-06-04 — Backend RLS hardening:** the Base44 entity-schema RLS rules were
 > tightened to fix 9 critical findings from the Base44 security scan (ChargeItem,

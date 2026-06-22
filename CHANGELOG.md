@@ -7,6 +7,38 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Event-confirmation reminders, rebuilt correctly**: parents who haven't
+  confirmed attendance for an event get a reminder when its `confirmation_deadline`
+  is 3 days out. The previous implementation lived inside a parent page's read
+  query and targeted `EventResponse` rows with `response: 'PENDING'` — which are
+  never written (the form only writes `ACCEPTED`/`DECLINED`; non-responders have
+  no row), so it could never actually remind anyone. The reminder now resolves
+  the real **non-responders** per event scope (`SCHOOL` → all active students'
+  parents; `CLASSROOM` → that classroom's parents, minus anyone with an existing
+  response) and emails them. It runs opportunistically and idempotently from the
+  admin calendar (no cron in this app), mirroring `autoEscalateBreachedTickets`:
+  once per load, `reminder_sent` guards re-sends, each email is independently
+  error-handled, and the deadline check compares at day granularity so it isn't
+  thrown off by time-of-day. Pure selectors (`selectEventsNeedingReminder`,
+  `selectNonResponders`) are unit-tested.
+
+### Changed
+
+- **`GlobalLumiBubble` reuses the shared profile hook**: replaced its own
+  separately-keyed `globalLumiUserProfile` UserProfile fetch with
+  `useCurrentProfile()`, so the assistant bubble shares the app-wide
+  `['userProfile', user.id]` cache instead of issuing a duplicate request.
+
+### Removed
+
+- **Dead `user.data.linked_student_ids` fallback** in `getLinkedStudents`:
+  `base44.auth.me()` returns the user flat on the client (`user.data` is always
+  undefined), and `linked_student_ids` only exists as a server-side RLS token
+  with no client-accessible source, so the fallback never executed. Removed it;
+  parent→student linkage continues to come from the `ParentStudent` table.
+
 ### Fixed
 
 - **Admin pages that silently never loaded** (`GestionPedidosAdmin`,

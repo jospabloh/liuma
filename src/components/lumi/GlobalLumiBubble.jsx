@@ -1,23 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import LumiButton from '@/components/ui/LumiButton';
 import LumiChat from '@/components/lumi/LumiChat';
 
 import { isLumiBubbleExcluded } from '@/lib/lumi/bubble-visibility';
 
 export default function GlobalLumiBubble() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
-  const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
-    queryKey: ['globalLumiUserProfile', user?.id],
-    queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0],
-    enabled: isAuthenticated && Boolean(user?.id),
-  });
+  // Reuse the shared profile hook (shared ['userProfile', user.id] cache key)
+  // rather than a second, separately-keyed UserProfile fetch.
+  const { userProfile, isLoading: isLoadingProfile } = useCurrentProfile();
 
   const hidden = useMemo(() => {
     if (!isAuthenticated) return true;

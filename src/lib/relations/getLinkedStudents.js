@@ -18,12 +18,13 @@ export async function getLinkedStudents(user) {
     status: 'ACTIVE',
   });
 
-  const parentStudentIds = [...new Set(parentLinks.map((l) => l.student_id).filter(Boolean))];
-  const fallbackIds = Array.isArray(user?.data?.linked_student_ids)
-    ? user.data.linked_student_ids.filter(Boolean)
-    : [];
-
-  const studentIds = parentStudentIds.length > 0 ? parentStudentIds : [...new Set(fallbackIds)];
+  // Parent→student linkage is the ParentStudent table. (There used to be a
+  // `user.data.linked_student_ids` fallback here, but base44.auth.me() returns
+  // the user flat on the client — `user.data` is always undefined — so it was
+  // dead code. `linked_student_ids` only exists as a server-side RLS token and
+  // has no client-accessible source, so the fallback is removed rather than
+  // wired to a non-existent field.)
+  const studentIds = [...new Set(parentLinks.map((l) => l.student_id).filter(Boolean))];
   if (studentIds.length === 0) {
     return { students: [], studentIds: [], orphanedLinkIds: [] };
   }

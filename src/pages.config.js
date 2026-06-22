@@ -80,6 +80,7 @@ const PedidosUniformes = React.lazy(() => import('./pages/PedidosUniformes'));
 const PermisosRoles = React.lazy(() => import('./pages/PermisosRoles'));
 const Reportes = React.lazy(() => import('./pages/Reportes'));
 const ResumenAsistencia = React.lazy(() => import('./pages/ResumenAsistencia'));
+const SeedTestData = React.lazy(() => import('./pages/SeedTestData'));
 const SolicitarAusencia = React.lazy(() => import('./pages/SolicitarAusencia'));
 const Soporte = React.lazy(() => import('./pages/Soporte'));
 const SoporteAdmin = React.lazy(() => import('./pages/SoporteAdmin'));
@@ -122,6 +123,7 @@ export const PAGES = {
     "PedidosUniformes": PedidosUniformes,
     "Reportes": Reportes,
     "ResumenAsistencia": ResumenAsistencia,
+    "SeedTestData": SeedTestData,
     "SolicitarAusencia": SolicitarAusencia,
     "Soporte": Soporte,
     "SoporteAdmin": SoporteAdmin,

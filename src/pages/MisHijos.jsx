@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useCurrentUser } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
@@ -18,10 +18,7 @@ import { loadClassroomsByIds, normalizedIdQueryKey } from '@/lib/data-loaders/ba
 export default function MisHijos() {
   const navigate = useNavigate();
   
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
+  const { user } = useCurrentUser();
 
   const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] }, isLoading } = useQuery({
     queryKey: ['linkedStudents', user?.id],

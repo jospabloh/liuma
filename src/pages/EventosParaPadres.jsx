@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -11,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Calendar, Clock, MapPin, DollarSign, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
-import { format, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,10 +26,7 @@ export default function EventosParaPadres() {
 
   const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
+  const { user, userProfile, isLoading: profileLoading } = useCurrentProfile();
 
   const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
     queryKey: ['linkedStudents', user?.id],
@@ -39,71 +37,17 @@ export default function EventosParaPadres() {
   const students = linkedStudents.students;
 
   const { data: events, isLoading } = useQuery({
-    queryKey: ['eventsRequiringConfirmation', user?.data?.school_id],
+    queryKey: ['eventsRequiringConfirmation', userProfile?.school_id],
     queryFn: async () => {
       const allEvents = await base44.entities.Event.filter({
-        school_id: user.data.school_id,
+        school_id: userProfile.school_id,
         requires_confirmation: true
       }, 'date');
-      
-      // Enviar recordatorios automáticos 3 días antes del deadline
-      const now = new Date();
-      for (const event of allEvents) {
-        if (event.confirmation_deadline && !event.reminder_sent) {
-          const daysUntilDeadline = differenceInDays(new Date(event.confirmation_deadline), now);
-          
-          if (daysUntilDeadline === 3) {
-            try {
-              // Obtener todas las respuestas pendientes
-              const responses = await base44.entities.EventResponse.filter({
-                event_id: event.id,
-                response: 'PENDING'
-              });
-              
-              const allUsers = await base44.entities.User.list();
-              
-              for (const resp of responses) {
-                const parent = allUsers.find(u => u.id === resp.parent_id);
-                if (parent) {
-                  const studentResp = await base44.entities.Student.filter({ id: resp.student_id });
-                  const student = studentResp[0];
-                  
-                  await base44.integrations.Core.SendEmail({
-                    from_name: 'LIUMA - Recordatorio de Evento',
-                    to: parent.email,
-                    subject: `Recordatorio: Confirma asistencia a ${event.title}`,
-                    body: `
-                      <h2>Recordatorio de Confirmación</h2>
-                      <p>Estimado padre/madre de familia:</p>
-                      <p>Le recordamos confirmar la asistencia de <strong>${student.first_name} ${student.last_name}</strong> al siguiente evento:</p>
-                      
-                      <div style="background: #dbeafe; padding: 16px; border-radius: 8px; border: 1px solid #3b82f6; margin: 16px 0;">
-                        <p><strong>${event.title}</strong></p>
-                        <p><strong>Fecha:</strong> ${format(new Date(event.date), "d 'de' MMMM, yyyy", { locale: es })}</p>
-                        ${event.time ? `<p><strong>Hora:</strong> ${event.time}</p>` : ''}
-                        ${event.location ? `<p><strong>Lugar:</strong> ${event.location}</p>` : ''}
-                        <p><strong>Fecha límite:</strong> ${format(new Date(event.confirmation_deadline), "d 'de' MMMM", { locale: es })}</p>
-                      </div>
-                      
-                      <p>Por favor, confirme su asistencia lo antes posible.</p>
-                      <p>Atentamente,<br>Equipo LIUMA</p>
-                    `
-                  });
-                }
-              }
-              
-              await base44.entities.Event.update(event.id, { reminder_sent: true });
-            } catch (error) {
-              console.error('Error sending event reminder:', error);
-            }
-          }
-        }
-      }
       
       // Filtrar solo eventos futuros
       return allEvents.filter(e => new Date(e.date) >= new Date());
     },
-    enabled: !!user?.data?.school_id,
+    enabled: !!userProfile?.school_id,
   });
 
   const { data: responses = [] } = useQuery({
@@ -120,7 +64,7 @@ export default function EventosParaPadres() {
       // Si acepta y tiene costo, crear cargo automáticamente
       if (data.response === 'ACCEPTED' && selectedEvent.has_cost) {
         const charge = await base44.entities.ChargeItem.create({
-          school_id: user.data.school_id,
+          school_id: userProfile.school_id,
           student_id: data.student_id,
           concept_name: selectedEvent.cost_concept || selectedEvent.title,
           concept_type: 'EVENTO',
@@ -160,7 +104,7 @@ export default function EventosParaPadres() {
     }
 
     respondMutation.mutate({
-      school_id: user.data.school_id,
+      school_id: userProfile.school_id,
       event_id: selectedEvent.id,
       student_id: selectedStudent,
       parent_id: user.id,
@@ -195,7 +139,7 @@ export default function EventosParaPadres() {
     PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
   };
 
-  if (isLoading) {
+  if (profileLoading || isLoading) {
     return <LoadingScreen message="Cargando eventos..." />;
   }
 

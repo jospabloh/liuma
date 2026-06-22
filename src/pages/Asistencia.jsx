@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Calendar, CheckCircle2, XCircle, Clock, FileText, Filter, Users, AlertCircle } from 'lucide-react';
@@ -279,23 +280,12 @@ function ParentAttendanceView({ user, userProfile }) {
 }
 
 export default function Asistencia() {
-  const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
   const [selectedClassroom, setSelectedClassroom] = useState(null);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const queryClient = useQueryClient();
   const { canWrite } = useCanWrite();
 
-  const { isLoading: loadingUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const currentUser = await base44.auth.me();
-      setUser(currentUser);
-      const profiles = await base44.entities.UserProfile.filter({ user_id: currentUser.id });
-      setUserProfile(profiles[0]);
-      return currentUser;
-    }
-  });
+  const { user, userProfile, isLoading: loadingUser } = useCurrentProfile();
 
   const { data: classrooms = [], isLoading: loadingClassrooms } = useQuery({
     queryKey: ['classrooms', userProfile?.school_id, userProfile?.app_role],

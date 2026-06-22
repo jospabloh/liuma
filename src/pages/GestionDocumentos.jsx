@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -34,15 +35,12 @@ export default function GestionDocumentos() {
 
   const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
+  const { user, userProfile, isLoading: profileLoading } = useCurrentProfile();
 
   const { data: documents, isLoading } = useQuery({
-    queryKey: ['officialDocuments', user?.data?.school_id],
-    queryFn: () => base44.entities.OfficialDocument.filter({ school_id: user.data.school_id }, '-created_date'),
-    enabled: !!user?.data?.school_id,
+    queryKey: ['officialDocuments', userProfile?.school_id],
+    queryFn: () => base44.entities.OfficialDocument.filter({ school_id: userProfile.school_id }, '-created_date'),
+    enabled: !!userProfile?.school_id,
   });
 
   const uploadMutation = useMutation({
@@ -53,7 +51,7 @@ export default function GestionDocumentos() {
       // Mark previous documents of same type as not current
       if (data.document_type === 'MENU' || data.document_type === 'UNIFORM_CATALOG') {
         const previousDocs = await base44.entities.OfficialDocument.filter({
-          school_id: user.data.school_id,
+          school_id: userProfile.school_id,
           document_type: data.document_type,
           is_current: true
         });
@@ -65,7 +63,7 @@ export default function GestionDocumentos() {
       
       // Create the document record
       return base44.entities.OfficialDocument.create({
-        school_id: user.data.school_id,
+        school_id: userProfile.school_id,
         title: data.title,
         description: data.description,
         document_type: data.document_type,
@@ -126,7 +124,7 @@ export default function GestionDocumentos() {
     UNIFORM_CATALOG: 'Catálogo de Uniformes',
   };
 
-  if (isLoading) {
+  if (profileLoading || isLoading) {
     return <LoadingScreen message="Cargando documentos..." />;
   }
 

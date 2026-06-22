@@ -1,10 +1,10 @@
 {
   "product": "LIUMA",
-  "version": "1.3.4",
-  "previousVersion": "1.3.3",
+  "version": "1.3.5",
+  "previousVersion": "1.3.4",
   "releaseDate": "2026-06-22",
   "semverBump": "patch",
-  "bumpRationale": "Tooling only: a dev-only visual preview harness (preview.html + src/preview/) that renders the real premium components against mock data for design review/screenshots, plus npm scripts (preview:dev, preview:shots) and a Playwright capture script. NavContext exported for the harness to mock; preview build entry gated behind PREVIEW so normal builds are unchanged. No production app behavior, API, or data changes.",
+  "bumpRationale": "Premium polish on admin data tables & list density: new theme-aware .ui-table (sticky uppercase header, zebra, brand hover) and .ui-field (brand focus ring) utilities, adopted by the PermisosRoles governance matrix (5 tables, 8 native selects, brand-accent checkboxes). Presentation only; all maker-checker/audit logic untouched. No behavior, API, or data changes.",
   "architecture": {
     "type": "single-page application",
     "runtime": "browser (client-side only; no application server)",
@@ -19,7 +19,7 @@
     "pages": 37,
     "entities": 31,
     "agents": 1,
-    "tests": 228,
+    "tests": 231,
     "assistantSkills": {
       "note": "The sibling claude-skills repo holds 48 generic Anthropic/Claude authoring skills (pdf, xlsx, brainstorming, math-olympiad, ...). They are assistant tooling used to BUILD Liuma — NOT features of the application, not integrated into it, and not listed in the user manual.",
       "count": 48

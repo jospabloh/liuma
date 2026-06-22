@@ -578,7 +578,7 @@ export default function PermisosRoles() {
           <p className="text-xs text-muted-foreground">El dueño de la app está exento del maker-checker y aplica el cambio directo.</p>
           <div className="grid gap-3 md:grid-cols-2">
             <select
-              className="h-10 rounded-md border border-border px-3 text-sm"
+              className="ui-field"
               value={selectedProfileId}
               onChange={(event) => setSelectedProfileId(event.target.value)}
             >
@@ -591,7 +591,7 @@ export default function PermisosRoles() {
             </select>
 
             <select
-              className="h-10 rounded-md border border-border px-3 text-sm"
+              className="ui-field"
               value={selectedRole}
               onChange={(event) => setSelectedRole(event.target.value)}
             >
@@ -610,10 +610,10 @@ export default function PermisosRoles() {
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
           <p className="font-medium text-card-foreground">Rollback por módulo</p>
           <div className="grid gap-3 md:grid-cols-2">
-            <select className="h-10 rounded-md border border-border px-3 text-sm" value={rollbackModule} onChange={(event) => { setRollbackModule(event.target.value); setRollbackOverrideId(''); }}>
+            <select className="ui-field" value={rollbackModule} onChange={(event) => { setRollbackModule(event.target.value); setRollbackOverrideId(''); }}>
               {ROLLBACK_MODULES.map((module) => <option key={module} value={module}>{module}</option>)}
             </select>
-            <select className="h-10 rounded-md border border-border px-3 text-sm" value={rollbackOverrideId} onChange={(event) => setRollbackOverrideId(event.target.value)}>
+            <select className="ui-field" value={rollbackOverrideId} onChange={(event) => setRollbackOverrideId(event.target.value)}>
               <option value="">Selecciona override</option>
               {rollbackCandidates.map((entry) => <option key={entry.id} value={entry.id}>{entry.action} / {entry.effect} / {entry.user_profile_id}</option>)}
             </select>
@@ -627,14 +627,14 @@ export default function PermisosRoles() {
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
           <p className="font-medium text-card-foreground">Solicitudes pendientes de cambio de rol</p>
           <div className="overflow-auto border border-border rounded-2xl">
-            <table className="min-w-full text-sm">
+            <table className="ui-table min-w-full">
               <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Usuario objetivo</th><th className="sticky top-0 bg-muted p-2 text-left">Desde</th><th className="sticky top-0 bg-muted p-2 text-left">Hacia</th><th className="sticky top-0 bg-muted p-2 text-left">Estado</th><th className="sticky top-0 bg-muted p-2 text-left">Acciones</th></tr></thead>
               <tbody>
                 {pendingRoleChanges.map((change) => {
                   const targetProfile = schoolProfiles.find((profile) => profile.id === change.target_profile_id);
                   const disabledByRequesterRule = change.requester_profile_id === userProfile.id;
                   return (
-                    <tr key={change.id} className="border-t">
+                    <tr key={change.id}>
                       <td className="p-2">{targetProfile ? `${getUserName(targetProfile.user_id)} (${targetProfile.app_role})` : change.target_profile_id}</td>
                       <td className="p-2">{change.payload?.from_role}</td>
                       <td className="p-2">{change.payload?.to_role}</td>
@@ -661,11 +661,11 @@ export default function PermisosRoles() {
           <p className="font-medium text-card-foreground">Danger Zone (Permisos y Roles)</p>
           <p className="text-xs text-red-700">Todas las operaciones son de alto riesgo, irreversibles en algunos casos, y usan maker-checker con segundo ADMIN (excepto app owner).</p>
           <div className="overflow-auto border border-border rounded-2xl">
-            <table className="min-w-full text-sm">
+            <table className="ui-table min-w-full">
               <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Operación</th><th className="sticky top-0 bg-muted p-2 text-left">Riesgo</th><th className="sticky top-0 bg-muted p-2 text-left">Confirmación requerida</th><th className="sticky top-0 bg-muted p-2 text-left">Rollback/Compensación</th></tr></thead>
               <tbody>
                 {dangerZoneOperations.map((operation) => (
-                  <tr key={operation.key} className="border-t">
+                  <tr key={operation.key}>
                     <td className="p-2">{operation.label}</td>
                     <td className="p-2 text-red-700">High-risk</td>
                     <td className="p-2">Frase escrita + warning irreversible + preview de tenant objetivo</td>
@@ -682,17 +682,17 @@ export default function PermisosRoles() {
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
           <p className="font-medium text-card-foreground">Overrides por usuario</p>
           <div className="grid gap-3 md:grid-cols-4">
-            <select className="h-10 rounded-md border border-border px-3 text-sm" value={overrideForm.user_profile_id} onChange={(event) => setOverrideForm((prev) => ({ ...prev, user_profile_id: event.target.value }))}>
+            <select className="ui-field" value={overrideForm.user_profile_id} onChange={(event) => setOverrideForm((prev) => ({ ...prev, user_profile_id: event.target.value }))}>
               <option value="">Selecciona usuario</option>
               {schoolProfiles.map((profile) => <option key={profile.id} value={profile.id}>{getUserName(profile.user_id)} ({profile.app_role})</option>)}
             </select>
-            <select className="h-10 rounded-md border border-border px-3 text-sm" value={overrideForm.resource} onChange={(event) => setOverrideForm((prev) => ({ ...prev, resource: event.target.value }))}>
+            <select className="ui-field" value={overrideForm.resource} onChange={(event) => setOverrideForm((prev) => ({ ...prev, resource: event.target.value }))}>
               {['Notice', 'Attendance', 'Homework', 'DiaryEntry', 'ChargeItem', 'PaymentConcept', 'PaymentRecord'].map((resource) => <option key={resource} value={resource}>{resource}</option>)}
             </select>
-            <select className="h-10 rounded-md border border-border px-3 text-sm" value={overrideForm.action} onChange={(event) => setOverrideForm((prev) => ({ ...prev, action: event.target.value }))}>
+            <select className="ui-field" value={overrideForm.action} onChange={(event) => setOverrideForm((prev) => ({ ...prev, action: event.target.value }))}>
               {POLICY_ACTIONS.map((action) => <option key={action} value={action}>{action}</option>)}
             </select>
-            <select className="h-10 rounded-md border border-border px-3 text-sm" value={overrideForm.effect} onChange={(event) => setOverrideForm((prev) => ({ ...prev, effect: event.target.value }))}>
+            <select className="ui-field" value={overrideForm.effect} onChange={(event) => setOverrideForm((prev) => ({ ...prev, effect: event.target.value }))}>
               <option value="deny">deny</option>
               <option value="allow">allow</option>
             </select>
@@ -701,14 +701,14 @@ export default function PermisosRoles() {
           {overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id ? <p className="text-sm text-red-700">Bloqueado: no puedes cambiar tu propio manage_permissions.</p> : null}
           <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar override de permisos' : 'Crear override de permisos'}</Button>
           <div className="overflow-auto border border-border rounded-2xl">
-            <table className="min-w-full text-sm">
+            <table className="ui-table min-w-full">
               <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Usuario</th><th className="sticky top-0 bg-muted p-2 text-left">Recurso</th><th className="sticky top-0 bg-muted p-2 text-left">Acción</th><th className="sticky top-0 bg-muted p-2 text-left">Efecto</th><th className="sticky top-0 bg-muted p-2 text-left">Preview</th><th className="sticky top-0 bg-muted p-2 text-left">Acciones</th></tr></thead>
               <tbody>
                 {permissionOverrides.map((override) => {
                   const profile = schoolProfiles.find((entry) => entry.id === override.user_profile_id);
                   const preview = getEffectivePolicyDecision({ role: profile?.app_role, entity: override.resource, action: override.action, userProfileId: override.user_profile_id, overrides: permissionOverrides });
                   return (
-                    <tr key={override.id} className="border-t">
+                    <tr key={override.id}>
                       <td className="p-2">{profile ? `${getUserName(profile.user_id)} (${profile.app_role})` : override.user_profile_id}</td>
                       <td className="p-2">{override.resource}</td><td className="p-2">{override.action}</td><td className="p-2">{override.effect}</td>
                       <td className="p-2">{preview.allowed ? 'Permitido' : 'Denegado'} ({preview.precedence})</td>
@@ -748,7 +748,7 @@ export default function PermisosRoles() {
             </div>
 
             <div className="overflow-auto border border-border rounded-2xl bg-card">
-              <table className="min-w-full text-sm">
+              <table className="ui-table min-w-full">
                 <thead>
                   <tr className="bg-muted">
                     <th className="p-2 text-left">Recurso</th>
@@ -759,12 +759,13 @@ export default function PermisosRoles() {
                 </thead>
                 <tbody>
                   {RESOURCES.map((resource) => (
-                    <tr key={resource} className="border-t">
+                    <tr key={resource}>
                       <td className="p-2 font-medium">{resource}</td>
                       {ACTIONS.map((action) => (
                         <td key={`${resource}-${action}`} className="p-2">
                           <input
                             type="checkbox"
+                            className="accent-brand h-4 w-4 cursor-pointer"
                             checked={Boolean(activeTemplate.permissions[resource][action])}
                             onChange={() => handleTogglePermission(resource, action)}
                           />
@@ -778,13 +779,13 @@ export default function PermisosRoles() {
 
 
             <div className="overflow-auto border border-border rounded-2xl bg-card">
-              <table className="min-w-full text-sm">
+              <table className="ui-table min-w-full">
                 <thead><tr className="bg-muted"><th className="p-2 text-left">Capacidad AI</th><th className="p-2 text-left">allow</th></tr></thead>
                 <tbody>
                   {AI_CAPABILITIES.map((capability) => (
-                    <tr key={capability} className="border-t">
+                    <tr key={capability}>
                       <td className="p-2 font-medium">{capability}</td>
-                      <td className="p-2"><input type="checkbox" checked={Boolean(activeTemplate.ai_capabilities?.[capability])} onChange={() => handleToggleAICapability(capability)} /></td>
+                      <td className="p-2"><input type="checkbox" className="accent-brand h-4 w-4 cursor-pointer" checked={Boolean(activeTemplate.ai_capabilities?.[capability])} onChange={() => handleToggleAICapability(capability)} /></td>
                     </tr>
                   ))}
                 </tbody>

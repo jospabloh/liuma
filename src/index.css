@@ -141,6 +141,71 @@ html, body, #root {
   overflow-x: hidden;
 }
 
+@layer components {
+  /* Premium data table — one disciplined treatment for the admin matrices:
+     a sticky uppercase header, comfortable density, zebra striping and a brand
+     hover so dense rows stay scannable. Lives in @layer components so per-cell
+     Tailwind utilities still win when a specific cell needs to differ. */
+  .ui-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8125rem;
+  }
+  .ui-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    padding: 0.625rem 0.75rem;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    font-weight: 700;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  .ui-table tbody td {
+    padding: 0.625rem 0.75rem;
+    vertical-align: middle;
+    border-top: 1px solid hsl(var(--border));
+  }
+  .ui-table tbody tr {
+    transition: background-color 120ms ease;
+  }
+  .ui-table tbody tr:nth-child(even) {
+    background: hsl(var(--muted) / 0.35);
+  }
+  .ui-table tbody tr:hover {
+    background: hsl(var(--accent) / 0.6);
+  }
+
+  /* Native <select>/<input> fields styled to match the shadcn controls, with
+     the same tenant-brand focus ring as Input/Select. */
+  .ui-field {
+    height: 2.5rem;
+    width: 100%;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--input));
+    background: transparent;
+    padding: 0 0.75rem;
+    font-size: 0.875rem;
+    color: hsl(var(--foreground));
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .ui-field:hover {
+    border-color: hsl(var(--muted-foreground) / 0.3);
+  }
+  .ui-field:focus,
+  .ui-field:focus-visible {
+    outline: none;
+    border-color: rgb(var(--tenant-primary-rgb));
+    box-shadow: 0 0 0 2px rgb(var(--tenant-primary-rgb) / 0.25);
+  }
+}
+
 @layer utilities {
   .ui-readable-text {
     @apply text-sm md:text-[15px] leading-6;

@@ -5,6 +5,35 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.5] - 2026-06-22
+
+Premium polish on **admin data tables & list density** — applied to the
+governance matrix. Presentation only; no behavior, API, or data changes.
+
+### Added
+
+- **`.ui-table`** component utility: one disciplined data-table treatment — a
+  sticky uppercase header, comfortable density, **zebra striping**, and a brand
+  hover so dense rows stay scannable. Theme-aware (keyed off `--muted` /
+  `--accent` / `--border`); per-cell Tailwind utilities still win where needed.
+- **`.ui-field`** utility: native `<select>` / `<input>` styled to match the
+  shadcn controls, including the tenant-**brand** focus ring.
+
+### Changed
+
+- **`PermisosRoles` (Permisos y Roles)** — the five raw permission/governance
+  tables now use `.ui-table`; the eight hand-styled native `<select>`s use
+  `.ui-field`; the permission-matrix and AI-capability checkboxes are tinted
+  with `accent-brand`. Pure restyle — all maker-checker / audit logic untouched.
+
+### Tests
+
+- `tests/unit/premium-tables.test.js` — `.ui-table` / `.ui-field` are defined
+  and theme-aware (no hardcoded hex), and `PermisosRoles` adopts the treatment
+  (and no longer carries the old hardcoded native-select class).
+
+---
+
 ## [1.3.4] - 2026-06-22
 
 Tooling: a dev-only **visual preview harness** for design review. No production

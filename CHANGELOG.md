@@ -5,6 +5,29 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.6] - 2026-06-22
+
+Rolls the `.ui-table` / `.ui-field` treatment (introduced in 1.3.5) across the
+remaining admin consoles. Presentation only; no behavior, API, or data changes.
+
+### Changed
+
+- **`AuditoriaAdmin` (Auditoría)** — the audit log, previously a stack of cards,
+  now renders as a compact **`.ui-table`** (Acción · Entidad · Fecha · Rol ·
+  Actor · Razón · Detalle). Long values truncate with a tooltip and the masked
+  JSON context is tucked behind a per-row collapsible **Detalle** cell, so rows
+  stay scannable; an empty state spans the table.
+- **`Reportes`** — the three hand-styled native `<select>` filters adopt
+  `.ui-field` (tenant-brand focus ring), matching the rest of the controls.
+
+### Tests
+
+- `tests/unit/premium-tables.test.js` extended — `AuditoriaAdmin` renders the
+  `.ui-table` with a collapsible context cell + empty state, and `Reportes`
+  filters use `.ui-field` (old hardcoded class gone).
+
+---
+
 ## [1.3.5] - 2026-06-22
 
 Premium polish on **admin data tables & list density** — applied to the

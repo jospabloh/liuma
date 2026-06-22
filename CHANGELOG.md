@@ -5,6 +5,39 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.4] - 2026-06-22
+
+Tooling: a dev-only **visual preview harness** for design review. No production
+app behavior changes.
+
+### Added
+
+- **Preview harness** (`preview.html` → `src/preview/`): renders the real
+  premium components (`SideNav`, `BigTile`, `Card`, `PageHeader`, `EmptyState`,
+  `LoadingScreen`, `Skeleton`, form fields, `Dialog`) against mock data — no
+  base44 backend or auth required — so they can be viewed and screenshotted.
+  `SideNav` is rendered headless via a mocked `NavContext` inside a `transform`ed
+  containing block.
+- **`npm run preview:dev`** (interactive: brand + dark toggles, opens the real
+  dialog) and **`npm run preview:shots`** (`PREVIEW=1 vite build` + a Playwright
+  capture script → `docs/screenshots/*.png`). Playwright added as a devDependency.
+- `docs/preview-harness.md` — how to run it.
+
+### Changed
+
+- `NavContext` is now exported (so the harness can mock it); the app still uses
+  `NavProvider` / `useNav` exclusively.
+- `vite.config.js` adds `preview.html` as a second build entry **only** when
+  `PREVIEW=1`, so a normal `npm run build` is byte-for-byte unchanged.
+
+### Tests
+
+- `tests/unit/preview-harness.test.js` — harness files/scripts present, the
+  preview entry is gated behind `PREVIEW`, `NavContext` is exported, and the
+  gallery imports the real components.
+
+---
+
 ## [1.3.3] - 2026-06-22
 
 Premium polish on the **empty & loading states** — the fourth leg of the UI

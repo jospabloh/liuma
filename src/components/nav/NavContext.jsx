@@ -10,7 +10,12 @@ import CommandPalette from './CommandPalette.jsx';
  * role (fetched via the shared react-query keys) so consumers don't each refetch
  * the profile.
  */
-const NavContext = createContext(null);
+/**
+ * Exported so a non-app harness (the dev-only preview gallery) can render the
+ * real SideNav against a mocked value without standing up base44/auth. The app
+ * itself never imports the raw context — it uses NavProvider / useNav.
+ */
+export const NavContext = createContext(null);
 
 export function NavProvider({ children }) {
   const [paletteOpen, setPaletteOpen] = useState(false);

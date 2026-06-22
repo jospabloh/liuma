@@ -2,7 +2,13 @@ import React from 'react';
 import { Toaster } from "sonner";
 import GlobalLumiBubble from '@/components/lumi/GlobalLumiBubble';
 import BottomNav from '@/components/nav/BottomNav';
+import SideNav from '@/components/nav/SideNav';
 import { NavProvider } from '@/components/nav/NavContext';
+import { installConsoleCapture } from '@/lib/support/diagnostics';
+
+// Retain recent console warnings/errors so a support ticket can attach them.
+// Installed once at module load; no-op on repeat calls (see diagnostics.js).
+installConsoleCapture();
 
 export default function Layout({ children, currentPageName }) {
   return (
@@ -51,17 +57,22 @@ export default function Layout({ children, currentPageName }) {
       />
       
       <NavProvider>
-        {children}
-        <footer className="py-4 text-center text-sm text-slate-500">
-          <a
-            href="https://acaciaco.com.mx"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-slate-700 underline"
-          >
-            creado con cariño ❤ por ACACIA Consultoría
-          </a>
-        </footer>
+        {/* Persistent desktop rail (md+); mobile uses the BottomNav below. The
+            content is offset on desktop so the fixed rail never covers it. */}
+        <SideNav />
+        <div className="md:pl-64">
+          {children}
+          <footer className="py-4 text-center text-sm text-slate-500">
+            <a
+              href="https://acaciaco.com.mx"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-slate-700 underline"
+            >
+              creado con cariño ❤ por ACACIA Consultoría
+            </a>
+          </footer>
+        </div>
         <GlobalLumiBubble />
         <BottomNav />
       </NavProvider>

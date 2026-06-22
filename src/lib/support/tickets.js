@@ -123,6 +123,7 @@ export async function createSupportTicket({
   channelOrigin = SUPPORT_CHANNEL.MANUAL,
   aiAttempted = false,
   aiResolutionSummary = null,
+  clientContext = null,
 }) {
   if (!user || !userProfile || !subject || !description) {
     throw new Error('createSupportTicket requires user, userProfile, subject and description');
@@ -154,6 +155,10 @@ export async function createSupportTicket({
     first_response_at: null,
     resolved_at: null,
     escalated_at: nowIso,
+    // Diagnostics captured client-side at submit time (route, app version,
+    // browser, recent console warnings/errors). Stored as a JSON string so the
+    // entity stays a flat scalar shape; staff see it parsed in the thread view.
+    client_context: clientContext ? JSON.stringify(clientContext) : null,
   });
 
   // Seed the thread: the requester's description (and the AI attempt, if any).

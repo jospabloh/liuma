@@ -153,4 +153,24 @@ html, body, #root {
   .ui-sticky-actions {
     @apply sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80;
   }
+
+  /* Thin, unobtrusive scrollbar for dense surfaces like the desktop nav rail —
+     only paints the thumb on hover so the resting state stays clean. */
+  .ui-thin-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .ui-thin-scroll:hover {
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .ui-thin-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .ui-thin-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+  }
+  .ui-thin-scroll:hover::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+  }
 }

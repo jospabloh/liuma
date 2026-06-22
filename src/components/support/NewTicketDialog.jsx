@@ -15,6 +15,7 @@ import { Loader2 } from 'lucide-react';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES, DEFAULT_CATEGORY, DEFAULT_PRIORITY, SUPPORT_CHANNEL } from '@/lib/support/constants';
 import { resolveSupportRouting } from '@/lib/support/routing';
 import { SUPPORT_TIER } from '@/lib/support/constants';
+import { captureClientContext } from '@/lib/support/diagnostics';
 import { CATEGORY_LABELS, PRIORITY_LABELS } from './labels.jsx';
 
 /**
@@ -53,6 +54,9 @@ export default function NewTicketDialog({ open, onOpenChange, userProfile, onSub
         category,
         priority,
         channelOrigin: SUPPORT_CHANNEL.MANUAL,
+        // Smart hook: bundle the technical context so the requester only has to
+        // write what went wrong (screen, app version, browser, recent logs).
+        clientContext: captureClientContext(),
       });
       reset();
       onOpenChange(false);

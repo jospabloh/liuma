@@ -263,6 +263,7 @@ export default function SoporteAdmin() {
                 messages={messages}
                 onReply={handleReply}
                 viewerIsStaff
+                clientContext={activeTicket.client_context}
                 disabled={activeTicket.status === SUPPORT_STATUS.CLOSED}
               />
             </div>

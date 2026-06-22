@@ -102,6 +102,10 @@
     "escalated_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "client_context": {
+      "type": "string",
+      "description": "JSON-encoded diagnostics captured client-side when the ticket was opened (route, app version, browser, viewport, recent console warnings/errors). Read-only context for support staff."
     }
   },
   "required": [

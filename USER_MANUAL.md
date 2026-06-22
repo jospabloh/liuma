@@ -27,18 +27,35 @@ entre escuelas.
 
 ---
 
-## 2. Secciones compartidas (Admin + Maestro + Padre)
+## 2. Cómo navegar
+
+La navegación sale de una sola fuente (`src/components/nav/navRegistry.js`), por
+lo que el menú es idéntico en todos los accesos:
+
+- **En computadora (pantalla ancha):** una **barra lateral fija a la izquierda**
+  muestra todo el menú de tu rol agrupado por área. La sección donde estás se
+  resalta con un borde de color de marca a la izquierda. Cambiar de sección **no
+  te regresa al inicio** — la navegación es interna.
+- **En móvil:** una **barra inferior** de cuatro accesos — Inicio · Hoy · Avisos
+  · Más. "Más" abre el buscador de comandos.
+- **Buscador de comandos (⌘K / Ctrl+K):** desde cualquier pantalla, escribe para
+  saltar a cualquier sección de tu rol. También se abre con el botón de búsqueda
+  del encabezado de cada página.
+
+---
+
+## 3. Secciones compartidas (Admin + Maestro + Padre)
 
 | Página | Ruta | Qué hace | Acciones clave |
 |---|---|---|---|
 | **Inicio** | `/Home` | Tablero principal; dirige al inicio según tu rol. | Aterrizas en tu panel; el admin ve el modal de bienvenida/prueba en su primera visita. |
 | **Operación Diaria** | `/OperacionDiaria` | Línea de tiempo del día: asistencia, tareas, bitácora, avisos y eventos (filtrada por rol). | Filtrar por categoría/urgencia; abrir el origen. |
 | **Calendario Escolar** | `/CalendarioEscolar` | Calendario mensual con eventos de hoy y próximos. | Ver eventos; el **admin** crea/edita/elimina eventos. |
-| **Soporte** | `/Soporte` | Mesa de ayuda: preguntar a Lumi o abrir y seguir tickets. | "Preguntar a Lumi"; "Crear ticket"; ver/responder tus tickets. |
+| **Soporte** | `/Soporte` | Mesa de ayuda: preguntar a Lumi o abrir y seguir tickets. Al crear un ticket, la app adjunta automáticamente el diagnóstico técnico (pantalla, versión, navegador y eventos recientes) — sólo escribes tu problema. | "Preguntar a Lumi"; "Crear ticket"; ver/responder tus tickets. |
 
 ---
 
-## 3. Sección Padre / Madre
+## 4. Sección Padre / Madre
 
 | Página | Ruta | Acceso | Qué hace | Acciones clave |
 |---|---|---|---|---|
@@ -59,7 +76,7 @@ entre escuelas.
 
 ---
 
-## 4. Sección Maestro
+## 5. Sección Maestro
 
 | Página | Ruta | Acceso | Qué hace | Acciones clave |
 |---|---|---|---|---|
@@ -80,7 +97,7 @@ entre escuelas.
 
 ---
 
-## 5. Sección Administrador / Directivo
+## 6. Sección Administrador / Directivo
 
 | Página | Ruta | Qué hace | Acciones clave |
 |---|---|---|---|
@@ -102,7 +119,7 @@ entre escuelas.
 
 ---
 
-## 6. Asistente Lumi (IA)
+## 7. Asistente Lumi (IA)
 
 Lumi es el asistente conversacional, en español (México). Definido en
 `base44/agents/lumi.jsonc` con reglas de alcance en
@@ -142,7 +159,7 @@ bloquea (`student_scope_mismatch`).
 
 ---
 
-## 7. Notificaciones, soporte y suscripción
+## 8. Notificaciones, soporte y suscripción
 
 - **Notificaciones:** avisos y eventos se entregan en la app y por correo; las
   preferencias de canal se administran desde la configuración de la escuela.
@@ -155,7 +172,7 @@ bloquea (`student_scope_mismatch`).
 
 ---
 
-## 8. Privacidad
+## 9. Privacidad
 
 - **Aislamiento por escuela:** cada inquilino ve sólo sus datos
   (`school_id`).

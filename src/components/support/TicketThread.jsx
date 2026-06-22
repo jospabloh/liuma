@@ -5,6 +5,7 @@ import { Loader2, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { SUPPORT_AUTHOR_ROLE } from '@/lib/support/constants';
+import { formatClientContext } from '@/lib/support/diagnostics';
 
 const AUTHOR_LABELS = {
   [SUPPORT_AUTHOR_ROLE.REQUESTER]: 'Tú / Solicitante',
@@ -24,9 +25,22 @@ function messageAlignment(authorRole, viewerIsStaff) {
  * Threaded conversation for a ticket with an optional reply box. `viewerIsStaff`
  * controls bubble alignment and is passed through to `onReply`.
  */
-export default function TicketThread({ messages = [], onReply, viewerIsStaff = false, disabled = false }) {
+export default function TicketThread({ messages = [], onReply, viewerIsStaff = false, disabled = false, clientContext = null }) {
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+
+  // Staff-only: the diagnostics the app captured when the ticket was opened
+  // (screen, app version, browser, recent client warnings/errors). Parsed
+  // defensively — a malformed payload must never break the thread view.
+  let parsedContext = null;
+  if (viewerIsStaff && clientContext) {
+    try {
+      parsedContext = typeof clientContext === 'string' ? JSON.parse(clientContext) : clientContext;
+    } catch {
+      parsedContext = null;
+    }
+  }
+  const contextSummary = parsedContext ? formatClientContext(parsedContext) : '';
 
   const handleSend = async () => {
     if (!reply.trim() || sending) return;
@@ -41,6 +55,17 @@ export default function TicketThread({ messages = [], onReply, viewerIsStaff = f
 
   return (
     <div className="flex flex-col gap-3">
+      {contextSummary && (
+        <details className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-medium text-muted-foreground">
+            Diagnóstico técnico (capturado al abrir el ticket)
+          </summary>
+          <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground">
+            {contextSummary}
+          </pre>
+        </details>
+      )}
+
       <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
         {messages.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-4">Aún no hay mensajes.</p>

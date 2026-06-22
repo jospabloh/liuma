@@ -5,6 +5,60 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.0] - 2026-06-22
+
+Additive UX + support pass. No breaking API or data changes; one optional,
+backward-compatible field added to the `SupportTicket` entity.
+
+### Added
+
+- **Persistent desktop navigation rail** (`src/components/nav/SideNav.jsx`):
+  on `md` and wider, the role's full menu now lives permanently on the left so
+  switching sections no longer means bouncing back to the home grid. It reads
+  the **same single source of truth** as the mobile bottom bar and the ⌘K
+  command palette (`navRegistry`) — destinations are curated in exactly one
+  place. The active item is marked with an accent left border + tinted brand
+  background and `aria-current="page"`, mirroring the bottom bar's brand
+  indicator. Navigation is client-side (`<Link>`), so router state and the React
+  Query cache are preserved (no hard reload). Mobile is unchanged: it keeps the
+  four-item `BottomNav`, and the rail is `hidden md:flex`.
+- **Support ticket diagnostics ("smart hook")**
+  (`src/lib/support/diagnostics.js`): opening a ticket now auto-bundles the
+  technical context support would otherwise have to ask for — current route /
+  screen, app version, browser/viewport/language, and a bounded ring buffer of
+  recent client `console.warn`/`console.error` output. The requester still only
+  types their complaint; their **role and identity were already captured**.
+  Support staff see the bundle parsed in a collapsible *"Diagnóstico técnico"*
+  panel inside the ticket thread (`TicketThread`). Capture is best-effort and
+  never blocks ticket creation, and reads nothing sensitive (only the user's own
+  console output and public environment facts).
+- New optional `client_context` field on the `SupportTicket` entity
+  (JSON-encoded string; not required; excluded from RLS predicates).
+- Build-time `__APP_VERSION__` define (sourced from `package.json`), surfaced in
+  the support diagnostics bundle.
+
+### Changed
+
+- `Layout.jsx` mounts the new desktop rail and offsets desktop content
+  (`md:pl-60`) so the fixed rail never covers a page; installs the console
+  capture once at boot.
+
+### Tests
+
+- `tests/unit/side-nav.test.js` — rail reuses `navRegistry`, navigates with
+  client-side `<Link>` (no reload), marks the active item, is desktop-only, and
+  is mounted + offset by `Layout`.
+- `tests/unit/support-diagnostics.test.js` — context snapshot is
+  JSON-serializable, the console ring buffer retains and bounds entries, and the
+  staff summary formats (and tolerates empty input).
+
+> Note: the sibling `claude-skills` repository contains generic Anthropic/Claude
+> authoring skills (pdf, xlsx, brainstorming, math-olympiad, …). They are
+> assistant tooling used to *build* LIUMA — **not** application features — and
+> are intentionally not integrated into the product or its user manual.
+
+---
+
 ## [1.2.0] - 2026-06-22
 
 ### Changed

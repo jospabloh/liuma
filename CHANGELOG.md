@@ -7,6 +7,21 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`GlobalLumiBubble` reuses the shared profile hook**: replaced its own
+  separately-keyed `globalLumiUserProfile` UserProfile fetch with
+  `useCurrentProfile()`, so the assistant bubble shares the app-wide
+  `['userProfile', user.id]` cache instead of issuing a duplicate request.
+
+### Removed
+
+- **Dead `user.data.linked_student_ids` fallback** in `getLinkedStudents`:
+  `base44.auth.me()` returns the user flat on the client (`user.data` is always
+  undefined), and `linked_student_ids` only exists as a server-side RLS token
+  with no client-accessible source, so the fallback never executed. Removed it;
+  parent→student linkage continues to come from the `ParentStudent` table.
+
 ### Fixed
 
 - **Admin pages that silently never loaded** (`GestionPedidosAdmin`,

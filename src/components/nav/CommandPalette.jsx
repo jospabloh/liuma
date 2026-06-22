@@ -9,7 +9,7 @@ import { getGroupedDestinations, pageUrl } from './navRegistry';
 /**
  * ⌘K command palette — type to jump anywhere, or browse the role's full menu.
  * Shared destination list with the bottom bar (navRegistry), so there's one
- * place to curate navigation. Opened from the "Menú" tab or the keyboard.
+ * place to curate navigation. Opened from the "Más" tab or the keyboard.
  */
 export default function CommandPalette({ open, onOpenChange, role }) {
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ export default function CommandPalette({ open, onOpenChange, role }) {
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput placeholder="¿Qué necesitas? Busca o navega…" />
       <CommandList>
-        <CommandEmpty>Sin resultados.</CommandEmpty>
+        <CommandEmpty>Nada con ese nombre. Prueba con otra palabra.</CommandEmpty>
         {groups.map(({ group, items }) => (
           <CommandGroup key={group} heading={group}>
             {items.map((dest) => (

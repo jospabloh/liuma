@@ -32,6 +32,25 @@ export const NOTIFICATION_TEMPLATES = {
     inAppTitle: () => 'Pago por vencer',
     inAppContent: ({ studentName, dueDateLabel }) => `Tienes un pago pendiente de ${studentName} con vencimiento ${dueDateLabel}.`,
   },
+  event_confirmation_reminder: {
+    subject: ({ eventTitle }) => `Recordatorio: Confirma asistencia a ${eventTitle}`,
+    emailBody: ({ studentName, eventTitle, dateLabel, timeLabel, locationLabel, deadlineLabel }) => `
+      <h2>Recordatorio de Confirmación</h2>
+      <p>Estimado padre/madre de familia:</p>
+      <p>Le recordamos confirmar la asistencia de <strong>${studentName}</strong> al siguiente evento:</p>
+      <div style="background: #dbeafe; padding: 16px; border-radius: 8px; border: 1px solid #3b82f6; margin: 16px 0;">
+        <p><strong>${eventTitle}</strong></p>
+        <p><strong>Fecha:</strong> ${dateLabel}</p>
+        ${timeLabel ? `<p><strong>Hora:</strong> ${timeLabel}</p>` : ''}
+        ${locationLabel ? `<p><strong>Lugar:</strong> ${locationLabel}</p>` : ''}
+        <p><strong>Fecha límite:</strong> ${deadlineLabel}</p>
+      </div>
+      <p>Por favor, confirme su asistencia lo antes posible.</p>
+      <p>Atentamente,<br>Equipo LIUMA</p>
+    `,
+    inAppTitle: ({ eventTitle }) => `Confirma asistencia a ${eventTitle}`,
+    inAppContent: ({ studentName, deadlineLabel }) => `Confirma la asistencia de ${studentName} antes del ${deadlineLabel}.`,
+  },
   emergency_alert: {
     subject: ({ schoolName }) => `🚨 Alerta de emergencia - ${schoolName || 'Escuela'}`,
     emailBody: ({ message }) => `

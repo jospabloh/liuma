@@ -5,16 +5,20 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { useNav } from '@/components/nav/NavContext';
 
-export default function PageHeader({ 
-  title, 
+export default function PageHeader({
+  title,
   subtitle,
   showBack = false,
   backTo,
-  action 
+  action,
+  showSearch = true,
 }) {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
-  const { openPalette } = useNav();
+  const { openPalette, role } = useNav();
+  // Only offer search where the palette can actually open (a role is resolved);
+  // avoids a dead button on pre-profile screens like onboarding/setup.
+  const searchEnabled = showSearch && !!role;
 
   const handleBack = () => {
     if (backTo) {
@@ -48,15 +52,17 @@ export default function PageHeader({
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Buscar"
-          onClick={openPalette}
-          className="mobile-touch-target rounded-full"
-        >
-          <Search className="w-5 h-5" />
-        </Button>
+        {searchEnabled && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Buscar"
+            onClick={openPalette}
+            className="mobile-touch-target rounded-full"
+          >
+            <Search className="w-5 h-5" />
+          </Button>
+        )}
         {action && <div>{action}</div>}
       </div>
     </motion.div>

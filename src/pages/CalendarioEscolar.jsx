@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { sendDueEventReminders } from '@/lib/events/reminders';
+import { useRunOnce } from '@/hooks/useRunOnce';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Calendar, Plus, Trash2, MapPin, Clock } from 'lucide-react';
@@ -55,19 +56,10 @@ export default function CalendarioEscolar() {
   // No cron in this app, so confirmation reminders run opportunistically when an
   // admin opens the calendar — once per load, idempotent via reminder_sent, and
   // only to parents who haven't responded yet (resolved per event scope).
-  const [remindersDone, setRemindersDone] = useState(false);
-  useEffect(() => {
-    if (remindersDone) return;
-    if (userProfile?.app_role !== 'ADMIN' || !userProfile?.school_id) return;
-    setRemindersDone(true);
-    (async () => {
-      const count = await sendDueEventReminders({ schoolId: userProfile.school_id });
-      if (count > 0) {
-        queryClient.invalidateQueries(['events']);
-      }
-    })().catch((error) => console.error('Event reminder sweep failed', error));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile, remindersDone]);
+  useRunOnce(userProfile?.app_role === 'ADMIN' && !!userProfile?.school_id, async () => {
+    const count = await sendDueEventReminders({ schoolId: userProfile.school_id });
+    if (count > 0) queryClient.invalidateQueries(['events']);
+  });
 
   if (loadingUser || loadingEvents || !userProfile) {
     return <LoadingScreen message="Cargando calendario..." />;

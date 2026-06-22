@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Calendar, TrendingDown, Users, Filter } from 'lucide-react';
@@ -11,19 +12,10 @@ import LoadingScreen from "@/components/ui/LoadingScreen";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
 export default function ResumenAsistencia() {
-  const [userProfile, setUserProfile] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [selectedClassroom, setSelectedClassroom] = useState('all');
 
-  const { isLoading: loadingUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const currentUser = await base44.auth.me();
-      const profiles = await base44.entities.UserProfile.filter({ user_id: currentUser.id });
-      setUserProfile(profiles[0]);
-      return currentUser;
-    }
-  });
+  const { userProfile, isLoading: loadingUser } = useCurrentProfile();
 
   const { data: classrooms = [] } = useQuery({
     queryKey: ['classrooms', userProfile?.school_id],

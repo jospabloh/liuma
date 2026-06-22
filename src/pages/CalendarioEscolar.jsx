@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Calendar, Plus, Trash2, MapPin, Clock } from 'lucide-react';
@@ -14,23 +15,12 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 export default function CalendarioEscolar() {
-  const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const queryClient = useQueryClient();
 
-  const { isLoading: loadingUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const currentUser = await base44.auth.me();
-      setUser(currentUser);
-      const profiles = await base44.entities.UserProfile.filter({ user_id: currentUser.id });
-      setUserProfile(profiles[0]);
-      return currentUser;
-    }
-  });
+  const { user, userProfile, isLoading: loadingUser } = useCurrentProfile();
 
   const { data: events = [], isLoading: loadingEvents } = useQuery({
     queryKey: ['events', userProfile?.school_id],

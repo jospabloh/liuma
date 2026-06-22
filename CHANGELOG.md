@@ -7,8 +7,39 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Admin pages that silently never loaded** (`GestionPedidosAdmin`,
+  `GestionDescuentos`, `GestionDocumentos`) and the uniform catalog in
+  `PedidosUniformes` plus the parent **EventosParaPadres** list read their tenant
+  scope from `user.data.school_id`. `base44.auth.me()` returns the user flat
+  (`user.id`), so `user.data` was always `undefined` → those queries were
+  permanently disabled and showed nothing. Now they read `userProfile.school_id`
+  (the canonical scope used everywhere else), so the pages work. A unit test
+  guards against any page reading `school_id` off the auth user again.
+- **Parent events page no longer sends email on load**: `EventosParaPadres`'s
+  read query contained a misplaced block that emailed all pending parents and
+  flipped `Event.reminder_sent` as a side effect. It never ran in production
+  (the query was disabled by the bug above), but the `school_id` fix would have
+  activated unintended mass emails from a parent-facing page. Removed it; the
+  page now only displays events. (The auto-reminder feature needs a proper
+  admin/cron home — see follow-ups.)
+- **Lumi bubble no longer overlaps the mobile bottom nav**: lifted to `bottom-20`
+  on mobile (the nav is 64px tall) while staying at `bottom-6` on desktop.
+- **Page headers truncate long titles** instead of crowding the search/action
+  buttons (`min-w-0` + `truncate` + `shrink-0`).
+
 ### Changed
 
+- **`useCurrentUser` / `useCurrentProfile` hooks** (full rollout): added a lighter
+  `useCurrentUser` (user only, no profile fetch) and adopted the hooks across the
+  remaining pages — including the imperative `setUser`/`setUserProfile`-in-queryFn
+  pages (`Asistencia`, `ResumenAsistencia`, `CalendarioEscolar`) and the
+  `school_id`-bug pages above. `useCurrentProfile` now builds on `useCurrentUser`;
+  newly-activated pages gained a `profileLoading || isLoading` guard so they show
+  a loader (not an empty flash) while the profile resolves. `Home` is the one
+  intentional holdout — it uses `selectCurrentUserProfile` for multi-tenant
+  selection plus a welcome-modal side effect the generic hook doesn't model.
 - **`useCurrentProfile` hook** (maintenance / de-duplication): the authenticated
   user + `UserProfile` two-query pattern was copy-pasted verbatim into ~26 pages.
   Extracted into `src/hooks/useCurrentProfile.js` and adopted across **25 pages**

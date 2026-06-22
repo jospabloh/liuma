@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -35,21 +36,18 @@ export default function GestionDescuentos() {
 
   const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
+  const { userProfile, isLoading: profileLoading } = useCurrentProfile();
 
   const { data: discounts, isLoading } = useQuery({
-    queryKey: ['discounts', user?.data?.school_id],
-    queryFn: () => base44.entities.Discount.filter({ school_id: user.data.school_id }, '-created_date'),
-    enabled: !!user?.data?.school_id,
+    queryKey: ['discounts', userProfile?.school_id],
+    queryFn: () => base44.entities.Discount.filter({ school_id: userProfile.school_id }, '-created_date'),
+    enabled: !!userProfile?.school_id,
   });
 
   const createDiscountMutation = useMutation({
     mutationFn: (data) => base44.entities.Discount.create({
       ...data,
-      school_id: user.data.school_id,
+      school_id: userProfile.school_id,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['discounts'] });
@@ -144,7 +142,7 @@ export default function GestionDescuentos() {
     OTRO: 'Otros',
   };
 
-  if (isLoading) {
+  if (profileLoading || isLoading) {
     return <LoadingScreen message="Cargando descuentos..." />;
   }
 

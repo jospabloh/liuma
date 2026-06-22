@@ -30,7 +30,7 @@ export default function PageHeader({
       animate={{ opacity: 1, y: 0 }}
       className="flex items-center justify-between mb-6"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         {showBack && (
           <Button
             variant="ghost"
@@ -42,12 +42,12 @@ export default function PageHeader({
             <ArrowLeft className="w-5 h-5" />
           </Button>
         )}
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
-          {subtitle && <p className="text-muted-foreground mt-0.5">{subtitle}</p>}
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground truncate">{title}</h1>
+          {subtitle && <p className="text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         <Button
           variant="ghost"
           size="icon"

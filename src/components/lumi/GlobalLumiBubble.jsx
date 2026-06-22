@@ -46,7 +46,9 @@ export default function GlobalLumiBubble() {
 
   return (
     <>
-      <LumiButton isOpen={isOpen} onClick={handleBubbleToggle} className="bottom-4 right-4 md:bottom-6 md:right-6" />
+      {/* On mobile the persistent bottom nav is 64px tall (h-16); sit above it.
+          The nav is hidden at md+, so drop back to the corner there. */}
+      <LumiButton isOpen={isOpen} onClick={handleBubbleToggle} className="bottom-20 right-4 md:bottom-6 md:right-6" />
       <LumiChat isOpen={isOpen} onClose={handleChatClose} userProfile={userProfile} />
     </>
   );

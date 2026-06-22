@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -31,10 +32,7 @@ export default function PedidosUniformes() {
 
   const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
+  const { user, userProfile, isLoading: profileLoading } = useCurrentProfile();
 
   const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
     queryKey: ['linkedStudents', user?.id],
@@ -45,16 +43,16 @@ export default function PedidosUniformes() {
   const students = linkedStudents.students;
 
   const { data: catalog } = useQuery({
-    queryKey: ['uniformCatalog', user?.data?.school_id],
+    queryKey: ['uniformCatalog', userProfile?.school_id],
     queryFn: async () => {
       const docs = await base44.entities.OfficialDocument.filter({
-        school_id: user.data.school_id,
+        school_id: userProfile.school_id,
         document_type: 'UNIFORM_CATALOG',
         is_current: true
       });
       return docs[0];
     },
-    enabled: !!user?.data?.school_id,
+    enabled: !!userProfile?.school_id,
   });
 
   const { data: orders, isLoading } = useQuery({
@@ -98,7 +96,7 @@ export default function PedidosUniformes() {
     }
 
     createOrderMutation.mutate({
-      school_id: user.data.school_id,
+      school_id: userProfile.school_id,
       student_id: selectedStudent,
       parent_id: user.id,
       parent_name: user.full_name,
@@ -130,7 +128,7 @@ export default function PedidosUniformes() {
     CANCELLED: { label: 'Cancelado', color: 'bg-red-100 text-red-800' },
   };
 
-  if (isLoading) {
+  if (profileLoading || isLoading) {
     return <LoadingScreen message="Cargando pedidos..." />;
   }
 

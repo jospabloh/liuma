@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -21,21 +22,18 @@ export default function GestionPedidosAdmin() {
 
   const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-  });
+  const { userProfile, isLoading: profileLoading } = useCurrentProfile();
 
   const { data: orders, isLoading } = useQuery({
-    queryKey: ['allUniformOrders', user?.data?.school_id],
-    queryFn: () => base44.entities.UniformOrder.filter({ school_id: user.data.school_id }, '-created_date'),
-    enabled: !!user?.data?.school_id,
+    queryKey: ['allUniformOrders', userProfile?.school_id],
+    queryFn: () => base44.entities.UniformOrder.filter({ school_id: userProfile.school_id }, '-created_date'),
+    enabled: !!userProfile?.school_id,
   });
 
   const { data: students } = useQuery({
-    queryKey: ['allStudents', user?.data?.school_id],
-    queryFn: () => base44.entities.Student.filter({ school_id: user.data.school_id }),
-    enabled: !!user?.data?.school_id,
+    queryKey: ['allStudents', userProfile?.school_id],
+    queryFn: () => base44.entities.Student.filter({ school_id: userProfile.school_id }),
+    enabled: !!userProfile?.school_id,
   });
 
   const updateOrderMutation = useMutation({
@@ -71,7 +69,7 @@ export default function GestionPedidosAdmin() {
     CANCELLED: { label: 'Cancelado', color: 'bg-red-100 text-red-800' },
   };
 
-  if (isLoading) {
+  if (profileLoading || isLoading) {
     return <LoadingScreen message="Cargando pedidos..." />;
   }
 

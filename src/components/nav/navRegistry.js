@@ -92,16 +92,12 @@ export function getDestinations(role) {
 
 /** Destinations grouped by their `group`, preserving insertion order. */
 export function getGroupedDestinations(role) {
-  const groups = [];
-  const index = new Map();
+  const byGroup = new Map(); // Map preserves first-seen (insertion) order.
   for (const dest of getDestinations(role)) {
-    if (!index.has(dest.group)) {
-      index.set(dest.group, groups.length);
-      groups.push({ group: dest.group, items: [] });
-    }
-    groups[index.get(dest.group)].items.push(dest);
+    if (!byGroup.has(dest.group)) byGroup.set(dest.group, []);
+    byGroup.get(dest.group).push(dest);
   }
-  return groups;
+  return [...byGroup].map(([group, items]) => ({ group, items }));
 }
 
 /** URL for a page name — mirrors src/utils createPageUrl. */

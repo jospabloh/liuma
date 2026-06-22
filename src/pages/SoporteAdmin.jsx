@@ -28,6 +28,7 @@ import {
 import { isSlaBreached } from '@/lib/support/sla';
 import { nextStatusesFor } from '@/lib/support/statusMachine';
 import { isPlatformOwner } from '@/lib/support/owner';
+import { useRunOnce } from '@/hooks/useRunOnce';
 import { SUPPORT_AUTHOR_ROLE, SUPPORT_STATUS, SUPPORT_TIER, TERMINAL_STATUSES } from '@/lib/support/constants';
 import TicketThread from '@/components/support/TicketThread';
 import { SupportStatusBadge, SupportPriorityBadge, STATUS_LABELS } from '@/components/support/labels.jsx';
@@ -129,19 +130,13 @@ export default function SoporteAdmin() {
   // SLA lapsed without a first response rolls up to soporte automatically. The
   // app has no cron, so this is the opportunistic trigger. Owners are already
   // L2, so it only runs for directors, and once per queue load.
-  const [autoEscalateDone, setAutoEscalateDone] = useState(false);
-  useEffect(() => {
-    if (autoEscalateDone || isOwner || !user || !userProfile || tickets.length === 0) return;
-    setAutoEscalateDone(true);
-    (async () => {
-      const count = await autoEscalateBreachedTickets({ user, userProfile, tickets });
-      if (count > 0) {
-        toast.info(`${count} ticket${count !== 1 ? 's' : ''} sin respuesta escalado${count !== 1 ? 's' : ''} a soporte.`);
-        refresh();
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tickets, isOwner, user, userProfile, autoEscalateDone]);
+  useRunOnce(!isOwner && !!user && !!userProfile && tickets.length > 0, async () => {
+    const count = await autoEscalateBreachedTickets({ user, userProfile, tickets });
+    if (count > 0) {
+      toast.info(`${count} ticket${count !== 1 ? 's' : ''} sin respuesta escalado${count !== 1 ? 's' : ''} a soporte.`);
+      refresh();
+    }
+  });
 
   if (isLoading) return <LoadingScreen message="Cargando tickets..." />;
 

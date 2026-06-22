@@ -7,6 +7,31 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Quality pass (`/simplify`) on the session's new code:**
+  - **`useRunOnce` hook**: the app's two opportunistic "admin sweep" effects
+    (auto-escalate breached tickets on the support queue; send due event
+    reminders on the admin calendar) were near-identical hand-rolled
+    once-per-load `useState`+`useEffect` latches. Extracted into one
+    `useRunOnce(ready, run)` hook (ref-based, so flipping the latch doesn't
+    re-render) and adopted in both places.
+  - **Event reminders now go through `notificationService`** (retry +
+    delivery-failure audit) using a new `event_confirmation_reminder` template,
+    instead of calling `SendEmail` directly with an inline HTML body — the
+    EventResponse lookup is batched (`$in`) and the per-parent sends run via
+    `Promise.allSettled`.
+  - **`getGroupedDestinations`** simplified to a single insertion-ordered `Map`.
+  - **`PageHeader`** gained a `showSearch` opt-out and only renders the search
+    button once a role is resolved (no dead control on pre-profile screens).
+- **Bottom-nav active state (frontend-design pass):** replaced the plain
+  color-swap active tab with a single brand-colored indicator that springs
+  between tabs (shared `layoutId`) to mark location — the one deliberate
+  flourish, with everything else kept quiet; derives its color from the tenant
+  brand token and respects reduced motion. The command palette's empty state is
+  now directional ("Nada con ese nombre. Prueba con otra palabra.") rather than a
+  dead "Sin resultados."
+
 ### Added
 
 - **Event-confirmation reminders, rebuilt correctly**: parents who haven't

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LIUMA — Preview Harness</title>
+  </head>
+  <body>
+    <!--
+      Dev-only visual harness. NOT part of the production app (index.html is the
+      only build entry unless PREVIEW=1). Renders the REAL premium components
+      against mock data so they can be screenshotted without a base44 backend.
+      Run: npm run preview:shots   (see scripts/capture-preview.mjs)
+    -->
+    <div id="preview-root"></div>
+    <script type="module" src="/src/preview/main.jsx"></script>
+  </body>
+</html>

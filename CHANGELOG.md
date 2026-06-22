@@ -5,6 +5,38 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.1] - 2026-06-22
+
+Premium UI polish pass extending the v1.3.0 desktop-rail redesign across the
+shared surfaces. Cosmetic + one additive, optional prop; no behavior or data
+changes.
+
+### Changed
+
+- **Premium card elevation:** the app-wide `Card` primitive now uses a shared
+  `ui-elevation` surface — a two-layer soft shadow keyed off the theme
+  `foreground` color (with alpha) so it adapts to light/dark instead of a flat
+  grey drop shadow. Hairline border softened to `border-border/70`. Home tiles
+  (`BigTile`) adopt the same resting elevation for a consistent, substantial
+  feel.
+- **PageHeader** refined: larger display title on wide screens, more breathing
+  room, and subtle hover borders on the back/search controls.
+
+### Added
+
+- **`PageHeader` `eyebrow` prop** — an optional brand-tinted context label
+  (e.g. *Administración*, *Plataforma*) above the title, with a small brand
+  accent. Adopted on the Pagos (admin), Reportes, and Soporte admin consoles.
+- `ui-elevation` / `ui-elevation-hover` utilities (theme-aware soft shadows).
+
+### Tests
+
+- `tests/unit/premium-ui.test.js` — Card uses `ui-elevation`, the elevation
+  utilities are theme-aware, and PageHeader supports `eyebrow` while keeping its
+  a11y controls and staying on the tenant brand token (no hardcoded hex).
+
+---
+
 ## [1.3.0] - 2026-06-22
 
 Additive UX + support pass. No breaking API or data changes; one optional,

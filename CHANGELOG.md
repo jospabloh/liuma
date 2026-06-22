@@ -5,6 +5,38 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.3.2] - 2026-06-22
+
+Premium polish pass on the **form & dialog surfaces** — the third leg of the
+UI elevation work (after the desktop rail and the shared card/header surfaces).
+Cosmetic only; no behavior, API, or data changes.
+
+### Changed
+
+- **Unified brand focus state:** `Input`, `Textarea`, and the `Select` trigger
+  now share one focus treatment keyed off the tenant **`brand`** token — a soft
+  `ring-brand/25` ring + `border-brand` — instead of the generic grey ring, plus
+  a subtle hover border. Fields are now `rounded-lg`, harmonized with `Button`
+  (also `rounded-lg`).
+- **Select menu:** softer `rounded-xl` popover with a lighter border and deeper
+  shadow; items use brand-tinted focus (`bg-brand/10` / `text-brand`) and a
+  brand check mark, matching the navigation's active-state language.
+- **Dialogs:** premium modal treatment — a **blurred scrim** (`backdrop-blur`),
+  `rounded-2xl` corners, a stronger `shadow-2xl` elevation, and a refined
+  circular close button with a brand focus ring.
+
+All color rides the tenant brand token — no hardcoded hex — so every school's
+palette re-skins it.
+
+### Tests
+
+- `tests/unit/premium-forms.test.js` — inputs/textarea/select share the brand
+  focus ring (no hardcoded hex), select items use brand-tinted focus + check,
+  the dialog has a blurred scrim / rounded corners / strong elevation, and the
+  button radius harmonizes with the fields.
+
+---
+
 ## [1.3.1] - 2026-06-22
 
 Premium UI polish pass extending the v1.3.0 desktop-rail redesign across the

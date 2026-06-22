@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LIUMA — Premium UI Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!--
+    Self-contained preview of LIUMA's premium UI surfaces (work from PRs #117–#120):
+    desktop nav rail, card/tile elevation, brand focus on forms, blurred dialogs,
+    on-brand loading + empty/shimmer states. Uses the app's real design tokens.
+    Open in any browser. Toggle the brand color (top-right) to see the per-tenant
+    re-skin, and toggle dark mode. No backend required — this is documentation.
+  -->
+  <style>
+    :root {
+      --background: 40 30% 97%;
+      --foreground: 30 10% 11%;
+      --card: 0 0% 100%;
+      --muted: 40 18% 93%;
+      --muted-foreground: 35 8% 42%;
+      --accent: 40 22% 93%;
+      --border: 36 22% 88%;
+      --input: 36 22% 88%;
+      --radius: 0.75rem;
+      --tenant-primary-rgb: 79 70 229; /* indigo (default fallback brand) */
+    }
+    .dark {
+      --background: 222 20% 7%;
+      --foreground: 0 0% 98%;
+      --card: 222 18% 11%;
+      --muted: 222 14% 16%;
+      --muted-foreground: 220 9% 64%;
+      --accent: 222 14% 18%;
+      --border: 222 14% 18%;
+      --input: 222 14% 18%;
+    }
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .font-display { font-family: 'Bricolage Grotesque', 'Inter', sans-serif; letter-spacing: -0.02em; }
+
+    /* The real app utilities, copied verbatim from src/index.css */
+    .ui-elevation {
+      box-shadow: 0 1px 2px -1px hsl(var(--foreground) / 0.06), 0 8px 24px -14px hsl(var(--foreground) / 0.18);
+    }
+    .ui-elevation-hover { transition: box-shadow 200ms ease, transform 200ms ease; }
+    .ui-elevation-hover:hover {
+      box-shadow: 0 2px 4px -2px hsl(var(--foreground) / 0.08), 0 16px 32px -16px hsl(var(--foreground) / 0.24);
+      transform: translateY(-2px);
+    }
+    @keyframes ui-shimmer { 100% { transform: translateX(100%); } }
+    .ui-shimmer { position: relative; overflow: hidden; }
+    .ui-shimmer::after {
+      content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+      background: linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.06), transparent);
+      animation: ui-shimmer 1.6s infinite;
+    }
+    @keyframes ui-spin { to { transform: rotate(360deg); } }
+    .ui-spin { animation: ui-spin 1s linear infinite; }
+  </style>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {
+        colors: {
+          brand: 'rgb(var(--tenant-primary-rgb) / <alpha-value>)',
+          background: 'hsl(var(--background))', foreground: 'hsl(var(--foreground))',
+          card: 'hsl(var(--card))', muted: 'hsl(var(--muted))',
+          'muted-foreground': 'hsl(var(--muted-foreground))', accent: 'hsl(var(--accent))',
+          border: 'hsl(var(--border))', input: 'hsl(var(--input))',
+        },
+        borderRadius: { lg: 'var(--radius)', md: 'calc(var(--radius) - 2px)', sm: 'calc(var(--radius) - 4px)' },
+        fontFamily: { display: ['Bricolage Grotesque', 'Inter', 'sans-serif'], sans: ['Inter', 'sans-serif'] },
+      } },
+    };
+  </script>
+</head>
+<body class="bg-background text-foreground antialiased">
+  <!-- Controls -->
+  <div class="fixed right-4 top-4 z-50 flex items-center gap-2 rounded-full border border-border bg-card/90 px-2 py-1.5 backdrop-blur ui-elevation">
+    <span class="px-1 text-xs font-medium text-muted-foreground">Marca:</span>
+    <button onclick="setBrand('79 70 229')" class="h-6 w-6 rounded-full ring-2 ring-offset-1 ring-offset-background" style="background:rgb(79 70 229)" title="Índigo"></button>
+    <button onclick="setBrand('13 148 136')" class="h-6 w-6 rounded-full" style="background:rgb(13 148 136)" title="Teal"></button>
+    <button onclick="setBrand('219 39 119')" class="h-6 w-6 rounded-full" style="background:rgb(219 39 119)" title="Rosa"></button>
+    <button onclick="setBrand('234 88 12')" class="h-6 w-6 rounded-full" style="background:rgb(234 88 12)" title="Naranja"></button>
+    <span class="mx-1 h-5 w-px bg-border"></span>
+    <button onclick="document.documentElement.classList.toggle('dark')" class="rounded-full px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent">🌓 Tema</button>
+  </div>
+
+  <div class="mx-auto max-w-7xl px-4 py-8">
+    <header class="mb-8">
+      <p class="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">
+        <span class="inline-block h-1 w-4 rounded-full bg-brand"></span> Design preview
+      </p>
+      <h1 class="font-display text-3xl font-semibold">LIUMA · Premium UI</h1>
+      <p class="mt-1 text-muted-foreground">Las superficies elevadas de los PRs #117–#120, con los tokens reales del producto. Cambia la marca arriba a la derecha para ver el re-skin por escuela.</p>
+    </header>
+
+    <!-- App window mock: rail + dashboard -->
+    <section class="mb-10 overflow-hidden rounded-2xl border border-border ui-elevation">
+      <div class="flex min-h-[520px]">
+        <!-- Nav rail (SideNav) -->
+        <nav class="hidden w-64 flex-col border-r border-border bg-card/80 md:flex">
+          <div class="flex items-center gap-2.5 px-5 pb-4 pt-5">
+            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-base font-bold text-white" style="box-shadow:0 4px 14px -4px rgb(var(--tenant-primary-rgb) / .5)">L</span>
+            <div class="leading-tight">
+              <p class="text-[15px] font-semibold">LIU<span class="text-brand">MA</span></p>
+              <p class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Administración</p>
+            </div>
+          </div>
+          <div class="px-3">
+            <button class="flex w-full items-center gap-2 rounded-xl border border-border bg-background/60 px-3 py-2 text-sm text-muted-foreground hover:bg-accent">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              Buscar… <kbd class="ml-auto rounded-md border border-border bg-card px-1.5 py-0.5 text-[10px] font-semibold">⌘K</kbd>
+            </button>
+          </div>
+          <div class="mt-4 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
+            <a class="group relative flex items-center gap-3 rounded-xl bg-brand/10 px-3 py-2 text-sm font-semibold text-brand">
+              <span class="absolute -left-3 top-1/2 h-5 -translate-y-1/2 rounded-r-full border-l-2 border-brand bg-brand"></span>
+              ● Inicio
+            </a>
+            <div class="space-y-1">
+              <p class="px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground/60">Día a día</p>
+              <a class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground">○ Operación diaria</a>
+              <a class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground">○ Aprobaciones</a>
+              <a class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground">○ Asistencia</a>
+            </div>
+            <div class="space-y-1">
+              <p class="px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground/60">Administración</p>
+              <a class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground">○ Pagos</a>
+              <a class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground">○ Reportes</a>
+            </div>
+          </div>
+          <div class="border-t border-border p-3">
+            <div class="flex items-center gap-3 rounded-xl px-2 py-1.5">
+              <span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">MR</span>
+              <div class="min-w-0 leading-tight">
+                <p class="truncate text-sm font-medium">María Reyes</p>
+                <p class="truncate text-[11px] text-muted-foreground">Administración</p>
+              </div>
+              <span class="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent">⛑</span>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Dashboard -->
+        <div class="flex-1 bg-background p-6">
+          <div class="mb-6 flex items-center justify-between">
+            <div>
+              <p class="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand"><span class="inline-block h-1 w-4 rounded-full bg-brand"></span> Administración</p>
+              <h2 class="font-display text-[28px] font-semibold leading-tight">Inicio</h2>
+              <p class="mt-1 text-muted-foreground">lunes 22 de junio</p>
+            </div>
+            <button class="rounded-full border border-transparent p-2 text-muted-foreground hover:border-border">🔍</button>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2">
+            <!-- BigTiles -->
+            <div class="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/70 bg-card p-5 ui-elevation ui-elevation-hover">
+              <span class="absolute inset-y-0 left-0 w-1 bg-brand opacity-70"></span>
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10 text-brand">🔔</div>
+              <div class="min-w-0 flex-1"><h3 class="font-display font-semibold">Avisos</h3><p class="mt-0.5 text-sm text-muted-foreground">3 sin leer</p></div>
+              <span class="min-w-[24px] rounded-full bg-rose-500 px-2.5 py-1 text-center text-xs font-bold text-white">3</span>
+            </div>
+            <div class="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/70 bg-card p-5 ui-elevation ui-elevation-hover">
+              <span class="absolute inset-y-0 left-0 w-1 bg-brand opacity-70"></span>
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10 text-brand">💳</div>
+              <div class="min-w-0 flex-1"><h3 class="font-display font-semibold">Pagos</h3><p class="mt-0.5 text-sm text-muted-foreground">2 vencidos</p></div>
+              <span class="text-muted-foreground/50">›</span>
+            </div>
+            <div class="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/70 bg-card p-5 ui-elevation ui-elevation-hover">
+              <span class="absolute inset-y-0 left-0 w-1 bg-brand opacity-70"></span>
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10 text-brand">📋</div>
+              <div class="min-w-0 flex-1"><h3 class="font-display font-semibold">Asistencia</h3><p class="mt-0.5 text-sm text-muted-foreground">Registrar hoy</p></div>
+              <span class="text-muted-foreground/50">›</span>
+            </div>
+            <!-- Skeleton (loading tile) -->
+            <div class="flex items-center gap-4 rounded-2xl border border-border/70 bg-card p-5 ui-elevation">
+              <div class="ui-shimmer h-12 w-12 rounded-xl bg-muted"></div>
+              <div class="flex-1 space-y-2"><div class="ui-shimmer h-4 w-2/3 rounded bg-muted"></div><div class="ui-shimmer h-3 w-1/3 rounded bg-muted"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Component gallery -->
+    <div class="grid gap-6 lg:grid-cols-3">
+      <!-- Forms -->
+      <section class="rounded-2xl border border-border/70 bg-card p-6 ui-elevation">
+        <h3 class="font-display mb-4 text-lg font-semibold">Formularios · foco de marca</h3>
+        <div class="space-y-4">
+          <div>
+            <label class="mb-1.5 block text-sm font-medium">Asunto</label>
+            <input placeholder="Escribe aquí…" class="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-brand focus:ring-2 focus:ring-brand/25" />
+            <p class="mt-1 text-xs text-muted-foreground">Haz clic para ver el anillo de foco de marca.</p>
+          </div>
+          <div>
+            <label class="mb-1.5 block text-sm font-medium">Categoría</label>
+            <button class="flex h-9 w-full items-center justify-between rounded-lg border border-input bg-transparent px-3 text-sm transition-colors hover:border-muted-foreground/30 focus:border-brand focus:ring-2 focus:ring-brand/25">Pagos <span class="opacity-50">▾</span></button>
+          </div>
+          <textarea rows="3" placeholder="Descripción…" class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-brand focus:ring-2 focus:ring-brand/25"></textarea>
+          <div class="flex justify-end gap-2">
+            <button class="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-accent">Cancelar</button>
+            <button class="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition active:scale-[0.98]" style="box-shadow:0 4px 14px -4px rgb(var(--tenant-primary-rgb) / .5)">Enviar</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dialog -->
+      <section class="rounded-2xl border border-border/70 bg-card p-6 ui-elevation">
+        <h3 class="font-display mb-4 text-lg font-semibold">Diálogo · scrim difuminado</h3>
+        <div class="relative h-64 overflow-hidden rounded-xl border border-border bg-muted/40">
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+          <div class="absolute left-1/2 top-1/2 w-[88%] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border/70 bg-background p-5" style="box-shadow:0 25px 50px -12px rgb(0 0 0 / .35)">
+            <button class="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent">✕</button>
+            <h4 class="font-display text-base font-semibold">Crear ticket de soporte</h4>
+            <p class="mt-1 text-sm text-muted-foreground">Se adjunta el diagnóstico técnico automáticamente.</p>
+            <div class="mt-4 flex justify-end gap-2">
+              <button class="rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">Cancelar</button>
+              <button class="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white">Enviar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Loading + Empty -->
+      <section class="rounded-2xl border border-border/70 bg-card p-6 ui-elevation">
+        <h3 class="font-display mb-4 text-lg font-semibold">Carga · vacío · skeleton</h3>
+        <div class="space-y-5">
+          <div class="flex items-center gap-4 rounded-xl border border-border bg-background p-4">
+            <div class="relative">
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-xl font-bold text-white">L</div>
+              <div class="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-card shadow">
+                <svg class="ui-spin h-3 w-3 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg>
+              </div>
+            </div>
+            <p class="text-sm font-medium text-muted-foreground">Cargando…</p>
+          </div>
+          <div class="flex flex-col items-center rounded-xl border border-dashed border-border py-6 text-center">
+            <div class="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10 ring-1 ring-inset ring-brand/15 text-brand text-2xl">📭</div>
+            <h4 class="font-semibold">Sin avisos por ahora</h4>
+            <p class="mt-0.5 max-w-xs text-sm text-muted-foreground">Cuando la escuela publique un aviso, aparecerá aquí.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <p class="mt-10 text-center text-xs text-muted-foreground">LIUMA · creado con cariño por ACACIA Consultoría · vista de diseño (sin backend)</p>
+  </div>
+
+  <script>
+    function setBrand(rgb) { document.documentElement.style.setProperty('--tenant-primary-rgb', rgb); }
+  </script>
+</body>
+</html>

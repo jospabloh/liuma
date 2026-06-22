@@ -34,3 +34,19 @@ test('PermisosRoles adopts the premium table/field/checkbox treatment', () => {
   // The old hardcoded native-select class is fully replaced.
   assert.doesNotMatch(src, /h-10 rounded-md border border-border px-3 text-sm/);
 });
+
+// The audit log is genuinely tabular; it now renders as a compact .ui-table
+// with the JSON context tucked behind a collapsible cell.
+test('AuditoriaAdmin renders the audit log as a premium table', () => {
+  const src = read('src/pages/AuditoriaAdmin.jsx');
+  assert.match(src, /className="ui-table/);
+  assert.match(src, /<details>/); // context is collapsible, keeping rows compact
+  assert.match(src, /colSpan=\{7\}/); // empty state spans the table
+});
+
+// Remaining hand-styled native selects (Reportes filters) adopt .ui-field.
+test('Reportes filters adopt the .ui-field native control', () => {
+  const src = read('src/pages/Reportes.jsx');
+  assert.match(src, /className="ui-field"/);
+  assert.doesNotMatch(src, /bg-card border border-border rounded-lg px-3 py-2 text-sm/);
+});

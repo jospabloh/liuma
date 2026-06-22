@@ -104,18 +104,18 @@ export default function Reportes() {
       <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4 mb-4">
         <p className="text-xs text-muted-foreground mb-2">Filtros</p>
         <div className="grid md:grid-cols-4 gap-3">
-          <input className="bg-card border border-border rounded-lg px-3 py-2 text-sm" type="date" value={filters.dateFrom} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
-          <input className="bg-card border border-border rounded-lg px-3 py-2 text-sm" type="date" value={filters.dateTo} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
-          <select className="bg-card border border-border rounded-lg px-3 py-2 text-sm" value={filters.classroomId} onChange={(e) => setFilters((f) => ({ ...f, classroomId: e.target.value }))}>
+          <input className="ui-field" type="date" value={filters.dateFrom} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
+          <input className="ui-field" type="date" value={filters.dateTo} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
+          <select className="ui-field" value={filters.classroomId} onChange={(e) => setFilters((f) => ({ ...f, classroomId: e.target.value }))}>
             <option value="ALL">Todos los salones</option>
             {classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select className="bg-card border border-border rounded-lg px-3 py-2 text-sm" value={filters.studentStatus} onChange={(e) => setFilters((f) => ({ ...f, studentStatus: e.target.value }))}>
+          <select className="ui-field" value={filters.studentStatus} onChange={(e) => setFilters((f) => ({ ...f, studentStatus: e.target.value }))}>
             <option value="ALL">Todos los estados</option><option value="ACTIVE">Activos</option><option value="INACTIVE">Inactivos</option>
           </select>
         </div>
         <div className="grid md:grid-cols-2 gap-3 mt-3">
-          <select className="bg-card border border-border rounded-lg px-3 py-2 text-sm" value={filters.roleScope} onChange={(e) => setFilters((f) => ({ ...f, roleScope: e.target.value }))}>
+          <select className="ui-field" value={filters.roleScope} onChange={(e) => setFilters((f) => ({ ...f, roleScope: e.target.value }))}>
             <option value="ALL">Alcance: todos</option><option value="SCHOOL">Escuela</option><option value="CLASSROOM">Salón</option><option value="STUDENT">Alumno</option>
           </select>
           <div className="flex gap-2 justify-end">

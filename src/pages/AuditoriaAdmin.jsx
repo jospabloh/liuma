@@ -60,16 +60,48 @@ export default function AuditoriaAdmin() {
         <Button onClick={exportCsv}>Exportar CSV</Button>
       </Card>
 
-      <div className="space-y-3">
-        {filtered.map((row) => (
-          <Card key={row.id} className="p-4 text-sm rounded-2xl">
-            <p className="text-card-foreground"><strong>{row.action}</strong> · {row.entity} · {row.entity_id}</p>
-            <p className="text-muted-foreground">{row.timestamp || row.created_date} · {row.role} · {row.actor || row.user_id}</p>
-            {row.reason && <p className="mt-1 text-card-foreground">Razón: {row.reason}</p>}
-            {row.context && <pre className="mt-2 bg-muted p-2 rounded-xl overflow-auto text-muted-foreground">{JSON.stringify(maskAuditContext(row.context), null, 2)}</pre>}
-          </Card>
-        ))}
-      </div>
+      <Card className="overflow-hidden rounded-2xl">
+        <div className="overflow-x-auto">
+          <table className="ui-table min-w-[760px]">
+            <thead>
+              <tr>
+                <th>Acción</th>
+                <th>Entidad</th>
+                <th>Fecha</th>
+                <th>Rol</th>
+                <th>Actor</th>
+                <th>Razón</th>
+                <th>Detalle</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-muted-foreground">Sin eventos para los filtros actuales.</td>
+                </tr>
+              )}
+              {filtered.map((row) => (
+                <tr key={row.id}>
+                  <td className="font-medium text-foreground">{row.action}</td>
+                  <td className="text-muted-foreground">{row.entity}{row.entity_id ? ` · ${row.entity_id}` : ''}</td>
+                  <td className="whitespace-nowrap text-muted-foreground">{row.timestamp || row.created_date}</td>
+                  <td className="text-muted-foreground">{row.role}</td>
+                  <td className="ui-truncate-cell text-muted-foreground">{row.actor || row.user_id}</td>
+                  <td className="ui-truncate-cell" title={row.reason || ''}>{row.reason || '—'}</td>
+                  <td>
+                    {row.context ? (
+                      <details>
+                        <summary className="cursor-pointer text-brand">Ver</summary>
+                        <pre className="mt-2 max-w-xs overflow-auto rounded-lg bg-muted p-2 text-[11px] text-muted-foreground">{JSON.stringify(maskAuditContext(row.context), null, 2)}</pre>
+                      </details>
+                    ) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
       </div>
     </div>
   );

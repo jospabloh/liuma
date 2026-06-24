@@ -58,19 +58,28 @@
       ]
     },
     "read": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "user_condition": {
+            "role": "admin"
+          }
         },
         {
-          "$or": [
+          "$and": [
             {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
+              "data.school_id": "{{user.data.school_id}}"
             },
             {
-              "data.requester_user_id": "{{user.id}}"
+              "$or": [
+                {
+                  "user_condition": {
+                    "data.app_role": "ADMIN"
+                  }
+                },
+                {
+                  "data.requester_user_id": "{{user.id}}"
+                }
+              ]
             }
           ]
         }

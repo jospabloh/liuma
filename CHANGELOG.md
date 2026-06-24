@@ -5,6 +5,27 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.1] - 2026-06-23
+
+### Security (RLS hardening, round 5)
+
+Closes 4 critical Base44 security-scan findings about missing **platform-owner**
+(`role: "admin"`) coverage on platform-governed entities. Applied to the Base44
+backend via the entity-schema API and mirrored in `base44/entities/*.jsonc`;
+full detail in `docs/rls-hardening-2026-06-23.md`.
+
+- **School** — `create`/`delete` (were `null`) restricted to the platform owner.
+- **SchoolSubscription** — `create` (was `null`) restricted to the platform owner.
+- **SupportTicket** — platform owner can now `read`/`update` across all schools;
+  `delete` (was `null`) is platform-owner-only.
+- **SupportTicketMessage** — platform owner can `read` all messages.
+
+Existing access is preserved: parents still open/read their own tickets and
+messages; school ADMINs still manage tickets and read their own school +
+subscription. No tenant `create` path was widened.
+
+---
+
 ## [1.4.0] - 2026-06-22
 
 Adds a **test-data seeder**: a connected, role-isolated sample dataset across

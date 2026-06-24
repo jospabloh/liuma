@@ -122,6 +122,11 @@
     "read": {
       "$or": [
         {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
           "data.requester_user_id": "{{user.id}}"
         },
         {
@@ -143,11 +148,24 @@
       ]
     },
     "update": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        }
+      ]
     },
-    "delete": null
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
   }
 }

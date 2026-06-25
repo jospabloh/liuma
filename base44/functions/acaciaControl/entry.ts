@@ -4,11 +4,12 @@
 //   { action, params, ts, sig }
 // We verify the signature against the app secret INGEST_HMAC_SECRET (set via
 // `npx base44 secrets set`), then run the requested action with the service
-// role. This is the single channel for both reads (license sync) and, later,
-// writes (activate/suspend licenses — Fase 6). Same file deploys to every app.
+// role. Single channel for reads (license sync, usage) and writes (Fase 6).
+// Same file deploys to every app.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const MAX_SKEW_MS = 5 * 60 * 1000;
+const COUNT_CAP = 5000; // Base44 caps list at 5,000 — usage counts are capped here.
 
 // Stable JSON: keys sorted recursively, so MC and this function sign the exact
 // same string (must mirror api/_lib/ingestSign.js in Mission Control).
@@ -59,12 +60,26 @@ Deno.serve(async (req) => {
       case 'licenses.list': {
         const entity = params.entity;
         if (!entity) return Response.json({ error: 'params.entity required' }, { status: 400 });
-        const records = await sr.entities[entity].list('-created_date', 5000);
+        const records = await sr.entities[entity].list('-created_date', COUNT_CAP);
         return Response.json({ ok: true, records });
       }
 
-      // Fase 6 — writes land here, e.g. 'license.activate' / 'license.suspend',
-      // each doing sr.entities[entity].update(id, {...}) under the service role.
+      case 'usage.summary': {
+        // Count records of each requested entity → product-usage signal.
+        const entities: string[] = Array.isArray(params.entities) ? params.entities : [];
+        const counts: Record<string, number | null> = {};
+        for (const e of entities) {
+          try {
+            const rows = await sr.entities[e].list('-created_date', COUNT_CAP);
+            counts[e] = rows.length;
+          } catch {
+            counts[e] = null; // entity missing/inaccessible in this app
+          }
+        }
+        return Response.json({ ok: true, counts, cap: COUNT_CAP });
+      }
+
+      // Fase 6 — writes land here, e.g. 'license.activate' / 'license.suspend'.
 
       default:
         return Response.json({ error: `unknown action: ${action}` }, { status: 400 });

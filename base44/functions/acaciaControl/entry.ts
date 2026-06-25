@@ -79,6 +79,24 @@ Deno.serve(async (req) => {
         return Response.json({ ok: true, counts, cap: COUNT_CAP });
       }
 
+      case 'emails.status': {
+        // Read follow-up / lifecycle email history for one tenant from the app's
+        // email log entity (apps that have one). Returns [] when absent. Read-only.
+        const logEntity = params.logEntity;
+        const idField = params.idField;
+        const id = params.id;
+        if (!logEntity || !idField || !id) return Response.json({ error: 'params.logEntity/idField/id required' }, { status: 400 });
+        try {
+          const rows = await sr.entities[logEntity].filter({ [idField]: id });
+          const records = (rows ?? []).map((r: Record<string, unknown>) => ({
+            email_type: r.email_type, status: r.status, sent_at: r.sent_at, recipient_email: r.recipient_email,
+          }));
+          return Response.json({ ok: true, records });
+        } catch (e) {
+          return Response.json({ ok: true, records: [], note: (e as Error).message });
+        }
+      }
+
       // Fase 6 — writes land here, e.g. 'license.activate' / 'license.suspend'.
 
       default:

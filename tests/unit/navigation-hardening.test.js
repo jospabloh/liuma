@@ -13,14 +13,20 @@ test('App scrolls to top on route change', () => {
   const app = read('src/App.jsx');
   assert.match(app, /ScrollToTopOnNavigate/);
   assert.match(app, /window\.scrollTo\(/);
-  assert.match(app, /useEffect\(\(\) => \{[\s\S]*scrollTo[\s\S]*\}, \[pathname\]\)/);
+  // Tolerant of arrow-function/whitespace formatting so a reformat can't break it.
+  assert.match(app, /useEffect\(\s*\(\s*\)\s*=>\s*\{[\s\S]*scrollTo[\s\S]*\}\s*,\s*\[\s*pathname\s*\]\s*\)/);
 });
 
 // Redirecting to login during render is a React anti-pattern; it now runs as
 // an effect.
 test('auth_required redirect runs in an effect, not during render', () => {
   const app = read('src/App.jsx');
-  assert.match(app, /useEffect\(\(\) => \{\s*if \(authError\?\.type === 'auth_required'\)/);
+  // Assert the auth_required guard lives inside a useEffect. Tolerant of
+  // comments between the effect opener and the guard, of whitespace, and of
+  // extra conditions appended to the check (e.g. `&& !getRememberedIdentity()`),
+  // while still keying on the effect-only `authError?.type` optional chaining
+  // (the render branch uses the already-narrowed `authError.type`).
+  assert.match(app, /useEffect\(\s*\(\s*\)\s*=>\s*\{[\s\S]*?if\s*\(\s*authError\?\.type\s*===\s*'auth_required'/);
   // The render branch no longer calls navigateToLogin() directly.
   assert.doesNotMatch(app, /auth_required'\) \{\s*\n\s*\/\/ Redirect to login automatically\s*\n\s*navigateToLogin\(\);/);
 });

@@ -115,6 +115,54 @@ Deno.serve(async (req) => {
         return Response.json({ ok: true, updated });
       }
 
+      case 'emails.sendFollowup': {
+        // Mission Control sends ONE renewal follow-up to a tenant (HMAC-gated,
+        // service-role). MC owns the recipient + rendered content; the bridge
+        // just sends via the app email integration and optionally logs it.
+        const to = params.to;
+        const subject = params.subject;
+        const html = params.html;
+        if (!to || !subject || !html) return Response.json({ error: 'params.to/subject/html required' }, { status: 400 });
+        await sr.integrations.Core.SendEmail({ to, subject, body: html, from_name: 'ACACIA' });
+        const sent_at = new Date().toISOString();
+        const log = params.log;
+        if (log && log.entity && log.row && typeof log.row === 'object') {
+          try { await sr.entities[log.entity].create({ ...log.row, sent_at }); } catch { /* audit best-effort */ }
+        }
+        return Response.json({ ok: true, sent_at, recipient: to });
+      }
+
+      case 'tenants.contacts': {
+        // Resolve recipient contacts for the app's tenants (read-only). MC passes
+        // the per-app recipient spec: emails from fields on the license record, or
+        // from a related entity (membership / school). Used to target campaigns.
+        const entity = params.entity;
+        const r = params.recipient || {};
+        if (!entity) return Response.json({ error: 'params.entity required' }, { status: 400 });
+        const records = await sr.entities[entity].list('-created_date', COUNT_CAP);
+        const contacts = [];
+        for (const rec of records) {
+          let email = '';
+          if (Array.isArray(r.fields)) {
+            for (const f of r.fields) { if (rec[f]) { email = String(rec[f]); break; } }
+          }
+          if (!email && r.related && r.related.entity && r.related.keyField && r.related.emailField) {
+            try {
+              const key = r.related.keyFromRecord ? rec[r.related.keyFromRecord] : rec.id;
+              const rows = await sr.entities[r.related.entity].filter({ [r.related.keyField]: key });
+              let pick = rows[0];
+              if (Array.isArray(r.related.roles) && r.related.roleField) {
+                const m = rows.find((x) => r.related.roles.includes(x[r.related.roleField]));
+                if (m) pick = m;
+              }
+              if (pick) email = String(pick[r.related.emailField] || '');
+            } catch { /* skip this record */ }
+          }
+          contacts.push({ id: rec.id, name: (r.nameField ? rec[r.nameField] : rec.name) || null, email: email || null });
+        }
+        return Response.json({ ok: true, contacts });
+      }
+
       // Fase 6 — writes land here, e.g. 'license.activate' / 'license.suspend'.
 
       default:

@@ -150,10 +150,13 @@ Deno.serve(async (req) => {
             try {
               const key = r.related.keyFromRecord ? rec[r.related.keyFromRecord] : rec.id;
               const rows = await sr.entities[r.related.entity].filter({ [r.related.keyField]: key });
-              let pick = rows[0];
+              // When roles are required, ONLY accept a row with an allowed role —
+              // never fall back to an arbitrary (wrong-role) contact.
+              let pick;
               if (Array.isArray(r.related.roles) && r.related.roleField) {
-                const m = rows.find((x) => r.related.roles.includes(x[r.related.roleField]));
-                if (m) pick = m;
+                pick = rows.find((x) => r.related.roles.includes(x[r.related.roleField])) || null;
+              } else {
+                pick = rows[0] || null;
               }
               if (pick) email = String(pick[r.related.emailField] || '');
             } catch { /* skip this record */ }

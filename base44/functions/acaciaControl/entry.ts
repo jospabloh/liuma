@@ -189,6 +189,54 @@ Deno.serve(async (req) => {
         }
       }
 
+      case 'tickets.list': {
+        // List an app's support tickets (service-role). MC owns the per-app field
+        // mapping; this returns the raw records. Read-only.
+        const entity = params.entity;
+        if (!entity) return Response.json({ error: 'params.entity required' }, { status: 400 });
+        const records = await sr.entities[entity].list(params.order || '-created_date', COUNT_CAP);
+        return Response.json({ ok: true, records });
+      }
+
+      case 'tickets.thread': {
+        // Messages of one ticket, for apps with a SEPARATE message entity
+        // (puntos/liuma). Rumbo stores the thread inline so MC never calls this.
+        const messageEntity = params.messageEntity;
+        const fkField = params.fkField;
+        const ticketId = params.ticketId;
+        if (!messageEntity || !fkField || !ticketId) return Response.json({ error: 'params.messageEntity/fkField/ticketId required' }, { status: 400 });
+        const records = await sr.entities[messageEntity].filter({ [fkField]: ticketId });
+        return Response.json({ ok: true, records });
+      }
+
+      case 'tickets.update': {
+        // Reply to and/or change the status of a ticket (service-role, HMAC-gated).
+        // MC owns the per-app shape: optionally create a message row (separate-entity
+        // apps), optionally append to an inline array (rumbo `responses`), and patch
+        // the ticket (status / activity / counters). Returns the updated row.
+        const entity = params.entity;
+        const id = params.id;
+        if (!entity || !id) return Response.json({ error: 'params.entity/id required' }, { status: 400 });
+        if (params.messageEntity && params.message && typeof params.message === 'object') {
+          await sr.entities[params.messageEntity].create(params.message);
+        }
+        const patch = (params.patch && typeof params.patch === 'object') ? { ...params.patch } : {};
+        if (params.appendField && params.appendItem && typeof params.appendItem === 'object') {
+          // Append to an inline array on the ticket. Read the LIVE array first so a
+          // concurrent customer reply isn't lost; fall back to MC's snapshot.
+          let arr = null;
+          try {
+            const cur = await sr.entities[entity].get(id);
+            if (Array.isArray(cur?.[params.appendField])) arr = cur[params.appendField];
+          } catch { /* get unavailable — use the snapshot below */ }
+          if (arr === null && Array.isArray(params.currentArray)) arr = params.currentArray;
+          if (arr === null) arr = [];
+          patch[params.appendField] = [...arr, params.appendItem];
+        }
+        const updated = Object.keys(patch).length ? await sr.entities[entity].update(id, patch) : null;
+        return Response.json({ ok: true, updated });
+      }
+
       // Fase 6 — writes land here, e.g. 'license.activate' / 'license.suspend'.
 
       default:

@@ -8,6 +8,8 @@ import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-route
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import ContinueAs from '@/components/auth/ContinueAs';
+import { getRememberedIdentity } from '@/lib/lastIdentity';
 import GuardedRoute from '@/components/GuardedRoute';
 import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 
@@ -51,7 +53,11 @@ const AuthenticatedApp = () => {
   // double-fire under StrictMode / concurrent rendering.
   useEffect(() => {
     if (authError?.type === 'auth_required') {
-      navigateToLogin();
+      // If we remember the last user, show the "Continuar como" card (rendered
+      // below) instead of bouncing straight to the hosted login.
+      if (!getRememberedIdentity()) {
+        navigateToLogin();
+      }
     }
   }, [authError, navigateToLogin]);
 
@@ -69,7 +75,10 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Redirect handled by the effect above; render nothing meanwhile.
+      // Remembered user → friendly card; otherwise the effect above redirects.
+      if (getRememberedIdentity()) {
+        return <ContinueAs />;
+      }
       return null;
     }
   }

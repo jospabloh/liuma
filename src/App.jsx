@@ -52,10 +52,12 @@ const AuthenticatedApp = () => {
   // navigateToLogin() in the render body is a React anti-pattern that can
   // double-fire under StrictMode / concurrent rendering.
   useEffect(() => {
-    // If we remember the last user, show the "Continuar como" card instead of
-    // bouncing straight to the hosted login (handled in the render below).
-    if (authError?.type === 'auth_required' && !getRememberedIdentity()) {
-      navigateToLogin();
+    if (authError?.type === 'auth_required') {
+      // If we remember the last user, show the "Continuar como" card (rendered
+      // below) instead of bouncing straight to the hosted login.
+      if (!getRememberedIdentity()) {
+        navigateToLogin();
+      }
     }
   }, [authError, navigateToLogin]);
 

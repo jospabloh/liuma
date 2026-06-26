@@ -49,7 +49,14 @@
   ],
   "rls": {
     "create": {
-      "data.user_id": "{{user.id}}"
+      "$and": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        }
+      ]
     },
     "read": {
       "$or": [

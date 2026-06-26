@@ -97,6 +97,24 @@ Deno.serve(async (req) => {
         }
       }
 
+      case 'license.set': {
+        // Mission Control writes a tenant's license (service-role, HMAC-gated).
+        // MC owns the per-app field mapping and builds `patch`; optional `log`
+        // appends an audit row (e.g. puntos LicenseEvent). Returns the updated row.
+        const entity = params.entity;
+        const id = params.id;
+        const patch = params.patch;
+        if (!entity || !id || !patch || typeof patch !== 'object') {
+          return Response.json({ error: 'params.entity/id/patch required' }, { status: 400 });
+        }
+        const updated = await sr.entities[entity].update(id, patch);
+        const log = params.log;
+        if (log && log.entity && log.row && typeof log.row === 'object') {
+          try { await sr.entities[log.entity].create(log.row); } catch { /* audit best-effort */ }
+        }
+        return Response.json({ ok: true, updated });
+      }
+
       // Fase 6 — writes land here, e.g. 'license.activate' / 'license.suspend'.
 
       default:

@@ -166,6 +166,29 @@ Deno.serve(async (req) => {
         return Response.json({ ok: true, contacts });
       }
 
+      case 'usage.byTenant': {
+        // Per-tenant consumption: count records of an entity grouped by its tenant
+        // FK field. Privacy: returns ONLY { tenant id, count } — no record data.
+        const entity = params.entity;
+        const field = params.tenantField;
+        if (!entity || !field) return Response.json({ error: 'params.entity/tenantField required' }, { status: 400 });
+        try {
+          const rows = await sr.entities[entity].list('-created_date', COUNT_CAP);
+          const counts: Record<string, number> = {};
+          for (const r of rows) {
+            const k = r?.[field];
+            if (k) counts[String(k)] = (counts[String(k)] ?? 0) + 1;
+          }
+          const top = Object.entries(counts)
+            .map(([id, count]) => ({ id, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 50);
+          return Response.json({ ok: true, entity, field, top, capped: rows.length >= COUNT_CAP });
+        } catch (e) {
+          return Response.json({ ok: true, top: [], note: (e as Error).message });
+        }
+      }
+
       // Fase 6 — writes land here, e.g. 'license.activate' / 'license.suspend'.
 
       default:

@@ -51,10 +51,19 @@
       }
     },
     "read": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        }
+      ]
     },
     "update": {
       "data.school_id": "{{user.data.school_id}}",

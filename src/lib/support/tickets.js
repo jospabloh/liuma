@@ -205,6 +205,10 @@ export async function createSupportTicket({
     },
   });
 
+  // Push en tiempo real a ACACIA Mission Control (no bloquea el flujo): refleja
+  // el ticket sin sincronización manual y dispara la alerta unificada al soporte.
+  base44.functions.invoke('notifyTicketCreated', { ticketId: ticket.id }).catch(() => {});
+
   return ticket;
 }
 

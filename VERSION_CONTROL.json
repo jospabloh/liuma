@@ -1,10 +1,10 @@
 {
   "product": "LIUMA",
-  "version": "1.4.1",
-  "previousVersion": "1.4.0",
-  "releaseDate": "2026-06-23",
+  "version": "1.4.2",
+  "previousVersion": "1.4.1",
+  "releaseDate": "2026-07-02",
   "semverBump": "patch",
-  "bumpRationale": "RLS hardening (round 5): closes 4 critical Base44 security-scan findings by granting platform-owner (role:admin) coverage on platform-governed entities — School create/delete, SchoolSubscription create, SupportTicket read/update/delete across schools, SupportTicketMessage read-all. Applied to the Base44 backend via the entity-schema API and mirrored in base44/entities/*.jsonc; existing parent/school-admin access preserved, no tenant create path widened. Backend RLS only; no source-code behavior change. See docs/rls-hardening-2026-06-23.md.",
+  "bumpRationale": "Automated security and quality audit (2026-07-02): dependency security fixes — @babel/core Arbitrary File Read (Low, GHSA-4x5r-pxfx-6jf8) resolved; dompurify moderate vulnerabilities (GHSA-vxr8-fq34-vvx9, GHSA-gvmj-g25r-r7wr, GHSA-cmwh-pvxp-8882) resolved via npm audit fix. No source-code behavior change. All 246 tests pass; RLS validation green; release gate green.",
   "architecture": {
     "type": "single-page application",
     "runtime": "browser (client-side only; no application server)",

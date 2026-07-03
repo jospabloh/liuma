@@ -1,25 +1,26 @@
 {
   "product": "LIUMA",
-  "version": "1.4.2",
-  "previousVersion": "1.4.1",
-  "releaseDate": "2026-07-02",
-  "semverBump": "patch",
-  "bumpRationale": "Automated security and quality audit (2026-07-02): dependency security fixes — @babel/core Arbitrary File Read (Low, GHSA-4x5r-pxfx-6jf8) resolved; dompurify moderate vulnerabilities (GHSA-vxr8-fq34-vvx9, GHSA-gvmj-g25r-r7wr, GHSA-cmwh-pvxp-8882) resolved via npm audit fix. No source-code behavior change. All 246 tests pass; RLS validation green; release gate green.",
+  "version": "1.5.0",
+  "previousVersion": "1.4.2",
+  "releaseDate": "2026-07-03",
+  "semverBump": "minor",
+  "bumpRationale": "Security hardening (2026-07-03): server-authoritative maker-checker for UserProfile.app_role changes. New Base44 backend function governRoleChange enforces role-change requests and approvals with the service role, closing the client-side-only enforcement of findings C1 (self/cross-elevation to ADMIN) and C2 (self-approval of a PendingChange) for the app UI. PermisosRoles now routes every role request and approval through the function; shared rules live in src/lib/authorization/roleGovernance.js and are unit-tested. Full raw-SDK closure additionally requires a per-field RLS lock on app_role plus onboarding rerouting, staged for owner deploy — see docs/security-role-governance-remediation.md. All 263 tests pass; lint clean; RLS validation green (31 entities); release gate green (23/23).",
   "architecture": {
     "type": "single-page application",
-    "runtime": "browser (client-side only; no application server)",
+    "runtime": "browser (client-side only; no application server) + Base44 backend functions for privileged mutations",
     "framework": "React 18 + Vite",
     "router": "react-router-dom v6",
     "styling": "Tailwind CSS + shadcn/ui",
     "platform": "base44 SDK",
-    "enforcementBoundary": "base44 Row-Level Security (RLS) in base44/entities/*.jsonc",
-    "language": "JavaScript / JSX (type-checked via jsconfig)"
+    "enforcementBoundary": "base44 Row-Level Security (RLS) in base44/entities/*.jsonc + service-role backend functions in base44/functions/*",
+    "language": "JavaScript / JSX (type-checked via jsconfig); Deno TypeScript for backend functions"
   },
   "inventory": {
     "pages": 38,
     "entities": 31,
     "agents": 1,
-    "tests": 246,
+    "functions": 3,
+    "tests": 263,
     "assistantSkills": {
       "note": "The sibling claude-skills repo holds 48 generic Anthropic/Claude authoring skills (pdf, xlsx, brainstorming, math-olympiad, ...). They are assistant tooling used to BUILD Liuma — NOT features of the application, not integrated into it, and not listed in the user manual.",
       "count": 48
@@ -35,6 +36,7 @@
     "changelog": "CHANGELOG.md",
     "userManual": "USER_MANUAL.md",
     "securityAudit": "docs/security-audit-2026-06-21.md",
+    "roleGovernanceRemediation": "docs/security-role-governance-remediation.md",
     "authorizationMatrix": "docs/authorization-matrix.md"
   }
 }

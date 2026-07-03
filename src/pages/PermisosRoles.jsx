@@ -19,6 +19,7 @@ import {
 } from '@/lib/authorization/overrides';
 import { getEffectivePolicyDecision } from '@/lib/authorization/policy';
 import { hasOtherActiveAdminWithManagePermissions } from '@/lib/authorization/adminSafety';
+import { validateRoleChangeRequest, validateRoleChangeDecision } from '@/lib/authorization/roleGovernance';
 import { DANGER_ZONE_OPERATIONS, getRollbackPolicy } from '@/lib/authorization/tenantDangerZone';
 
 const RESOURCES = [
@@ -117,7 +118,6 @@ export default function PermisosRoles() {
   const isAdminRoleChange = selectedProfile && (selectedProfile.app_role === 'ADMIN' || selectedRole === 'ADMIN');
   const overrideTargetProfile = schoolProfiles.find((profile) => profile.id === overrideForm.user_profile_id) || null;
   const isOverrideTargetAdmin = overrideTargetProfile?.app_role === 'ADMIN';
-  const isAppOwner = selectedProfile?.user_id === userProfile?.user_id;
   const isSelfRoleChange = selectedProfile?.id === userProfile?.id;
   const isSelfAdminDemotion = isSelfRoleChange && selectedProfile?.app_role === 'ADMIN' && selectedRole !== 'ADMIN';
   const isLastManagePermissionsAdminAtRisk = selectedProfile?.app_role === 'ADMIN' && selectedRole !== 'ADMIN' && !hasOtherActiveAdminWithManagePermissions({
@@ -275,36 +275,38 @@ export default function PermisosRoles() {
       setErrorText('Ya existe una solicitud pendiente para este usuario.');
       return;
     }
+    // Shared maker-checker rules (mirrored server-side in governRoleChange).
+    const requestValidation = validateRoleChangeRequest({
+      requesterProfile: userProfile,
+      targetProfile: selectedProfile,
+      toRole: selectedRole,
+      profiles: schoolProfiles,
+    });
+    if (!requestValidation.ok) {
+      setErrorText(requestValidation.message);
+      return;
+    }
     if (isAdminRoleChange && !requireExplicitConfirmation('Confirmación de alto riesgo: este cambio modifica privilegios ADMIN. ¿Deseas continuar?')) {
       return;
     }
     setErrorText('');
     setIsUpdatingRole(true);
     try {
-      if (isAppOwner) {
-        await base44.entities.UserProfile.update(selectedProfile.id, { app_role: selectedRole });
-      } else {
-        const isHighRiskChange = selectedProfile.app_role === 'ADMIN' || selectedRole === 'ADMIN';
-        await base44.entities[PENDING_CHANGE_ENTITY].create({
-          school_id: userProfile.school_id,
-          type: 'ROLE_CHANGE',
-          status: isHighRiskChange ? PENDING_CHANGE_STATUSES.PENDING_SECOND_ADMIN_APPROVAL : PENDING_CHANGE_STATUSES.PENDING_ADMIN_APPROVAL,
-          requester_profile_id: userProfile.id,
-          requester_user_id: user.id,
-          target_profile_id: selectedProfile.id,
-          payload: {
-            from_role: selectedProfile.app_role,
-            to_role: selectedRole,
-            risk_level: isHighRiskChange ? 'HIGH' : 'NORMAL',
-          },
-        });
-      }
+      // Role mutations go exclusively through the server-authoritative function;
+      // it re-validates and creates the PendingChange with the service role, so
+      // the maker-checker cannot be bypassed from the client (findings C1/C2).
+      await base44.functions.invoke('governRoleChange', {
+        action: 'request',
+        targetProfileId: selectedProfile.id,
+        toRole: selectedRole,
+        reason: reasonText.trim(),
+      });
       await logAuditEvent({
         user,
         userProfile,
         entity: AUDIT_ENTITIES.USER_PROFILE,
         entityId: selectedProfile.id,
-        action: isAppOwner ? 'ROLE_CHANGED_OWNER_BYPASS' : 'ROLE_CHANGE_REQUESTED',
+        action: 'ROLE_CHANGE_REQUESTED',
         reason: reasonText.trim(),
         context: {
           from_role: selectedProfile.app_role,
@@ -330,18 +332,27 @@ export default function PermisosRoles() {
       });
       await refetchPendingRoleChanges();
       await refetchSchoolProfiles();
-      toast.success(isAppOwner ? 'Rol actualizado correctamente' : 'Solicitud de cambio enviada');
+      toast.success('Solicitud de cambio enviada');
       setReasonText('');
     } catch (error) {
-      toast.error('No se pudo actualizar el rol');
+      toast.error(error?.data?.error || 'No se pudo enviar la solicitud de cambio');
     } finally {
       setIsUpdatingRole(false);
     }
   };
   const handlePendingRoleChangeDecision = async (change, decision) => {
-    const isRequester = change.requester_profile_id === userProfile.id;
-    if (isRequester) {
-      toast.error('El aprobador no puede ser el mismo solicitante.');
+    const targetProfile = schoolProfiles.find((profile) => profile.id === change.target_profile_id);
+    // Shared maker-checker rules (mirrored server-side in governRoleChange):
+    // closes C2 by rejecting a decision where the approver is the requester.
+    const decisionValidation = validateRoleChangeDecision({
+      change,
+      approverProfile: userProfile,
+      targetProfile,
+      profiles: schoolProfiles,
+      decision,
+    });
+    if (!decisionValidation.ok) {
+      toast.error(decisionValidation.message);
       return;
     }
     if (decision === 'approve' && !requireExplicitConfirmation('Confirmación: aprobar este cambio aplicará el nuevo rol inmediatamente. ¿Continuar?')) {
@@ -349,26 +360,16 @@ export default function PermisosRoles() {
     }
     setPendingDecisionByChangeId((prev) => ({ ...prev, [change.id]: true }));
     try {
-      const targetProfile = schoolProfiles.find((profile) => profile.id === change.target_profile_id);
-      const approvesAdminDemotion = decision === 'approve' && targetProfile?.app_role === 'ADMIN' && change.payload?.to_role !== 'ADMIN';
-      if (approvesAdminDemotion && !hasOtherActiveAdminWithManagePermissions({
-        profiles: schoolProfiles,
-        actorProfileId: userProfile?.id,
-        targetProfileId: targetProfile?.id,
-      })) {
-        toast.error('Bloqueado: debe existir otro ADMIN activo con manage_permissions antes de aprobar este cambio.');
-        return;
-      }
-      const updateData = {
-        status: decision === 'approve' ? PENDING_CHANGE_STATUSES.APPROVED : PENDING_CHANGE_STATUSES.REJECTED,
-        approver_profile_id: userProfile.id,
-        approver_user_id: user.id,
-        approved_at: new Date().toISOString(),
-      };
-      await base44.entities[PENDING_CHANGE_ENTITY].update(change.id, updateData);
-      if (decision === 'approve') {
-        await base44.entities.UserProfile.update(change.target_profile_id, { app_role: change.payload?.to_role });
-      }
+      // The server function re-checks approver != requester and applies the role
+      // with the service role; the client never writes the approval directly.
+      await base44.functions.invoke('governRoleChange', {
+        action: 'decide',
+        changeId: change.id,
+        decision,
+      });
+      const resolvedStatus = decision === 'approve'
+        ? PENDING_CHANGE_STATUSES.APPROVED
+        : PENDING_CHANGE_STATUSES.REJECTED;
       await logAuditEvent({
         user,
         userProfile,
@@ -379,7 +380,7 @@ export default function PermisosRoles() {
         context: buildPermissionChangeContext({
           changeType: 'ROLE_CHANGE_REVIEW',
           before: { app_role: change.payload?.from_role, status: change.status },
-          after: { app_role: change.payload?.to_role, status: updateData.status },
+          after: { app_role: change.payload?.to_role, status: resolvedStatus },
           actorProfileId: change.requester_profile_id,
           reviewerProfileId: userProfile.id,
           reason: `ROLE_CHANGE_${decision.toUpperCase()}`,
@@ -389,6 +390,8 @@ export default function PermisosRoles() {
       await refetchPendingRoleChanges();
       await refetchSchoolProfiles();
       toast.success(decision === 'approve' ? 'Cambio aprobado' : 'Cambio rechazado');
+    } catch (error) {
+      toast.error(error?.data?.error || 'No se pudo resolver la solicitud');
     } finally {
       setPendingDecisionByChangeId((prev) => ({ ...prev, [change.id]: false }));
     }

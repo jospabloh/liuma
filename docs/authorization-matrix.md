@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-06-22 · Version 1.2.0**
+**Last updated: 2026-07-02 · Version 1.4.2**
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -236,6 +236,8 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 | C2 — Requester can approve their own `PendingChange` | Critical | Open — `update` RLS only checks `school_id + app_role == ADMIN`; approver ≠ requester rule is client-only. Fix requires RLS field check or backend function. See `docs/security-audit-2026-06-21.md`. |
 | `ConsentRecord` entity referenced in code but not created in Base44 | Low | Open — `privacyNotice.js` writes consent to `ConsentRecord` best-effort with `AuditLog` as fallback; consent is recorded even before the entity exists. Owner action: create `ConsentRecord` entity in Base44 Builder (schema in `src/lib/consent/privacyNotice.js`). |
 | Support routes / SupportTicket entity missing from authorization matrix | Low | Fixed (v1.2.0) — Soporte/SoporteAdmin/PanelSoporte/LicenseAdmin routes added; SupportTicket/SupportTicketMessage entities added; support_request Lumi capability added |
+| `@babel/core` ≤ 7.29.0 Arbitrary File Read (`GHSA-4x5r-pxfx-6jf8`) | Low | Fixed (v1.4.2) — build-toolchain dependency; not in deployed runtime. Resolved via `npm audit fix`. |
+| `dompurify` ≤ 3.4.10 Trusted Types / SAFE_FOR_TEMPLATES / ALLOWED_ATTR bypass (3 Moderate advisories) | Moderate | Fixed (v1.4.2) — transitive build dependency; resolved via `npm audit fix`. |
 
 > **2026-06-04 — Backend RLS hardening:** the Base44 entity-schema RLS rules were
 > tightened to fix 9 critical findings from the Base44 security scan (ChargeItem,

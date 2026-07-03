@@ -5,6 +5,28 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.4.2] - 2026-07-02
+
+### Security (dependency updates)
+
+Automated security audit resolved dependency vulnerabilities via `npm audit fix`.
+No application behavior changes. All 246 tests pass; RLS validation green; release gate green.
+
+- **`@babel/core` ≤ 7.29.0 — Arbitrary File Read (Low)** — `GHSA-4x5r-pxfx-6jf8`.
+  Resolved via transitive update; `@babel/core` is a build-only toolchain dependency,
+  not in the deployed runtime.
+- **`dompurify` ≤ 3.4.10 — three Moderate advisories** resolved via transitive update:
+  - `GHSA-vxr8-fq34-vvx9`: Trusted Types policy survives `clearConfig()`
+  - `GHSA-gvmj-g25r-r7wr`: `SAFE_FOR_TEMPLATES` bypass in `<template>` content
+  - `GHSA-cmwh-pvxp-8882`: Permanent `ALLOWED_ATTR` pollution via `setConfig()`
+
+**Remaining accepted vulnerabilities (unchanged):**
+- `quill` ≤ 1.3.7 / `react-quill` XSS (Moderate) — breaking fix requires replacing
+  the rich-text editor; deferred. Risk is mitigated: the editor is accessible only to
+  authenticated ADMIN and TEACHER users within their own school tenant.
+
+---
+
 ## [1.4.1] - 2026-06-23
 
 ### Security (RLS hardening, round 5)

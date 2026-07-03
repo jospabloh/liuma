@@ -5,6 +5,53 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.5.0] - 2026-07-03
+
+### Security (role-change governance — findings C1 / C2)
+
+Moves LIUMA's maker-checker for `UserProfile.app_role` from client-only enforcement
+to a server-authoritative Base44 backend function. Previously the request →
+second-admin-approval → apply flow was enforced only in the `PermisosRoles` UI, so a
+direct SDK call could bypass it.
+
+- **C1 — privilege escalation to ADMIN.** The `UserProfile.update` RLS rule grants
+  every admin — and, through its self-branch (`data.user_id == {{user.id}}`), *any*
+  authenticated user — write access to `app_role`. A raw
+  `UserProfile.update({ app_role: 'ADMIN' })` bypassed the approval flow. (Broader
+  than originally reported, which described only admin→any elevation.)
+- **C2 — self-approval of a `PendingChange`.** The "approver ≠ requester" rule lived
+  only in the client; Base44 RLS cannot express a field-to-field comparison
+  (`approver_profile_id != requester_profile_id`), so a requester could approve their
+  own request via the SDK.
+
+**Changes**
+- New backend function `base44/functions/governRoleChange/entry.ts` — the sole
+  sanctioned path for role mutations. It establishes the caller's identity from
+  `base44.auth.me()`, re-reads state with the service role, enforces admin-only,
+  approver ≠ requester (checked on both profile id and user id), last-admin
+  protection, tenant isolation, and duplicate-open-request rejection, then applies
+  the mutation with the service role.
+- `src/lib/authorization/roleGovernance.js` — shared, framework-agnostic maker-checker
+  predicates (mirrored inside the function), unit-tested in
+  `tests/unit/role-governance.test.js` (17 cases).
+- `PermisosRoles.jsx` now routes every role-change request and approval/rejection
+  through `governRoleChange`; the client no longer writes `app_role` or
+  `PendingChange` approvals directly. Self role-changes are no longer applied
+  instantly — they go through the same approval flow.
+
+**Requires owner deploy (see `docs/security-role-governance-remediation.md`):**
+- Deploy `governRoleChange` to the Base44 backend **before** merging (functions do not
+  auto-deploy from GitHub). Until it is live, the wired UI depends on it.
+- Full closure of the raw-SDK bypass additionally needs a per-field RLS lock on
+  `UserProfile.app_role` (and `PendingChange` status/approver fields) plus routing
+  onboarding's initial role write through a service-role function. This schema change
+  puts onboarding in the blast radius and is staged for owner review/verification
+  against the live backend rather than blind-deployed.
+
+All 263 tests pass; lint clean; RLS validation green (31 entities); release gate green.
+
+---
+
 ## [1.4.2] - 2026-07-02
 
 ### Security (dependency updates)

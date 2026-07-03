@@ -23,7 +23,14 @@
         "REJECTED"
       ],
       "default": "PENDING_ADMIN_APPROVAL",
-      "description": "Estado de la solicitud"
+      "description": "Estado de la solicitud",
+      "rls": {
+        "update": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "requester_profile_id": {
       "type": "string",
@@ -39,16 +46,37 @@
     },
     "approver_profile_id": {
       "type": "string",
-      "description": "UserProfile ID de quien aprueba/rechaza"
+      "description": "UserProfile ID de quien aprueba/rechaza",
+      "rls": {
+        "update": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "approver_user_id": {
       "type": "string",
-      "description": "User ID de quien aprueba/rechaza"
+      "description": "User ID de quien aprueba/rechaza",
+      "rls": {
+        "update": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "approved_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Cu\u00e1ndo se resolvi\u00f3"
+      "description": "Cu\u00e1ndo se resolvi\u00f3",
+      "rls": {
+        "update": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "payload": {
       "type": "object",

@@ -5,6 +5,51 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.6.0] - 2026-07-03
+
+### Security (full closure of role-escalation findings C1 / C2)
+
+Completes what v1.5.0 started. v1.5.0 moved the maker-checker to a server function
+but the **raw-SDK bypass stayed open** because Base44 RLS gates rows, not fields.
+This release closes it with **field-level RLS (FLS)** plus an onboarding reroute.
+
+- **C1 — closed.** `UserProfile.app_role` now carries FLS `write` restricted to the
+  service role (`{"user_condition":{"role":"admin"}}`). Tenant admins (built-in
+  `role: user`) and regular users can no longer write `app_role` directly — only the
+  service-role functions can. Other fields (`status`, `welcome_message_shown`, …) stay
+  writable, so admin user-activation in `Aprobaciones` and self-writes in `Home` are
+  unaffected.
+- **C2 — closed (defense-in-depth).** `PendingChange` `status`, `approver_profile_id`,
+  `approver_user_id`, and `approved_at` now carry FLS `update` restricted to the service
+  role, so an approval can only be written by `governRoleChange`. A forged approval is
+  rejected, and even if one slipped through, the FLS lock on `app_role` means it can no
+  longer apply a role.
+
+**Onboarding reroute (required by the field lock)**
+- New backend function `base44/functions/provisionOnboardingProfile/entry.ts` — onboarding
+  self-wrote `app_role`, which the FLS lock now blocks, so the initial role assignment
+  moves to this service-role function. It provisions **only the caller's own** profile and
+  enforces the single privileged rule: a user may be provisioned as **ADMIN only as the
+  founder of a brand-new school** (a school they created, with no other active admin).
+  Everyone else joins an existing school as TEACHER/PARENT with status **PENDING** and must
+  be activated by an admin. Existing profiles are never re-roled by onboarding.
+- Shared rules in `src/lib/authorization/onboardingProvision.js`, unit-tested in
+  `tests/unit/onboarding-provision.test.js`. `onboardingTenantCreation.js` now calls the
+  function instead of writing `UserProfile` directly.
+
+**⚠️ Ordered owner deploy (see `docs/security-role-governance-remediation.md`)**
+Deploy in this order or you WILL break production:
+1. Deploy the functions first — `governRoleChange` (from v1.5.0, if not already live) **and**
+   `provisionOnboardingProfile`. Functions do not auto-deploy from GitHub.
+2. Then deploy the schema (the FLS changes on `UserProfile` + `PendingChange`).
+3. Verify onboarding (founder + joiner) and a role change end-to-end against the live backend.
+Deploying the FLS schema before the functions exist blocks onboarding and role changes.
+
+All 271 tests pass; lint clean; RLS validation green (31 entities); release gate green;
+typecheck clean; build succeeds.
+
+---
+
 ## [1.5.0] - 2026-07-03
 
 ### Security (role-change governance — findings C1 / C2)

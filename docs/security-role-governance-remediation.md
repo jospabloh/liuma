@@ -1,6 +1,10 @@
 # Role-change governance remediation (findings C1 / C2)
 
-**Date:** 2026-07-03 · **Version:** 1.5.0 · **Scope:** `UserProfile.app_role` maker-checker
+**Date:** 2026-07-03 · **Versions:** 1.5.0 (server function) + 1.6.0 (field-level RLS + onboarding reroute) · **Scope:** `UserProfile.app_role` maker-checker
+
+> **Status (v1.6.0):** C1 and C2 are now fully closed in the repo. The raw-SDK bypass is
+> shut by field-level RLS; onboarding is rerouted so the lock doesn't break signup. This
+> requires an **ordered** owner deploy (functions first, then schema) — see §3.
 
 This document is the authoritative record for the two open critical findings from the
 2026-07-02 audit (PR #141), including a correction to how C1 was originally described,
@@ -84,84 +88,82 @@ The sanctioned, server-authoritative path.
 **Effect:** the UI-reachable maker-checker is now enforced server-side. A user driving
 the app can no longer self-approve or skip the second-admin step.
 
-**Not yet closed by this PR:** the *raw-SDK* bypass in §1 (direct `UserProfile.update`
-of `app_role`; direct `PendingChange.update`). Closing it requires the per-field RLS
-lock in §3, which is deliberately staged rather than blind-deployed.
+## 2b. What v1.6.0 adds (the raw-SDK closure)
+
+- **Field-level RLS (FLS) on `UserProfile.app_role`** — `write` restricted to the service
+  role (`{"user_condition":{"role":"admin"}}`). Base44 FLS gates the *field*, so the
+  entity-level `update` rule stays intact: admins can still write `status` (activation in
+  `Aprobaciones.jsx`) and users can still self-write `welcome_message_shown` /
+  `onboarding_completed` — only `app_role` is locked. In LIUMA the app role lives in
+  `data.app_role`; the built-in `role` is what `asServiceRole` evaluates as (`admin`), and
+  tenant admins carry built-in `role: user`, so this excludes them from writing `app_role`
+  while still allowing the service-role functions.
+- **FLS on `PendingChange` approval fields** — `status`, `approver_profile_id`,
+  `approver_user_id`, `approved_at` get `update` restricted to the service role, so an
+  approval can only be written by `governRoleChange`.
+- **`provisionOnboardingProfile`** backend function — onboarding self-wrote `app_role`,
+  which the field lock now blocks, so the initial role assignment moves server-side. It
+  provisions only the caller's own profile and enforces founder-only ADMIN (a school the
+  caller created, with no other active admin); joiners land TEACHER/PARENT **PENDING** for
+  admin approval. Existing profiles are never re-roled by onboarding. Shared rules:
+  `src/lib/authorization/onboardingProvision.js` (unit-tested).
+
+With 2 + 2b in place the raw bypass is closed: a client cannot set `app_role` (FLS) and
+cannot forge an approval that applies a role (FLS + governance).
 
 ---
 
-## 3. Follow-up the owner must review and deploy (staged)
+## 3. Ordered owner deploy — DO THIS IN ORDER
 
-### 3a. Deploy `governRoleChange` — **before merging this PR**
+Base44 functions do **not** auto-deploy from GitHub, and deploying the FLS schema before
+the functions exist will block onboarding and role changes. From a machine with Base44
+network access:
 
-Base44 functions do **not** auto-deploy from GitHub. The wired UI depends on the
-function, so deploy it first (from a machine with Base44 network access):
+### Step 1 — deploy the functions FIRST
 
 ```bash
-git pull origin <this-branch>
+git pull origin main
 npx base44 functions deploy --app-id 696e967c430ceb6a2232ffd8 --force
-npx base44 functions list  --app-id 696e967c430ceb6a2232ffd8   # expect governRoleChange present
+npx base44 functions list  --app-id 696e967c430ceb6a2232ffd8
+# expect: governRoleChange AND provisionOnboardingProfile present; total ≤ 50
 ```
 
-### 3b. Per-field RLS lock on `app_role` (closes the C1 raw bypass)
+### Step 2 — deploy the schema (FLS) SECOND
 
-Lock the `app_role` **field** to the service role so only `governRoleChange` can write
-it, while leaving the entity-level `update` rule intact (admins still need it to write
-`status` — user activation in `Aprobaciones.jsx` — and users still self-write
-`welcome_message_shown`, `onboarding_completed`, etc.). Illustrative shape:
+Deploy the updated `UserProfile` and `PendingChange` schemas (the field-level `rls`
+blocks). Either `npx base44 entities push` (or `base44 deploy`), or the Base44 MCP
+`update_entity_schema`. Because `update_entity_schema` removes omitted properties, send
+the **full** property set for each entity (the repo `.jsonc` is the source of truth), and
+remember it **preserves** entity-level and per-field `rls` only when omitted — here we are
+intentionally changing per-field `rls`, so include it.
 
-```jsonc
-// UserProfile.app_role property
-"app_role": {
-  "type": "string",
-  "enum": ["ADMIN", "TEACHER", "PARENT"],
-  "default": "PARENT",
-  "rls": {
-    "write": { "user_condition": { "role": "admin" } }  // service role only
-  }
-}
-```
+### Step 3 — verify end-to-end against the live backend
 
-> Verify the exact per-field RLS syntax and the built-in `role` mapping against the live
-> backend before deploying. In LIUMA the *app* role lives in `data.app_role`; the
-> built-in `role` is what `asServiceRole` evaluates as (`admin`). Confirm that a regular
-> app-ADMIN does **not** carry built-in `role: admin`, or the lock will not actually
-> exclude them.
-
-**Blast-radius dependency:** onboarding self-writes `app_role`
-(`src/lib/onboardingTenantCreation.js → upsertUserProfile`). Locking the field breaks
-first-run onboarding unless the initial role assignment is first rerouted through a
-service-role function (e.g. an `assignInitialRole` action that only lets a user set
-their own role when they have no existing ACTIVE profile). **Do 3b and the onboarding
-reroute together, and verify against the live backend** — do not deploy the lock alone.
-
-### 3c. Per-field lock on `PendingChange` approval fields (defense-in-depth for C2)
-
-Lock `status`, `approver_profile_id`, `approver_user_id`, `approved_at` to the service
-role so approvals can only be written by `governRoleChange`. Leave `create` admin-open
-so requests still work. This is optional once 3b is in place (a locked `app_role` means
-a forged approval can no longer apply a role), but it keeps the audit trail honest.
+- Founder onboarding → becomes ACTIVE ADMIN of their new school.
+- Joiner onboarding (TEACHER/PARENT) → lands PENDING; admin activates via Aprobaciones.
+- Role request + second-admin approval → applies; self-approval is rejected.
+- Direct SDK `UserProfile.update({app_role:'ADMIN'})` as a non-service user → rejected.
 
 ---
 
-## 4. Why staged rather than blind-deployed
+## 4. Why this was staged across two releases
 
 LIUMA is a live multi-tenant app (real schools, parents, students). The portfolio's own
 notes document multiple outages caused by narrowing live RLS rules without end-to-end
-verification. The §3 changes put **onboarding** and **user activation** in the blast
-radius and cannot be exercised end-to-end from this environment. Shipping the additive,
-fully-tested server function now — and handing over the exact schema + deploy steps for
-the RLS lock — closes the UI-reachable hole immediately while keeping the higher-risk
-change under owner review, matching this codebase's "repo change + separate,
-verified deploy" discipline.
+verification. v1.5.0 shipped the additive, fully-tested server function first (no
+onboarding blast radius); v1.6.0 adds the field lock together with the onboarding reroute
+that keeps signup working, and hands over a strict ordered deploy. This matches the
+codebase's "repo change + separate, verified deploy" discipline — the field lock is never
+live before the functions that make it survivable.
 
 ---
 
-## 5. Verification performed for 1.5.0
+## 5. Verification
 
 - `npm run lint` — clean
-- `npm run validate:rls` — 31 entities OK
-- `npm test` — 263/263 pass (was 246; +17 new governance cases)
+- `npm run validate:rls` — 31 entities OK (the guard parses field-level `rls` too)
+- `npm test` — 271/271 pass (v1.5.0 added 17 governance cases; v1.6.0 added 8 onboarding-provision cases)
 - `npm run release:gate` — 23/23 pass
+- `npm run typecheck` — clean
 - `npm run build` — succeeds
-- Deployed `UserProfile` + `PendingChange` schema confirmed identical to repo
+- Deployed `UserProfile` + `PendingChange` schema confirmed identical to repo before the FLS change

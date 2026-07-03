@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-07-03 · Version 1.5.0**
+**Last updated: 2026-07-03 · Version 1.6.0**
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -232,8 +232,8 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 | `VITE_OWNER_EMAIL` / `VITE_OWNER_USER_ID` in client bundle | High | Fixed (v1.0.5 / PR #90) — owner identity moved to server-persisted UserProfile; env vars removed |
 | C3 — `is_super_admin` self-grantable field enabled cross-tenant bypass | Critical | Fixed (v1.2.0 / PR #109) — all `is_super_admin` branches removed from `School` and `SchoolSubscription` RLS; platform owner identified via base44 account `role: admin` which tenants cannot self-assign |
 | C4 — `SchoolSubscription` writes were tenant-admin-writeable (paywall bypass) | Critical | Fixed (v1.2.0 / PR #109) — update/delete restricted to platform owner (`role: admin`); tenant admins retain read access; `welcome_message_shown` moved to `UserProfile` (self-writable) |
-| C1 — Escalation to ADMIN via direct `UserProfile.update` (in fact reachable by *any* user via the self-branch, not only admins) | Critical | UI path fixed (v1.5.0) — role mutations now go through the server-authoritative `governRoleChange` function; direct client writes removed. **Raw-SDK bypass still open** until the per-field RLS lock on `app_role` + onboarding reroute is deployed. See `docs/security-role-governance-remediation.md`. |
-| C2 — Requester can approve their own `PendingChange` | Critical | Fixed for the UI path (v1.5.0) — `governRoleChange` enforces approver ≠ requester (profile id + user id) server-side. RLS cannot express the field-to-field comparison, so a per-field lock on `PendingChange` approval fields is the defense-in-depth follow-up. See `docs/security-role-governance-remediation.md`. |
+| C1 — Escalation to ADMIN via direct `UserProfile.update` (in fact reachable by *any* user via the self-branch, not only admins) | Critical | **Closed (v1.6.0, pending deploy)** — field-level RLS locks `UserProfile.app_role` `write` to the service role; role mutations go through `governRoleChange`, and onboarding's initial role assignment through `provisionOnboardingProfile` (founder-only ADMIN). v1.5.0 first moved the UI path server-side. Requires ordered deploy (functions then schema). See `docs/security-role-governance-remediation.md`. |
+| C2 — Requester can approve their own `PendingChange` | Critical | **Closed (v1.6.0, pending deploy)** — `governRoleChange` enforces approver ≠ requester server-side (v1.5.0), and field-level RLS now locks `PendingChange` `status`/`approver_*`/`approved_at` `update` to the service role so an approval can't be forged. See `docs/security-role-governance-remediation.md`. |
 | `ConsentRecord` entity referenced in code but not created in Base44 | Low | Open — `privacyNotice.js` writes consent to `ConsentRecord` best-effort with `AuditLog` as fallback; consent is recorded even before the entity exists. Owner action: create `ConsentRecord` entity in Base44 Builder (schema in `src/lib/consent/privacyNotice.js`). |
 | Support routes / SupportTicket entity missing from authorization matrix | Low | Fixed (v1.2.0) — Soporte/SoporteAdmin/PanelSoporte/LicenseAdmin routes added; SupportTicket/SupportTicketMessage entities added; support_request Lumi capability added |
 | `@babel/core` ≤ 7.29.0 Arbitrary File Read (`GHSA-4x5r-pxfx-6jf8`) | Low | Fixed (v1.4.2) — build-toolchain dependency; not in deployed runtime. Resolved via `npm audit fix`. |

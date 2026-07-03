@@ -15,7 +15,14 @@
         "TEACHER",
         "PARENT"
       ],
-      "default": "PARENT"
+      "default": "PARENT",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "status": {
       "type": "string",

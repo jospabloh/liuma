@@ -13,6 +13,7 @@ import {
   validateOnboardingPayload,
 } from '../../src/lib/onboardingTenantCreation.js';
 import { DEFAULT_THEME } from '../../src/lib/tenantTheme.js';
+import { resolveOnboardingProvision, buildOnboardingUpsert } from '../../src/lib/authorization/onboardingProvision.js';
 
 const user = { id: 'user-1', email: 'owner@example.com', full_name: 'Owner User' };
 const themePreview = { palette: { primary: '#111111', secondary: '#222222', accent: '#333333', neutral: '#444444' } };
@@ -46,18 +47,54 @@ function createEntity(seed = []) {
   };
 }
 
-function createBase44(seed = {}) {
+function createBase44(seed = {}, actingUser = user) {
+  const entities = {
+    School: createEntity(seed.schools),
+    SchoolSubscription: createEntity(seed.subscriptions),
+    UserProfile: createEntity(seed.profiles),
+    User: createEntity(seed.users),
+    Role: createEntity(seed.roles),
+    PermissionTemplate: createEntity(seed.permissionTemplates),
+    AccessBinding: createEntity(seed.accessBindings),
+  };
+  // Stub for base44.functions.invoke — mimics the provisionOnboardingProfile
+  // backend function against the mock entities, so onboarding tests exercise the
+  // same provisioning rules the service-role function enforces.
+  const functions = {
+    async invoke(name, payload) {
+      if (name !== 'provisionOnboardingProfile') throw new Error(`unexpected function ${name}`);
+      const { schoolId, role, phone } = payload;
+      const school = (await entities.School.filter({ id: schoolId }))[0] || null;
+      const schoolAdmins = await entities.UserProfile.filter({ school_id: schoolId, app_role: 'ADMIN' });
+      const decision = resolveOnboardingProvision({ user: actingUser, school, role, schoolAdmins });
+      if (!decision.ok) {
+        const error = new Error(decision.message);
+        error.code = decision.code;
+        error.status = decision.code === 'ADMIN_NOT_ALLOWED' ? 403 : 400;
+        error.data = { code: decision.code, error: decision.message };
+        throw error;
+      }
+      const existing = (await entities.UserProfile.filter({ user_id: actingUser.id, school_id: schoolId }, '-created_date', 1))[0] || null;
+      const upsert = buildOnboardingUpsert({
+        user: actingUser,
+        schoolId,
+        phone,
+        appRole: decision.appRole,
+        status: decision.status,
+        existingProfile: existing,
+      });
+      if (upsert.action === 'update') {
+        await entities.UserProfile.update(upsert.id, upsert.payload);
+        return { ok: true, profileId: upsert.id, status: existing.status || decision.status };
+      }
+      const created = await entities.UserProfile.create(upsert.payload);
+      return { ok: true, profileId: created.id, status: decision.status };
+    },
+  };
   return {
     integrations: { Core: { UploadFile: async () => ({ file_url: 'https://cdn.test/logo.png' }) } },
-    entities: {
-      School: createEntity(seed.schools),
-      SchoolSubscription: createEntity(seed.subscriptions),
-      UserProfile: createEntity(seed.profiles),
-      User: createEntity(seed.users),
-      Role: createEntity(seed.roles),
-      PermissionTemplate: createEntity(seed.permissionTemplates),
-      AccessBinding: createEntity(seed.accessBindings),
-    },
+    entities,
+    functions,
   };
 }
 

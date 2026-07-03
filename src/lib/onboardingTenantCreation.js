@@ -277,19 +277,20 @@ async function persistOnboardingConsent({ base44, logAuditEvent, user, schoolId,
   }
 }
 
-async function upsertUserProfile(UserProfile, profilePayload) {
-  const existingProfiles = await UserProfile.filter({
-    user_id: profilePayload.user_id,
-    school_id: profilePayload.school_id,
-  }, '-created_date', 1);
-
-  if (existingProfiles[0]) {
-    await UserProfile.update(existingProfiles[0].id, profilePayload);
-    return existingProfiles[0].id;
-  }
-
-  const created = await UserProfile.create(profilePayload);
-  return created?.id || null;
+// Provision the caller's own profile through the server-authoritative function.
+// UserProfile.app_role is locked to the service role by field-level RLS, so the
+// client can no longer write it directly; the function enforces founder-only
+// ADMIN and applies the role with the service role. Returns { profileId, status }.
+async function provisionProfile(base44, { schoolId, role, phone }) {
+  const result = await base44.functions.invoke('provisionOnboardingProfile', {
+    schoolId,
+    role,
+    phone,
+  });
+  return {
+    profileId: result?.profileId || null,
+    status: result?.status || (role === 'ADMIN' ? 'ACTIVE' : 'PENDING'),
+  };
 }
 
 export async function completeOnboardingTenantCreation({
@@ -337,8 +338,11 @@ export async function completeOnboardingTenantCreation({
     schoolId = school.id;
   }
 
-  const profilePayload = buildUserProfilePayload({ formData, user, schoolId });
-  const profileId = await upsertUserProfile(base44.entities.UserProfile, profilePayload);
+  const { profileId, status: provisionedStatus } = await provisionProfile(base44, {
+    schoolId,
+    role: formData.role,
+    phone: normalizeText(formData.phone),
+  });
 
   await persistOnboardingConsent({ base44, logAuditEvent, user, schoolId, role: formData.role, consent });
 
@@ -346,7 +350,7 @@ export async function completeOnboardingTenantCreation({
     await ensureTenantBootstrapRecords(base44, schoolId, profileId);
   }
 
-  if (profilePayload.status === 'PENDING') {
+  if (provisionedStatus === 'PENDING') {
     const adminProfiles = await base44.entities.UserProfile.filter({
       school_id: schoolId,
       app_role: 'ADMIN',

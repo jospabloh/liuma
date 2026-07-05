@@ -237,6 +237,32 @@ Deno.serve(async (req) => {
         return Response.json({ ok: true, updated });
       }
 
+      case 'sessions.list': {
+        // List this app's end-user sessions for Mission Control (service-role).
+        // MC computes idle/state from last_active_at; here we just return the raw
+        // rows, most-recently-active first. Read-only.
+        const entity = params.entity;
+        if (!entity) return Response.json({ error: 'params.entity required' }, { status: 400 });
+        const records = await sr.entities[entity].list('-last_active_at', COUNT_CAP);
+        return Response.json({ ok: true, records });
+      }
+
+      case 'sessions.revoke': {
+        // Force-logout: mark the given sessions revoked (service-role, HMAC-gated).
+        // The app's client checks its own row each heartbeat and logs out when
+        // revoked_at is set. `actorEmail` is recorded for the in-app audit trail.
+        const entity = params.entity;
+        const ids = Array.isArray(params.ids) ? params.ids : [];
+        const revokedBy = typeof params.actorEmail === 'string' ? params.actorEmail : null;
+        if (!entity || ids.length === 0) return Response.json({ error: 'params.entity/ids required' }, { status: 400 });
+        const revoked_at = new Date().toISOString();
+        let revoked = 0;
+        for (const id of ids) {
+          try { await sr.entities[entity].update(id, { revoked_at, revoked_by: revokedBy }); revoked++; } catch { /* skip missing */ }
+        }
+        return Response.json({ ok: true, revoked });
+      }
+
       // Fase 6 — writes land here, e.g. 'license.activate' / 'license.suspend'.
 
       default:

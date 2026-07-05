@@ -1,0 +1,47 @@
+{
+  // AppSession — one row per end-user login on one device/browser. The client
+  // heartbeat (src/lib/SessionHeartbeat.jsx) creates the row on login and moves
+  // last_active_at every ~60s; ACACIA Mission Control reads these via the
+  // acaciaControl bridge (sessions.list) to show "sesiones activas por usuario"
+  // and sets revoked_at (sessions.revoke) to force a logout — the client checks
+  // its own row each heartbeat and calls logout() when revoked.
+  //
+  // RLS: service role (role:admin) has full access so the bridge can list/revoke;
+  // an end user only touches THEIR OWN rows, scoped by the built-in created_by_id
+  // (Base44 sets it on create — cannot be spoofed by a forged data.user_id).
+  "name": "AppSession",
+  "type": "object",
+  "properties": {
+    "user_email": { "type": "string", "description": "Email del usuario de la sesión" },
+    "user_name": { "type": "string", "description": "Nombre para mostrar" },
+    "device": { "type": "string", "description": "Etiqueta corta del navegador/dispositivo (p.ej. 'Chrome · macOS')" },
+    "started_at": { "type": "string", "format": "date-time", "description": "Inicio de sesión" },
+    "last_active_at": { "type": "string", "format": "date-time", "description": "Última actividad (movida por el latido)" },
+    "revoked_at": { "type": "string", "format": "date-time", "description": "Marcada por Mission Control para forzar el cierre de sesión" },
+    "revoked_by": { "type": "string", "description": "Operador que forzó el cierre (auditoría)" }
+  },
+  "required": ["user_email"],
+  "rls": {
+    "create": {
+      "$or": [
+        { "user_condition": { "role": "admin" } },
+        { "created_by_id": "{{user.id}}" }
+      ]
+    },
+    "read": {
+      "$or": [
+        { "user_condition": { "role": "admin" } },
+        { "created_by_id": "{{user.id}}" }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "user_condition": { "role": "admin" } },
+        { "created_by_id": "{{user.id}}" }
+      ]
+    },
+    "delete": {
+      "user_condition": { "role": "admin" }
+    }
+  }
+}

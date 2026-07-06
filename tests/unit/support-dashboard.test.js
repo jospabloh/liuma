@@ -5,6 +5,7 @@ import {
   groupByCategory, groupByPriority, summarizePending,
   PRIORITY_ORDER, CATEGORY_ORDER,
 } from '../../src/lib/support/dashboard.js';
+import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '../../src/lib/support/constants.js';
 
 const NOW = new Date('2026-06-18T12:00:00Z');
 
@@ -101,6 +102,10 @@ test('summarizePending counts total, urgent and breached', () => {
 });
 
 test('exposed orders cover all categories and priorities', () => {
-  assert.equal(CATEGORY_ORDER.length, 6);
-  assert.equal(PRIORITY_ORDER.length, 4);
+  // CATEGORY_ORDER must list every SUPPORT_CATEGORIES value exactly once, so a
+  // newly added category can't be silently dropped from the "Por categoría" view.
+  const cats = Object.values(SUPPORT_CATEGORIES);
+  assert.deepEqual([...CATEGORY_ORDER].sort(), [...cats].sort());
+  assert.equal(CATEGORY_ORDER.length, cats.length);
+  assert.equal(PRIORITY_ORDER.length, Object.values(SUPPORT_PRIORITIES).length);
 });

@@ -102,7 +102,7 @@ export default function AiIntakeChat({ kind, subject, description, onComplete, o
                 ? 'bg-primary text-primary-foreground rounded-br-sm'
                 : 'bg-muted text-foreground rounded-bl-sm'}`}>
               <p className="whitespace-pre-wrap">{m.text}</p>
-              {m.role === 'ai' && Array.isArray(m.suggestions) && m.suggestions.length > 0 && !brief && (
+              {m.role === 'ai' && i === messages.length - 1 && Array.isArray(m.suggestions) && m.suggestions.length > 0 && !brief && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {m.suggestions.map((s, j) => (
                     <button key={j} onClick={() => submitAnswer(s)} disabled={thinking}

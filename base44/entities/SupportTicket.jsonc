@@ -39,6 +39,7 @@
         "PAYMENTS",
         "ACCOUNT",
         "TECHNICAL",
+        "FEATURE",
         "BILLING",
         "OTHER"
       ]
@@ -106,6 +107,10 @@
     "client_context": {
       "type": "string",
       "description": "JSON-encoded diagnostics captured client-side when the ticket was opened (route, app version, browser, viewport, recent console warnings/errors). Read-only context for support staff."
+    },
+    "ai_brief": {
+      "type": "object",
+      "description": "Structured spec produced by the AI BA/PO intake when a FEATURE or TECHNICAL ticket is opened (user story, acceptance criteria, reproduction steps, severity, impact, etc.). The same brief is also embedded as Markdown in the seed thread message, so this field is purely additive for richer rendering."
     }
   },
   "required": [

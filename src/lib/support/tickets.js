@@ -124,6 +124,7 @@ export async function createSupportTicket({
   aiAttempted = false,
   aiResolutionSummary = null,
   clientContext = null,
+  aiBrief = null,
 }) {
   if (!user || !userProfile || !subject || !description) {
     throw new Error('createSupportTicket requires user, userProfile, subject and description');
@@ -135,7 +136,8 @@ export async function createSupportTicket({
   const ticketNumber = await allocateTicketNumber(schoolId);
   const nowIso = new Date().toISOString();
 
-  const ticket = await base44.entities.SupportTicket.create({
+  /** @type {Record<string, any>} */
+  const ticketPayload = {
     ticket_number: ticketNumber,
     school_id: schoolId,
     requester_user_id: user.id,
@@ -159,7 +161,15 @@ export async function createSupportTicket({
     // browser, recent console warnings/errors). Stored as a JSON string so the
     // entity stays a flat scalar shape; staff see it parsed in the thread view.
     client_context: clientContext ? JSON.stringify(clientContext) : null,
-  });
+  };
+
+  // Structured brief from the AI BA/PO intake (FEATURE / TECHNICAL tickets). It
+  // is additive: the same content is also embedded as Markdown in `description`
+  // (the seed message body), so it survives even if the schema field isn't
+  // deployed yet in Base44.
+  if (aiBrief) ticketPayload.ai_brief = aiBrief;
+
+  const ticket = await base44.entities.SupportTicket.create(ticketPayload);
 
   // Seed the thread: the requester's description (and the AI attempt, if any).
   // `requester_user_id` is denormalized onto every message so Base44 RLS can

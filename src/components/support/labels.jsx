@@ -45,6 +45,7 @@ export const CATEGORY_LABELS = {
   [SUPPORT_CATEGORIES.PAYMENTS]: 'Pagos y cargos',
   [SUPPORT_CATEGORIES.ACCOUNT]: 'Cuenta y vinculación de alumnos',
   [SUPPORT_CATEGORIES.TECHNICAL]: 'Problema técnico de la app',
+  [SUPPORT_CATEGORIES.FEATURE]: 'Sugerencia o nueva funcionalidad',
   [SUPPORT_CATEGORIES.BILLING]: 'Suscripción / facturación LIUMA',
   [SUPPORT_CATEGORIES.OTHER]: 'Otro',
 };

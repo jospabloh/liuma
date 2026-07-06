@@ -1,10 +1,10 @@
 {
   "product": "LIUMA",
-  "version": "1.6.0",
-  "previousVersion": "1.5.0",
-  "releaseDate": "2026-07-03",
-  "semverBump": "minor",
-  "bumpRationale": "Full closure of role-escalation findings C1/C2 (2026-07-03). Field-level RLS now locks UserProfile.app_role to the service role, and PendingChange approval fields (status/approver_*/approved_at) to the service role on update — so the raw Base44 SDK can no longer set a role or forge an approval. Onboarding's initial role assignment moves to a new service-role backend function provisionOnboardingProfile (founder-only ADMIN; joiners land PENDING for admin approval), since the field lock blocks direct client writes. Shared rules in src/lib/authorization/onboardingProvision.js, unit-tested. REQUIRES ordered owner deploy: deploy governRoleChange + provisionOnboardingProfile FIRST, then the schema (FLS) — see docs/security-role-governance-remediation.md. All 271 tests pass; lint clean; RLS validation green (31 entities); release gate green (23/23); typecheck clean; build succeeds.",
+  "version": "1.6.1",
+  "previousVersion": "1.6.0",
+  "releaseDate": "2026-07-06",
+  "semverBump": "patch",
+  "bumpRationale": "Patch: removes unused react-quill dependency (fixes moderate XSS advisory GHSA-4943-9vgg-gr5r; 0 vulnerabilities now); adds AppSession session-management feature with heartbeat and Mission Control force-logout bridge; updates @base44/vite-plugin to 1.0.25; fixes jsconfig.json baseUrl deprecation. 271 tests pass; lint clean; typecheck clean; RLS validation green (32 entities); release gate green (23/23); build succeeds.",
   "architecture": {
     "type": "single-page application",
     "runtime": "browser (client-side only; no application server) + Base44 backend functions for privileged mutations",
@@ -17,7 +17,7 @@
   },
   "inventory": {
     "pages": 38,
-    "entities": 31,
+    "entities": 32,
     "agents": 1,
     "functions": 4,
     "tests": 271,

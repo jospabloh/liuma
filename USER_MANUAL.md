@@ -172,6 +172,35 @@ bloquea (`student_scope_mismatch`).
 
 ---
 
+## 8b. Gestión de sesiones activas (AppSession)
+
+Cada vez que un usuario inicia sesión en un navegador o dispositivo, la app
+registra una **sesión activa** (`AppSession`). La sesión se mantiene actualizada
+con un latido cada 60 segundos.
+
+**Lo que esto significa para los usuarios:**
+
+- Cada pestaña o dispositivo abierto genera su propia sesión.
+- La sesión registra el tipo de navegador y sistema operativo
+  (por ejemplo, "Chrome · macOS") pero **no** el contenido de las páginas
+  visitadas.
+
+**Control desde Mission Control (ACACIA — propietario de plataforma):**
+
+- El equipo de ACACIA puede ver las sesiones activas de todos los usuarios
+  para soporte operativo.
+- Si es necesario (por seguridad o soporte), ACACIA puede **forzar el cierre
+  de sesión** de un usuario en tiempo real. La app detecta el cierre en el
+  siguiente latido y desconecta al usuario automáticamente.
+
+**Alcance de datos:**
+
+- Cada usuario sólo puede ver y modificar sus propias sesiones.
+- La plataforma (ACACIA) puede leer y revocar sesiones a través del rol de
+  servicio. No hay acceso cruzado entre usuarios ni entre escuelas.
+
+---
+
 ## 9. Privacidad
 
 - **Aislamiento por escuela:** cada inquilino ve sólo sus datos

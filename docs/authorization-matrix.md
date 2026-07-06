@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-07-03 · Version 1.6.0**
+**Last updated: 2026-07-06 · Version 1.6.1**
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -221,7 +221,7 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 
 | Gap | Severity | Status |
 |---|---|---|
-| `react-quill` XSS (quill ≤ 1.3.7) | Moderate | Accepted — editor is admin/teacher only; breaking fix deferred |
+| `react-quill` XSS (quill ≤ 1.3.7) | Moderate | **Closed (v1.6.1)** — dependency found unused in source; removed from `package.json`. `npm audit` reports 0 vulnerabilities. |
 | No HTTP Content Security Policy headers | Medium | Open — requires hosting/deployment configuration outside app code |
 | `X-Frame-Options` / `Permissions-Policy` headers | Medium/Low | Open — host-level (Base44 edge) config; see `docs/rls-hardening-2026-06-04.md` |
 | No automated Node.js CI pipeline | High | Fixed (v1.0.7) — `.github/workflows/ci-node.yml` added; runs lint, full 87-test suite, and release gate on every push/PR |

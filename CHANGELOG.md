@@ -5,6 +5,38 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.6.1] - 2026-07-06
+
+### Security
+
+- **react-quill / quill XSS advisory closed (Moderate).** The `react-quill`
+  dependency (`quill ≤ 1.3.7`, advisory `GHSA-4943-9vgg-gr5r`) was found to be
+  completely **unused** in the application source. It has been removed from
+  `package.json`. `npm audit` now reports **0 vulnerabilities**.
+
+### Added
+
+- **Session management (AppSession).** Each authenticated browser tab now
+  creates an `AppSession` record with the user's email, display name, device
+  label, and timestamps. A heartbeat updates `last_active_at` every 60 seconds
+  and checks for a `revoked_at` signal from ACACIA Mission Control (force-logout).
+  Session rows are user-scoped via `created_by_id` (Base44 RLS); the platform
+  service role can list and revoke sessions via the `acaciaControl` bridge.
+
+### Build
+
+- `@base44/vite-plugin` updated to `1.0.25`.
+- `baseUrl` removed from `jsconfig.json` (deprecated in TypeScript 5.9; paths
+  still resolve correctly via `moduleResolution: "bundler"` + `paths`). Typecheck
+  is now clean with zero warnings.
+
+### Quality gates
+
+271 tests pass; lint clean; typecheck clean; RLS validation green (32 entities);
+release gate green (23/23); build succeeds; `npm audit` — 0 vulnerabilities.
+
+---
+
 ## [1.6.0] - 2026-07-03
 
 ### Security (full closure of role-escalation findings C1 / C2)

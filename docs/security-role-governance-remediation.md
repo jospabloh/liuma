@@ -2,9 +2,19 @@
 
 **Date:** 2026-07-03 · **Versions:** 1.5.0 (server function) + 1.6.0 (field-level RLS + onboarding reroute) · **Scope:** `UserProfile.app_role` maker-checker
 
-> **Status (v1.6.0):** C1 and C2 are now fully closed in the repo. The raw-SDK bypass is
-> shut by field-level RLS; onboarding is rerouted so the lock doesn't break signup. This
-> requires an **ordered** owner deploy (functions first, then schema) — see §3.
+> **Status (v1.6.0):** C1 and C2 are fully closed, both in the repo and on the live
+> backend. The raw-SDK bypass is shut by field-level RLS; onboarding is rerouted so the
+> lock doesn't break signup. The ordered owner deploy (functions first, then schema) from
+> §3 has been completed and verified:
+> - `governRoleChange` and `provisionOnboardingProfile` confirmed live via
+>   `npx base44 functions deploy --app-id 696e967c430ceb6a2232ffd8 --force` (2026-07-06,
+>   both reported `unchanged` — already deployed and matching repo code) and
+>   `npx base44 functions list` (both present, 4/4 functions on remote).
+> - Field-level RLS on `UserProfile.app_role` and `PendingChange` (`status`,
+>   `approver_profile_id`, `approver_user_id`, `approved_at`) confirmed live via
+>   `list_entity_schemas` (2026-07-06) — all locked to service-role write.
+>
+> No further owner action is required for this remediation.
 
 This document is the authoritative record for the two open critical findings from the
 2026-07-02 audit (PR #141), including a correction to how C1 was originally described,

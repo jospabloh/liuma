@@ -15,8 +15,21 @@ export const SUPPORT_CATEGORIES = {
   PAYMENTS: 'PAYMENTS', // a specific charge/amount on a student — handled by the school
   ACCOUNT: 'ACCOUNT', // linking a child, join codes, profile data — handled by the school
   TECHNICAL: 'TECHNICAL', // the app fails, errors, won't load — handled by the platform owner
+  FEATURE: 'FEATURE', // a request for new/improved app functionality — handled by the platform owner
   BILLING: 'BILLING', // the school's LIUMA subscription — handled by the platform owner
   OTHER: 'OTHER', // anything else — defaults to the school first
+};
+
+/**
+ * Categories that open the AI "BA/PO" intake before the ticket is created: the
+ * assistant interviews the requester and builds a structured brief for the dev
+ * team. TECHNICAL is treated as an incidence (bug), FEATURE as a new-feature
+ * request. Every other category keeps the plain form. The value is the intake
+ * `kind` passed to `aiIntake` / `AiIntakeChat`.
+ */
+export const AI_INTAKE_KIND_BY_CATEGORY = {
+  [SUPPORT_CATEGORIES.TECHNICAL]: 'bug',
+  [SUPPORT_CATEGORIES.FEATURE]: 'feature',
 };
 
 export const SUPPORT_PRIORITIES = {

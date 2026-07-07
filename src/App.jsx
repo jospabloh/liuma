@@ -5,7 +5,7 @@ import NavigationTracker from '@/lib/NavigationTracker'
 import SessionHeartbeat from '@/lib/SessionHeartbeat'
 import { pagesConfig } from './pages.config'
 import { Suspense, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -13,6 +13,7 @@ import ContinueAs from '@/components/auth/ContinueAs';
 import { getRememberedIdentity } from '@/lib/lastIdentity';
 import GuardedRoute from '@/components/GuardedRoute';
 import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
+import Login from '@/pages/Login';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -47,20 +48,7 @@ const ScrollToTopOnNavigate = () => {
 };
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
-
-  // Redirect to login as a side effect, not during render. Calling
-  // navigateToLogin() in the render body is a React anti-pattern that can
-  // double-fire under StrictMode / concurrent rendering.
-  useEffect(() => {
-    if (authError?.type === 'auth_required') {
-      // If we remember the last user, show the "Continuar como" card (rendered
-      // below) instead of bouncing straight to the hosted login.
-      if (!getRememberedIdentity()) {
-        navigateToLogin();
-      }
-    }
-  }, [authError, navigateToLogin]);
+  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -76,11 +64,20 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Remembered user → friendly card; otherwise the effect above redirects.
+      // Remembered user → friendly "Continuar como" card, which silently
+      // re-authenticates via the Base44 session cookie through
+      // redirectToLogin(). Otherwise render our own in-app /login page instead
+      // of bouncing out to Base44's hosted login — any other path also lands
+      // there, since nothing in the app is reachable while unauthenticated.
       if (getRememberedIdentity()) {
         return <ContinueAs />;
       }
-      return null;
+      return (
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      );
     }
   }
 
@@ -92,6 +89,8 @@ const AuthenticatedApp = () => {
           <Suspense fallback={<PageTransitionFallback />}><MainPage /></Suspense>
         </LayoutWrapper>
       } />
+      {/* Already authenticated — /login has nothing to do, send them home. */}
+      <Route path="/login" element={<Navigate to="/" replace />} />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}

@@ -17,17 +17,16 @@ test('App scrolls to top on route change', () => {
   assert.match(app, /useEffect\(\s*\(\s*\)\s*=>\s*\{[\s\S]*scrollTo[\s\S]*\}\s*,\s*\[\s*pathname\s*\]\s*\)/);
 });
 
-// Redirecting to login during render is a React anti-pattern; it now runs as
-// an effect.
-test('auth_required redirect runs in an effect, not during render', () => {
+// auth_required used to imperatively bounce out to Base44's hosted login via
+// navigateToLogin() (window.location.href = ...) — a real side effect, so it
+// had to run in a useEffect rather than during render. It now renders our own
+// in-app /login route declaratively via react-router's <Navigate>, which is
+// safe during render (no imperative side effect to guard against), so the
+// hosted-login redirect call must be gone entirely from this branch.
+test('auth_required renders the in-app /login route instead of bouncing to the Base44 hosted login', () => {
   const app = read('src/App.jsx');
-  // Assert the auth_required guard lives inside a useEffect. Tolerant of
-  // comments between the effect opener and the guard, of whitespace, and of
-  // extra conditions appended to the check (e.g. `&& !getRememberedIdentity()`),
-  // while still keying on the effect-only `authError?.type` optional chaining
-  // (the render branch uses the already-narrowed `authError.type`).
-  assert.match(app, /useEffect\(\s*\(\s*\)\s*=>\s*\{[\s\S]*?if\s*\(\s*authError\?\.type\s*===\s*'auth_required'/);
-  // The render branch no longer calls navigateToLogin() directly.
+  assert.match(app, /authError\.type === 'auth_required'/);
+  assert.match(app, /<Navigate to="\/login"/);
   assert.doesNotMatch(app, /auth_required'\) \{\s*\n\s*\/\/ Redirect to login automatically\s*\n\s*navigateToLogin\(\);/);
 });
 

@@ -44,6 +44,20 @@ lo que el menú es idéntico en todos los accesos:
 
 ---
 
+## 2b. Iniciar sesión
+
+La pantalla de inicio de sesión (`/login`) tiene la marca de LIUMA — ya no
+redirige a una página genérica externa. Ingresa tu correo y contraseña para
+entrar. Si tu navegador ya recuerda tu sesión, verás un botón "Continuar
+como…" con tu nombre para volver a entrar sin escribir tu contraseña de
+nuevo; también puedes elegir usar otra cuenta.
+
+Si el correo o la contraseña no coinciden, verás un mensaje genérico de
+error — por seguridad, la app nunca indica si el problema fue el correo o la
+contraseña.
+
+---
+
 ## 3. Secciones compartidas (Admin + Maestro + Padre)
 
 | Página | Ruta | Qué hace | Acciones clave |

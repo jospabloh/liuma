@@ -1,10 +1,10 @@
 {
   "product": "LIUMA",
-  "version": "1.6.1",
-  "previousVersion": "1.6.0",
-  "releaseDate": "2026-07-06",
-  "semverBump": "patch",
-  "bumpRationale": "Patch: removes unused react-quill dependency (fixes moderate XSS advisory GHSA-4943-9vgg-gr5r; 0 vulnerabilities now); adds AppSession session-management feature with heartbeat and Mission Control force-logout bridge; updates @base44/vite-plugin to 1.0.25; fixes jsconfig.json baseUrl deprecation. 271 tests pass; lint clean; typecheck clean; RLS validation green (32 entities); release gate green (23/23); build succeeds.",
+  "version": "1.7.0",
+  "previousVersion": "1.6.1",
+  "releaseDate": "2026-07-13",
+  "semverBump": "minor",
+  "bumpRationale": "Minor: catches up release metadata for two PRs merged after v1.6.1 that shipped without a version bump — (1) a branded in-app /login screen replacing the Base44-hosted login redirect (PR #148), and (2) a critical RLS fix restoring the service-role admin branch on UserProfile/PendingChange/School/AuditLog that had silently broken onboarding and role-approval app-wide (PR #149). This release's audit re-verified both: the login screen introduces no credential-handling, XSS, open-redirect, or tenant-isolation issues, and the RLS restore does not reopen C1/C2 (field-level RLS locks on app_role/status/approver_* are untouched; the restored branch only matches the synthetic service-role identity, never a real end-user). Also wires typecheck and build into CI (previously only lint/RLS/test/release-gate ran in ci-node.yml). 271 tests pass; lint clean; typecheck clean; RLS validation green (32 entities); release gate green (23/23); build succeeds; npm audit — 0 vulnerabilities.",
   "architecture": {
     "type": "single-page application",
     "runtime": "browser (client-side only; no application server) + Base44 backend functions for privileged mutations",
@@ -35,7 +35,7 @@
   "artifacts": {
     "changelog": "CHANGELOG.md",
     "userManual": "USER_MANUAL.md",
-    "securityAudit": "docs/security-audit-2026-06-21.md",
+    "securityAudit": "docs/security-audit-2026-07-13.md",
     "roleGovernanceRemediation": "docs/security-role-governance-remediation.md",
     "authorizationMatrix": "docs/authorization-matrix.md"
   }

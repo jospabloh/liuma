@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-07-06 · Version 1.6.1**
+**Last updated: 2026-07-13 · Version 1.7.0**
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -82,6 +82,12 @@ Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
 | /CalendarioEscolar | School calendar |
 | /Soporte | Help desk: Lumi AI deflection (L0) + ticket creation and tracking (L1) |
 
+### Public / unauthenticated routes
+
+| Route | Description |
+|---|---|
+| /login | Branded email/password sign-in form (added v1.7.0, replaces the Base44-hosted login redirect). Not in `ROUTE_ACCESS` and not wrapped by `GuardedRoute` — reachable only when `AuthenticatedApp` has no authenticated session and no remembered identity; already-authenticated users are redirected away to `/` (`src/App.jsx`). Renders a static form only; performs no entity reads, so it cannot leak cross-tenant data. |
+
 ---
 
 ## Entity authorization
@@ -132,6 +138,27 @@ Lumi can perform write operations in the following flows (TEACHER-only dictation
 - **Create / update `Attendance`** — teacher voice attendance; scoped to the teacher's assigned classrooms.
 
 No other write operations are performed by Lumi. Lumi does not write to payments, permissions, student records, school settings, support tickets, or any other entity.
+
+> **2026-07-13 audit note (accepted risk, pending product decision):**
+> 1. `evaluateCapabilityAccess` short-circuits to `{allowed:true}` when no
+>    structured `intent` is set (`capabilities.js:73`), which is the case for
+>    LumiChat's free-text messages. Row-level Base44 RLS on every entity Lumi
+>    can touch (keyed off the server-verified session, not client input) is
+>    the sole enforcement backstop for that path — verified adequate for
+>    school/classroom/student scoping, but that path is not currently logged
+>    with the same `policy_decision` detail as the structured intents.
+> 2. The dictation-based `DiaryEntry.create` / `Attendance.create`+`update`
+>    writes commit as soon as the agent decides to call the tool — there is
+>    no separate "review before saving" step in `LumiChat.jsx`; the teacher's
+>    dictated message is the only confirmation. This is long-standing,
+>    intentional product behavior (voice-driven bitácora creation), not a new
+>    regression, and rows remain scoped to the teacher's assigned classroom.
+>
+> Neither point allows cross-school, cross-classroom, or cross-family
+> exposure. Recommendation for a future release: add `policy_decision`
+> audit logging to the free-text path, and a lightweight post-save
+> confirmation/undo affordance for dictation writes. Owner sign-off needed
+> before changing this live workflow.
 
 ---
 
@@ -232,8 +259,9 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 | `VITE_OWNER_EMAIL` / `VITE_OWNER_USER_ID` in client bundle | High | Fixed (v1.0.5 / PR #90) — owner identity moved to server-persisted UserProfile; env vars removed |
 | C3 — `is_super_admin` self-grantable field enabled cross-tenant bypass | Critical | Fixed (v1.2.0 / PR #109) — all `is_super_admin` branches removed from `School` and `SchoolSubscription` RLS; platform owner identified via base44 account `role: admin` which tenants cannot self-assign |
 | C4 — `SchoolSubscription` writes were tenant-admin-writeable (paywall bypass) | Critical | Fixed (v1.2.0 / PR #109) — update/delete restricted to platform owner (`role: admin`); tenant admins retain read access; `welcome_message_shown` moved to `UserProfile` (self-writable) |
-| C1 — Escalation to ADMIN via direct `UserProfile.update` (in fact reachable by *any* user via the self-branch, not only admins) | Critical | **Closed (v1.6.0, pending deploy)** — field-level RLS locks `UserProfile.app_role` `write` to the service role; role mutations go through `governRoleChange`, and onboarding's initial role assignment through `provisionOnboardingProfile` (founder-only ADMIN). v1.5.0 first moved the UI path server-side. Requires ordered deploy (functions then schema). See `docs/security-role-governance-remediation.md`. |
-| C2 — Requester can approve their own `PendingChange` | Critical | **Closed (v1.6.0, pending deploy)** — `governRoleChange` enforces approver ≠ requester server-side (v1.5.0), and field-level RLS now locks `PendingChange` `status`/`approver_*`/`approved_at` `update` to the service role so an approval can't be forged. See `docs/security-role-governance-remediation.md`. |
+| C1 — Escalation to ADMIN via direct `UserProfile.update` (in fact reachable by *any* user via the self-branch, not only admins) | Critical | **Closed (v1.6.0) — deploy verified live 2026-07-13.** Field-level RLS locks `UserProfile.app_role` `write` to the service role; role mutations go through `governRoleChange`, and onboarding's initial role assignment through `provisionOnboardingProfile` (founder-only ADMIN). v1.5.0 first moved the UI path server-side. Re-confirmed via direct comparison of `base44/entities/UserProfile.jsonc` against the live Base44 schema (`list_entity_schemas`) — identical. See `docs/security-role-governance-remediation.md`. |
+| C2 — Requester can approve their own `PendingChange` | Critical | **Closed (v1.6.0) — deploy verified live 2026-07-13.** `governRoleChange` enforces approver ≠ requester server-side (v1.5.0), and field-level RLS locks `PendingChange` `status`/`approver_*`/`approved_at` `update` to the service role so an approval can't be forged. Re-confirmed via direct comparison of `base44/entities/PendingChange.jsonc` against the live Base44 schema — identical. See `docs/security-role-governance-remediation.md`. |
+| Missing service-role admin branch on `UserProfile`/`PendingChange`/`School`/`AuditLog` broke onboarding and role-approval app-wide (production outage) | Critical | **Fixed (v1.7.0, PR #149) — deploy verified live 2026-07-13.** Restored the `{"user_condition":{"role":"admin"}}` branch that `asServiceRole` calls (`provisionOnboardingProfile`, `governRoleChange`) need to pass row-level RLS; this branch is un-matchable by any real end-user (real users carry built-in `role:"user"`, never `role:"admin"`), so it does not reopen C1/C2 — the field-level locks above are untouched and independently verified live. Confirmed by comparing all four `base44/entities/*.jsonc` files against the live Base44 schema via the Base44 MCP `list_entity_schemas` tool — byte-for-byte match, no drift. |
 | `ConsentRecord` entity referenced in code but not created in Base44 | Low | Open — `privacyNotice.js` writes consent to `ConsentRecord` best-effort with `AuditLog` as fallback; consent is recorded even before the entity exists. Owner action: create `ConsentRecord` entity in Base44 Builder (schema in `src/lib/consent/privacyNotice.js`). |
 | Support routes / SupportTicket entity missing from authorization matrix | Low | Fixed (v1.2.0) — Soporte/SoporteAdmin/PanelSoporte/LicenseAdmin routes added; SupportTicket/SupportTicketMessage entities added; support_request Lumi capability added |
 | `@babel/core` ≤ 7.29.0 Arbitrary File Read (`GHSA-4x5r-pxfx-6jf8`) | Low | Fixed (v1.4.2) — build-toolchain dependency; not in deployed runtime. Resolved via `npm audit fix`. |

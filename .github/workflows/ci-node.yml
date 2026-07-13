@@ -23,6 +23,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Validate RLS
         run: npm run validate:rls
 
@@ -31,3 +34,6 @@ jobs:
 
       - name: Release gate
         run: npm run release:gate
+
+      - name: Build
+        run: npm run build

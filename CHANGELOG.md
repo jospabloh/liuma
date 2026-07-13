@@ -5,6 +5,49 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.0] - 2026-07-13
+
+### Release-metadata catch-up
+
+Two PRs merged after v1.6.1 shipped without a version bump. This release
+synchronizes version/changelog/docs with what was already deployed and adds a
+fresh audit pass over both:
+
+- **Branded in-app login screen.** `/login` now renders a LIUMA-branded
+  email/password form instead of bouncing to the Base44-hosted login page.
+  Remembered-identity silent re-auth ("Continuar como") is unchanged. Audited
+  for credential handling, XSS, open redirect, and tenant-isolation bypass —
+  no issues found.
+- **Critical onboarding/role-approval fix.** A backend row-level security
+  rule was missing the branch that lets trusted server-side operations
+  create/read/update records during signup and role-change approval. This
+  had silently blocked new users (both first admins and people joining an
+  existing school) from getting an account created, and blocked role-change
+  approvals. Restored, with no change to the stricter per-field protections
+  added in v1.6.0 that keep normal users from editing their own role or
+  approving their own request — re-verified in this audit.
+- CI now runs typecheck and build on every push/PR, in addition to the
+  existing lint, RLS validation, test, and release-gate checks.
+
+### Audit
+
+Full security / privacy / school-isolation / AI-safety pass performed; see
+`docs/security-audit-2026-07-13.md`. No unresolved Critical or High findings.
+Two Medium-severity AI-assistant observations recorded as accepted risk
+pending a product decision (see audit doc) — Lumi's free-text chat path
+relies on backend row-level security rather than the app-level capability
+check when no structured intent is set, and Lumi's dictation-based diary/
+attendance writes commit immediately without a separate confirmation step.
+Neither allows cross-school, cross-classroom, or cross-family data exposure.
+
+### Quality gates
+
+271 tests pass; lint clean; typecheck clean; RLS validation green (32
+entities); release gate green (23/23); build succeeds; `npm audit` — 0
+vulnerabilities.
+
+---
+
 ## [1.6.1] - 2026-07-06
 
 ### Security

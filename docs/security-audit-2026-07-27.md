@@ -5,15 +5,31 @@
 Weekly automated audit. **No application code, entity schema, or RLS rule
 changed** since the v1.7.0 audit (2026-07-13) or the metadata-only PR #151
 (2026-07-20) — see §2. The only substantive finding this round came from
-`npm ci`: three new upstream dependency advisories, none introduced by any
-Liuma code change, all closed with non-breaking patch bumps. Two further
-advisories are reviewed and accepted as risk this round (rationale in §3).
+`npm ci`: six new upstream dependency advisories, none introduced by any
+Liuma code change. Three were closed with non-breaking patch bumps; two
+are reviewed and accepted as risk this round (rationale in §3).
 
-**Findings by severity:** Critical 0 · High 0 (3 new, all fixed) · Medium 0
-(2 new, both accepted risk with documented rationale; 2 pre-existing
-accepted-risk AI items carried forward unchanged from 2026-07-13) · Low 0.
+**Findings by severity:** Critical 0 · **High 3 new** — 2 fixed
+(`js-yaml` quadratic-CPU DoS `GHSA-52cp-r559-cp3m`; `postcss`/`nanoid`
+sourcemap path traversal `GHSA-r28c-9q8g-f849`), **1 accepted risk**
+(`brace-expansion` DoS `GHSA-mh99-v99m-4gvg`, dev-only ESLint toolchain —
+see §3) · Moderate 2 new, both accepted risk (`react-router` /
+`react-router-dom`, see §3) · Low 1 new, fixed (`dompurify` sanitizer
+bypass `GHSA-c2j3-45gr-mqc4`). Separately, 2 pre-existing Medium-severity
+AI-assistant items carry forward unchanged from 2026-07-13 (non-blocking,
+unrelated to this round's dependency findings).
 
-No Critical or High finding remains unresolved. Safe to merge.
+**One High-severity finding (`brace-expansion`) remains, classified as
+accepted risk rather than fixed** — §3 explains why: the only available
+fix path force-downgrades `eslint-plugin-react` (a regression trade), and
+the advisory's blast radius is the local/CI lint process only, never the
+shipped application (100% dev-only dependency). No Critical finding
+exists, and this accepted-risk High does not block merge under this
+routine's own rules (an accepted-risk finding with documented rationale is
+a resolved classification, not an unresolved one) — but this summary does
+not claim zero High-severity findings exist, and reviewers should weigh
+the accepted-risk rationale in §3 directly rather than relying on a bare
+severity count. Safe to merge.
 
 ## 2. What changed since the last audit (4fdc0ce..HEAD)
 

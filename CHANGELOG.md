@@ -5,6 +5,49 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.1] - 2026-07-27
+
+### Security
+
+Weekly automated audit. No application code, entity schema, or RLS rule
+changed since the last audit — only bot-driven dependency bumps had landed
+on `main` in the interim. This pass's dependency install surfaced three new
+upstream advisories, all closed with non-breaking patch bumps:
+
+- **dompurify** — `CUSTOM_ELEMENT_HANDLING` sanitizer bypass for allowed
+  custom elements (advisory `GHSA-c2j3-45gr-mqc4`). Patched 3.4.11 → 3.4.12.
+- **js-yaml** — quadratic-CPU denial of service via YAML merge-key chains
+  (advisory `GHSA-52cp-r559-cp3m`). Dev-only tooling dependency. Patched
+  4.2.0 → 4.3.0.
+- **postcss / nanoid** — arbitrary source-map file disclosure via path
+  traversal in sourcemap auto-loading (advisory `GHSA-r28c-9q8g-f849`).
+  Dev-only build-tooling dependency. Patched 8.5.15 → 8.5.23 (nanoid
+  3.3.12 → 3.3.16).
+
+Two advisories were reviewed and accepted as risk rather than force-fixed
+this round — see `docs/security-audit-2026-07-27.md` for the full
+reasoning:
+
+- **react-router / react-router-dom** (moderate) — the only fix requires a
+  major v6→v7 upgrade. Liuma is a client-only SPA (no server-side
+  rendering), so the SSR-hydration half of the advisory does not apply; the
+  open-redirect half was checked against every navigation call site in the
+  app and found not reachable (all in-app navigation goes through a helper
+  that only ever builds internal, `/`-prefixed paths — never an
+  externally-controlled URL). Deferred to a dedicated major-version
+  migration.
+- **brace-expansion** (dev-only, via the ESLint toolchain) — the only fix
+  path force-downgrades `eslint-plugin-react`, a regression trade for a
+  denial-of-service advisory that only affects local/CI lint execution,
+  never the shipped application. Left as-is.
+
+### Quality gates
+
+271 tests pass; lint clean; typecheck clean; RLS validation green (32
+entities); release gate green (23/23); build succeeds.
+
+---
+
 ## [1.7.0] - 2026-07-13
 
 ### Release-metadata catch-up

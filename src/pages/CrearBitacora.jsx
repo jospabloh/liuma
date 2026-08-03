@@ -26,6 +26,18 @@ import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
+// Escape user-controlled text before interpolating it into HTML email bodies
+// to prevent HTML/script injection (OWASP A03 / CWE-79).
+const escapeHtml = (value) => {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 export default function CrearBitacora() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -116,21 +128,21 @@ export default function CrearBitacora() {
                 to: parent.email,
                 subject: `Nueva bitácora de ${student.first_name} - ${format(new Date(), "d 'de' MMMM", { locale: es })}`,
                 body: `
-                  <h2>Bitácora de ${student.first_name} ${student.last_name}</h2>
+                  <h2>Bitácora de ${escapeHtml(student.first_name)} ${escapeHtml(student.last_name)}</h2>
                   <p><strong>Fecha:</strong> ${format(new Date(), "d 'de' MMMM, yyyy", { locale: es })}</p>
                   
                   <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                    <p style="color: #334155; white-space: pre-wrap;">${data.notes_text}</p>
+                    <p style="color: #334155; white-space: pre-wrap;">${escapeHtml(data.notes_text)}</p>
                   </div>
                   
                   ${data.teacher_message ? `
                     <div style="background: linear-gradient(to right, #fce7f3, #f3e8ff); padding: 16px; border-radius: 8px; border: 1px solid #f9a8d4; margin: 16px 0;">
                       <p style="font-size: 12px; color: #9f1239; font-weight: bold; margin-bottom: 8px;">💌 Mensajito especial</p>
-                      <p style="color: #7c3aed;">${data.teacher_message}</p>
+                      <p style="color: #7c3aed;">${escapeHtml(data.teacher_message)}</p>
                     </div>
                   ` : ''}
                   
-                  <p style="margin-top: 16px;">Registrado por: ${data.teacher_name}</p>
+                  <p style="margin-top: 16px;">Registrado por: ${escapeHtml(data.teacher_name)}</p>
                   <p style="color: #64748b; font-size: 12px; margin-top: 8px;">Este es un mensaje automático de LIUMA.</p>
                 `
               });

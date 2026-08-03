@@ -78,6 +78,7 @@ export function captureClientContext({ route, pageName, appVersion } = {}) {
     capturedAt: new Date().toISOString(),
     route: route || null,
     pageName: pageName || null,
+    // eslint-disable-next-line no-undef
     appVersion: appVersion || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null),
     recentLogs: getRecentLogs(),
   };

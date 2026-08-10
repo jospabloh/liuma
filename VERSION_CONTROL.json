@@ -20,7 +20,7 @@
     "entities": 32,
     "agents": 1,
     "functions": 4,
-    "tests": 271,
+    "tests": 276,
     "assistantSkills": {
       "note": "The sibling claude-skills repo holds 48 generic Anthropic/Claude authoring skills (pdf, xlsx, brainstorming, math-olympiad, ...). They are assistant tooling used to BUILD Liuma — NOT features of the application, not integrated into it, and not listed in the user manual.",
       "count": 48

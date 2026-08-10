@@ -25,18 +25,7 @@ import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
-
-// Escape user-controlled text before interpolating it into HTML email bodies
-// to prevent HTML/script injection (OWASP A03 / CWE-79).
-const escapeHtml = (value) => {
-  if (value == null) return '';
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
+import { escapeHtml } from '@/lib/htmlEscape';
 
 export default function CrearBitacora() {
   const navigate = useNavigate();

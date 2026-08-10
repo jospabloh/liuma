@@ -19,6 +19,7 @@ import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { escapeHtml } from '@/lib/htmlEscape';
 
 const statusConfig = {
   present: { label: 'Presente', icon: CheckCircle2, color: 'bg-green-500', textColor: 'text-green-700', bgColor: 'bg-green-50' },
@@ -351,8 +352,8 @@ export default function Asistencia() {
                 body: `
                   <h2>Notificación de Ausencia</h2>
                   <p>Estimado padre/madre de familia:</p>
-                  <p>Le informamos que <strong>${student.first_name} ${student.last_name}</strong> no asistió a clases el día <strong>${format(new Date(selectedDate), 'dd/MM/yyyy', { locale: es })}</strong>.</p>
-                  ${reason ? `<p><strong>Motivo registrado:</strong> ${reason}</p>` : ''}
+                  <p>Le informamos que <strong>${escapeHtml(student.first_name)} ${escapeHtml(student.last_name)}</strong> no asistió a clases el día <strong>${format(new Date(selectedDate), 'dd/MM/yyyy', { locale: es })}</strong>.</p>
+                  ${reason ? `<p><strong>Motivo registrado:</strong> ${escapeHtml(reason)}</p>` : ''}
                   <p>Si tiene alguna pregunta, por favor contacte a la escuela.</p>
                   <p>Atentamente,<br>Equipo LIUMA</p>
                 `

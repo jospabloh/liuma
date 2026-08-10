@@ -5,6 +5,45 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.2] - 2026-08-10
+
+### Security
+
+Weekly automated audit. Closes a High-severity HTML/script-injection gap
+(CWE-79) in parent- and staff-facing transactional emails, and five
+dependency advisories.
+
+- **HTML injection in transactional emails, fixed.** Several email
+  templates — the absence-notification email and all seven templates in
+  the shared notification library (new-user-approval, payment reminders,
+  event confirmations, emergency alerts, and support-ticket emails) —
+  interpolated user- or entity-controlled text directly into an HTML email
+  body without escaping. The highest-risk path let an unauthenticated
+  self-registering user's name/email reach a school admin's inbox
+  unescaped. A partial fix had already landed for one of these emails in an
+  untracked direct commit to `main`; this release completes it with a
+  shared, tested `escapeHtml()` helper applied consistently across every
+  affected template. See `docs/security-audit-2026-08-10.md` for the full
+  writeup.
+- **Dependency advisories closed** (non-breaking patch bumps): `nanoid`,
+  `js-yaml`, `dompurify`, `socket.io-parser`, and `brace-expansion`
+  (`GHSA-2v37-7h3g-55p8`, `GHSA-5p4m-2wfm-xmqj`, `GHSA-55q2-fjhq-7xh7`,
+  `GHSA-2m8v-j782-fhvr`, `GHSA-mh99-v99m-4gvg` / `GHSA-rgw5-rvv9-x895`).
+  The `brace-expansion` fix closes the High-severity item carried forward
+  as accepted risk from the previous audit.
+- **`react-router` / `react-router-dom`** (moderate) remains accepted risk,
+  unchanged from the last two audits — requires a major v6→v7 upgrade; not
+  reachable in this codebase (client-only SPA, all navigation targets are
+  internally constructed). Deferred to a dedicated migration.
+
+### Quality gates
+
+276 tests pass (271 + 5 new regression tests for the escaping fix); lint
+clean; typecheck clean; RLS validation green (32 entities); release gate
+green (23/23); build succeeds.
+
+---
+
 ## [1.7.1] - 2026-07-27
 
 ### Security

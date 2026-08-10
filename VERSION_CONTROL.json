@@ -1,10 +1,10 @@
 {
   "product": "LIUMA",
-  "version": "1.7.1",
-  "previousVersion": "1.7.0",
-  "releaseDate": "2026-07-27",
+  "version": "1.7.2",
+  "previousVersion": "1.7.1",
+  "releaseDate": "2026-08-10",
   "semverBump": "patch",
-  "bumpRationale": "Patch: weekly automated audit. No app code, entity schema, or RLS rule changed since the v1.7.0 audit (2026-07-13) or the metadata-only PR #151 (2026-07-20) — the only intervening commits were bot-driven dependency bumps (@base44/sdk 0.8.35→0.8.40, axios 1.18.0→1.18.1) and a build-config change (base44/.app.jsonc stopped being tracked; now managed via `base44 link`), already merged to main and re-verified here. This audit's own `npm ci` surfaced 6 new transitive-dependency advisories (introduced by upstream tooling releases, not by any Liuma change): dompurify (CUSTOM_ELEMENT_HANDLING bypass), js-yaml (quadratic-CPU DoS), and postcss/nanoid (sourcemap path traversal) were closed via `npm audit fix` (non-breaking patch bumps only) and re-verified against the full quality-gate suite. A residual brace-expansion (dev-only, eslint toolchain) advisory and a moderate react-router advisory (production dependency) remain — see docs/security-audit-2026-07-27.md for why both are accepted risk this round rather than force-fixed. No permission, tenant-isolation, student-data, or AI/RAG behavior changed. 271 tests pass; lint clean; typecheck clean; RLS validation green (32 entities); release gate green (23/23); build succeeds.",
+  "bumpRationale": "Patch: weekly automated audit. Closes a High-severity HTML/script-injection gap (CWE-79) found in the shared notification-template library (src/lib/notifications/templates.js, 7 templates) and in Asistencia.jsx's absence-notification email — a partial fix for the same class of bug had already landed for one email (CrearBitacora.jsx) via an untracked direct commit to main (a5a663d, no PR, no version bump); this release completes it with a shared, unit-tested escapeHtml() helper (src/lib/htmlEscape.js) applied consistently everywhere the pattern existed, plus 5 new regression tests. Also closes 5 dependency advisories via non-breaking npm audit fix (nanoid, js-yaml, dompurify, socket.io-parser, brace-expansion) — the brace-expansion fix closes the High-severity item carried forward as accepted risk from v1.7.1. The moderate react-router/react-router-dom advisory remains accepted risk (unchanged rationale: requires a major v6→v7 upgrade; not reachable — client-only SPA, no externally-controlled navigation targets). See docs/security-audit-2026-08-10.md. No entity schema, RLS rule, permission, tenant-isolation, or AI/RAG behavior changed. 276 tests pass (271 + 5 new); lint clean; typecheck clean; RLS validation green (32 entities); release gate green (23/23); build succeeds.",
   "architecture": {
     "type": "single-page application",
     "runtime": "browser (client-side only; no application server) + Base44 backend functions for privileged mutations",
@@ -35,7 +35,7 @@
   "artifacts": {
     "changelog": "CHANGELOG.md",
     "userManual": "USER_MANUAL.md",
-    "securityAudit": "docs/security-audit-2026-07-27.md",
+    "securityAudit": "docs/security-audit-2026-08-10.md",
     "roleGovernanceRemediation": "docs/security-role-governance-remediation.md",
     "authorizationMatrix": "docs/authorization-matrix.md"
   }

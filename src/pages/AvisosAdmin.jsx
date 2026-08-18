@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { guardedCreate } from '@/lib/authorization/guardedWrite';
 import {
   Dialog,
   DialogContent,
@@ -75,7 +76,7 @@ export default function AvisosAdmin() {
 
   const createNoticeMutation = useMutation({
     mutationFn: async (data) => {
-      const notice = await base44.entities.Notice.create(data);
+      const notice = await guardedCreate('Notice', data);
 
       const activeLinks = await base44.entities.ParentStudent.filter({ status: 'ACTIVE' });
       const schoolStudentIds = new Set(students.map((student) => student.id));

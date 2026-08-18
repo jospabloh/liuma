@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { guardedCreate } from '@/lib/authorization/guardedWrite';
 import { escapeHtml } from '@/lib/htmlEscape';
 
 export default function CrearBitacora() {
@@ -85,7 +86,7 @@ export default function CrearBitacora() {
 
   const createDiaryMutation = useMutation({
     mutationFn: async (data) => {
-      const entry = await base44.entities.DiaryEntry.create(data);
+      const entry = await guardedCreate('DiaryEntry', data);
       
       // Log the action
       await logAuditEvent({

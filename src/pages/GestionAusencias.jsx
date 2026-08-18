@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
 
 export default function GestionAusencias() {
   const { canWrite } = useCanWrite();
@@ -66,14 +67,14 @@ export default function GestionAusencias() {
         
         if (existingAttendance.length > 0) {
           // Actualizar existente
-          await base44.entities.Attendance.update(existingAttendance[0].id, {
+          await guardedUpdate('Attendance', existingAttendance[0].id, {
             status: 'excused',
             reason: notification.reason,
           });
         } else {
           // Crear nuevo registro justificado
           const student = students.find(s => s.id === notification.student_id);
-          await base44.entities.Attendance.create({
+          await guardedCreate('Attendance', {
             school_id: notification.school_id,
             classroom_id: student?.classroom_id,
             student_id: notification.student_id,

@@ -5,6 +5,39 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.4] - 2026-08-18
+
+### Security
+
+Portfolio-standard audit (module 3 — server-side permission/billing
+enforcement). `PermissionOverride` rows (per-user allow/deny beyond a role's
+default write access, set via `PermisosRoles.jsx`) and
+`SchoolSubscription.subscription_status` (the read-only billing gate) were
+both only ever checked client-side — a user an admin explicitly denied
+write access to `Notice`/`Attendance`/`Homework`/`DiaryEntry`/`ChargeItem`/
+`PaymentConcept`/`PaymentRecord`, or a school in a read-only billing state,
+could still write to any of them via a direct SDK call, since base RLS on
+these 7 entities only checks role, not per-user overrides or billing status.
+
+- **Added `base44/functions/guardedEntityWrite`** — the new sanctioned write
+  path for all 7 entities. Re-derives the caller's role from their own
+  school-scoped `UserProfile`, then checks role policy → matching
+  `PermissionOverride` (`action:'write'`) → billing read-only status, before
+  delegating the write. Preserves the one legitimate non-admin exception
+  (a parent may create a `ChargeItem` for their own child when accepting a
+  paid event) by re-deriving that linkage server-side instead of relying on
+  a client-inaccessible RLS token.
+- **Migrated 15 call sites across 8 pages** from direct
+  `base44.entities.X.create/update/delete(...)` to the new function via a
+  shared client wrapper, `src/lib/authorization/guardedWrite.js`.
+- No behavior change for anyone whose role/override combination already
+  granted access — this closes a bypass that only mattered for a user an
+  admin had specifically restricted, or a school past its billing grace
+  period. See `CLAUDE.md`'s module 3 section for the full writeup, including
+  one internal-notification write-path intentionally left as-is and a
+  separate, unrelated finding (an unwired "permission template" UI) noted
+  for later.
+
 ## [1.7.3] - 2026-08-18
 
 ### Security

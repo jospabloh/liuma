@@ -16,6 +16,7 @@ import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
+import { guardedCreate } from '@/lib/authorization/guardedWrite';
 import {
   Dialog,
   DialogContent,
@@ -63,7 +64,7 @@ export default function AvisosMaestro() {
 
   const createNoticeMutation = useMutation({
     mutationFn: async (data) => {
-      const notice = await base44.entities.Notice.create(data);
+      const notice = await guardedCreate('Notice', data);
 
       const activeLinks = await base44.entities.ParentStudent.filter({ status: 'ACTIVE' });
       const classroomStudentIds = new Set(

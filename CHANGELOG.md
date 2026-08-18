@@ -5,6 +5,37 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.7] - 2026-08-18
+
+### Added
+
+Portfolio-standard audit (module 7 — cuenta y zona de peligro). `PermisosRoles.jsx`
+already rendered a "Danger Zone" spec table (delete/suspend/reset/transfer
+tenant) but it was read-only documentation — no working action, no data
+export, no way to request deletion.
+
+- New `base44/functions/exportSchoolData` — any ADMIN of a school can
+  download everything their school owns (23 operational entities) as one
+  JSON payload. Runs with the caller's own token to derive the school from
+  their ACTIVE ADMIN `UserProfile`, never from client input; every read is
+  explicitly scoped to that one `school_id` via `asServiceRole`.
+- **"Solicitar eliminación de la escuela"** — **not** a direct delete.
+  `School.delete`'s RLS requires `role: admin` (the ACACIA platform owner)
+  — a school's own ADMIN cannot delete their own school via RLS at all, by
+  design. This creates a `SupportTicket` (`category: ACCOUNT`,
+  `priority: HIGH`), which `resolveSupportRouting` already always sends to
+  the platform owner for an ADMIN's own tickets — same principle as every
+  other irreversible, tenant-wide deletion in this portfolio going through
+  a human rather than instant self-service.
+- The pre-existing 4-operation maker-checker spec table is left as
+  documentation, now explicitly labeled as a separate, larger, not-yet-built
+  initiative — see `CLAUDE.md` for why building it for real is out of scope
+  here.
+
+No RLS or entity change beyond the new function. Verified: `npm run lint`,
+`npm run build`, `npm run validate:rls` (32 entities), `npm test`
+(276/276) all pass.
+
 ## [1.7.6] - 2026-08-18
 
 ### Added

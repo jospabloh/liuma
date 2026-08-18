@@ -21,6 +21,8 @@ import { getEffectivePolicyDecision } from '@/lib/authorization/policy';
 import { hasOtherActiveAdminWithManagePermissions } from '@/lib/authorization/adminSafety';
 import { validateRoleChangeRequest, validateRoleChangeDecision } from '@/lib/authorization/roleGovernance';
 import { DANGER_ZONE_OPERATIONS, getRollbackPolicy } from '@/lib/authorization/tenantDangerZone';
+import { createSupportTicket } from '@/lib/support/tickets';
+import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
 
 const RESOURCES = [
   'Students',
@@ -90,6 +92,9 @@ export default function PermisosRoles() {
   const [rollbackModule, setRollbackModule] = React.useState('Notice');
   const [rollbackOverrideId, setRollbackOverrideId] = React.useState('');
   const [isApplyingRollback, setIsApplyingRollback] = React.useState(false);
+  const [isExporting, setIsExporting] = React.useState(false);
+  const [isRequestingDeletion, setIsRequestingDeletion] = React.useState(false);
+  const [deletionReason, setDeletionReason] = React.useState('');
 
   const { data: schoolProfiles = [], refetch: refetchSchoolProfiles } = useQuery({
     queryKey: ['schoolUserProfiles', userProfile?.school_id],
@@ -569,6 +574,65 @@ export default function PermisosRoles() {
     }
   };
 
+  // Data export: client-side download of everything base44/functions/exportSchoolData
+  // returns for this admin's own school (never a client-supplied id). Purely
+  // read-only -- no confirmation dialog needed.
+  const handleExportSchoolData = async () => {
+    setIsExporting(true);
+    try {
+      const payload = await base44.functions.invoke('exportSchoolData', {});
+      if (!payload?.ok) throw new Error(payload?.error || 'export failed');
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `liuma-${userProfile.school_id}-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Descarga iniciada');
+    } catch {
+      toast.error('No se pudo generar la exportación');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // "Solicitar eliminación de la escuela" -- NOT a direct delete. School.delete's
+  // RLS requires role:admin (the ACACIA platform owner); a school's own ADMIN
+  // cannot delete their own school via RLS at all, by design. So this creates a
+  // SupportTicket (routed to the platform owner regardless of category, since
+  // resolveSupportRouting always sends an ADMIN's own tickets there) instead of
+  // an instant, irreversible self-service action -- same principle as every
+  // other tenant-wide deletion in this portfolio going through a human.
+  const handleRequestSchoolDeletion = async () => {
+    if (!deletionReason.trim()) {
+      toast.error('Describe el motivo de la solicitud.');
+      return;
+    }
+    if (!requireExplicitConfirmation('Vas a solicitar la eliminación de tu escuela. Esta acción es irreversible una vez procesada. ¿Deseas continuar?')) {
+      return;
+    }
+    setIsRequestingDeletion(true);
+    try {
+      await createSupportTicket({
+        user,
+        userProfile,
+        subject: 'Solicitud de eliminación de la escuela',
+        description: deletionReason.trim(),
+        category: SUPPORT_CATEGORIES.ACCOUNT,
+        priority: SUPPORT_PRIORITIES.HIGH,
+      });
+      setDeletionReason('');
+      toast.success('Solicitud enviada. El equipo de ACACIA se pondrá en contacto contigo.');
+    } catch {
+      toast.error('No se pudo enviar la solicitud');
+    } finally {
+      setIsRequestingDeletion(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader title="Permisos y Roles" subtitle="Configuración de acceso" showBack backTo={createPageUrl('Home')} />
@@ -661,7 +725,37 @@ export default function PermisosRoles() {
         </div>
 
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
-          <p className="font-medium text-card-foreground">Danger Zone (Permisos y Roles)</p>
+          <p className="font-medium text-card-foreground">Cuenta y zona de peligro</p>
+          <p className="text-sm text-muted-foreground">Descarga los datos de tu escuela, o solicita su eliminación.</p>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" onClick={handleExportSchoolData} disabled={isExporting}>
+              {isExporting ? 'Generando...' : 'Descargar datos de la escuela'}
+            </Button>
+          </div>
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-sm font-medium text-red-700">Solicitar eliminación de la escuela</p>
+            <p className="text-xs text-muted-foreground">
+              No es instantáneo: se envía como solicitud al equipo de ACACIA, quien la procesará manualmente.
+              Descarga tus datos primero — la eliminación no tiene marcha atrás.
+            </p>
+            <Textarea
+              value={deletionReason}
+              onChange={(event) => setDeletionReason(event.target.value)}
+              placeholder="Motivo de la solicitud (obligatorio)"
+            />
+            <Button variant="destructive" onClick={handleRequestSchoolDeletion} disabled={isRequestingDeletion}>
+              {isRequestingDeletion ? 'Enviando...' : 'Solicitar eliminación de la escuela'}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
+          <p className="font-medium text-card-foreground">Danger Zone (Permisos y Roles) — especificación, no implementada</p>
+          <p className="text-xs text-muted-foreground">
+            Documentación de una iniciativa separada y más amplia (delete/suspend/reset/transfer de tenant con
+            maker-checker propio) — no confundir con "Cuenta y zona de peligro" arriba, que sí es funcional.
+            Ver CLAUDE.md ("Module 7") para el razonamiento de por qué esto se deja como especificación.
+          </p>
           <p className="text-xs text-red-700">Todas las operaciones son de alto riesgo, irreversibles en algunos casos, y usan maker-checker con segundo ADMIN (excepto app owner).</p>
           <div className="overflow-auto border border-border rounded-2xl">
             <table className="ui-table min-w-full">

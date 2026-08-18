@@ -206,27 +206,56 @@ is that a user an admin explicitly denied, or a school in a read-only
 billing state, now correctly gets rejected server-side instead of the write
 silently succeeding.
 
-## Module 7 (danger zone) — found aspirational, not wired to any action
+## Module 7 (cuenta y zona de peligro) — data export + request-deletion added 2026-08-18
 
-`PermisosRoles.jsx` renders a "Danger Zone" table (`DELETE_TENANT`,
+`PermisosRoles.jsx` had a "Danger Zone" table (`DELETE_TENANT`,
 `SUSPEND_TENANT`, `RESET_TENANT_DATA`, `TRANSFER_TENANT_OWNERSHIP` from
 `src/lib/authorization/tenantDangerZone.js`) describing risk level,
-confirmation requirements, and rollback policy for each operation — but it's
-**read-only documentation**. The table has no action column, no buttons, no
-click handlers. `tenantDangerZone.js` additionally exports
-`evaluateDangerZoneRequest`/`buildDangerZoneAuditEvent`/
-`isHighRiskOperation` — a maker-checker policy library — but **none of the
-three are imported anywhere in `src/` or `base44/functions/`**. The whole
-module was built (policy + spec table) but never connected to an executable
-path: there is currently no way, through the UI, to actually delete/suspend/
-reset/transfer a tenant.
+confirmation requirements, and rollback policy for each operation, but it
+was **read-only documentation** — no action column, no buttons, no click
+handlers — and no data export existed anywhere. New:
 
-**Why not built here:** these four operations are irreversible and
-tenant-wide (a botched `RESET_TENANT_DATA` or `DELETE_TENANT` destroys a
-school's data outright) — implementing them for real needs the same
-maker-checker rigor `governRoleChange` already proved out for role changes
-(second-ADMIN approval, `PendingChange` audit trail, self-approval
-rejection) applied to four much higher-blast-radius operations, with no way
-to verify against a live deploy from this environment. Building it rushed,
-unverified, is a worse outcome than leaving the honest gap documented.
-Tracked as a separate initiative alongside module 3 above.
+- **`exportSchoolData`** (`base44/functions/`) — any ADMIN. Service role,
+  but every read explicitly filtered by the caller's own `school_id`,
+  re-derived server-side from their own ACTIVE ADMIN `UserProfile` (never
+  trusted from the request — same authority-derivation pattern as
+  `governRoleChange`). Returns `Student`, `Classroom`, `TeacherClassroom`,
+  `ParentStudent`, `ParentProfile`, `Attendance`, `Homework`, `DiaryEntry`,
+  `Notice`, `NoticeDelivery`, `AbsenceNotification`, `EmergencyContact`,
+  `Event`, `EventResponse`, `PaymentConcept`, `ChargeItem`, `PaymentRecord`,
+  `Discount`, `UniformOrder`, `OfficialDocument`, `WeeklyMenu`,
+  `SchoolSetupGuide`, `SupportTicket`, `UserProfile` as one JSON payload; a
+  failure on any single entity doesn't fail the whole export.
+  `PermisosRoles.jsx` turns the response into a client-side download.
+- **"Solicitar eliminación de la escuela"** — **not** a direct delete.
+  `School.delete`'s RLS requires `role: admin` (the ACACIA platform owner) —
+  a school's own ADMIN cannot delete their own school via RLS at all, by
+  design. So this creates a `SupportTicket` (`category: ACCOUNT`,
+  `priority: HIGH`) via the existing `createSupportTicket` helper;
+  `resolveSupportRouting` already always routes an ADMIN's own tickets to
+  the platform owner regardless of category, so no new routing logic was
+  needed. Same principle as every other irreversible, tenant-wide deletion
+  in this portfolio going through a human rather than instant self-service
+  (see `jospabloh/radar`'s equivalent module-7 fix).
+
+**The pre-existing 4-operation maker-checker spec table is unchanged and
+deliberately left as documentation**, now explicitly labeled in the UI as a
+separate initiative so it doesn't read as functional. `tenantDangerZone.js`
+additionally exports `evaluateDangerZoneRequest`/`buildDangerZoneAuditEvent`/
+`isHighRiskOperation` — still unused anywhere in `src/` or
+`base44/functions/`. Building `DELETE_TENANT`/`SUSPEND_TENANT`/
+`RESET_TENANT_DATA`/`TRANSFER_TENANT_OWNERSHIP` for real still needs the
+same maker-checker rigor `governRoleChange` already proved out for role
+changes (second-ADMIN approval, `PendingChange` audit trail, self-approval
+rejection) applied to four much higher-blast-radius, irreversible,
+tenant-wide operations — that remains out of scope for this pass, same
+reasoning as before: building it rushed is a worse outcome than the actual
+module-7 requirement (export + human-mediated deletion request), which is
+now genuinely done.
+
+Bumped to v1.7.7. Verified: `npm run lint`, `npm run build`, `npm run
+validate:rls` (32 entities), `npm test` (276/276) all pass. `deno` isn't
+available in this sandbox — `exportSchoolData` gets its first live check
+once deployed to the Base44 backend (see the portfolio-wide note: a repo
+commit alone never touches deployed functions, `npx base44 functions
+deploy` from a machine with Base44 access is still required).

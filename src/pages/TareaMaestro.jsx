@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -19,6 +18,7 @@ import { loadHomeworkByClassroomIds, normalizedIdQueryKey } from '@/lib/data-loa
 import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { guardedCreate } from '@/lib/authorization/guardedWrite';
 import {
   Dialog,
   DialogContent,
@@ -63,7 +63,7 @@ export default function TareaMaestro() {
   });
 
   const createHomeworkMutation = useMutation({
-    mutationFn: (data) => base44.entities.Homework.create(data),
+    mutationFn: (data) => guardedCreate('Homework', data),
     onSuccess: () => {
       queryClient.invalidateQueries(['teacherHomework']);
       toast.success('Tarea creada correctamente');

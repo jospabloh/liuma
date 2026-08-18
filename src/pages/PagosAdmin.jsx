@@ -19,6 +19,7 @@ import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { notificationService } from '@/lib/notifications/service';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -87,7 +88,7 @@ export default function PagosAdmin() {
       for (const charge of allCharges) {
         if (charge.status === 'PENDING' && isPast(new Date(charge.due_date))) {
           try {
-            await base44.entities.ChargeItem.update(charge.id, { status: 'OVERDUE' });
+            await guardedUpdate('ChargeItem', charge.id, { status: 'OVERDUE' });
             charge.status = 'OVERDUE';
           } catch (error) {
             console.error('Error updating charge status:', error);
@@ -101,7 +102,7 @@ export default function PagosAdmin() {
   });
 
   const createConceptMutation = useMutation({
-    mutationFn: (data) => base44.entities.PaymentConcept.create(data),
+    mutationFn: (data) => guardedCreate('PaymentConcept', data),
     onSuccess: () => {
       queryClient.invalidateQueries(['paymentConcepts']);
       toast.success('Concepto creado');
@@ -112,7 +113,7 @@ export default function PagosAdmin() {
 
   const createChargeMutation = useMutation({
     mutationFn: async (data) => {
-      const charge = await base44.entities.ChargeItem.create(data);
+      const charge = await guardedCreate('ChargeItem', data);
       await logAuditEvent({
         user,
         userProfile,
@@ -134,8 +135,8 @@ export default function PagosAdmin() {
 
   const recordPaymentMutation = useMutation({
     mutationFn: async (data) => {
-      await base44.entities.ChargeItem.update(selectedCharge.id, { status: 'PAID' });
-      const payment = await base44.entities.PaymentRecord.create(data);
+      await guardedUpdate('ChargeItem', selectedCharge.id, { status: 'PAID' });
+      const payment = await guardedCreate('PaymentRecord', data);
       await logAuditEvent({
         user,
         userProfile,
@@ -290,7 +291,7 @@ export default function PagosAdmin() {
               }
             }
             
-            await base44.entities.ChargeItem.update(charge.id, { reminder_sent: true });
+            await guardedUpdate('ChargeItem', charge.id, { reminder_sent: true });
           } catch (error) {
             console.error('Error sending payment reminder:', error);
           }

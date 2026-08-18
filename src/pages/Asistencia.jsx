@@ -15,6 +15,7 @@ import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { canWriteEntity } from '@/lib/authorization/policy';
+import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
@@ -332,9 +333,9 @@ export default function Asistencia() {
       const data = { school_id: userProfile.school_id, classroom_id: selectedClassroom, student_id: student.id, date: selectedDate, status, reason, recorded_by: user.id, recorded_by_name: user.full_name };
       let record;
       if (existingRecord) {
-        record = await base44.entities.Attendance.update(existingRecord.id, data);
+        record = await guardedUpdate('Attendance', existingRecord.id, data);
       } else {
-        record = await base44.entities.Attendance.create(data);
+        record = await guardedCreate('Attendance', data);
       }
 
       if (status === 'absent' && !existingRecord?.parent_notified) {
@@ -361,7 +362,7 @@ export default function Asistencia() {
             }
           }
 
-          await base44.entities.Attendance.update(record.id, { parent_notified: true, notified_at: new Date().toISOString() });
+          await guardedUpdate('Attendance', record.id, { parent_notified: true, notified_at: new Date().toISOString() });
         } catch (error) {
           console.error('Error notifying parents:', error);
         }
@@ -390,7 +391,7 @@ export default function Asistencia() {
       const promises = students.map(student => {
         const existingRecord = attendanceRecords.find(r => r.student_id === student.id);
         if (!existingRecord) {
-          return base44.entities.Attendance.create({ school_id: userProfile.school_id, classroom_id: selectedClassroom, student_id: student.id, date: selectedDate, status: 'present', recorded_by: user.id, recorded_by_name: user.full_name });
+          return guardedCreate('Attendance', { school_id: userProfile.school_id, classroom_id: selectedClassroom, student_id: student.id, date: selectedDate, status: 'present', recorded_by: user.id, recorded_by_name: user.full_name });
         }
         return Promise.resolve();
       });

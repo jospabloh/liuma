@@ -17,6 +17,7 @@ import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { guardedCreate } from '@/lib/authorization/guardedWrite';
 
 export default function EventosParaPadres() {
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -63,7 +64,7 @@ export default function EventosParaPadres() {
       
       // Si acepta y tiene costo, crear cargo automáticamente
       if (data.response === 'ACCEPTED' && selectedEvent.has_cost) {
-        const charge = await base44.entities.ChargeItem.create({
+        const charge = await guardedCreate('ChargeItem', {
           school_id: userProfile.school_id,
           student_id: data.student_id,
           concept_name: selectedEvent.cost_concept || selectedEvent.title,

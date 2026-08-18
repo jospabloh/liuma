@@ -68,30 +68,117 @@
   ],
   "rls": {
     "create": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
-        },
-        {
-          "$or": [
+          "$and": [
             {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
+              "data.school_id": "{{user.data.school_id}}"
             },
             {
-              "$and": [
+              "$or": [
                 {
                   "user_condition": {
-                    "data.app_role": "TEACHER"
+                    "data.app_role": "ADMIN"
                   }
                 },
                 {
-                  "data.scope": "CLASSROOM"
+                  "$and": [
+                    {
+                      "user_condition": {
+                        "data.app_role": "TEACHER"
+                      }
+                    },
+                    {
+                      "data.scope": "CLASSROOM"
+                    },
+                    {
+                      "data.classroom_id": {
+                        "$in": "{{user.data.assigned_classroom_ids}}"
+                      }
+                    },
+                    {
+                      "data.author_id": "{{user.id}}"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "data.app_role": "ADMIN"
+                  }
                 },
                 {
+                  "user_condition": {
+                    "data.app_role": "TEACHER"
+                  },
+                  "data.scope": "SCHOOL"
+                },
+                {
+                  "user_condition": {
+                    "data.app_role": "TEACHER"
+                  },
+                  "data.scope": "CLASSROOM",
                   "data.classroom_id": {
                     "$in": "{{user.data.assigned_classroom_ids}}"
+                  }
+                },
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  },
+                  "data.scope": "SCHOOL"
+                },
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  },
+                  "data.scope": "CLASSROOM",
+                  "data.classroom_id": {
+                    "$in": "{{user.data.linked_student_classroom_ids}}"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "data.app_role": "ADMIN"
                   }
                 },
                 {
@@ -100,82 +187,31 @@
               ]
             }
           ]
-        }
-      ]
-    },
-    "read": {
-      "$and": [
-        {
-          "data.school_id": "{{user.data.school_id}}"
         },
         {
-          "$or": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "user_condition": {
-                "data.app_role": "TEACHER"
-              },
-              "data.scope": "SCHOOL"
-            },
-            {
-              "user_condition": {
-                "data.app_role": "TEACHER"
-              },
-              "data.scope": "CLASSROOM",
-              "data.classroom_id": {
-                "$in": "{{user.data.assigned_classroom_ids}}"
-              }
-            },
-            {
-              "user_condition": {
-                "data.app_role": "PARENT"
-              },
-              "data.scope": "SCHOOL"
-            },
-            {
-              "user_condition": {
-                "data.app_role": "PARENT"
-              },
-              "data.scope": "CLASSROOM",
-              "data.classroom_id": {
-                "$in": "{{user.data.linked_student_classroom_ids}}"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    "update": {
-      "$and": [
-        {
-          "data.school_id": "{{user.data.school_id}}"
-        },
-        {
-          "$or": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.author_id": "{{user.id}}"
-            }
-          ]
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
     },
     "delete": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            }
+          ]
         },
         {
           "user_condition": {
-            "data.app_role": "ADMIN"
+            "role": "admin"
           }
         }
       ]

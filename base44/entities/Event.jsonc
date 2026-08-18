@@ -38,7 +38,7 @@
     "requires_confirmation": {
       "type": "boolean",
       "default": false,
-      "description": "Si requiere confirmaci\u00f3n de asistencia"
+      "description": "Si requiere confirmación de asistencia"
     },
     "has_cost": {
       "type": "boolean",
@@ -56,7 +56,7 @@
     "confirmation_deadline": {
       "type": "string",
       "format": "date",
-      "description": "Fecha l\u00edmite para confirmar"
+      "description": "Fecha límite para confirmar"
     },
     "reminder_sent": {
       "type": "boolean",
@@ -70,65 +70,101 @@
   ],
   "rls": {
     "create": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
-    },
-    "read": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
         },
         {
-          "$or": [
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "$and": [
             {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
+              "data.school_id": "{{user.data.school_id}}"
             },
             {
-              "data.scope": "SCHOOL"
-            },
-            {
-              "$and": [
+              "$or": [
                 {
-                  "data.scope": "CLASSROOM"
+                  "user_condition": {
+                    "data.app_role": "ADMIN"
+                  }
                 },
                 {
-                  "data.classroom_id": {
-                    "$in": "{{user.data.assigned_classroom_ids}}"
-                  }
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "data.scope": "CLASSROOM"
+                  "data.scope": "SCHOOL"
                 },
                 {
-                  "data.classroom_id": {
-                    "$in": "{{user.data.linked_student_classroom_ids}}"
-                  }
+                  "$and": [
+                    {
+                      "data.scope": "CLASSROOM"
+                    },
+                    {
+                      "data.classroom_id": {
+                        "$in": "{{user.data.assigned_classroom_ids}}"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "data.scope": "CLASSROOM"
+                    },
+                    {
+                      "data.classroom_id": {
+                        "$in": "{{user.data.linked_student_classroom_ids}}"
+                      }
+                    }
+                  ]
                 }
               ]
             }
           ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
     },
     "update": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "delete": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   }
 }

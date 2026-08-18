@@ -5,6 +5,38 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.3] - 2026-08-18
+
+### Security
+
+Portfolio-standard audit (module 4 — multi-tenant RLS). 20 of 32 entities
+gated admin access only via the custom `data.app_role` field, which
+`asServiceRole` (the identity every backend function uses) can never match —
+a landmine for any future backend function that reads or writes one of
+them, silently returning zero rows or rejecting the write instead of an
+obvious error. Same failure mode already fixed once for `UserProfile`/
+`PendingChange` via `governRoleChange`.
+
+- **Added the missing service-role branch** (`{"user_condition":{"role":
+  "admin"}}`) to all four RLS ops on: `AbsenceNotification`, `ChargeItem`,
+  `Classroom`, `DiaryEntry`, `Discount`, `EmergencyContact`, `Event`,
+  `EventResponse`, `Homework`, `Notice`, `NoticeDelivery`,
+  `OfficialDocument`, `ParentProfile`, `ParentStudent`, `PaymentConcept`,
+  `PermissionOverride`, `SchoolSetupGuide`, `TeacherClassroom`,
+  `UniformOrder`, `WeeklyMenu`. Additive only — each op's original rule is
+  preserved verbatim as one branch of a new outer `$or`; nothing narrowed.
+- `scripts/validate-rls.mjs` doesn't check for this class of gap by design
+  (documented in its own header) — it still won't catch a regression here.
+  Adding that check is a natural follow-up, not done in this release.
+- No entity field, permission default, or tenant-isolation rule changed —
+  only the missing OR-branch was added. 276/276 tests pass (unaffected —
+  none exercise entity RLS directly); `npm run validate:rls` passes clean
+  (32 entities); lint and build both pass.
+- **Still needed, cannot be done from this environment:** the repo change
+  alone doesn't touch the deployed Base44 backend — this needs
+  `update_entity_schema` (or the Base44 dashboard) run against all 20
+  entities before it takes effect in production.
+
 ## [1.7.2] - 2026-08-10
 
 ### Security

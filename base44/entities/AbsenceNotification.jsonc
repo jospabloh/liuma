@@ -33,7 +33,7 @@
         "REJECTED"
       ],
       "default": "PENDING",
-      "description": "Estado de la justificaci\u00f3n"
+      "description": "Estado de la justificación"
     },
     "admin_notes": {
       "type": "string",
@@ -41,7 +41,7 @@
     },
     "reviewed_by": {
       "type": "string",
-      "description": "User ID de quien revis\u00f3"
+      "description": "User ID de quien revisó"
     },
     "reviewed_at": {
       "type": "string",
@@ -57,34 +57,81 @@
   ],
   "rls": {
     "create": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "data.student_id": {
+                "$in": "{{user.data.linked_student_ids}}"
+              }
+            },
+            {
+              "data.parent_id": "{{user.id}}"
+            }
+          ]
         },
         {
-          "data.student_id": {
-            "$in": "{{user.data.linked_student_ids}}"
+          "user_condition": {
+            "role": "admin"
           }
-        },
-        {
-          "data.parent_id": "{{user.id}}"
         }
       ]
     },
     "read": {
       "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$or": [
+            {
+              "data.school_id": "{{user.data.school_id}}",
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.parent_id": "{{user.id}}"
+            }
+          ]
         },
         {
-          "data.parent_id": "{{user.id}}"
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
     },
     "update": {
+      "$or": [
+        {
+          "$or": [
+            {
+              "data.school_id": "{{user.data.school_id}}",
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "$and": [
+                {
+                  "data.parent_id": "{{user.id}}"
+                },
+                {
+                  "data.status": "PENDING"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
       "$or": [
         {
           "data.school_id": "{{user.data.school_id}}",
@@ -93,22 +140,11 @@
           }
         },
         {
-          "$and": [
-            {
-              "data.parent_id": "{{user.id}}"
-            },
-            {
-              "data.status": "PENDING"
-            }
-          ]
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
-    },
-    "delete": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
     }
   }
 }

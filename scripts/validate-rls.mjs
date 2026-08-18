@@ -24,6 +24,23 @@
  * only). Keep that review manual; this guard stays focused on the two silent,
  * always-wrong classes above so every failure it reports is actionable.
  *
+ * THIRD class, added 2026-08-18: a rule object that mixes "user_condition"
+ * with sibling field keys — e.g. {"data.school_id": X, "user_condition": Y} —
+ * looks like valid Mongo-style implicit-AND syntax and this script used to
+ * accept it, but Base44's live deploy-time engine does NOT: it silently DROPS
+ * every sibling key and keeps only user_condition. A tenant-scoping clause
+ * written that way isn't "strict but correct" — it's not enforced at all.
+ * Found across 29 of liuma's 32 entities (84 instances) while completing the
+ * module-4 live deploy: the *deployed* schemas already had this exact shape,
+ * meaning tenant scoping on most read/write rules combined with a role check
+ * was silently inert in production. Confirmed via update_entity_schema's own
+ * validator error ("user_condition must be the only key in its rule — the
+ * engine drops the sibling clause(s)") — the same defect class (and message)
+ * jospabloh/cateqhub's CLAUDE.md documents finding once, in one entity
+ * (Parish), with a note it was worth checking elsewhere. This is elsewhere.
+ * The fix is always the same: wrap as {"$and": [{"user_condition": Y}, {rest
+ * of the keys}]} — never drop the entity-side clause to "simplify".
+ *
  * Run: node scripts/validate-rls.mjs   (also: npm run validate:rls)
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -71,6 +88,11 @@ function walkRule(node, ctx) {
     return;
   }
   if (node && typeof node === 'object') {
+    const keys = Object.keys(node);
+    if (keys.includes('user_condition') && keys.length > 1) {
+      const siblings = keys.filter((k) => k !== 'user_condition');
+      errors.push(`${ctx}: "user_condition" has sibling key(s) [${siblings.join(', ')}] in the same rule object — Base44's engine drops the sibling clause(s) and evaluates user_condition alone. Wrap as {"$and": [{"user_condition": ...}, {${siblings.join(', ')}}]}.`);
+    }
     for (const [key, value] of Object.entries(node)) {
       if (key === 'user_condition') continue;
       if (key === '$or' || key === '$and' || key === '$in' || key === '$nin') {

@@ -70,6 +70,7 @@ const GestionDocumentos = React.lazy(() => import('./pages/GestionDocumentos'));
 const GestionEscuela = React.lazy(() => import('./pages/GestionEscuela'));
 const GestionPedidosAdmin = React.lazy(() => import('./pages/GestionPedidosAdmin'));
 const GestionSalon = React.lazy(() => import('./pages/GestionSalon'));
+const HistorialCambios = React.lazy(() => import('./pages/HistorialCambios'));
 const Home = React.lazy(() => import('./pages/Home'));
 const LicenseAdmin = React.lazy(() => import('./pages/LicenseAdmin'));
 const MisHijos = React.lazy(() => import('./pages/MisHijos'));
@@ -112,6 +113,7 @@ export const PAGES = {
     "GestionEscuela": GestionEscuela,
     "GestionPedidosAdmin": GestionPedidosAdmin,
     "GestionSalon": GestionSalon,
+    "HistorialCambios": HistorialCambios,
     "Home": Home,
     "LicenseAdmin": LicenseAdmin,
     "MisHijos": MisHijos,

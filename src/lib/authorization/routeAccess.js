@@ -30,6 +30,7 @@ export const ROUTE_ACCESS = {
   Soporte: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
   SoporteAdmin: [ROLES.ADMIN],
   PanelSoporte: [ROLES.ADMIN],
+  HistorialCambios: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
   // School admins see their own read-only "Mi Licencia"; the ACACIA platform
   // owner gets the full cross-tenant panel via the owner override in GuardedRoute.
   LicenseAdmin: [ROLES.ADMIN],

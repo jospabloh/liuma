@@ -12,11 +12,11 @@
     },
     "resource": {
       "type": "string",
-      "description": "Recurso/m\u00f3dulo afectado (ej. Notice, Attendance)"
+      "description": "Recurso/módulo afectado (ej. Notice, Attendance)"
     },
     "action": {
       "type": "string",
-      "description": "Acci\u00f3n (view, add, edit, delete, approve, export, manage_permissions, read, write)"
+      "description": "Acción (view, add, edit, delete, approve, export, manage_permissions, read, write)"
     },
     "effect": {
       "type": "string",
@@ -28,7 +28,7 @@
     },
     "reason": {
       "type": "string",
-      "description": "Justificaci\u00f3n del override"
+      "description": "Justificación del override"
     }
   },
   "required": [
@@ -40,28 +40,64 @@
   ],
   "rls": {
     "create": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "read": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "update": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "delete": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   }
 }

@@ -2,7 +2,7 @@
   "name": "OfficialDocument",
   "properties": {
     "description": {
-      "description": "Descripci\u00f3n del documento",
+      "description": "Descripción del documento",
       "type": "string"
     },
     "document_type": {
@@ -40,15 +40,15 @@
       "type": "string"
     },
     "title": {
-      "description": "T\u00edtulo del documento",
+      "description": "Título del documento",
       "type": "string"
     },
     "uploaded_by": {
-      "description": "User ID que lo subi\u00f3",
+      "description": "User ID que lo subió",
       "type": "string"
     },
     "uploaded_by_name": {
-      "description": "Nombre de quien lo subi\u00f3",
+      "description": "Nombre de quien lo subió",
       "type": "string"
     },
     "valid_from": {
@@ -71,75 +71,111 @@
   ],
   "rls": {
     "create": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
-    },
-    "delete": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
-    },
-    "read": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
         },
         {
-          "$or": [
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "$and": [
             {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
+              "data.school_id": "{{user.data.school_id}}"
             },
             {
-              "data.document_type": "UNIFORM_CATALOG"
-            },
-            {
-              "$and": [
+              "$or": [
                 {
                   "user_condition": {
-                    "data.app_role": "TEACHER"
+                    "data.app_role": "ADMIN"
                   }
                 },
                 {
-                  "data.target_audience": {
-                    "$in": [
-                      "TODOS",
-                      "MAESTROS"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "PARENT"
-                  }
+                  "data.document_type": "UNIFORM_CATALOG"
                 },
                 {
-                  "data.target_audience": {
-                    "$in": [
-                      "TODOS",
-                      "PADRES"
-                    ]
-                  }
+                  "$and": [
+                    {
+                      "user_condition": {
+                        "data.app_role": "TEACHER"
+                      }
+                    },
+                    {
+                      "data.target_audience": {
+                        "$in": [
+                          "TODOS",
+                          "MAESTROS"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "user_condition": {
+                        "data.app_role": "PARENT"
+                      }
+                    },
+                    {
+                      "data.target_audience": {
+                        "$in": [
+                          "TODOS",
+                          "PADRES"
+                        ]
+                      }
+                    }
+                  ]
                 }
               ]
             }
           ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
     },
     "update": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   },
   "type": "object"

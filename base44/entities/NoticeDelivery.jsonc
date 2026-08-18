@@ -29,7 +29,7 @@
     },
     "classroom_id": {
       "type": "string",
-      "description": "Sal\u00f3n asociado a la entrega"
+      "description": "Salón asociado a la entrega"
     },
     "status": {
       "type": "string",
@@ -44,24 +44,24 @@
     "sent_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Cu\u00e1ndo se envi\u00f3"
+      "description": "Cuándo se envió"
     },
     "read_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Cu\u00e1ndo se ley\u00f3"
+      "description": "Cuándo se leyó"
     },
     "escalation_due_at": {
       "type": "string",
       "format": "date-time",
-      "description": "L\u00edmite para escalar avisos urgentes no le\u00eddos"
+      "description": "Límite para escalar avisos urgentes no leídos"
     },
     "escalation_status": {
       "type": "string",
       "enum": [
         "ESCALATED"
       ],
-      "description": "Estado de escalaci\u00f3n"
+      "description": "Estado de escalación"
     }
   },
   "required": [
@@ -71,85 +71,121 @@
   ],
   "rls": {
     "create": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
-        },
-        {
-          "$or": [
+          "$and": [
             {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
+              "data.school_id": "{{user.data.school_id}}"
             },
             {
-              "$and": [
+              "$or": [
                 {
                   "user_condition": {
-                    "data.app_role": "TEACHER"
+                    "data.app_role": "ADMIN"
                   }
                 },
                 {
-                  "data.classroom_id": {
-                    "$in": "{{user.data.assigned_classroom_ids}}"
-                  }
+                  "$and": [
+                    {
+                      "user_condition": {
+                        "data.app_role": "TEACHER"
+                      }
+                    },
+                    {
+                      "data.classroom_id": {
+                        "$in": "{{user.data.assigned_classroom_ids}}"
+                      }
+                    }
+                  ]
                 }
               ]
             }
           ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
     },
     "read": {
       "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        },
-        {
-          "data.school_id": "{{user.data.school_id}}",
-          "data.recipient_user_id": "{{user.id}}"
-        },
-        {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "TEACHER"
-          },
-          "data.classroom_id": {
-            "$in": "{{user.data.assigned_classroom_ids}}"
-          }
-        }
-      ]
-    },
-    "update": {
-      "$and": [
-        {
-          "data.school_id": "{{user.data.school_id}}"
-        },
-        {
           "$or": [
             {
+              "data.school_id": "{{user.data.school_id}}",
               "user_condition": {
                 "data.app_role": "ADMIN"
               }
             },
             {
+              "data.school_id": "{{user.data.school_id}}",
               "data.recipient_user_id": "{{user.id}}"
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}",
+              "user_condition": {
+                "data.app_role": "TEACHER"
+              },
+              "data.classroom_id": {
+                "$in": "{{user.data.assigned_classroom_ids}}"
+              }
             }
           ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "data.app_role": "ADMIN"
+                  }
+                },
+                {
+                  "data.recipient_user_id": "{{user.id}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
     },
     "delete": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            }
+          ]
         },
         {
           "user_condition": {
-            "data.app_role": "ADMIN"
+            "role": "admin"
           }
         }
       ]

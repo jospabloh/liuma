@@ -16,7 +16,7 @@
     },
     "description": {
       "type": "string",
-      "description": "Descripci\u00f3n detallada del paso"
+      "description": "Descripción detallada del paso"
     },
     "category": {
       "type": "string",
@@ -27,7 +27,7 @@
         "GENERAL"
       ],
       "default": "GENERAL",
-      "description": "Categor\u00eda del paso"
+      "description": "Categoría del paso"
     },
     "is_annual": {
       "type": "boolean",
@@ -36,16 +36,16 @@
     },
     "school_year": {
       "type": "string",
-      "description": "A\u00f1o escolar (ej: 2025-2026)"
+      "description": "Año escolar (ej: 2025-2026)"
     },
     "is_completed": {
       "type": "boolean",
       "default": false,
-      "description": "Si el paso est\u00e1 completado"
+      "description": "Si el paso está completado"
     },
     "completed_by": {
       "type": "string",
-      "description": "User ID quien complet\u00f3"
+      "description": "User ID quien completó"
     },
     "completed_at": {
       "type": "string",
@@ -54,11 +54,11 @@
     "last_confirmed_at": {
       "type": "string",
       "format": "date-time",
-      "description": "\u00daltima vez que se confirm\u00f3 que sigue vigente"
+      "description": "Última vez que se confirmó que sigue vigente"
     },
     "confirmed_by": {
       "type": "string",
-      "description": "User ID quien confirm\u00f3"
+      "description": "User ID quien confirmó"
     },
     "notes": {
       "type": "string",
@@ -88,28 +88,64 @@
   ],
   "rls": {
     "create": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "read": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "update": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "delete": {
-      "data.school_id": "{{user.data.school_id}}",
-      "user_condition": {
-        "data.app_role": "ADMIN"
-      }
+      "$or": [
+        {
+          "data.school_id": "{{user.data.school_id}}",
+          "user_condition": {
+            "data.app_role": "ADMIN"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   }
 }

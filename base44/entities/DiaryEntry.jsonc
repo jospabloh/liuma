@@ -2,17 +2,17 @@
   "name": "DiaryEntry",
   "properties": {
     "bathroom": {
-      "description": "Informaci\u00f3n sobre ba\u00f1o",
+      "description": "Información sobre baño",
       "type": "string"
     },
     "bathroom_pipi": {
       "default": false,
-      "description": "HOY HICE - Pip\u00ed",
+      "description": "HOY HICE - Pipí",
       "type": "boolean"
     },
     "bathroom_popo": {
       "default": false,
-      "description": "HOY HICE - Pop\u00f3",
+      "description": "HOY HICE - Popó",
       "type": "boolean"
     },
     "behavior": {
@@ -43,7 +43,7 @@
       "type": "string"
     },
     "food_mood": {
-      "description": "HOY COM\u00cd - C\u00f3mo comi\u00f3 el alumno (carita)",
+      "description": "HOY COMÍ - Cómo comió el alumno (carita)",
       "enum": [
         "feliz",
         "neutral",
@@ -52,7 +52,7 @@
       "type": "string"
     },
     "general_mood": {
-      "description": "HOY ESTUVE - Estado de \u00e1nimo general (carita)",
+      "description": "HOY ESTUVE - Estado de ánimo general (carita)",
       "enum": [
         "feliz",
         "neutral",
@@ -68,7 +68,7 @@
       "type": "string"
     },
     "learning": {
-      "description": "Evaluaci\u00f3n de aprendizaje (opcional - para primaria)",
+      "description": "Evaluación de aprendizaje (opcional - para primaria)",
       "enum": [
         "excelente",
         "bueno",
@@ -78,7 +78,7 @@
       "type": "string"
     },
     "mood": {
-      "description": "Estado de \u00e1nimo detallado (opcional)",
+      "description": "Estado de ánimo detallado (opcional)",
       "enum": [
         "feliz",
         "tranquilo",
@@ -89,7 +89,7 @@
       "type": "string"
     },
     "naps": {
-      "description": "Informaci\u00f3n sobre siestas",
+      "description": "Información sobre siestas",
       "type": "string"
     },
     "needs_clothes": {
@@ -99,7 +99,7 @@
     },
     "needs_diapers": {
       "default": false,
-      "description": "NECESITO - Pa\u00f1ales",
+      "description": "NECESITO - Pañales",
       "type": "boolean"
     },
     "needs_ointment": {
@@ -112,11 +112,11 @@
       "type": "string"
     },
     "notes_text": {
-      "description": "MI MAESTRA DICE - Notas principales del d\u00eda",
+      "description": "MI MAESTRA DICE - Notas principales del día",
       "type": "string"
     },
     "parent_notes": {
-      "description": "MIS PAP\u00c1S DICEN - Respuesta de los padres",
+      "description": "MIS PAPÁS DICEN - Respuesta de los padres",
       "type": "string"
     },
     "school_id": {
@@ -131,11 +131,11 @@
       "type": "boolean"
     },
     "sleep_hours": {
-      "description": "HOY DORM\u00cd - Horas",
+      "description": "HOY DORMÍ - Horas",
       "type": "number"
     },
     "sleep_minutes": {
-      "description": "HOY DORM\u00cd - Minutos",
+      "description": "HOY DORMÍ - Minutos",
       "type": "number"
     },
     "student_id": {
@@ -169,13 +169,74 @@
   ],
   "rls": {
     "create": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "data.app_role": "ADMIN"
+                  }
+                },
+                {
+                  "$and": [
+                    {
+                      "user_condition": {
+                        "data.app_role": "TEACHER"
+                      }
+                    },
+                    {
+                      "data.classroom_id": {
+                        "$in": "{{user.data.assigned_classroom_ids}}"
+                      }
+                    },
+                    {
+                      "data.teacher_id": "{{user.id}}"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
         {
           "$or": [
             {
+              "data.school_id": "{{user.data.school_id}}",
               "user_condition": {
                 "data.app_role": "ADMIN"
               }
@@ -188,8 +249,53 @@
                   }
                 },
                 {
+                  "data.school_id": "{{user.data.school_id}}"
+                },
+                {
                   "data.classroom_id": {
                     "$in": "{{user.data.assigned_classroom_ids}}"
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  }
+                },
+                {
+                  "data.school_id": "{{user.data.school_id}}"
+                },
+                {
+                  "data.student_id": {
+                    "$in": "{{user.data.linked_student_ids}}"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "$and": [
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            },
+            {
+              "$or": [
+                {
+                  "user_condition": {
+                    "data.app_role": "ADMIN"
                   }
                 },
                 {
@@ -198,81 +304,11 @@
               ]
             }
           ]
-        }
-      ]
-    },
-    "delete": {
-      "$and": [
-        {
-          "data.school_id": "{{user.data.school_id}}"
         },
         {
           "user_condition": {
-            "data.app_role": "ADMIN"
+            "role": "admin"
           }
-        }
-      ]
-    },
-    "read": {
-      "$or": [
-        {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "TEACHER"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "data.classroom_id": {
-                "$in": "{{user.data.assigned_classroom_ids}}"
-              }
-            }
-          ]
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "PARENT"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "data.student_id": {
-                "$in": "{{user.data.linked_student_ids}}"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    "update": {
-      "$and": [
-        {
-          "data.school_id": "{{user.data.school_id}}"
-        },
-        {
-          "$or": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.teacher_id": "{{user.id}}"
-            }
-          ]
         }
       ]
     }

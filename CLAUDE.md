@@ -68,6 +68,29 @@ Bumped to v1.7.5 (patch, security). Verified: `npm run lint`, `npm run
 build`, `npm run validate:rls` (32 entities, new check included) all pass;
 276/276 tests unaffected (none exercise entity RLS directly).
 
+## Module 6 (in-app version/changelog) — added 2026-08-18
+
+LIUMA had no in-app changelog surface — `CHANGELOG.md` at the repo root was
+kept current release-over-release, but nothing in the running app ever
+showed it. New `src/lib/appConfig.js` (`APP_VERSION`/`RELEASE_DATE`,
+mirroring the same file's role in stockflow/cateqhub/puntos/radar) feeds a
+new `HistorialCambios` page — plain-language Spanish summaries of recent
+releases, not the raw technical `CHANGELOG.md` entries, plus a version
+stamp footer. Wired the same way every other page in this app is
+registered (this repo has no page auto-discovery — `pages.config.js` is
+edited by hand despite its "AUTO-GENERATED" header comment, which is
+guidance for the Base44 IDE's own codegen tool, not a prohibition on
+manual edits when that tool isn't available): a route in
+`src/pages.config.js`, a `[ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT]` entry
+in `src/lib/authorization/routeAccess.js` (this page carries no sensitive
+data — every role sees it), and a nav destination for all three roles
+under the existing "Soporte" group in `src/components/nav/navRegistry.js`
+(+ a `History` icon added to `navIcons.jsx`'s string→component map).
+
+Bumped to v1.7.6. Verified: `npm run lint`, `npm run build`, `npm test`
+(276/276) all pass. No RLS, permission, or entity change — a new read-only
+page, purely additive.
+
 ## Module 3 (server-side permission/billing enforcement) — fixed 2026-08-18
 
 A portfolio-standard audit (`jospabloh/acacia-app-standard`, module 3) flagged

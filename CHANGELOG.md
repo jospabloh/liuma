@@ -5,6 +5,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.6] - 2026-08-18
+
+### Added
+
+Portfolio-standard audit (module 6 — in-app version/changelog). LIUMA had
+no in-app changelog surface at all — only this repo-root `CHANGELOG.md`,
+never seen by an end user.
+
+- New `src/lib/appConfig.js` (`APP_VERSION`/`RELEASE_DATE`) and a new
+  **`HistorialCambios`** page — plain-language Spanish summaries of recent
+  releases plus a version stamp, reachable from every role's nav under the
+  existing "Soporte" group (`src/components/nav/navRegistry.js`), wired
+  through `routeAccess.js` and `pages.config.js` the same way every other
+  page in this app is registered.
+- No RLS, permission, or entity change — a new read-only page, purely
+  additive.
+
+Verified: `npm run lint`, `npm run build`, `npm test` (276/276) all pass.
+
 ## [1.7.5] - 2026-08-18
 
 ### Security (critical)

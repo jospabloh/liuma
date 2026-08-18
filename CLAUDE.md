@@ -4,6 +4,59 @@ School management SaaS (Base44 backend + Vite/React front-end), multi-tenant via
 `school_id` on every business entity. See `docs/authorization-matrix.md` and
 `docs/security-role-governance-remediation.md`.
 
+## Module 10 (dark theme) — added 2026-08-18
+
+`tailwind.config.js` already had `darkMode: ["class"]` and `src/index.css`
+already had a complete `.dark` token palette (shadcn boilerplate) — neither
+was ever engaged. Fixed:
+
+- **`src/lib/ThemeContext.jsx`** (new) — `ThemeProvider`/`useTheme`,
+  `STORAGE_KEY = 'liuma-theme'`. Resolution order: stored preference →
+  `prefers-color-scheme` → light.
+- **`index.html`** — inline pre-mount `<script>` reading the same
+  `localStorage` key + `prefers-color-scheme`, applying `.dark` before
+  React mounts (no flash of wrong theme). Kept manually in sync with
+  `ThemeContext.jsx`'s own resolution logic — both carry a comment pointing
+  at the other.
+- **`src/App.jsx`** — wrapped the whole provider tree in `<ThemeProvider>`.
+- **`src/components/ThemeToggle.jsx`** (new) — Sun/Moon icon button, wired
+  into two places: `SideNav`'s identity footer (the desktop rail, next to
+  the Soporte link) and `CommandPalette`'s new footer row. The mobile
+  `BottomNav` has no spare slot — its own header comment is explicit that
+  all 4 are already spoken for (Inicio/Hoy/Avisos/Más) — so the command
+  palette (opened from the "Más" tab, the one piece of persistent chrome
+  every mobile screen has) is the only mobile-reachable spot for the
+  toggle; desktop's `SideNav` isn't under that constraint.
+- **Six pre-existing hardcoded-light spots** (`PendingApproval.jsx`,
+  `ContinueAs.jsx`, `App.jsx`'s two loading skeletons, `Layout.jsx`'s
+  footer, `PageNotFound.jsx`) that used `bg-white`/`text-slate-*`/
+  `border-slate-*` with no `dark:` variant — each got the matching `dark:`
+  classes.
+- **Four more hardcoded spots checked and left as-is**: `LumiChat.jsx`'s
+  header (`text-white`/`bg-white/20` on a `bg-gradient-to-r` tenant-brand
+  band), `HomeChrome.jsx`'s `bg-white/10` blur decoration (on `bg-primary`,
+  already theme-aware via the CSS custom property), `WelcomeTrialModal.jsx`/
+  `SuspendedAccountModal.jsx`'s `bg-white/20` icon circles (on
+  `bg-primary`/`bg-destructive` respectively), and `AdminHome.jsx`'s
+  tenant-switcher "current" pill (`bg-white text-slate-900`, an
+  intentional white chip against the brand-colored `HomeHeader` band, not
+  a themed page surface). None of these are neutral page surfaces — a flat
+  `dark:` inversion would have been wrong for all four, same reasoning
+  `jospabloh/puntos`'s CLAUDE.md gives for its own opacity-suffixed
+  overlay/scrim exclusions.
+
+**Verified:** `npm run lint`, `npm run build`, `npm run validate:rls` (32
+entities), `npm test` (276/276) all pass. Visually verified with Playwright
+(Chromium) against a local dev server — `/login` (role-picker step,
+pre-auth) and a 404 page, both in dark mode — text contrast, card
+backgrounds, and borders all render correctly. **Not verified:** any
+authenticated page (Home, Asistencia, GestionEscuela, etc.) — not reachable
+without live Base44 auth in this environment. Risk is bounded: those pages
+already use the same semantic tokens (`bg-card`, `text-foreground`, etc.)
+the `.dark` palette in `index.css` was hand-tuned for, and the same call
+was made (and held up) for `jospabloh/cateqhub`'s and `jospabloh/puntos`'s
+equivalent module-10 gaps.
+
 ## Module 4 (multi-tenant RLS) — deployed live 2026-08-18, critical follow-on found and fixed same day
 
 The repo-side fix (missing `{"user_condition":{"role":"admin"}}` service-role

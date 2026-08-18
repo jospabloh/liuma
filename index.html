@@ -12,6 +12,19 @@
       rel="stylesheet"
     />
     <title>liuma</title>
+    <script>
+      // Pre-mount theme resolution — applies .dark before React hydrates so
+      // there's no flash of the wrong theme. Mirrors src/lib/ThemeContext.jsx's
+      // own resolution order (stored preference -> prefers-color-scheme ->
+      // light); keep both in sync by hand.
+      (function () {
+        try {
+          var stored = window.localStorage.getItem('liuma-theme');
+          var dark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

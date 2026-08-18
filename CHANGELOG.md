@@ -5,6 +5,32 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.8] - 2026-08-18
+
+### Added
+
+Portfolio-standard audit (module 10 — dark theme). `tailwind.config.js`
+already had `darkMode: ["class"]` and `index.css` already had a complete
+`.dark` token palette (shadcn boilerplate), but nothing ever applied the
+`.dark` class — no toggle, no persisted preference, no
+`prefers-color-scheme` fallback.
+
+- New `src/lib/ThemeContext.jsx` (`ThemeProvider`/`useTheme`), a matching
+  inline pre-mount `<script>` in `index.html` (no flash of the wrong theme
+  before React hydrates), and a new `ThemeToggle` component wired into
+  `SideNav`'s identity footer (desktop) and `CommandPalette`'s new footer
+  row (mobile — the bottom nav's 4 slots were already spoken for).
+- Six pre-existing hardcoded-light spots (`PendingApproval.jsx`,
+  `ContinueAs.jsx`, `App.jsx`'s loading skeletons, `Layout.jsx`'s footer,
+  `PageNotFound.jsx`) got matching `dark:` variants.
+- Four more hardcoded spots were checked and correctly left as-is — all sit
+  on brand-color/semantic-color surfaces already theme-aware via CSS
+  variables, or are white-on-color decoration, not themed page surfaces.
+
+Verified: `npm run lint`, `npm run build`, `npm run validate:rls` (32
+entities), `npm test` (276/276) all pass, plus a Playwright visual check
+(dark mode) of `/login` and a 404 page.
+
 ## [1.7.7] - 2026-08-18
 
 ### Added

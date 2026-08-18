@@ -62,12 +62,12 @@ export default function Layout({ children, currentPageName }) {
         <SideNav />
         <div className="md:pl-64">
           {children}
-          <footer className="py-4 text-center text-sm text-slate-500">
+          <footer className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">
             <a
               href="https://acaciaco.com.mx"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-slate-700 underline"
+              className="hover:text-slate-700 hover:dark:text-slate-200 underline"
             >
               creado con cariño ❤ por ACACIA Consultoría
             </a>

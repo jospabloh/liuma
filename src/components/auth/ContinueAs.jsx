@@ -28,8 +28,8 @@ export default function ContinueAs() {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-slate-50 p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-xl shadow-slate-200/50">
+    <div className="fixed inset-0 flex items-center justify-center bg-slate-50 dark:bg-background p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-card p-7 text-center shadow-xl shadow-slate-200/50 dark:shadow-none">
         {identity.avatar ? (
           <img src={identity.avatar} alt="" className="mx-auto h-16 w-16 rounded-full object-cover" />
         ) : (
@@ -38,10 +38,10 @@ export default function ContinueAs() {
           </div>
         )}
 
-        <p className="mt-4 text-sm text-slate-500">¿Eres tú?</p>
-        <h1 className="mt-0.5 text-xl font-semibold text-slate-900">{name}</h1>
+        <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">¿Eres tú?</p>
+        <h1 className="mt-0.5 text-xl font-semibold text-slate-900 dark:text-slate-100">{name}</h1>
         {identity.email && identity.name && (
-          <p className="mt-0.5 text-sm text-slate-400">{identity.email}</p>
+          <p className="mt-0.5 text-sm text-slate-400 dark:text-slate-500">{identity.email}</p>
         )}
 
         <button
@@ -53,7 +53,7 @@ export default function ContinueAs() {
 
         <button
           onClick={useOther}
-          className="mt-3 w-full rounded-xl px-4 py-2 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+          className="mt-3 w-full rounded-xl px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 hover:dark:bg-slate-800 hover:dark:text-slate-200"
         >
           Usar otra cuenta
         </button>

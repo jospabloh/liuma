@@ -5,6 +5,51 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.5] - 2026-08-18
+
+### Security (critical)
+
+Completing 1.7.3's module-4 live deploy — pushing the fixed
+`base44/entities/*.jsonc` RLS to the actual Base44 backend, since a repo
+commit alone never changes runtime behavior — surfaced that Base44's live
+RLS engine **silently drops any sibling key placed next to
+`"user_condition"`** in the same rule object:
+`{"data.school_id": X, "user_condition": Y}` evaluates as `user_condition`
+**alone** — `X` is discarded entirely, not enforced. That shape was already
+the *deployed* form of most tenant-scoping rules in this app, not something
+1.7.3 introduced. A scan of all 32 entities found **29 affected, 84
+instances**, almost all on the `data.school_id` tenant-isolation clause —
+meaning a user matching only the role half of a rule (e.g.
+`data.app_role: ADMIN`) could read/write across **every school**, not just
+their own, on nearly every entity in the app. Same defect class
+`jospabloh/cateqhub`'s changelog documents finding once, in one entity
+(`Parish`) — this is the "worth checking elsewhere" that note called out,
+at much larger scale here.
+
+- **Fixed:** every affected rule object rewritten as an explicit
+  `{"$and": [{"user_condition": ...}, {...rest}]}` — access semantics
+  preserved exactly, nothing narrowed or widened beyond restoring the
+  tenant scoping the original (broken) rule always intended.
+- **Two further live-engine constraints** surfaced and fixed while
+  redeploying: a nested `$or` directly inside another `$or` is not
+  evaluated on write rules (create/update/delete) — flattened (read rules
+  tolerate it fine, left as-is); and the built-in record id must be
+  addressed as `"id"`, not `"_id"` — `Classroom`/`School`/`Student` used
+  `"_id"` and were rejected on redeploy, renamed.
+- All 29 corrected entities deployed live via the Base44 MCP and re-fetched
+  to confirm the fix actually took effect in production.
+- **`scripts/validate-rls.mjs` now catches the primary defect going
+  forward** — flags any rule object mixing `user_condition` with sibling
+  keys. This exact shape is syntactically valid Mongo-style implicit-AND,
+  so the existing checks (which only ever verified valid syntax) never
+  caught it; the new check verified real by confirming it fires on the
+  pre-fix files and passes clean after.
+- No entity field, property, or intended-access rule changed — every
+  entity's `properties`/`required` confirmed byte-identical before/after.
+
+Verified: `npm run lint`, `npm run build`, `npm run validate:rls` (32
+entities, including the new check) all pass; 276/276 tests unaffected.
+
 ## [1.7.4] - 2026-08-18
 
 ### Security

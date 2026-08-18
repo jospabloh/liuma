@@ -124,6 +124,16 @@
     "status"
   ],
   "rls": {
+    "create": {
+      "$and": [
+        {
+          "data.requester_user_id": "{{user.id}}"
+        },
+        {
+          "data.school_id": "{{user.data.school_id}}"
+        }
+      ]
+    },
     "read": {
       "$or": [
         {
@@ -135,20 +145,16 @@
           "data.requester_user_id": "{{user.id}}"
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        }
-      ]
-    },
-    "create": {
-      "$and": [
-        {
-          "data.requester_user_id": "{{user.id}}"
-        },
-        {
-          "data.school_id": "{{user.data.school_id}}"
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         }
       ]
     },
@@ -160,10 +166,16 @@
           }
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         }
       ]
     },

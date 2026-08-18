@@ -69,7 +69,7 @@
     "approved_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Cu\u00e1ndo se resolvi\u00f3",
+      "description": "Cuándo se resolvió",
       "rls": {
         "update": {
           "user_condition": {
@@ -80,7 +80,7 @@
     },
     "payload": {
       "type": "object",
-      "description": "Detalle del cambio solicitado (roles, m\u00f3dulo, nivel de riesgo, etc.)"
+      "description": "Detalle del cambio solicitado (roles, módulo, nivel de riesgo, etc.)"
     }
   },
   "required": [
@@ -97,10 +97,16 @@
           }
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         }
       ]
     },
@@ -112,10 +118,16 @@
           }
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         }
       ]
     },
@@ -127,10 +139,16 @@
           }
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         }
       ]
     },
@@ -142,10 +160,16 @@
           }
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         }
       ]
     }

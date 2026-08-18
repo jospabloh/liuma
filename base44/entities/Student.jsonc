@@ -81,28 +81,46 @@
           }
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "TEACHER"
-          },
-          "data.classroom_id": {
-            "$in": "{{user.data.assigned_classroom_ids}}"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "TEACHER"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}",
+              "data.classroom_id": {
+                "$in": "{{user.data.assigned_classroom_ids}}"
+              }
+            }
+          ]
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "PARENT"
-          },
-          "_id": {
-            "$in": "{{user.data.linked_student_ids}}"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "PARENT"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}",
+              "id": {
+                "$in": "{{user.data.linked_student_ids}}"
+              }
+            }
+          ]
         }
       ]
     },

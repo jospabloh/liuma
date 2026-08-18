@@ -32,7 +32,7 @@
     },
     "reason": {
       "type": "string",
-      "description": "Raz\u00f3n de ausencia o retraso"
+      "description": "Razón de ausencia o retraso"
     },
     "recorded_by": {
       "type": "string",
@@ -45,12 +45,12 @@
     "parent_notified": {
       "type": "boolean",
       "default": false,
-      "description": "Si se notific\u00f3 a los padres"
+      "description": "Si se notificó a los padres"
     },
     "notified_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Cu\u00e1ndo se notific\u00f3"
+      "description": "Cuándo se notificó"
     }
   },
   "required": [
@@ -99,28 +99,46 @@
           }
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "data.classroom_id": {
-            "$in": "{{user.data.assigned_classroom_ids}}"
-          },
-          "user_condition": {
-            "data.app_role": "TEACHER"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "TEACHER"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}",
+              "data.classroom_id": {
+                "$in": "{{user.data.assigned_classroom_ids}}"
+              }
+            }
+          ]
         },
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "data.student_id": {
-            "$in": "{{user.data.linked_student_ids}}"
-          },
-          "user_condition": {
-            "data.app_role": "PARENT"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "PARENT"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}",
+              "data.student_id": {
+                "$in": "{{user.data.linked_student_ids}}"
+              }
+            }
+          ]
         }
       ]
     },

@@ -47,10 +47,16 @@
     "create": {
       "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         },
         {
           "user_condition": {
@@ -64,16 +70,28 @@
         {
           "$or": [
             {
-              "data.school_id": "{{user.data.school_id}}",
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "ADMIN"
+                  }
+                },
+                {
+                  "data.school_id": "{{user.data.school_id}}"
+                }
+              ]
             },
             {
-              "data.parent_id": "{{user.id}}",
-              "user_condition": {
-                "data.app_role": "PARENT"
-              }
+              "$and": [
+                {
+                  "user_condition": {
+                    "data.app_role": "PARENT"
+                  }
+                },
+                {
+                  "data.parent_id": "{{user.id}}"
+                }
+              ]
             }
           ]
         },
@@ -87,10 +105,16 @@
     "update": {
       "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         },
         {
           "user_condition": {
@@ -102,10 +126,16 @@
     "delete": {
       "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}",
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
         },
         {
           "user_condition": {

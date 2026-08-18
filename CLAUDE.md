@@ -4,6 +4,70 @@ School management SaaS (Base44 backend + Vite/React front-end), multi-tenant via
 `school_id` on every business entity. See `docs/authorization-matrix.md` and
 `docs/security-role-governance-remediation.md`.
 
+## Module 4 (multi-tenant RLS) — deployed live 2026-08-18, critical follow-on found and fixed same day
+
+The repo-side fix (missing `{"user_condition":{"role":"admin"}}` service-role
+branch on 20 entities, v1.7.3) was committed but explicitly flagged as **not
+yet deployed** — a `.jsonc` change alone never touches the running Base44
+backend. Completing that deploy via the Base44 MCP's `update_entity_schema`
+surfaced something much bigger: **Base44's live RLS engine silently drops
+any sibling key placed next to `"user_condition"`** in the same rule
+object. `{"data.school_id": X, "user_condition": Y}` evaluates as
+`user_condition` **alone** — `X` is discarded, not enforced. Confirmed
+directly from `update_entity_schema`'s own validator error: *"user_condition
+must be the only key in its rule — the engine drops the sibling clause(s)"*.
+
+That shape was already the **deployed** form of most tenant-scoping rules in
+this app — not something the 1.7.3 fix introduced. A full scan of all 32
+entities found **29 affected, 84 instances**, almost all on the
+`data.school_id` tenant-isolation clause. Practical impact: a user matching
+only the role half of a rule (e.g. `data.app_role: ADMIN`) could read/write
+across **every school in the platform**, not just their own, on nearly
+every entity in the app — a live, portfolio-scale cross-tenant leak, not a
+theoretical one. This is the same defect class `jospabloh/cateqhub`'s
+changelog documents finding once, in one entity (`Parish`), with an explicit
+note that it was "worth checking elsewhere" — this is elsewhere, at far
+larger scale.
+
+**Fixed:**
+- Every affected rule object rewritten as an explicit `{"$and":
+  [{"user_condition": ...}, {...rest}]}` — access semantics preserved
+  exactly, nothing narrowed or widened beyond restoring the tenant scoping
+  the original (broken) rule always intended. Verified per-entity that
+  `properties`/`required` are byte-identical before/after — only `rls`
+  changed.
+- Two further live-engine constraints surfaced (and fixed) while pushing
+  the corrected schemas: a nested `$or` directly inside another `$or` is
+  **not evaluated on write rules** (create/update/delete) — *"the branch
+  silently matches"* per the engine's own error — fixed by flattening (read
+  rules tolerate nested `$or` fine and were left as-is, confirmed by a
+  successful deploy). And the built-in record id must be addressed as
+  `"id"`, never `"_id"` — `Classroom`, `School`, and `Student` used `"_id"`
+  and were rejected on redeploy; renamed.
+- All 29 corrected entities deployed live via the Base44 MCP
+  (`update_entity_schema`, appId `696e967c430ceb6a2232ffd8`) and **re-fetched
+  via `list_entity_schemas` to confirm the fix actually took effect in
+  production** — not just that the repo file changed.
+- `scripts/validate-rls.mjs` now has a third check
+  (`user_condition` sibling keys) alongside its existing entity-path and
+  user-template checks. This exact shape is syntactically valid
+  Mongo-style implicit-AND, so nothing in the prior checks ever caught it —
+  verified the new check is real (not a no-op) by confirming it fires on
+  the pre-fix file content and passes clean after the fix.
+
+**If you touch `base44/entities/*.jsonc` RLS again:** a rule object that
+combines `"user_condition"` with any other key **must** use an explicit
+`$and` — never rely on implicit multi-key-object AND the way plain Mongo
+query merging would suggest. `npm run validate:rls` now catches this
+statically, but the authoritative check is still whatever
+`update_entity_schema` accepts, since that's the actual deploy-time engine
+— when in doubt, redeploy and read its error, don't assume local validation
+is complete.
+
+Bumped to v1.7.5 (patch, security). Verified: `npm run lint`, `npm run
+build`, `npm run validate:rls` (32 entities, new check included) all pass;
+276/276 tests unaffected (none exercise entity RLS directly).
+
 ## Module 3 (server-side permission/billing enforcement) — fixed 2026-08-18
 
 A portfolio-standard audit (`jospabloh/acacia-app-standard`, module 3) flagged

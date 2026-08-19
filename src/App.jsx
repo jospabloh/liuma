@@ -13,6 +13,7 @@ import ContinueAs from '@/components/auth/ContinueAs';
 import { getRememberedIdentity } from '@/lib/lastIdentity';
 import GuardedRoute from '@/components/GuardedRoute';
 import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
+import { ThemeProvider } from '@/lib/ThemeContext';
 import Login from '@/pages/Login';
 
 const { Pages, Layout, mainPage } = pagesConfig;
@@ -22,11 +23,11 @@ const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 const PageTransitionFallback = () => (
   <div className="min-h-[30vh] w-full px-4 py-6 sm:py-10">
     <div className="mx-auto max-w-sm space-y-4 animate-pulse">
-      <div className="h-6 w-2/3 rounded-md bg-slate-200" />
-      <div className="h-4 w-full rounded-md bg-slate-200" />
-      <div className="h-4 w-5/6 rounded-md bg-slate-200" />
+      <div className="h-6 w-2/3 rounded-md bg-slate-200 dark:bg-slate-800" />
+      <div className="h-4 w-full rounded-md bg-slate-200 dark:bg-slate-800" />
+      <div className="h-4 w-5/6 rounded-md bg-slate-200 dark:bg-slate-800" />
       <div className="flex justify-center pt-2">
-        <div className="h-8 w-8 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin" />
+        <div className="h-8 w-8 rounded-full border-4 border-slate-200 dark:border-slate-800 border-t-slate-800 dark:border-t-slate-200 animate-spin" />
       </div>
     </div>
   </div>
@@ -54,7 +55,7 @@ const AuthenticatedApp = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-slate-200 dark:border-slate-800 border-t-slate-800 dark:border-t-slate-200 rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -113,18 +114,20 @@ const AuthenticatedApp = () => {
 function App() {
 
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <ScrollToTopOnNavigate />
-          <NavigationTracker />
-          <SessionHeartbeat />
-          <TenantThemeRuntime />
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <Router>
+            <ScrollToTopOnNavigate />
+            <NavigationTracker />
+            <SessionHeartbeat />
+            <TenantThemeRuntime />
+            <AuthenticatedApp />
+          </Router>
+          <Toaster />
+        </QueryClientProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
 

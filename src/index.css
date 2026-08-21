@@ -283,3 +283,16 @@ html, body, #root {
     background: hsl(var(--border));
   }
 }
+
+/* Corner theme switcher (src/components/ThemeSwitcher.jsx) — placement only.
+   Below `md` the bottom nav owns the bottom edge, so lift the control clear of
+   it. This is also why the theme control no longer lives in the command
+   palette: the corner is reachable from every screen on a phone, which the
+   palette footer was only ever a workaround for. */
+:root {
+  --theme-switcher-bottom: 1rem;
+  --theme-switcher-right: 1rem;
+}
+@media (max-width: 767px) {
+  :root { --theme-switcher-bottom: 5.25rem; }
+}

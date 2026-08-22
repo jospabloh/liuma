@@ -5,7 +5,6 @@ import {
 } from '@/components/ui/command';
 import { NavIcon } from './navIcons.jsx';
 import { getGroupedDestinations, pageUrl } from './navRegistry';
-import ThemeToggle from '@/components/ThemeToggle';
 
 /**
  * ⌘K command palette — type to jump anywhere, or browse the role's full menu.
@@ -41,13 +40,6 @@ export default function CommandPalette({ open, onOpenChange, role }) {
           </CommandGroup>
         ))}
       </CommandList>
-      {/* Mobile has no persistent top bar (the bottom nav's 4 slots are all
-          spoken for) — this is the one place a phone user can reach the
-          theme toggle. Desktop also has it in SideNav's identity footer. */}
-      <div className="flex items-center justify-between border-t border-border px-3 py-2">
-        <span className="text-xs text-muted-foreground">Apariencia</span>
-        <ThemeToggle />
-      </div>
     </CommandDialog>
   );
 }

@@ -358,3 +358,32 @@ fuera, donde grep no ve — un entity hook de Base44, un cron del panel, un
 `tool_config` de un agente, la URL de un webhook. El audit marca esas como
 `REVISAR EN PANEL` en vez de adivinar; confírmalas contra
 `npx base44 functions list` (anota `(N automation)`) antes de tocarlas.
+
+## Selector de tema: claro / oscuro / dispositivo (módulo 12, 2026-08-21)
+
+El tema se elige desde **un solo control**: un círculo pequeño anclado a una
+esquina de la pantalla que muestra el modo vigente y, al pulsarlo, crece de lado
+en una pista de tres ranuras (Claro · Oscuro · Sistema) con un indicador que se
+desliza a la elegida. Tres estados, tres posiciones físicas — que es justo lo
+que un botón sol/luna de dos estados no puede expresar en cuanto "seguir al
+dispositivo" entra en la lista.
+
+Lo que se guarda es la **preferencia** (`light` | `dark` | `system`), nunca el
+color resuelto: con `system` la app sigue a `prefers-color-scheme` en vivo, sin
+recargar. `index.html` trae un script pre-montaje que resuelve y aplica el tema
+antes de que monte React, así que el primer frame ya sale del color correcto;
+ese script y el proveedor comparten clave y valores, y cada uno lleva un
+comentario apuntando al otro.
+
+`src/components/ThemeSwitcher.jsx` es **idéntico byte a byte en todas las apps
+del portafolio**. La fuente canónica vive en `jospabloh/acacia-app-standard` →
+`shared/theme/`: cámbialo allí y cópialo, no lo edites aquí. Lo único propio de
+esta app es `src/lib/useThemeMode.js` (de dónde sale el estado) y las variables
+`--theme-switcher-bottom/right` en `src/index.css` (dónde se coloca).
+
+`src/lib/ThemeContext.jsx` pasó de dos modos a tres y ahora escucha
+`matchMedia` en vivo. Se quitaron el toggle del pie de `SideNav` y **el del pie
+de `CommandPalette`**: ese existía sólo porque en móvil no había otro sitio
+desde donde alcanzarlo (los 4 huecos de `BottomNav` están tomados), y la esquina
+ya se alcanza desde cualquier pantalla. El control sube por encima de
+`BottomNav` en móvil.

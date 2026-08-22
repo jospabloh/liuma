@@ -4,7 +4,6 @@ import { Search, LifeBuoy } from 'lucide-react';
 import { NavIcon } from './navIcons.jsx';
 import { useNav } from './NavContext.jsx';
 import { getGroupedDestinations, isActivePath, pageUrl } from './navRegistry';
-import ThemeToggle from '@/components/ThemeToggle';
 
 /**
  * Persistent desktop navigation rail (md and up). Mobile keeps the four-item
@@ -140,7 +139,6 @@ export default function SideNav() {
             <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
             <p className="truncate text-[11px] text-muted-foreground">{ROLE_LABELS[role] || 'Familia'}</p>
           </div>
-          <ThemeToggle className="ml-auto" />
           <Link
             to={pageUrl(role === 'PARENT' || role === 'TEACHER' ? 'Soporte' : 'SoporteAdmin')}
             aria-label="Soporte"

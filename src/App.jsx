@@ -14,6 +14,7 @@ import { getRememberedIdentity } from '@/lib/lastIdentity';
 import GuardedRoute from '@/components/GuardedRoute';
 import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 import { ThemeProvider } from '@/lib/ThemeContext';
+import ThemeSwitcher from '@/components/ThemeSwitcher';
 import Login from '@/pages/Login';
 
 const { Pages, Layout, mainPage } = pagesConfig;
@@ -125,6 +126,7 @@ function App() {
             <AuthenticatedApp />
           </Router>
           <Toaster />
+          <ThemeSwitcher />
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

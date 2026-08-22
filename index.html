@@ -14,14 +14,17 @@
     <title>liuma</title>
     <script>
       // Pre-mount theme resolution — applies .dark before React hydrates so
-      // there's no flash of the wrong theme. Mirrors src/lib/ThemeContext.jsx's
-      // own resolution order (stored preference -> prefers-color-scheme ->
-      // light); keep both in sync by hand.
+      // there's no flash of the wrong theme. Mirrors src/lib/ThemeContext.jsx
+      // exactly: same key, same 'light' | 'dark' | 'system' values, 'system'
+      // (and anything unreadable) resolving against the device. Keep both in
+      // sync by hand.
       (function () {
         try {
-          var stored = window.localStorage.getItem('liuma-theme');
-          var dark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          if (dark) document.documentElement.classList.add('dark');
+          var pref = window.localStorage.getItem('liuma-theme');
+          if (pref !== 'light' && pref !== 'dark') pref = 'system';
+          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         } catch (e) {}
       })();
     </script>

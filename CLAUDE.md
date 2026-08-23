@@ -466,7 +466,12 @@ pena decir por qué en vez de sólo marcarla como correcta:
   escuela ajena no sirve de nada;
 - en update **borra `school_id` del patch** antes de escribir (línea 160‑161).
   Eso cierra un agujero que casi nadie tapa: reasignar un registro existente a
-  otro inquilino. Ninguna otra app del portafolio hace esto explícitamente.
+  otro inquilino. **Corrección (2026-08-23):** la versión original de esta línea
+  decía que ninguna otra app del portafolio lo hacía explícitamente. Es falso —
+  el `guardedEntityWrite` de `jospabloh/rumbo` hace lo mismo (`delete
+  data.tenant_id`) y además borra `sender_id` en un `Message`, para que un
+  mensaje existente no pueda re-atribuirse. Se escribió antes de auditar rumbo y
+  no se comprobó; el mérito de liuma sigue en pie, la exclusiva no.
 - el carve-out PARENT/EVENTO de `ChargeItem` re-deriva el vínculo por
   `ParentStudent` en el servidor, porque `{{user.data.linked_student_ids}}` no
   tiene fuente accesible desde el cliente.

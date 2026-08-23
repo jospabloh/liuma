@@ -17,25 +17,13 @@
 //   ACACIA_MC_INGEST_URL — e.g. https://control.acaciaco.com.mx/api/ingest/ticket
 //   ACACIA_APP_SLUG      — this app's Mission Control id: puntos|rumbo|liuma|stockflow|flowfin
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { signAs } from './_acaciaSign.ts';
 
-// Stable JSON (keys sorted recursively) — MUST mirror Mission Control's
-// api/_lib/ingestSign.js so both sides sign the exact same string.
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
-}
-
-async function hmacHex(secret: string, msg: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-  );
-  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
-  return Array.from(new Uint8Array(mac), (b) => b.toString(16).padStart(2, '0')).join('');
-}
+// stableStringify and hmacHex used to live here, hand-mirrored against Mission
+// Control's api/_lib/ingestSign.js. Both now come from _acaciaSign.ts, the
+// canonical copy in jospabloh/acacia-app-standard → shared/bridge/ — a
+// hand-kept mirror of a signing routine is exactly the thing that drifts, and
+// a drift here surfaces only as "bad signature" at runtime.
 
 Deno.serve(async (req) => {
   try {
@@ -74,7 +62,13 @@ Deno.serve(async (req) => {
 
     const ts = Date.now().toString();
     const params = { app, record };
-    const sig = await hmacHex(secret, `${ts}.ticket.ingest.${stableStringify(params)}`);
+    // Signed with THIS app's derived key, not the bare INGEST_HMAC_SECRET.
+    // That secret is one value shared by the whole portfolio, so a signature
+    // made with it proves "someone holds the shared secret" and never "this is
+    // <app>" — and since the app name travels in the body, any app could sign
+    // a payload naming another. See _acaciaSign.ts, and Module 15 of
+    // jospabloh/acacia-app-standard.
+    const sig = await signAs(secret, app, ts, 'ticket.ingest', params);
 
     const resp = await fetch(url, {
       method: 'POST',

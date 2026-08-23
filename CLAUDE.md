@@ -446,3 +446,80 @@ portafolio llegó a desplegar eran **sintácticamente válidos**: la rama de rol
 motor descartaba la cláusula hermana de `user_condition`, los campos de licencia
 escribibles por el propio inquilino en puntos y rumbo, y el `PermissionProfile`
 que ningún RLS puede consultar porque vive en otra fila.
+
+### Resultado — 2026-08-23, contra el esquema desplegado
+
+Primera pasada del módulo 14 aquí. **No se encontró ningún cruce entre
+escuelas.** Un hallazgo real, latente hoy, anotado abajo.
+
+**Las funciones son la parte que importa en esta app y las seis están bien.**
+Ninguna lee `school_id` del cuerpo de la petición — se comprobó por grep sobre
+las seis, no por muestreo.
+
+`guardedEntityWrite` es la implementación más sólida del portafolio, y vale la
+pena decir por qué en vez de sólo marcarla como correcta:
+
+- en update/delete el `school_id` sale del registro **almacenado** (línea 107‑109),
+  no de la petición;
+- en create sale de los datos enviados, pero acto seguido exige que el
+  solicitante tenga un `UserProfile` ACTIVE **en esa escuela** — reclamar una
+  escuela ajena no sirve de nada;
+- en update **borra `school_id` del patch** antes de escribir (línea 160‑161).
+  Eso cierra un agujero que casi nadie tapa: reasignar un registro existente a
+  otro inquilino. Ninguna otra app del portafolio hace esto explícitamente.
+- el carve-out PARENT/EVENTO de `ChargeItem` re-deriva el vínculo por
+  `ParentStudent` en el servidor, porque `{{user.data.linked_student_ids}}` no
+  tiene fuente accesible desde el cliente.
+
+`exportSchoolData` y `governRoleChange` derivan la escuela del propio
+`UserProfile` ADMIN ACTIVE del solicitante; `governRoleChange` además resuelve
+el perfil objetivo **dentro** de `schoolProfiles`, ya filtrado por esa escuela,
+así que un objetivo de otra escuela da 404. `notifyTicketCreated` comprueba
+propiedad del ticket antes de firmar el HMAC. `acaciaControl` es el único camino
+cross-tenant deliberado, cerrado por HMAC y sin contexto de usuario.
+
+**Entidades.** `SchoolSubscription` tiene create/update/delete en `role: admin`
+puro — una escuela no puede tocar su propia licencia, sin necesidad de candados
+campo por campo. Se releyeron `ChargeItem`, `Guardian`-equivalentes y
+`SchoolSubscription` del esquema vivo **después** del `entities push` del
+2026-08-23: la corrección de `$and` del 2026-08-18 sigue desplegada, el push no
+la revirtió. Las 32 entidades no se releyeron una por una en esta pasada —
+`validate:rls` cubre la forma y corre en CI; lo que se verificó a mano fue que
+el push no deshiciera el arreglo.
+
+#### Hallazgo: tres reglas distintas para "en qué escuela estoy"
+
+Esta app **sí** contempla usuarios con perfil en varias escuelas —
+`src/lib/tenantSelection.js` existe justo para eso, con
+`buildTenantSelectionContext` armando la lista de opciones y un `is_current`.
+Pero la escuela vigente se elige de tres formas que no coinciden:
+
+| dónde | regla |
+|---|---|
+| `tenantSelection.js` | ordenado, `ACTIVE && onboarding_completed` |
+| `exportSchoolData:43`, `governRoleChange:86` | `.find(ADMIN && ACTIVE)` **sin ordenar** |
+| `NavContext.jsx:26` | `[0]` **sin ordenar** |
+
+No es una fuga: el usuario es dueño de todos los perfiles implicados. Es un
+problema de corrección, y del tipo que este módulo pregunta explícitamente (el
+cambio de inquilino). Para un admin de dos escuelas, "Descargar mis datos" puede
+devolver en silencio la escuela que no está viendo, y `governRoleChange` puede
+actuar sobre la otra. El orden por defecto de `filter()` en Base44 no está
+especificado, así que además es no determinista.
+
+**Latente, no vivo.** Se consultó producción: hay **un solo `UserProfile`, en una
+sola escuela**. Nadie tiene hoy perfil en dos, así que la divergencia no puede
+dispararse todavía. Se vuelve real el día que entre la segunda escuela o alguien
+reciba un segundo perfil. El arreglo es que el backend use `selectCurrentUserProfile`
+en lugar de su propio `.find()` — o que reciba la escuela vigente explícitamente
+y la valide contra los perfiles del solicitante.
+
+#### No verificado
+
+Una sesión autenticada como TEACHER o PARENT de una segunda escuela. Con un solo
+inquilino en producción no hay contra qué probarlo, y no se sembró uno: crear
+inquilinos en producción para probar aislamiento es peor que declarar el hueco.
+Lo de arriba es lectura de código, de esquema desplegado y una consulta a datos
+reales — suficiente para descartar los defectos estructurales y para fechar el
+hallazgo como latente, insuficiente para afirmar que el motor evalúa cada regla
+como se lee.

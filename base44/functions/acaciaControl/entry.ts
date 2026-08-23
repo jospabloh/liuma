@@ -12,31 +12,11 @@ import { verifyAs } from './_acaciaSign.ts';
 const MAX_SKEW_MS = 5 * 60 * 1000;
 const COUNT_CAP = 5000; // Base44 caps list at 5,000 — usage counts are capped here.
 
-// Stable JSON: keys sorted recursively, so MC and this function sign the exact
-// same string (must mirror api/_lib/ingestSign.js in Mission Control).
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
-}
-
-async function hmacHex(secret: string, msg: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-  );
-  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
-  return Array.from(new Uint8Array(mac), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let out = 0;
-  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return out === 0;
-}
+// stableStringify / hmacHex / timingSafeEqual used to live here, hand-mirrored
+// against Mission Control's api/_lib/ingestSign.js. verifyAs() in
+// _acaciaSign.ts owns all three now — a hand-kept mirror of a signing routine
+// is exactly the thing that drifts, and a drift here surfaces only as
+// "bad signature" at runtime.
 
 Deno.serve(async (req) => {
   try {

@@ -61,7 +61,7 @@
     "requires_approval": {
       "type": "boolean",
       "default": false,
-      "description": "Si requiere aprobación para aplicarse"
+      "description": "Si requiere aprobaci\u00f3n para aplicarse"
     }
   },
   "required": [
@@ -72,88 +72,24 @@
   ],
   "rls": {
     "create": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "update": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }

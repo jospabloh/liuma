@@ -52,22 +52,22 @@
     "licensed_student_limit": {
       "type": "number",
       "default": 150,
-      "description": "Número máximo de alumnos permitidos según el tier de licencia (null = ilimitado)"
+      "description": "N\u00famero m\u00e1ximo de alumnos permitidos seg\u00fan el tier de licencia (null = ilimitado)"
     },
     "subscription_start_date": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha de inicio de suscripción pagada"
+      "description": "Fecha de inicio de suscripci\u00f3n pagada"
     },
     "subscription_end_date": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha de fin de suscripción pagada"
+      "description": "Fecha de fin de suscripci\u00f3n pagada"
     },
     "license_activated_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha en que ACACIA activó la licencia"
+      "description": "Fecha en que ACACIA activ\u00f3 la licencia"
     },
     "license_expires_at": {
       "type": "string",
@@ -76,65 +76,65 @@
     },
     "payment_reference": {
       "type": "string",
-      "description": "Referencia de pago del cliente (folio, transacción, etc.)"
+      "description": "Referencia de pago del cliente (folio, transacci\u00f3n, etc.)"
     },
     "activation_notes": {
       "type": "string",
-      "description": "Notas internas de activación (uso ACACIA)"
+      "description": "Notas internas de activaci\u00f3n (uso ACACIA)"
     },
     "activated_by_admin": {
       "type": "string",
-      "description": "Email del administrador ACACIA que activó la licencia"
+      "description": "Email del administrador ACACIA que activ\u00f3 la licencia"
     },
     "auto_renewal": {
       "type": "boolean",
       "default": false,
-      "description": "Indica si la escuela tiene suscripción Mercado Pago activa (cobro externo, validación manual por ACACIA)"
+      "description": "Indica si la escuela tiene suscripci\u00f3n Mercado Pago activa (cobro externo, validaci\u00f3n manual por ACACIA)"
     },
     "activation_fee_paid": {
       "type": "boolean",
       "default": false,
-      "description": "Si se cubrió la cuota de activación inicial ($7,990 MXN única vez)"
+      "description": "Si se cubri\u00f3 la cuota de activaci\u00f3n inicial ($7,990 MXN \u00fanica vez)"
     },
     "last_payment_confirmed_at": {
       "type": "string",
       "format": "date-time",
-      "description": "ISO datetime cuando ACACIA confirmó el último pago dentro de LIUMA"
+      "description": "ISO datetime cuando ACACIA confirm\u00f3 el \u00faltimo pago dentro de LIUMA"
     },
     "last_payment_confirmed_by": {
       "type": "string",
-      "description": "Email del admin de plataforma que confirmó el último pago"
+      "description": "Email del admin de plataforma que confirm\u00f3 el \u00faltimo pago"
     },
     "last_payment_period": {
       "type": "string",
-      "description": "Período de facturación confirmado por ACACIA, formato YYYY-MM"
+      "description": "Per\u00edodo de facturaci\u00f3n confirmado por ACACIA, formato YYYY-MM"
     },
     "last_payment_reference": {
       "type": "string",
-      "description": "Referencia del último pago confirmado (Mercado Pago ID, folio, nota manual)"
+      "description": "Referencia del \u00faltimo pago confirmado (Mercado Pago ID, folio, nota manual)"
     },
     "last_payment_notes": {
       "type": "string",
-      "description": "Notas internas ACACIA del último pago confirmado"
+      "description": "Notas internas ACACIA del \u00faltimo pago confirmado"
     },
     "view_only_since": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha en que la cuenta pasó a solo lectura"
+      "description": "Fecha en que la cuenta pas\u00f3 a solo lectura"
     },
     "welcome_message_shown": {
       "type": "boolean",
       "default": false,
-      "description": "Si ya se mostró el mensaje de bienvenida al trial"
+      "description": "Si ya se mostr\u00f3 el mensaje de bienvenida al trial"
     },
     "last_reminder_sent": {
       "type": "string",
       "format": "date-time",
-      "description": "Última vez que se envió recordatorio"
+      "description": "\u00daltima vez que se envi\u00f3 recordatorio"
     },
     "suspension_reason": {
       "type": "string",
-      "description": "Razón de suspensión"
+      "description": "Raz\u00f3n de suspensi\u00f3n"
     },
     "notes": {
       "type": "string",
@@ -153,25 +153,9 @@
       }
     },
     "read": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "update": {
       "user_condition": {

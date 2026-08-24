@@ -48,7 +48,7 @@
     },
     "reminder_sent": {
       "default": false,
-      "description": "Si ya se envió recordatorio de pago",
+      "description": "Si ya se envi\u00f3 recordatorio de pago",
       "type": "boolean"
     },
     "school_id": {
@@ -56,7 +56,7 @@
     },
     "status": {
       "default": "PENDING",
-      "description": "OVERDUE se actualiza automáticamente",
+      "description": "OVERDUE se actualiza autom\u00e1ticamente",
       "enum": [
         "PENDING",
         "PAID",
@@ -78,79 +78,14 @@
   ],
   "rls": {
     "create": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "$or": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "$and": [
-                    {
-                      "user_condition": {
-                        "data.app_role": "PARENT"
-                      }
-                    },
-                    {
-                      "data.student_id": {
-                        "$in": "{{user.data.linked_student_ids}}"
-                      }
-                    },
-                    {
-                      "data.concept_type": "EVENTO"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "$or": [
         {
-          "$or": [
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "data.school_id": "{{user.data.school_id}}"
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "PARENT"
-                  }
-                },
-                {
-                  "data.school_id": "{{user.data.school_id}}",
-                  "data.student_id": {
-                    "$in": "{{user.data.linked_student_ids}}"
-                  }
-                }
-              ]
-            }
-          ]
+          "created_by_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -160,46 +95,14 @@
       ]
     },
     "update": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   },
   "type": "object"

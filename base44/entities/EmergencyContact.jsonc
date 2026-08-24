@@ -35,34 +35,7 @@
     "create": {
       "$or": [
         {
-          "$and": [
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "$or": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "$and": [
-                    {
-                      "user_condition": {
-                        "data.app_role": "PARENT"
-                      }
-                    },
-                    {
-                      "data.student_id": {
-                        "$in": "{{user.data.linked_student_ids}}"
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
+          "created_by_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -74,48 +47,7 @@
     "read": {
       "$or": [
         {
-          "$or": [
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "data.school_id": "{{user.data.school_id}}"
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "TEACHER"
-                  }
-                },
-                {
-                  "data.student_id": {
-                    "$in": "{{user.data.assigned_student_ids}}"
-                  }
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "PARENT"
-                  }
-                },
-                {
-                  "data.student_id": {
-                    "$in": "{{user.data.linked_student_ids}}"
-                  }
-                }
-              ]
-            }
-          ]
+          "created_by_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -127,34 +59,7 @@
     "update": {
       "$or": [
         {
-          "$and": [
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "$or": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "$and": [
-                    {
-                      "user_condition": {
-                        "data.app_role": "PARENT"
-                      }
-                    },
-                    {
-                      "data.student_id": {
-                        "$in": "{{user.data.linked_student_ids}}"
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
+          "created_by_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -164,43 +69,9 @@
       ]
     },
     "delete": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "$or": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "$and": [
-                    {
-                      "user_condition": {
-                        "data.app_role": "PARENT"
-                      }
-                    },
-                    {
-                      "data.student_id": {
-                        "$in": "{{user.data.linked_student_ids}}"
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }

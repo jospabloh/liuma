@@ -49,37 +49,7 @@
     "create": {
       "$or": [
         {
-          "$and": [
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "$or": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "$and": [
-                    {
-                      "user_condition": {
-                        "data.app_role": "TEACHER"
-                      }
-                    },
-                    {
-                      "data.classroom_id": {
-                        "$in": "{{user.data.assigned_classroom_ids}}"
-                      }
-                    },
-                    {
-                      "data.teacher_id": "{{user.id}}"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
+          "data.teacher_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -91,54 +61,10 @@
     "read": {
       "$or": [
         {
-          "$or": [
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "data.school_id": "{{user.data.school_id}}"
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "TEACHER"
-                  }
-                },
-                {
-                  "data.school_id": "{{user.data.school_id}}"
-                },
-                {
-                  "data.classroom_id": {
-                    "$in": "{{user.data.assigned_classroom_ids}}"
-                  }
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "PARENT"
-                  }
-                },
-                {
-                  "data.school_id": "{{user.data.school_id}}"
-                },
-                {
-                  "data.classroom_id": {
-                    "$in": "{{user.data.linked_student_classroom_ids}}"
-                  }
-                }
-              ]
-            }
-          ]
+          "data.teacher_id": "{{user.id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -150,23 +76,7 @@
     "update": {
       "$or": [
         {
-          "$and": [
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "$or": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "data.teacher_id": "{{user.id}}"
-                }
-              ]
-            }
-          ]
+          "data.teacher_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -176,25 +86,9 @@
       ]
     },
     "delete": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }

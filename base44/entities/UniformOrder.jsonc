@@ -79,19 +79,7 @@
     "create": {
       "$or": [
         {
-          "$and": [
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            },
-            {
-              "data.student_id": {
-                "$in": "{{user.data.linked_student_ids}}"
-              }
-            },
-            {
-              "data.parent_id": "{{user.id}}"
-            }
-          ]
+          "data.parent_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -103,23 +91,10 @@
     "read": {
       "$or": [
         {
-          "$or": [
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "ADMIN"
-                  }
-                },
-                {
-                  "data.school_id": "{{user.data.school_id}}"
-                }
-              ]
-            },
-            {
-              "data.parent_id": "{{user.id}}"
-            }
-          ]
+          "data.parent_id": "{{user.id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -131,26 +106,7 @@
     "update": {
       "$or": [
         {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "$and": [
-            {
-              "data.parent_id": "{{user.id}}"
-            },
-            {
-              "data.status": "PENDING"
-            }
-          ]
+          "data.parent_id": "{{user.id}}"
         },
         {
           "user_condition": {
@@ -160,25 +116,9 @@
       ]
     },
     "delete": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }

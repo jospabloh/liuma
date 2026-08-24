@@ -45,61 +45,24 @@
   ],
   "rls": {
     "create": {
-      "$and": [
-        {
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        },
-        {
-          "data.school_id": "{{user.data.school_id}}"
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "update": {
-      "$and": [
-        {
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        },
-        {
-          "data.school_id": "{{user.data.school_id}}"
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "$and": [
-        {
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        },
-        {
-          "data.school_id": "{{user.data.school_id}}"
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }

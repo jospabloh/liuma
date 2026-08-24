@@ -32,7 +32,7 @@
     },
     "reason": {
       "type": "string",
-      "description": "Razón de ausencia o retraso"
+      "description": "Raz\u00f3n de ausencia o retraso"
     },
     "recorded_by": {
       "type": "string",
@@ -45,12 +45,12 @@
     "parent_notified": {
       "type": "boolean",
       "default": false,
-      "description": "Si se notificó a los padres"
+      "description": "Si se notific\u00f3 a los padres"
     },
     "notified_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Cuándo se notificó"
+      "description": "Cu\u00e1ndo se notific\u00f3"
     }
   },
   "required": [
@@ -62,127 +62,48 @@
   ],
   "rls": {
     "create": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "data.recorded_by": "{{user.id}}"
         },
         {
-          "$or": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "TEACHER"
-                  }
-                },
-                {
-                  "data.classroom_id": {
-                    "$in": "{{user.data.assigned_classroom_ids}}"
-                  }
-                }
-              ]
-            }
-          ]
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
     },
     "read": {
       "$or": [
         {
+          "data.recorded_by": "{{user.id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
           "user_condition": {
             "role": "admin"
           }
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "TEACHER"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}",
-              "data.classroom_id": {
-                "$in": "{{user.data.assigned_classroom_ids}}"
-              }
-            }
-          ]
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "PARENT"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}",
-              "data.student_id": {
-                "$in": "{{user.data.linked_student_ids}}"
-              }
-            }
-          ]
         }
       ]
     },
     "update": {
-      "$and": [
+      "$or": [
         {
-          "data.school_id": "{{user.data.school_id}}"
+          "data.recorded_by": "{{user.id}}"
         },
         {
-          "$or": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "$and": [
-                {
-                  "user_condition": {
-                    "data.app_role": "TEACHER"
-                  }
-                },
-                {
-                  "data.classroom_id": {
-                    "$in": "{{user.data.assigned_classroom_ids}}"
-                  }
-                }
-              ]
-            }
-          ]
+          "user_condition": {
+            "role": "admin"
+          }
         }
       ]
     },
     "delete": {
-      "$and": [
-        {
-          "data.school_id": "{{user.data.school_id}}"
-        },
-        {
-          "user_condition": {
-            "data.app_role": "ADMIN"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }

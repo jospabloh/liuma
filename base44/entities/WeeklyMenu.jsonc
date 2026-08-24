@@ -7,31 +7,31 @@
     },
     "week_number": {
       "type": "number",
-      "description": "Número de semana (1-8 o más)"
+      "description": "N\u00famero de semana (1-8 o m\u00e1s)"
     },
     "year": {
       "type": "number",
-      "description": "Año del menú"
+      "description": "A\u00f1o del men\u00fa"
     },
     "monday": {
       "type": "string",
-      "description": "Menú del lunes"
+      "description": "Men\u00fa del lunes"
     },
     "tuesday": {
       "type": "string",
-      "description": "Menú del martes"
+      "description": "Men\u00fa del martes"
     },
     "wednesday": {
       "type": "string",
-      "description": "Menú del miércoles"
+      "description": "Men\u00fa del mi\u00e9rcoles"
     },
     "thursday": {
       "type": "string",
-      "description": "Menú del jueves"
+      "description": "Men\u00fa del jueves"
     },
     "friday": {
       "type": "string",
-      "description": "Menú del viernes"
+      "description": "Men\u00fa del viernes"
     },
     "is_active": {
       "type": "boolean",
@@ -45,79 +45,24 @@
   ],
   "rls": {
     "create": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
-      "$or": [
-        {
-          "data.school_id": "{{user.data.school_id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "update": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "$or": [
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }

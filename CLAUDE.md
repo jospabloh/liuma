@@ -556,30 +556,32 @@ Dos copias idénticas: `acaciaControl` **verifica** y `notifyTicketCreated`
 acepta las dos llaves mientras `ACCEPT_LEGACY_MASTER` sea `true`, así que da
 igual quién despliegue primero. Pero Mission Control despliega al mergear y las
 apps a mano, así que MC siempre va primero — por eso MC sigue **firmando** con
-el maestro hasta que las nueve apps acepten derivada. Falta el paso que cierra
-el agujero de verdad: poner `ACCEPT_LEGACY_MASTER` en `false` en todas partes y
-cambiar la firma de salida de MC a `signFor`. Mientras tanto una firma con el
-maestro se sigue aceptando. `ACACIA_APP_SLUG` ya estaba puesto aquí.
+el maestro hasta que las nueve apps acepten derivada. **Los dos pasos ya están hechos** (2026-08-24): MC firma con `signFor` y
+`ACCEPT_LEGACY_MASTER` está en `false` en los once sitios, así que una firma con
+el maestro **ya no se acepta** — que es exactamente lo que cierra el agujero. `ACACIA_APP_SLUG=liuma` está puesto **y verificado** — ver abajo, porque
+el valor que traía antes no era éste.
 
-**Corrección del 2026-08-24: ese `ya estaba puesto` nunca se comprobó, y no
-sirve.** En la sincronización de las nueve apps de ese día, Mission Control
-registró que **liuma rechazó la llave derivada y aceptó el maestro** — junto con
-las otras tres que tampoco pasaron (las cuatro son justo las que traían el
-secreto de antes; las cinco a las que se les puso ese día verificaron derivada a
-la primera). O sea: aquí hay un `ACACIA_APP_SLUG`, pero la llave que sale de él
-no es la que Mission Control calcula.
+**Corrección del 2026-08-24: ese «ya estaba puesto» nunca se comprobó, y era
+falso.** En la primera sincronización de las nueve apps de ese día, Mission
+Control registró que **liuma rechazó la llave derivada y aceptó el maestro** —
+junto con las otras tres que tampoco pasaron. Las cuatro son justo las que
+traían el secreto de antes, de cuando se cableó el push de tickets; las cinco a
+las que se les puso ese día verificaron derivada a la primera. O sea: aquí había
+un `ACACIA_APP_SLUG`, pero con un valor que no producía la llave que MC calcula.
 
-Dos causas posibles, y desde Mission Control no se distinguen porque no puede
-leer los secrets de una app de Base44:
+**No era un `acaciaControl` viejo**, que era la otra hipótesis: al redesplegar,
+la CLI reportó `acaciaControl unchanged`, así que el código vivo ya traía
+`_acaciaSign.ts` desde antes de esa sincronización. La única variable que
+quedaba era el valor del secreto.
 
-1. **el valor no es exactamente `liuma`** — tiene que ser el id de Mission
-   Control, en minúsculas, sin espacios ni sufijos;
-2. **el `acaciaControl` desplegado es anterior a `_acaciaSign.ts`** y sólo sabe
-   verificar con el maestro. `npm run deploy` lo descarta.
+Corregido el mismo día. La sincronización de las 16:29 UTC dio nueve filas de
+auditoría y **cero** advertencias `rejected the derived key`, y con esa medición
+—no con una fecha— se apagó el flag en los once sitios y se borró el respaldo de
+Mission Control.
 
-Hasta que una sincronización complete sin esa advertencia, el flag se queda en
-`true` y el respaldo de Mission Control es lo único que mantiene vivo el puente
-de esta app.
+Lo que hay que quedarse: **un secreto que nadie ha releído no está configurado.**
+Este archivo afirmó por escrito durante días que lo estaba. El módulo 16 del
+estándar existe por esto.
 
 **Y ahora hay una prueba, que es lo que faltaba.** El helper no lo comprobaba
 nada: cada PR de este módulo decía que recibía su primer type-check al

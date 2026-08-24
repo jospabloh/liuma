@@ -5,6 +5,48 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.9] - 2026-08-24
+
+### Fixed
+
+Weekly automated audit. Unlike the 2026-08-17 round (no commits since the
+last audit), five real modules shipped on `main` between 2026-08-18 and
+2026-08-23 — module 11 (deploy tooling: app-id binding, `deploy:site`),
+module 12 (three-way light/dark/system theme switcher, replacing module
+10's two-state toggle), the `npm run test:smoke` live-site suite, module 14
+(multi-tenant isolation audit — one latent, not-live finding), and module
+15 (per-app derived signing key for the Mission Control bridge) — **and
+none of them bumped `package.json`, added a `CHANGELOG.md` entry, or
+updated `VERSION_CONTROL.json`/`src/lib/appConfig.js`'s `APP_VERSION`**.
+`APP_VERSION` was still reading `1.7.5`, three releases behind
+`package.json`'s `1.7.8`, so the in-app `HistorialCambios` page has been
+silently understating the shipped version for days. Closing that gap is
+this entry — see `CLAUDE.md` for each module's own detailed writeup, this
+is the release-metadata catch-up, same pattern as the 2026-07 `v1.7.0`
+round.
+
+- **`react-router` / `react-router-dom` 6.30.4 → 6.30.6** (`npm audit fix`,
+  lockfile-only, no `package.json` range change). Closes
+  `GHSA-jjmj-jmhj-qwj2` (open redirect leading to XSS). The other two
+  advisories on this dependency (`GHSA-wrjc-x8rr-h8h6`,
+  `GHSA-337j-9hxr-rhxg`) require a v6→v7 major upgrade and remain accepted
+  risk, unchanged from every prior audit — see
+  `docs/security-audit-2026-08-24.md` §3 for why they're not reachable
+  here (client-only SPA, no SSR, no externally-controlled navigation
+  target).
+- `USER_MANUAL.md` had zero mentions of the theme switcher, the
+  `HistorialCambios` page (module 6, shipped 2026-08-18), or the "Descargar
+  mis datos" / "Solicitar eliminación de la escuela" danger-zone actions
+  (module 7, shipped the same day) — all three are live, user-facing
+  features. Added.
+- New `docs/security-audit-2026-08-24.md` — full audit report, master
+  format (see prior `docs/security-audit-*.md` files).
+
+Verified: `npm run lint`, `npm run typecheck`, `npm run build`,
+`npm run test` (276/276), `npm run test:permissions` (23/23),
+`npm run validate:rls` (32 entities) all pass after the dependency bump.
+No RLS, entity, permission, or route-access code touched this round.
+
 ## [1.7.8] - 2026-08-18
 
 ### Added

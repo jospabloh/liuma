@@ -561,6 +561,26 @@ el agujero de verdad: poner `ACCEPT_LEGACY_MASTER` en `false` en todas partes y
 cambiar la firma de salida de MC a `signFor`. Mientras tanto una firma con el
 maestro se sigue aceptando. `ACACIA_APP_SLUG` ya estaba puesto aquí.
 
+**Corrección del 2026-08-24: ese `ya estaba puesto` nunca se comprobó, y no
+sirve.** En la sincronización de las nueve apps de ese día, Mission Control
+registró que **liuma rechazó la llave derivada y aceptó el maestro** — junto con
+las otras tres que tampoco pasaron (las cuatro son justo las que traían el
+secreto de antes; las cinco a las que se les puso ese día verificaron derivada a
+la primera). O sea: aquí hay un `ACACIA_APP_SLUG`, pero la llave que sale de él
+no es la que Mission Control calcula.
+
+Dos causas posibles, y desde Mission Control no se distinguen porque no puede
+leer los secrets de una app de Base44:
+
+1. **el valor no es exactamente `liuma`** — tiene que ser el id de Mission
+   Control, en minúsculas, sin espacios ni sufijos;
+2. **el `acaciaControl` desplegado es anterior a `_acaciaSign.ts`** y sólo sabe
+   verificar con el maestro. `npm run deploy` lo descarta.
+
+Hasta que una sincronización complete sin esa advertencia, el flag se queda en
+`true` y el respaldo de Mission Control es lo único que mantiene vivo el puente
+de esta app.
+
 **Y ahora hay una prueba, que es lo que faltaba.** El helper no lo comprobaba
 nada: cada PR de este módulo decía que recibía su primer type-check al
 desplegar. `acaciaSign.test.ts` (canónico en el repo estándar) fija el vector

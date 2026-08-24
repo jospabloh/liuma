@@ -41,6 +41,11 @@ lo que el menú es idéntico en todos los accesos:
 - **Buscador de comandos (⌘K / Ctrl+K):** desde cualquier pantalla, escribe para
   saltar a cualquier sección de tu rol. También se abre con el botón de búsqueda
   del encabezado de cada página.
+- **Tema Claro / Oscuro / Sistema:** un pequeño círculo anclado a una esquina de
+  la pantalla, visible desde cualquier página. Al pulsarlo se despliega una
+  pista de tres opciones (Claro · Oscuro · Sistema); "Sistema" sigue el modo
+  del dispositivo y cambia en vivo si el dispositivo cambia, sin recargar. La
+  preferencia se recuerda entre sesiones.
 
 ---
 
@@ -66,6 +71,7 @@ contraseña.
 | **Operación Diaria** | `/OperacionDiaria` | Línea de tiempo del día: asistencia, tareas, bitácora, avisos y eventos (filtrada por rol). | Filtrar por categoría/urgencia; abrir el origen. |
 | **Calendario Escolar** | `/CalendarioEscolar` | Calendario mensual con eventos de hoy y próximos. | Ver eventos; el **admin** crea/edita/elimina eventos. |
 | **Soporte** | `/Soporte` | Mesa de ayuda: preguntar a Lumi o abrir y seguir tickets. Al crear un ticket, la app adjunta automáticamente el diagnóstico técnico (pantalla, versión, navegador y eventos recientes) — sólo escribes tu problema. | "Preguntar a Lumi"; "Crear ticket"; ver/responder tus tickets. |
+| **Historial de Cambios** | `/HistorialCambios` | Resumen en lenguaje sencillo de las novedades recientes de LIUMA, con la versión actual en el pie. | Sólo lectura. |
 
 ---
 
@@ -122,7 +128,7 @@ contraseña.
 | **Gestión de Pedidos** | `/GestionPedidosAdmin` | Seguimiento de pedidos de uniformes. | Avanzar estado (Pendiente→Proceso→Listo→Entregado); notas. |
 | **Pagos (Admin)** | `/PagosAdmin` | Registro de cargos y pagos con vencimiento automático y recordatorios. | Crear conceptos; generar cargos (con descuento); registrar pagos. |
 | **Aprobaciones** | `/Aprobaciones` | Cola de aprobación de usuarios nuevos. | Aprobar/rechazar usuarios (auditado). |
-| **Permisos y Roles** | `/PermisosRoles` | Matriz de permisos / roles con control "maker-checker". | Solicitar cambios de rol (los de admin requieren aprobación de un segundo admin); definir overrides por usuario; plantillas/rollback. |
+| **Permisos y Roles** | `/PermisosRoles` | Matriz de permisos / roles con control "maker-checker"; también la zona de peligro de la cuenta. | Solicitar cambios de rol (los de admin requieren aprobación de un segundo admin); definir overrides por usuario; plantillas/rollback. **Zona de peligro:** "Descargar mis datos" exporta todo lo que la escuela posee en un archivo; "Solicitar eliminación de la escuela" abre un ticket de soporte de alta prioridad — no borra nada directamente, lo atiende una persona. |
 | **Auditoría** | `/AuditoriaAdmin` | Visor del registro de auditoría (cambios de permisos, eventos sensibles). | Buscar/filtrar por actor/entidad/acción/motivo; exportar CSV. |
 | **Avisos (Admin)** | `/AvisosAdmin` | Difusión de avisos a toda la escuela / salón / alumno. | Asistente de 3 pasos: alcance → mensaje → confirmar. |
 | **Alerta de Emergencia** | `/AlertaEmergencia` | Alerta de emergencia a padres y maestros. | Redactar mensaje; enviar alerta de alta prioridad (doble confirmación). |

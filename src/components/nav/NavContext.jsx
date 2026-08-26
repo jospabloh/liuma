@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import CommandPalette from './CommandPalette.jsx';
+import { selectCurrentUserProfile, getActiveSchoolOverride } from '@/lib/tenantSelection';
 
 /**
  * Shared navigation state so the command palette can be opened from anywhere —
@@ -21,9 +22,15 @@ export function NavProvider({ children }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
+  // Módulo 18: misma regla que Home.jsx (`selectCurrentUserProfile` +
+  // la preferencia guardada), no un `[0]` sin ordenar — antes de esto podía
+  // discrepar en cuanto el usuario tuviera perfil en más de una escuela.
   const { data: profile } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => (await base44.entities.UserProfile.filter({ user_id: user.id }))[0],
+    queryKey: ['userProfiles', user?.id],
+    queryFn: async () => {
+      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date');
+      return selectCurrentUserProfile(profiles, getActiveSchoolOverride());
+    },
     enabled: !!user,
   });
   const role = profile?.app_role || null;

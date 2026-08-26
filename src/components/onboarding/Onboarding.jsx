@@ -27,7 +27,7 @@ function buildCorrelationId() {
   return `tenant-create-${Date.now()}`;
 }
 
-export default function Onboarding({ user, onComplete }) {
+export default function Onboarding({ user, onComplete, onCancel }) {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -122,13 +122,31 @@ export default function Onboarding({ user, onComplete }) {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
+        {/* Cancelar — solo cuando esta pantalla se abrió DESDE dentro de la app
+            (Módulo 18: unirse a una segunda escuela ya no requiere quedarse sin
+            la primera). El flujo original, sin perfil todavía, no tiene a dónde
+            volver y no recibe esta prop. */}
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm text-muted-foreground hover:text-foreground mb-4"
+          >
+            ← Volver
+          </button>
+        )}
+
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl bg-brand flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl font-bold text-white">L</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Bienvenido a LIUMA</h1>
-          <p className="text-muted-foreground mt-1">Configuremos tu cuenta</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            {onCancel ? 'Unirme a otra escuela' : 'Bienvenido a LIUMA'}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {onCancel ? 'Crea una escuela nueva o únete a una existente con su código' : 'Configuremos tu cuenta'}
+          </p>
         </div>
 
         {/* Progress */}

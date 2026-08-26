@@ -26,6 +26,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
   unificaron en `selectCurrentUserProfile`. Era latente porque no existía
   forma de tener perfil en dos escuelas sin soporte manual; deja de serlo
   con el punto anterior.
+- **CI verde de nuevo, y una regresión real detrás**: `read` de
+  `SchoolSubscription` había vuelto a ser `{"user_condition":{"role":"admin"}}`
+  puro — un ADMIN de escuela no podía leer su propia suscripción. No era
+  del módulo 3 (2026-08-18) ni de este PR: `00d16e4` ("Apply RLS security
+  recommendations", `base44-builder[bot]`, push directo a `main` sin PR ni
+  review, 2026-08-24) deshizo la rama `$and[data.app_role:ADMIN,
+  data.school_id]` que el propio módulo 4 había corregido y el módulo 14
+  había confirmado desplegada — el mismo commit sólo tocaba escapes de
+  acentos en las descripciones, así que la regresión pasó inadvertida.
+  Restaurada exactamente a como estaba (misma forma `$and` que exige
+  `validate-rls.mjs` desde el módulo 4 — nunca claves hermanas de
+  `user_condition`); `update`/`delete` siguen sin tocar, sólo `role: admin`.
+  `tests/unit/rls-subscription-owner-only.test.js` (de antes de este PR) es
+  lo que lo capturó.
 
 ## [1.7.9] - 2026-08-24
 

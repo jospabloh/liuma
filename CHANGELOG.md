@@ -5,6 +5,42 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.10] - 2026-08-26
+
+### Added
+
+- **Módulo 18** (jospabloh/acacia-app-standard): unirse a una segunda
+  escuela ya no requiere navegar fuera de la app ni existía forma de
+  llegar de vuelta a esa pantalla una vez onboardeado — `Home.jsx` gana un
+  enlace "Unirme a otra escuela" siempre visible, y un selector real
+  (clickeable, no decorativo) cuando el usuario tiene perfil ACTIVE en más
+  de una. Reemplaza la fila de "pills" que vivía solo en `AdminHome.jsx`
+  (sin `onClick`, solo para ADMIN) por un componente compartido por los
+  tres roles.
+
+### Fixed
+
+- **Módulo 14, hallazgo cerrado**: las tres reglas distintas para "cuál es
+  mi escuela actual" (`tenantSelection.js` ordenada, `exportSchoolData`/
+  `governRoleChange` sin ordenar, `NavContext.jsx` con `[0]` sin ordenar) se
+  unificaron en `selectCurrentUserProfile`. Era latente porque no existía
+  forma de tener perfil en dos escuelas sin soporte manual; deja de serlo
+  con el punto anterior.
+- **CI verde de nuevo, y una regresión real detrás**: `read` de
+  `SchoolSubscription` había vuelto a ser `{"user_condition":{"role":"admin"}}`
+  puro — un ADMIN de escuela no podía leer su propia suscripción. No era
+  del módulo 3 (2026-08-18) ni de este PR: `00d16e4` ("Apply RLS security
+  recommendations", `base44-builder[bot]`, push directo a `main` sin PR ni
+  review, 2026-08-24) deshizo la rama `$and[data.app_role:ADMIN,
+  data.school_id]` que el propio módulo 4 había corregido y el módulo 14
+  había confirmado desplegada — el mismo commit sólo tocaba escapes de
+  acentos en las descripciones, así que la regresión pasó inadvertida.
+  Restaurada exactamente a como estaba (misma forma `$and` que exige
+  `validate-rls.mjs` desde el módulo 4 — nunca claves hermanas de
+  `user_condition`); `update`/`delete` siguen sin tocar, sólo `role: admin`.
+  `tests/unit/rls-subscription-owner-only.test.js` (de antes de este PR) es
+  lo que lo capturó.
+
 ## [1.7.9] - 2026-08-24
 
 ### Fixed

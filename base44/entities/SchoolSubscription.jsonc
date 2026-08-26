@@ -153,9 +153,25 @@
       }
     },
     "read": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "$and": [
+            {
+              "user_condition": {
+                "data.app_role": "ADMIN"
+              }
+            },
+            {
+              "data.school_id": "{{user.data.school_id}}"
+            }
+          ]
+        }
+      ]
     },
     "update": {
       "user_condition": {

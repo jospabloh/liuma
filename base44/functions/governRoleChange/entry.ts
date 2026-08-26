@@ -83,7 +83,12 @@ Deno.serve(async (req) => {
     // Establish the caller's authority from the backend, not from the request.
     // The caller must hold an ACTIVE ADMIN profile; that profile's school is the
     // only tenant this call may act on.
-    const callerProfiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id });
+    //
+    // Módulo 18: sorted by -created_date before picking (same fix, same
+    // reasoning, as exportSchoolData's twin comment) — an admin of more than
+    // one school used to get Base44 filter()'s unspecified order here, which
+    // could silently act on the wrong school (module 14 finding, 2026-08-23).
+    const callerProfiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id }, '-created_date');
     const callerProfile = callerProfiles.find((p) => p.app_role === 'ADMIN' && p.status === 'ACTIVE') || null;
     if (!callerProfile) return bad(403, 'NOT_ADMIN', 'Requires an active ADMIN profile');
     const schoolId = callerProfile.school_id;

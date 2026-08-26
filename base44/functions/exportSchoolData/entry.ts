@@ -40,8 +40,15 @@ Deno.serve(async (req) => {
 
     // Same authority derivation as governRoleChange: the caller's own ACTIVE
     // ADMIN profile determines the school, never a client-supplied id.
-    const callerProfiles = await sr.entities.UserProfile.filter({ user_id: user.id });
-    const callerProfile = (callerProfiles || []).find((p: any) => p.app_role === 'ADMIN' && p.status === 'ACTIVE') || null;
+    //
+    // Módulo 18: sorted by -created_date before picking, mirroring
+    // src/lib/tenantSelection.js's selectCurrentUserProfile — an admin of
+    // more than one school (a real possibility now that Home.jsx lets a
+    // user join a second school without leaving the first) used to get
+    // Base44 filter()'s unspecified order here, which could silently
+    // export the wrong school's data (module 14 finding, 2026-08-23).
+    const callerProfiles = (await sr.entities.UserProfile.filter({ user_id: user.id }, '-created_date')) || [];
+    const callerProfile = callerProfiles.find((p: any) => p.app_role === 'ADMIN' && p.status === 'ACTIVE') || null;
     if (!callerProfile) return bad(403, 'NOT_ADMIN', 'Requires an active ADMIN profile');
     const schoolId = callerProfile.school_id;
     if (!schoolId) return bad(400, 'NO_SCHOOL', 'Admin profile has no school_id');

@@ -600,3 +600,50 @@ llevaba su propio `stableStringify` / `hmacHex` / `timingSafeEqual`, copiados a
 mano contra `api/_lib/ingestSign.js` de Mission Control. Dejarlos al lado del
 helper no es desorden: es una segunda implementación de la misma rutina en el
 mismo archivo, que es exactamente la deriva que este módulo quita.
+
+## Auditoría completa 2026-08-31 — sin cruces de inquilino, un CVE de dependencia cerrado
+
+Pase automatizado, con el mismo alcance que módulo 14 pero verificando
+también build/lint/tests/RLS-de-archivo end to end, no solo aislamiento.
+Contra el repo en `main` (`ca9c2bf`), sin desplegar nada al backend de
+Base44 ni a producción — eso sigue siendo `npm run deploy`/`deploy:site`,
+manual, aparte.
+
+**Verificado limpio, sin cambios:** `npm run lint` (0 errores + `validate:functions`
+6/40), `npm run build`, `npm run validate:rls` (32 entidades), `npm test`
+(276/276), `npm run test:permissions` (23/23). Ningún secreto en árbol ni en
+historial (`.env.example` es el único `.env*` versionado). No había rama de
+auditoría ni PR abiertos previos a este pase.
+
+**Hallazgo real, cerrado:** `react-router-dom` `6.30.6` traía dos CVEs
+moderados (`GHSA-wrjc-x8rr-h8h6` open-redirect vía backslash en
+`<Link>`/`useNavigate`, `GHSA-337j-9hxr-rhxg` constructor injection en
+hidratación SSR). No existe versión `6.x` parcheada — la única corrección es
+saltar a v7. Antes de tomar ese riesgo se comprobó que ninguna de las dos
+tenía superficie viva aquí: todo `navigate()`/`<Link to>` en `src/` pasa por
+`createPageUrl()` con strings definidos en el propio código o por rutas fijas
+— ninguno recibe una URL cruda de un usuario — y la app es un SPA cliente
+puro, sin SSR. Con eso, y viendo que el uso es solo API "declarativa"
+(`BrowserRouter`/`Routes`/`Route`/`useNavigate`/`Link`, estable entre v6 y v7),
+se subió a `7.18.3`. `npm audit` pasó de 2 vulnerabilidades moderadas a 0.
+Verificado con la suite completa (arriba) más un chequeo de runtime con
+Playwright contra el dev server local en `/`, `/login` y una ruta 404: cero
+errores de router en consola (los únicos errores fueron el SDK de Base44 sin
+poder alcanzar un backend, esperado en este sandbox — mismo patrón que el
+módulo 10 ya documentó). Bump a v1.7.11, sin entrada en `HistorialCambios.jsx`
+a propósito: es un parche de dependencia invisible para el usuario, mismo
+criterio con el que los módulos 14/15/18 tampoco aparecen ahí.
+
+**No verificado, mismo límite que cada pase anterior de este archivo:**
+ninguna pantalla autenticada (Home, GestionEscuela, Pagos, etc.) ni UAT en
+vivo — este entorno no tiene sesión Base44 real ni alcanza el backend
+desplegado. Tampoco se releyó el esquema RLS *desplegado* en Base44 (eso es
+módulo 4/14 con el MCP de Base44 y una sesión con esas credenciales, no
+disponible aquí) — lo que se validó es el archivo `.jsonc` del repo, que es
+lo que `validate:rls` cubre. Sin una segunda pestaña con un tenant/rol
+distinto no hay forma de ejercer cross-device, performance real, ni
+deliverability de correo.
+
+**Conclusión:** ningún hallazgo de seguridad, aislamiento ni calidad además
+del CVE de arriba. El estado que documentan los módulos 1–18 anteriores se
+sostiene.

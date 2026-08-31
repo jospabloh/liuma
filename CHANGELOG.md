@@ -5,6 +5,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.11] - 2026-08-31
+
+### Security
+
+- **`react-router-dom` `6.30.6` → `7.18.3`** (2 moderate CVEs: an open-redirect
+  bypass via a backslash in `<Link>`/`useNavigate`, and an arbitrary
+  constructor injection in SSR hydration — GHSA-wrjc-x8rr-h8h6,
+  GHSA-337j-9hxr-rhxg). No patched `6.x` release exists (`npm audit` offers
+  only the major bump). Verified neither CVE was live here first — every
+  `navigate()`/`<Link to>` target in `src/` goes through app-defined
+  `createPageUrl()` strings or hardcoded routes, never raw user input, and
+  the app has no SSR — before taking the major-version risk. The app only
+  uses `BrowserRouter`/`Routes`/`Route`/`useNavigate`/`Link` (React Router's
+  "declarative mode", stable across v6→v7), so the bump needed no code
+  changes. `npm audit` now reports 0 vulnerabilities.
+
 ## [1.7.10] - 2026-08-26
 
 ### Added

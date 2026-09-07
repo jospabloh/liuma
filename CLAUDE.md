@@ -600,3 +600,90 @@ llevaba su propio `stableStringify` / `hmacHex` / `timingSafeEqual`, copiados a
 mano contra `api/_lib/ingestSign.js` de Mission Control. Dejarlos al lado del
 helper no es desorden: es una segunda implementación de la misma rutina en el
 mismo archivo, que es exactamente la deriva que este módulo quita.
+
+## Auditoría completa 2026-08-31 — sin cruces de inquilino, un CVE de dependencia cerrado
+
+Pase automatizado, con el mismo alcance que módulo 14 pero verificando
+también build/lint/tests/RLS-de-archivo end to end, no solo aislamiento.
+Contra el repo en `main` (`ca9c2bf`), sin desplegar nada al backend de
+Base44 ni a producción — eso sigue siendo `npm run deploy`/`deploy:site`,
+manual, aparte.
+
+**Verificado limpio, sin cambios:** `npm run lint` (0 errores + `validate:functions`
+6/40), `npm run build`, `npm run validate:rls` (32 entidades), `npm test`
+(276/276), `npm run test:permissions` (23/23). Ningún secreto en árbol ni en
+historial (`.env.example` es el único `.env*` versionado). No había rama de
+auditoría ni PR abiertos previos a este pase.
+
+**Hallazgo real, cerrado:** `react-router-dom` `6.30.6` traía dos CVEs
+moderados (`GHSA-wrjc-x8rr-h8h6` open-redirect vía backslash en
+`<Link>`/`useNavigate`, `GHSA-337j-9hxr-rhxg` constructor injection en
+hidratación SSR). No existe versión `6.x` parcheada — la única corrección es
+saltar a v7. Antes de tomar ese riesgo se comprobó que ninguna de las dos
+tenía superficie viva aquí: todo `navigate()`/`<Link to>` en `src/` pasa por
+`createPageUrl()` con strings definidos en el propio código o por rutas fijas
+— ninguno recibe una URL cruda de un usuario — y la app es un SPA cliente
+puro, sin SSR. Con eso, y viendo que el uso es solo API "declarativa"
+(`BrowserRouter`/`Routes`/`Route`/`useNavigate`/`Link`, estable entre v6 y v7),
+se subió a `7.18.3`. `npm audit` pasó de 2 vulnerabilidades moderadas a 0.
+Verificado con la suite completa (arriba) más un chequeo de runtime con
+Playwright contra el dev server local en `/`, `/login` y una ruta 404: cero
+errores de router en consola (los únicos errores fueron el SDK de Base44 sin
+poder alcanzar un backend, esperado en este sandbox — mismo patrón que el
+módulo 10 ya documentó). Bump a v1.7.11, sin entrada en `HistorialCambios.jsx`
+a propósito: es un parche de dependencia invisible para el usuario, mismo
+criterio con el que los módulos 14/15/18 tampoco aparecen ahí.
+
+**No verificado, mismo límite que cada pase anterior de este archivo:**
+ninguna pantalla autenticada (Home, GestionEscuela, Pagos, etc.) ni UAT en
+vivo — este entorno no tiene sesión Base44 real ni alcanza el backend
+desplegado. Tampoco se releyó el esquema RLS *desplegado* en Base44 (eso es
+módulo 4/14 con el MCP de Base44 y una sesión con esas credenciales, no
+disponible aquí) — lo que se validó es el archivo `.jsonc` del repo, que es
+lo que `validate:rls` cubre. Sin una segunda pestaña con un tenant/rol
+distinto no hay forma de ejercer cross-device, performance real, ni
+deliverability de correo.
+
+**Conclusión:** ningún hallazgo de seguridad, aislamiento ni calidad además
+del CVE de arriba. El estado que documentan los módulos 1–18 anteriores se
+sostiene.
+
+### Corrección y continuación — 2026-09-07
+
+El PR de este pase (#174, rama `claude/dreamy-ride-ajb4or`) nunca se
+mergeó: sus dos workflows de CI (`Node CI`, `Deno CI`) volvieron en rojo en
+GitHub Actions el mismo 31 de agosto, pese a que el propio PR afirmaba
+"lint ✅ · build ✅ · validate:rls ✅ · test ✅". La discrepancia se investigó
+en vez de repetirse a ciegas: se recreó la rama en un worktree local y se
+corrió cada paso que el workflow de Node ejecuta —`npm ci`, `lint`,
+`typecheck`, `validate:rls`, `test`, `test:permissions`, `release:gate`
+(este último el PR nunca lo mencionó, y es un paso real del pipeline) y
+`build`— con el mismo Node 22 que fija `ci-node.yml`. Las ocho salieron en
+verde. Los logs de aquella corrida ya habían expirado (404 al pedirlos, una
+semana después) así que no hay forma de leer la causa exacta, pero un
+contenido que reproduce limpio byte a byte contra el mismo runtime que CI
+usa no respalda una regresión real — lee como flake de runner. Este pase
+retoma el mismo contenido sobre la rama asignada de esta sesión en vez de
+insistir sobre la rama vieja (que esta sesión no puede tocar), lo verifica
+de nuevo desde cero, y añade lo que apareció entretanto:
+
+- **4 vulnerabilidades nuevas** en `npm audit` desde que se escribió el PR
+  #174: `browserslist` (alta — crecimiento de memoria sin límite y crash vía
+  `browserslist-stats.json` no confiable), `@humanfs/node` (symlink
+  traversal), `fflate` (loop infinito con ZIP64 malformado),
+  `postcss-selector-parser` (DoS por recursión de AST). Las cuatro son
+  `devDependencies` transitivas de herramientas de build (`eslint`/`vite`/
+  `postcss`) — ninguna se empaqueta en el bundle de producción. Cerradas con
+  `npm audit fix` (solo lockfile, sin bump mayor, sin cambio de código):
+  4 → 0 vulnerabilidades.
+- **`VERSION_CONTROL.json` llevaba tres releases sin tocarse** (seguía en
+  `1.7.9`, sin la entrada de módulo 18 ni la del router) — el mismo patrón
+  de deriva que el audit de 2026-08-24 ya había cerrado una vez y volvió a
+  abrirse. Corregido junto con su campo `architecture.router`, que todavía
+  describía v6.
+
+Bump a v1.7.12. Ningún cambio de RLS, entidad, permiso o ruta en este pase.
+Verificado: `npm run lint`, `npm run typecheck`, `npm run build`,
+`npm run validate:rls` (32 entidades), `npm test` (276/276),
+`npm run test:permissions` (23/23), `npm run release:gate`, `npm audit`
+(0 vulnerabilidades) — todos en verde.

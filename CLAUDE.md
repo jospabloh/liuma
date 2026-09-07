@@ -647,3 +647,43 @@ deliverability de correo.
 **Conclusión:** ningún hallazgo de seguridad, aislamiento ni calidad además
 del CVE de arriba. El estado que documentan los módulos 1–18 anteriores se
 sostiene.
+
+### Corrección y continuación — 2026-09-07
+
+El PR de este pase (#174, rama `claude/dreamy-ride-ajb4or`) nunca se
+mergeó: sus dos workflows de CI (`Node CI`, `Deno CI`) volvieron en rojo en
+GitHub Actions el mismo 31 de agosto, pese a que el propio PR afirmaba
+"lint ✅ · build ✅ · validate:rls ✅ · test ✅". La discrepancia se investigó
+en vez de repetirse a ciegas: se recreó la rama en un worktree local y se
+corrió cada paso que el workflow de Node ejecuta —`npm ci`, `lint`,
+`typecheck`, `validate:rls`, `test`, `test:permissions`, `release:gate`
+(este último el PR nunca lo mencionó, y es un paso real del pipeline) y
+`build`— con el mismo Node 22 que fija `ci-node.yml`. Las ocho salieron en
+verde. Los logs de aquella corrida ya habían expirado (404 al pedirlos, una
+semana después) así que no hay forma de leer la causa exacta, pero un
+contenido que reproduce limpio byte a byte contra el mismo runtime que CI
+usa no respalda una regresión real — lee como flake de runner. Este pase
+retoma el mismo contenido sobre la rama asignada de esta sesión en vez de
+insistir sobre la rama vieja (que esta sesión no puede tocar), lo verifica
+de nuevo desde cero, y añade lo que apareció entretanto:
+
+- **4 vulnerabilidades nuevas** en `npm audit` desde que se escribió el PR
+  #174: `browserslist` (alta — crecimiento de memoria sin límite y crash vía
+  `browserslist-stats.json` no confiable), `@humanfs/node` (symlink
+  traversal), `fflate` (loop infinito con ZIP64 malformado),
+  `postcss-selector-parser` (DoS por recursión de AST). Las cuatro son
+  `devDependencies` transitivas de herramientas de build (`eslint`/`vite`/
+  `postcss`) — ninguna se empaqueta en el bundle de producción. Cerradas con
+  `npm audit fix` (solo lockfile, sin bump mayor, sin cambio de código):
+  4 → 0 vulnerabilidades.
+- **`VERSION_CONTROL.json` llevaba tres releases sin tocarse** (seguía en
+  `1.7.9`, sin la entrada de módulo 18 ni la del router) — el mismo patrón
+  de deriva que el audit de 2026-08-24 ya había cerrado una vez y volvió a
+  abrirse. Corregido junto con su campo `architecture.router`, que todavía
+  describía v6.
+
+Bump a v1.7.12. Ningún cambio de RLS, entidad, permiso o ruta en este pase.
+Verificado: `npm run lint`, `npm run typecheck`, `npm run build`,
+`npm run validate:rls` (32 entidades), `npm test` (276/276),
+`npm run test:permissions` (23/23), `npm run release:gate`, `npm audit`
+(0 vulnerabilidades) — todos en verde.

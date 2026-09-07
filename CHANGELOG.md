@@ -5,6 +5,28 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.12] - 2026-09-07
+
+### Security
+
+- **4 dependency advisories closed** (`npm audit fix`, lockfile-only, no
+  breaking changes): `browserslist` (high — unbounded memory growth and a
+  crash via untrusted `browserslist-stats.json`), `@humanfs/node` (symlink
+  traversal on recursive copy), `fflate` (infinite loop parsing malformed
+  ZIP64 archives), `postcss-selector-parser` (AST-recursion denial of
+  service). All four are transitive build-tooling `devDependencies`
+  (pulled in by `eslint`/`vite`/`postcss`) — none ship in the production
+  bundle. `npm audit`: 4 (1 high, 2 moderate, 1 low) → 0.
+
+### Fixed
+
+- **Release-metadata drift, again**: `package.json`, `src/lib/appConfig.js`
+  and `VERSION_CONTROL.json` were still reading `1.7.9` — module 18
+  (`1.7.10`) and the router-CVE fix below (opened as PR #174, never merged)
+  both shipped without the version bump. `VERSION_CONTROL.json`'s
+  `architecture.router` field was also still describing v6. Both corrected
+  here.
+
 ## [1.7.11] - 2026-08-31
 
 ### Security

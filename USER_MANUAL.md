@@ -63,6 +63,22 @@ contraseña.
 
 ---
 
+## 2c. Unirse a otra escuela / cambiar de escuela
+
+Si perteneces a más de una escuela (por ejemplo, un directivo que también
+apoya en otra institución), en la pantalla de Inicio verás un pequeño
+selector con el nombre de cada escuela — la escuela actual aparece resaltada
+y las demás son botones para cambiar a ellas de inmediato, sin cerrar
+sesión. Este selector solo aparece si tienes más de una escuela vinculada.
+
+El enlace **"Unirme a otra escuela"** está siempre visible junto al selector
+(o solo, si aún perteneces a una sola escuela) — es la forma de dar de alta
+tu primer perfil en una segunda institución con su propio código de
+invitación, disponible para los tres roles (Administrador, Maestro,
+Padre/Madre).
+
+---
+
 ## 3. Secciones compartidas (Admin + Maestro + Padre)
 
 | Página | Ruta | Qué hace | Acciones clave |

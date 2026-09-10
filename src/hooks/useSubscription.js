@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { selectCurrentUserProfile, getActiveSchoolOverride } from '@/lib/tenantSelection';
+import { selectCurrentUserProfile } from '@/lib/tenantSelection';
 import { isPlatformOwner } from '@/lib/support/owner';
 import { normalizeSubscription } from '@/lib/license/licenseModel';
 
@@ -26,7 +26,7 @@ export function useSubscription() {
       const profiles = await base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date');
       // Módulo 18: respeta el switcher de Home.jsx — sin esto, cambiar de
       // escuela dejaría el banner de facturación mostrando la anterior.
-      return selectCurrentUserProfile(profiles, getActiveSchoolOverride());
+      return selectCurrentUserProfile(profiles);
     },
     enabled: !!user?.id,
   });

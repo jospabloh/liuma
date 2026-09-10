@@ -119,9 +119,6 @@ export default function AdminHome({ user, userProfile, subscription }) {
         title={school?.name || 'Administración'}
         subtitle={`${classrooms.length} salones · ${students.length} alumnos`}
       />
-      {/* El selector de escuela (real, no decorativo) vive en Home.jsx —
-          compartido por los tres roles, no solo ADMIN. Ver SchoolSwitcher.jsx. */}
-
       {/* Emergency Button */}
       <div className="relative z-10 mx-auto max-w-2xl px-6 -mt-6">
         <motion.div

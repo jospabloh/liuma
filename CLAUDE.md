@@ -687,3 +687,43 @@ Verificado: `npm run lint`, `npm run typecheck`, `npm run build`,
 `npm run validate:rls` (32 entidades), `npm test` (276/276),
 `npm run test:permissions` (23/23), `npm run release:gate`, `npm audit`
 (0 vulnerabilidades) — todos en verde.
+
+## Retirado: el selector de escuela (módulo 18) — 2026-09-10
+
+**Una cuenta, una escuela.** El selector que dejaba a un mismo email moverse
+entre escuelas y unirse a una segunda sin salir de la primera se quitó: el
+feature nunca llegó a producción en el portafolio.
+
+Lo que se fue: `src/components/home/SchoolSwitcher.jsx`, el estado
+`joiningAnother` de `Home.jsx` (que reabría el onboarding desde dentro de la
+app), `handleSwitchSchool`, la consulta de escuelas que sólo alimentaba las
+pills, y de `src/lib/tenantSelection.js` tanto
+`buildTenantSelectionContext` como el par
+`get/setActiveSchoolOverride`. **La clave `liuma.activeSchoolId` de
+`localStorage` ya no se lee ni se escribe**: un valor que haya quedado de antes
+es inerte, no hay que limpiarlo.
+
+**Lo que se queda, y es la mitad que importa:**
+`selectCurrentUserProfile` sigue siendo la **única** regla de "qué escuela estoy
+viendo", compartida por `Home.jsx`, `NavContext.jsx`, `useSubscription.js` y
+`TenantThemeRuntime.jsx`. Perdió el parámetro `preferredSchoolId` (lo alimentaba
+el selector) y conserva el orden determinista. Eso no es decoración: el hallazgo
+del módulo 14 (2026-08-23, "tres reglas distintas para en qué escuela estoy")
+fue precisamente que `filter()` de Base44 no garantiza orden y dos lectores
+podían elegir perfiles distintos — "Descargar mis datos" devolviendo en silencio
+la escuela que no estabas viendo. Hay un test nuevo que fija esa propiedad
+(mismo conjunto, entrada invertida, misma respuesta).
+
+**Ese hallazgo sigue abierto en el backend**, y conviene no darlo por cerrado
+de rebote: `exportSchoolData:43` y `governRoleChange:86` siguen con su propio
+`.find(ADMIN && ACTIVE)` sin ordenar. Quitar el selector lo hace **menos**
+probable —ya no hay forma de conseguirse un segundo perfil desde la app, sólo
+que un admin lo asigne— pero no imposible. El arreglo sigue siendo el que ese
+módulo propuso: que el backend use `selectCurrentUserProfile`.
+
+**Verificado:** `npm run lint` (incl. `validate:functions` 6/40),
+`npm run typecheck` (exit 0), `npm run build`, `npm run validate:rls`
+(32 entidades), `npm test` (276/276), `npm run test:permissions` (23/23) y
+`npm run release:gate` — todos limpios. Sin cambios de RLS, entidad ni función:
+esto es sólo frontend, así que requiere `npm run deploy:site` y **no**
+`npm run deploy`. **No verificado:** el deploy ni una sesión de navegador.

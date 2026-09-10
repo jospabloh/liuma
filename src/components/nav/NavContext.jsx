@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import CommandPalette from './CommandPalette.jsx';
-import { selectCurrentUserProfile, getActiveSchoolOverride } from '@/lib/tenantSelection';
+import { selectCurrentUserProfile } from '@/lib/tenantSelection';
 
 /**
  * Shared navigation state so the command palette can be opened from anywhere —
@@ -29,7 +29,7 @@ export function NavProvider({ children }) {
     queryKey: ['userProfiles', user?.id],
     queryFn: async () => {
       const profiles = await base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date');
-      return selectCurrentUserProfile(profiles, getActiveSchoolOverride());
+      return selectCurrentUserProfile(profiles);
     },
     enabled: !!user,
   });

@@ -2,5 +2,5 @@
 // (src/pages/HistorialCambios.jsx). Mirrors CHANGELOG.md's own entry titles —
 // keep package.json's "version" and this file's APP_VERSION in sync by hand,
 // same convention as stockflow/cateqhub/puntos/radar's appConfig.js.
-export const APP_VERSION = '1.7.12';
-export const RELEASE_DATE = '2026-09-07';
+export const APP_VERSION = '1.7.13';
+export const RELEASE_DATE = '2026-09-14';

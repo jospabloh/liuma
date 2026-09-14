@@ -5,6 +5,26 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.13] - 2026-09-14
+
+### Security
+
+- **`js-yaml` `4.3.1` → `4.3.2`** (`npm audit fix`, lockfile-only): closes
+  GHSA-2883-xcg3-v3hh (unbounded CPU use via `maxTotalMergeKeys` on an
+  untrusted YAML merge). Transitive `devDependency` of `eslint` (via
+  `@eslint/eslintrc`) — build-time only, never shipped in the app bundle.
+  `npm audit`: 1 high → 0.
+
+### Verified
+
+- Full scheduled audit pass: pre-flight (clean tree, HEAD == `origin/main`,
+  no open PRs or stray audit branches, no secrets in tree), then
+  `npm run lint`, `npm run typecheck`, `npm run build`,
+  `npm run validate:rls` (32 entities), `npm test` (276/276),
+  `npm run test:permissions` (23/23), `npm run release:gate` — all green
+  both before and after the fix above. No RLS, entity, permission, or
+  route-access code changed.
+
 ## [1.7.12] - 2026-09-07
 
 ### Security

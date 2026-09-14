@@ -727,3 +727,53 @@ módulo propuso: que el backend use `selectCurrentUserProfile`.
 `npm run release:gate` — todos limpios. Sin cambios de RLS, entidad ni función:
 esto es sólo frontend, así que requiere `npm run deploy:site` y **no**
 `npm run deploy`. **No verificado:** el deploy ni una sesión de navegador.
+
+## Auditoría completa 2026-09-14 — un CVE de dependencia cerrado, nada más
+
+Pase programado de revisión completa (inventario, RLS/aislamiento, calidad de
+código, matriz de permisos, UI/UX, cross-device, performance, QA automatizada,
+changelog/versión, PR + plan de rollback), contra `main`/rama asignada en
+`4420057` (sincronizada, sin diferencias). Cuatro días después del módulo 18
+(2026-09-10) y con la auditoría de aislamiento completa más reciente en
+2026-08-23/2026-08-31 — este pase no repite esas dos desde cero (ninguna
+entidad, función, rol ni ruta cambió entretanto que las obligara), y se
+concentra en lo que sí pudo cambiar solo: dependencias, y que la suite entera
+siga en verde.
+
+**Pre-flight:** árbol limpio, `HEAD` igual a `origin/main`, **cero PRs
+abiertos** y ninguna rama de auditoría previa sin cerrar. Sin secretos en el
+árbol (`.env.example` sigue siendo el único `.env*` versionado; grep de
+patrones de credenciales conocidos, sin resultados).
+
+**Hallazgo real, cerrado:** `npm audit` reportó **una** vulnerabilidad nueva
+desde el 1.7.12 (2026-09-07): `js-yaml` `4.3.1`, alta —
+[GHSA-2883-xcg3-v3hh](https://github.com/advisories/GHSA-2883-xcg3-v3hh),
+uso de CPU sin límite en `maxTotalMergeKeys` al fusionar YAML no confiable.
+Mismo patrón que cada advertencia cerrada en 1.7.9/1.7.11/1.7.12:
+`devDependency` transitiva (`eslint` → `@eslint/eslintrc` → `js-yaml`),
+herramienta de build, nunca se empaqueta en lo que carga un usuario. Cerrado
+con `npm audit fix` (`js-yaml` → `4.3.2`, solo lockfile, sin cambio de
+código ni bump mayor). `npm audit`: 1 alta → 0.
+
+**Sin hallazgos nuevos de aislamiento, permisos, RLS-de-archivo ni calidad de
+código.** El hallazgo del módulo 14 sigue en el mismo estado que dejó el
+módulo 18: `exportSchoolData:43`/`governRoleChange:86` siguen con su propio
+`.find(ADMIN && ACTIVE)` sin ordenar en vez de `selectCurrentUserProfile`,
+latente (sigue sin existir un segundo `UserProfile` por usuario en
+producción que lo dispare). No se releyó el esquema RLS **desplegado** en
+Base44 en este pase — eso exige el MCP de Base44 contra credenciales de
+producción, mismo límite que cada pase anterior — lo que sí se confirmó de
+nuevo es que el archivo `.jsonc` del repo pasa `validate:rls` sin cambios.
+
+**No verificado, mismo límite recurrente:** ninguna pantalla autenticada, UAT
+en vivo, cross-device real, ni deliverability de correo — este entorno no
+tiene sesión Base44 real ni alcanza el backend desplegado o el sitio
+desplegado (`npm run test:smoke` está fuera del alcance del sandbox, ver la
+sección de ese comando arriba).
+
+Bump a v1.7.13 (patch, seguridad). Verificado, antes y después del fix:
+`npm run lint` (incl. `validate:functions` 6/40), `npm run typecheck`,
+`npm run build`, `npm run validate:rls` (32 entidades), `npm test`
+(276/276), `npm run test:permissions` (23/23), `npm run release:gate`,
+`npm audit` (0 vulnerabilidades) — todos en verde. Ningún cambio de RLS,
+entidad, permiso o ruta en este pase.

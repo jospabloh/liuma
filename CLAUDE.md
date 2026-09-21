@@ -839,3 +839,12 @@ Bump a v1.7.14 (patch, seguridad/operación). Verificado antes y después:
 de entidad, RLS, permiso o ruta en este pase — el único cambio de código en
 `main` es el bump de `@base44/sdk`/`@base44/vite-plugin` que el propio bot
 de Base44 resolvió.
+
+**Corrección post-merge:** el review automático de Codex en el PR de este
+pase (#179) señaló, antes de mergear, que el checkpoint desplegado
+(`504ca94`) era el padre del commit que añadía el propio bump a 1.7.14 —
+así que "la app publicada corre `main`" se habría vuelto falso en cuanto
+ese PR se mergeara. Correcto. Tras el merge (`860c741`) se repitió
+`github/sync` + `deploy` y se releyó `package.json`/`appConfig.js` en el
+sandbox para confirmar `1.7.14` por contenido — la app publicada corre
+ahora sí el `main` actual.

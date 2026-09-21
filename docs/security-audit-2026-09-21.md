@@ -102,6 +102,13 @@ base44.app` — el proxy de este sandbox no alcanza dominios `*.base44.app`
 confirmación de que el deploy tomó es por contenido del checkpoint
 (`git_commit_hash` + `last_deployed_at`), no por una respuesta HTTP en vivo.
 
+**Cerrado tras el merge:** PR #179 se mergeó como `860c741`. Se repitió
+`github/sync` (limpio, sin conflicto — trajo exactamente ese commit) y
+`deploy`; el checkpoint resultante lleva `git_commit_hash` `860c741` y
+`last_deployed_at` de este mismo pase, y se releyó `package.json`/
+`src/lib/appConfig.js` en el sandbox para confirmar `1.7.14` por contenido.
+Ahora sí, la app publicada corre el `main` actual.
+
 **Impacto práctico mientras estuvo así:** los usuarios de producción
 estuvieron corriendo, durante casi un mes, una build sin la corrección de
 router (v6 con dos CVEs moderados aceptados como riesgo *después* de

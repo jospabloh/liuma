@@ -102,6 +102,32 @@ base44.app` — el proxy de este sandbox no alcanza dominios `*.base44.app`
 confirmación de que el deploy tomó es por contenido del checkpoint
 (`git_commit_hash` + `last_deployed_at`), no por una respuesta HTTP en vivo.
 
+**Cerrado tras el merge de #179, y por qué esta frase no se repite con cada
+commit de aquí en adelante.** #179 se mergeó como `860c741`. Se repitió
+`github/sync` (limpio, sin conflicto — trajo exactamente ese commit) y
+`deploy`; el checkpoint resultante lleva `git_commit_hash` `860c741` y
+`last_deployed_at` de este mismo pase, y se releyó `package.json`/
+`src/lib/appConfig.js` en el sandbox para confirmar `1.7.14` por contenido.
+Verificado en ese momento: el checkpoint desplegado == el `main` de ese
+momento.
+
+Codex señaló, en el PR que registra justo este párrafo (#180), que la misma
+trampa se repite: en cuanto ese PR se mergee, `main` vuelve a adelantarse un
+commit al checkpoint. Tiene razón otra vez, y la respuesta no es perseguirlo
+con un tercer PR que redeploya y un cuarto que lo registra — eso no termina
+nunca, porque *cualquier* commit nuevo en `main`, incluido uno que sólo
+documenta el deploy anterior, deja el checkpoint un commit atrás hasta el
+siguiente sync. **La distinción que sí importa, y que este párrafo fija de
+una vez:** un commit de solo-documentación (como éste) no cambia ni una
+línea de `package.json`, `src/` ni `base44/functions/` — el *contenido* que
+la app publicada sirve sigue siendo exactamente `1.7.14`, aunque el
+`git_commit_hash` del checkpoint no sea el último de `main`. Ese desfase de
+hash es el ruido inevitable de documentar un deploy; el hallazgo real de
+este pase — semanas de código sin desplegar, con un CVE sin llegar a
+producción — es sobre *contenido*, no sobre que el hash del checkpoint
+coincida con el de `main` al segundo. No se abrirá un PR de seguimiento
+para este mismo párrafo otra vez.
+
 **Impacto práctico mientras estuvo así:** los usuarios de producción
 estuvieron corriendo, durante casi un mes, una build sin la corrección de
 router (v6 con dos CVEs moderados aceptados como riesgo *después* de

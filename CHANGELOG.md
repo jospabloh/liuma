@@ -5,6 +5,30 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.14] - 2026-09-21
+
+### Fixed
+
+- **Production deploy had drifted ~4 weeks behind the repository.** The
+  Base44-hosted app's own checkpoint history showed no deploy since
+  2026-08-24, while the repo had moved on to 1.7.13 — meaning the
+  react-router-dom v6→v7 CVE fix (2026-08-31) and every change after it had
+  never actually reached production users. Root cause: Base44's own side of
+  the GitHub sync had diverged (a bot-authored RLS commit plus direct in-app
+  edits from earlier sessions), which silently stopped new commits from
+  applying. Pulled the latest commits, resolved the resulting
+  `package-lock.json`-only merge conflict, and redeployed; the app is now
+  running current `main`. See `docs/security-audit-2026-09-21.md`.
+- **Stale audit claim corrected.** The module-14 finding
+  (`exportSchoolData`/`governRoleChange` picking the caller's school via an
+  unordered `.find()`) was actually fixed on 2026-09-10 — every audit since
+  kept repeating that it was still open without re-checking the code.
+
+### Security
+
+- No new dependency advisory this cycle (`npm audit`: 0 vulnerabilities,
+  unchanged from 1.7.13).
+
 ## [1.7.13] - 2026-09-14
 
 ### Security

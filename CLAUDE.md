@@ -777,3 +777,65 @@ Bump a v1.7.13 (patch, seguridad). Verificado, antes y después del fix:
 (276/276), `npm run test:permissions` (23/23), `npm run release:gate`,
 `npm audit` (0 vulnerabilidades) — todos en verde. Ningún cambio de RLS,
 entidad, permiso o ruta en este pase.
+
+## Auditoría completa 2026-09-21 — el deploy llevaba ~4 semanas de retraso (el hallazgo real), una afirmación desactualizada corregida
+
+Primera vez que esta sesión tuvo acceso al MCP de Base44 para este repo, lo
+que cambió lo que realmente se pudo verificar frente a cada pase anterior
+desde el módulo 14. Detalle completo en
+`docs/security-audit-2026-09-21.md`; resumen aquí.
+
+**Corrección: el hallazgo del módulo 14 ya estaba cerrado.**
+`exportSchoolData:43`/`governRoleChange:86` — el `.find(ADMIN && ACTIVE)`
+sin ordenar que cada pase desde el 2026-09-10 seguía describiendo como
+"abierto" — en realidad se corrigió ese mismo día, en el commit `4ec5e0c`
+("Module 18: real school switcher…"), que añadió el ordenamiento
+`-created_date` a ambas funciones citando explícitamente el hallazgo del
+módulo 14. El commit que retiró el selector (`d6f217d`, mismo día) no tocó
+`entry.ts` — su mensaje afirmó que el hallazgo "sigue abierto" sin releer el
+código, y esa afirmación se repitió sin verificar en los pases del 08-31,
+09-07 y 09-14. Corregido aquí comprobando el diff real (`git show d6f217d
+-- base44/functions/{exportSchoolData,governRoleChange}/entry.ts`, vacío) y
+el contenido actual de ambos archivos.
+
+**El hallazgo real: producción no se había desplegado desde el
+2026-08-24.** Con el MCP de Base44 se pudo leer el código que el sandbox de
+la app tenía cargado y compararlo por **contenido** contra `main` (el
+método que este archivo pide desde el módulo 11). El sandbox marcaba
+`package.json` en `1.7.10` y `react-router-dom: "^6.26.0"` — sin el upgrade
+a v7 que el audit del 2026-08-31 dio por cerrado — mientras el repo ya iba
+en `1.7.13`. `GET /api/apps/{app_id}/app-checkpoints` confirmó la causa: el
+último `last_deployed_at` no nulo era del 2026-08-24T20:43, casi un mes sin
+deploy pese a que `main` había recibido el módulo 18 completo y tres
+releases de parches. La causa raíz: un commit de `base44-builder[bot]`
+("Apply RLS security recommendations", el mismo 08-24) más ediciones
+directas de sesiones previas en el sandbox habían divergido de `main`, y el
+sync automático con GitHub dejó de aplicar commits nuevos en silencio.
+
+**Arreglado:** `github/sync` (conflicto de merge acotado a
+`package-lock.json`) → `github/sync/resolve-conflicts` (Base44 resolvió con
+su propio builder y publicó un merge en `main`, `504ca94` — diff real solo
+en `package.json`/`package-lock.json`, bump de `@base44/sdk` y
+`@base44/vite-plugin`, verificado con `git diff --stat` antes de aceptarlo)
+→ rama rebasada sobre el nuevo `main`, suite completa corrida de nuevo →
+`POST /deploy`, confirmado por el nuevo checkpoint (`git_commit_hash`
+`504ca94`, `last_deployed_at` de este pase). **No verificado:** una petición
+HTTP directa contra el sitio publicado — el proxy de este sandbox no
+alcanza dominios `*.base44.app` (misma limitación que `npm run test:smoke`).
+
+**RLS desplegado:** `list_entity_schemas` sobre `SchoolSubscription`
+(elegida por tener una regresión documentada del 2026-08-26, `5d2e930`)
+confirmó que la regla `read` desplegada ya lleva la rama `$and` correcta —
+esa corrección sí había llegado a producción por una vía distinta
+(probablemente `update_entity_schema` directo de una sesión anterior). No
+se releyeron las 32 entidades una por una contra el esquema desplegado en
+este pase.
+
+Bump a v1.7.14 (patch, seguridad/operación). Verificado antes y después:
+`npm run lint` (incl. `validate:functions` 6/40), `npm run typecheck`,
+`npm run build`, `npm run validate:rls` (32 entidades), `npm test`
+(276/276), `npm run test:permissions` (23/23), `npm run release:gate`,
+`npm audit` (0 vulnerabilidades) — todos en verde. Ningún cambio de código
+de entidad, RLS, permiso o ruta en este pase — el único cambio de código en
+`main` es el bump de `@base44/sdk`/`@base44/vite-plugin` que el propio bot
+de Base44 resolvió.

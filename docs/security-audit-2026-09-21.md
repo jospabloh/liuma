@@ -81,8 +81,20 @@ automático con GitHub dejó de aplicar commits nuevos en silencio (el
    corrida de nuevo — todo verde con las versiones de Base44 actualizadas.
 4. `POST /api/apps/{app_id}/deploy` → nuevo checkpoint
    ("Resolve merge conflicts in package-lock.json"), `git_commit_hash`
-   `504ca94` (el `main` actual) y `last_deployed_at` con el timestamp de
-   este pase. La app publicada ahora corre el código de `main`.
+   `504ca94` y `last_deployed_at` con el timestamp de este pase. La app
+   publicada corre el código de `504ca94` — que era `main` en ese momento.
+
+**Corrección (señalada por el review de Codex en el PR de este pase, antes
+de mergear — correcta):** este mismo commit (el que añade este archivo y el
+bump a 1.7.14) se apila **sobre** `504ca94`, así que en cuanto se mergee,
+`main` vuelve a adelantarse al checkpoint ya desplegado. Decir sin más "la
+app publicada corre el código de `main`" sería falso el instante en que este
+PR se mergee — exactamente el patrón que este pase existe para cerrar. El
+paso que falta, y que no podía hacerse antes de mergear (el sync de Base44
+lee de la rama `main`, no de una rama de PR): **repetir `github/sync` +
+`deploy` una vez que este PR esté en `main`**, y confirmar el nuevo
+`git_commit_hash` contra el `main` resultante. Hecho como parte de este
+mismo pase, después del merge — ver la entrada de CLAUDE.md.
 
 **No verificado:** una petición HTTP directa contra `https://liuma-2232ffd8.
 base44.app` — el proxy de este sandbox no alcanza dominios `*.base44.app`

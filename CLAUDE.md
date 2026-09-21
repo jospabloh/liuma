@@ -600,3 +600,180 @@ llevaba su propio `stableStringify` / `hmacHex` / `timingSafeEqual`, copiados a
 mano contra `api/_lib/ingestSign.js` de Mission Control. Dejarlos al lado del
 helper no es desorden: es una segunda implementación de la misma rutina en el
 mismo archivo, que es exactamente la deriva que este módulo quita.
+
+## Auditoría completa 2026-08-31 — sin cruces de inquilino, un CVE de dependencia cerrado
+
+Pase automatizado, con el mismo alcance que módulo 14 pero verificando
+también build/lint/tests/RLS-de-archivo end to end, no solo aislamiento.
+Contra el repo en `main` (`ca9c2bf`), sin desplegar nada al backend de
+Base44 ni a producción — eso sigue siendo `npm run deploy`/`deploy:site`,
+manual, aparte.
+
+**Verificado limpio, sin cambios:** `npm run lint` (0 errores + `validate:functions`
+6/40), `npm run build`, `npm run validate:rls` (32 entidades), `npm test`
+(276/276), `npm run test:permissions` (23/23). Ningún secreto en árbol ni en
+historial (`.env.example` es el único `.env*` versionado). No había rama de
+auditoría ni PR abiertos previos a este pase.
+
+**Hallazgo real, cerrado:** `react-router-dom` `6.30.6` traía dos CVEs
+moderados (`GHSA-wrjc-x8rr-h8h6` open-redirect vía backslash en
+`<Link>`/`useNavigate`, `GHSA-337j-9hxr-rhxg` constructor injection en
+hidratación SSR). No existe versión `6.x` parcheada — la única corrección es
+saltar a v7. Antes de tomar ese riesgo se comprobó que ninguna de las dos
+tenía superficie viva aquí: todo `navigate()`/`<Link to>` en `src/` pasa por
+`createPageUrl()` con strings definidos en el propio código o por rutas fijas
+— ninguno recibe una URL cruda de un usuario — y la app es un SPA cliente
+puro, sin SSR. Con eso, y viendo que el uso es solo API "declarativa"
+(`BrowserRouter`/`Routes`/`Route`/`useNavigate`/`Link`, estable entre v6 y v7),
+se subió a `7.18.3`. `npm audit` pasó de 2 vulnerabilidades moderadas a 0.
+Verificado con la suite completa (arriba) más un chequeo de runtime con
+Playwright contra el dev server local en `/`, `/login` y una ruta 404: cero
+errores de router en consola (los únicos errores fueron el SDK de Base44 sin
+poder alcanzar un backend, esperado en este sandbox — mismo patrón que el
+módulo 10 ya documentó). Bump a v1.7.11, sin entrada en `HistorialCambios.jsx`
+a propósito: es un parche de dependencia invisible para el usuario, mismo
+criterio con el que los módulos 14/15/18 tampoco aparecen ahí.
+
+**No verificado, mismo límite que cada pase anterior de este archivo:**
+ninguna pantalla autenticada (Home, GestionEscuela, Pagos, etc.) ni UAT en
+vivo — este entorno no tiene sesión Base44 real ni alcanza el backend
+desplegado. Tampoco se releyó el esquema RLS *desplegado* en Base44 (eso es
+módulo 4/14 con el MCP de Base44 y una sesión con esas credenciales, no
+disponible aquí) — lo que se validó es el archivo `.jsonc` del repo, que es
+lo que `validate:rls` cubre. Sin una segunda pestaña con un tenant/rol
+distinto no hay forma de ejercer cross-device, performance real, ni
+deliverability de correo.
+
+**Conclusión:** ningún hallazgo de seguridad, aislamiento ni calidad además
+del CVE de arriba. El estado que documentan los módulos 1–18 anteriores se
+sostiene.
+
+### Corrección y continuación — 2026-09-07
+
+El PR de este pase (#174, rama `claude/dreamy-ride-ajb4or`) nunca se
+mergeó: sus dos workflows de CI (`Node CI`, `Deno CI`) volvieron en rojo en
+GitHub Actions el mismo 31 de agosto, pese a que el propio PR afirmaba
+"lint ✅ · build ✅ · validate:rls ✅ · test ✅". La discrepancia se investigó
+en vez de repetirse a ciegas: se recreó la rama en un worktree local y se
+corrió cada paso que el workflow de Node ejecuta —`npm ci`, `lint`,
+`typecheck`, `validate:rls`, `test`, `test:permissions`, `release:gate`
+(este último el PR nunca lo mencionó, y es un paso real del pipeline) y
+`build`— con el mismo Node 22 que fija `ci-node.yml`. Las ocho salieron en
+verde. Los logs de aquella corrida ya habían expirado (404 al pedirlos, una
+semana después) así que no hay forma de leer la causa exacta, pero un
+contenido que reproduce limpio byte a byte contra el mismo runtime que CI
+usa no respalda una regresión real — lee como flake de runner. Este pase
+retoma el mismo contenido sobre la rama asignada de esta sesión en vez de
+insistir sobre la rama vieja (que esta sesión no puede tocar), lo verifica
+de nuevo desde cero, y añade lo que apareció entretanto:
+
+- **4 vulnerabilidades nuevas** en `npm audit` desde que se escribió el PR
+  #174: `browserslist` (alta — crecimiento de memoria sin límite y crash vía
+  `browserslist-stats.json` no confiable), `@humanfs/node` (symlink
+  traversal), `fflate` (loop infinito con ZIP64 malformado),
+  `postcss-selector-parser` (DoS por recursión de AST). Las cuatro son
+  `devDependencies` transitivas de herramientas de build (`eslint`/`vite`/
+  `postcss`) — ninguna se empaqueta en el bundle de producción. Cerradas con
+  `npm audit fix` (solo lockfile, sin bump mayor, sin cambio de código):
+  4 → 0 vulnerabilidades.
+- **`VERSION_CONTROL.json` llevaba tres releases sin tocarse** (seguía en
+  `1.7.9`, sin la entrada de módulo 18 ni la del router) — el mismo patrón
+  de deriva que el audit de 2026-08-24 ya había cerrado una vez y volvió a
+  abrirse. Corregido junto con su campo `architecture.router`, que todavía
+  describía v6.
+
+Bump a v1.7.12. Ningún cambio de RLS, entidad, permiso o ruta en este pase.
+Verificado: `npm run lint`, `npm run typecheck`, `npm run build`,
+`npm run validate:rls` (32 entidades), `npm test` (276/276),
+`npm run test:permissions` (23/23), `npm run release:gate`, `npm audit`
+(0 vulnerabilidades) — todos en verde.
+
+## Retirado: el selector de escuela (módulo 18) — 2026-09-10
+
+**Una cuenta, una escuela.** El selector que dejaba a un mismo email moverse
+entre escuelas y unirse a una segunda sin salir de la primera se quitó: el
+feature nunca llegó a producción en el portafolio.
+
+Lo que se fue: `src/components/home/SchoolSwitcher.jsx`, el estado
+`joiningAnother` de `Home.jsx` (que reabría el onboarding desde dentro de la
+app), `handleSwitchSchool`, la consulta de escuelas que sólo alimentaba las
+pills, y de `src/lib/tenantSelection.js` tanto
+`buildTenantSelectionContext` como el par
+`get/setActiveSchoolOverride`. **La clave `liuma.activeSchoolId` de
+`localStorage` ya no se lee ni se escribe**: un valor que haya quedado de antes
+es inerte, no hay que limpiarlo.
+
+**Lo que se queda, y es la mitad que importa:**
+`selectCurrentUserProfile` sigue siendo la **única** regla de "qué escuela estoy
+viendo", compartida por `Home.jsx`, `NavContext.jsx`, `useSubscription.js` y
+`TenantThemeRuntime.jsx`. Perdió el parámetro `preferredSchoolId` (lo alimentaba
+el selector) y conserva el orden determinista. Eso no es decoración: el hallazgo
+del módulo 14 (2026-08-23, "tres reglas distintas para en qué escuela estoy")
+fue precisamente que `filter()` de Base44 no garantiza orden y dos lectores
+podían elegir perfiles distintos — "Descargar mis datos" devolviendo en silencio
+la escuela que no estabas viendo. Hay un test nuevo que fija esa propiedad
+(mismo conjunto, entrada invertida, misma respuesta).
+
+**Ese hallazgo sigue abierto en el backend**, y conviene no darlo por cerrado
+de rebote: `exportSchoolData:43` y `governRoleChange:86` siguen con su propio
+`.find(ADMIN && ACTIVE)` sin ordenar. Quitar el selector lo hace **menos**
+probable —ya no hay forma de conseguirse un segundo perfil desde la app, sólo
+que un admin lo asigne— pero no imposible. El arreglo sigue siendo el que ese
+módulo propuso: que el backend use `selectCurrentUserProfile`.
+
+**Verificado:** `npm run lint` (incl. `validate:functions` 6/40),
+`npm run typecheck` (exit 0), `npm run build`, `npm run validate:rls`
+(32 entidades), `npm test` (276/276), `npm run test:permissions` (23/23) y
+`npm run release:gate` — todos limpios. Sin cambios de RLS, entidad ni función:
+esto es sólo frontend, así que requiere `npm run deploy:site` y **no**
+`npm run deploy`. **No verificado:** el deploy ni una sesión de navegador.
+
+## Auditoría completa 2026-09-14 — un CVE de dependencia cerrado, nada más
+
+Pase programado de revisión completa (inventario, RLS/aislamiento, calidad de
+código, matriz de permisos, UI/UX, cross-device, performance, QA automatizada,
+changelog/versión, PR + plan de rollback), contra `main`/rama asignada en
+`4420057` (sincronizada, sin diferencias). Cuatro días después del módulo 18
+(2026-09-10) y con la auditoría de aislamiento completa más reciente en
+2026-08-23/2026-08-31 — este pase no repite esas dos desde cero (ninguna
+entidad, función, rol ni ruta cambió entretanto que las obligara), y se
+concentra en lo que sí pudo cambiar solo: dependencias, y que la suite entera
+siga en verde.
+
+**Pre-flight:** árbol limpio, `HEAD` igual a `origin/main`, **cero PRs
+abiertos** y ninguna rama de auditoría previa sin cerrar. Sin secretos en el
+árbol (`.env.example` sigue siendo el único `.env*` versionado; grep de
+patrones de credenciales conocidos, sin resultados).
+
+**Hallazgo real, cerrado:** `npm audit` reportó **una** vulnerabilidad nueva
+desde el 1.7.12 (2026-09-07): `js-yaml` `4.3.1`, alta —
+[GHSA-2883-xcg3-v3hh](https://github.com/advisories/GHSA-2883-xcg3-v3hh),
+uso de CPU sin límite en `maxTotalMergeKeys` al fusionar YAML no confiable.
+Mismo patrón que cada advertencia cerrada en 1.7.9/1.7.11/1.7.12:
+`devDependency` transitiva (`eslint` → `@eslint/eslintrc` → `js-yaml`),
+herramienta de build, nunca se empaqueta en lo que carga un usuario. Cerrado
+con `npm audit fix` (`js-yaml` → `4.3.2`, solo lockfile, sin cambio de
+código ni bump mayor). `npm audit`: 1 alta → 0.
+
+**Sin hallazgos nuevos de aislamiento, permisos, RLS-de-archivo ni calidad de
+código.** El hallazgo del módulo 14 sigue en el mismo estado que dejó el
+módulo 18: `exportSchoolData:43`/`governRoleChange:86` siguen con su propio
+`.find(ADMIN && ACTIVE)` sin ordenar en vez de `selectCurrentUserProfile`,
+latente (sigue sin existir un segundo `UserProfile` por usuario en
+producción que lo dispare). No se releyó el esquema RLS **desplegado** en
+Base44 en este pase — eso exige el MCP de Base44 contra credenciales de
+producción, mismo límite que cada pase anterior — lo que sí se confirmó de
+nuevo es que el archivo `.jsonc` del repo pasa `validate:rls` sin cambios.
+
+**No verificado, mismo límite recurrente:** ninguna pantalla autenticada, UAT
+en vivo, cross-device real, ni deliverability de correo — este entorno no
+tiene sesión Base44 real ni alcanza el backend desplegado o el sitio
+desplegado (`npm run test:smoke` está fuera del alcance del sandbox, ver la
+sección de ese comando arriba).
+
+Bump a v1.7.13 (patch, seguridad). Verificado, antes y después del fix:
+`npm run lint` (incl. `validate:functions` 6/40), `npm run typecheck`,
+`npm run build`, `npm run validate:rls` (32 entidades), `npm test`
+(276/276), `npm run test:permissions` (23/23), `npm run release:gate`,
+`npm audit` (0 vulnerabilidades) — todos en verde. Ningún cambio de RLS,
+entidad, permiso o ruta en este pase.

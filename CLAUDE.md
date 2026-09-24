@@ -848,3 +848,27 @@ ese PR se mergeara. Correcto. Tras el merge (`860c741`) se repitió
 `github/sync` + `deploy` y se releyó `package.json`/`appConfig.js` en el
 sandbox para confirmar `1.7.14` por contenido — la app publicada corre
 ahora sí el `main` actual.
+
+## Módulo 24 — `User.school_id`/`app_role` bloqueados (2026-09-24)
+
+`SchoolSubscription.read` da acceso a quien tenga `data.app_role: ADMIN` y
+`{{user.data.school_id}}` igual a la escuela. Esos dos campos viven en `User`,
+y este repo no tenía `User.jsonc`: nada impedía escribirlos. No es una fuga
+viva: leídos del `User` real, **nadie** tiene esos campos, porque la escuela y
+el rol viven en `UserProfile`. Se abriría el día que `updateMe` pudiera
+escribirlos: bastaría con apuntarse a otra escuela y darse ADMIN para leer su
+suscripción. Ahora `base44/entities/User.jsonc` los declara con
+`rls.write: false`, y `npm run validate:tenant-roles` (checker canónico del
+estándar, en CI) falla si una regla vuelve a depender de un campo de `User` sin
+candado.
+
+**Hallazgo aparte, no arreglado:** como esa rama nunca empareja, un ADMIN de
+escuela **no puede leer su propia suscripción** desde el cliente.
+`useSubscription` siempre ha devuelto `null` para ellos (`SchoolSubscription`
+no tiene otra rama de lectura que no sea de plataforma), así que el aviso de
+facturación nunca ha tenido datos. El arreglo es leerla en una función con
+service role, filtrada por el `UserProfile` ADMIN ACTIVE del que llama. Es otro
+cambio.
+
+**Pendiente:** `npm run deploy:entities` después de mergear, y releer `User`
+del esquema desplegado.

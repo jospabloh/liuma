@@ -52,19 +52,53 @@ test('notification email templates escape every interpolated field', () => {
   }
 });
 
-test('Asistencia.jsx escapes student name and reason in the absence-notification email', () => {
+// 2026-09-24: the absence and diary parent emails moved server-side, into
+// base44/functions/notifyParents/entry.ts (Base44 security scan, "Evitar el
+// uso no autorizado de créditos" — SendEmail/InvokeLLM can no longer be
+// called from the browser with a client-built body). Asistencia.jsx and
+// CrearBitacora.jsx now only pass a record id; the escaping guarantee these
+// two tests used to check on the client lives in notifyParents/entry.ts
+// instead.
+
+test('Asistencia.jsx no longer builds the absence email client-side', () => {
   const source = read('src/pages/Asistencia.jsx');
-  assert.match(source, /import \{ escapeHtml \} from '@\/lib\/htmlEscape'/);
-  assert.match(source, /escapeHtml\(student\.first_name\)/);
-  assert.match(source, /escapeHtml\(student\.last_name\)/);
-  assert.match(source, /escapeHtml\(reason\)/);
+  assert.doesNotMatch(source, /integrations\.Core\.SendEmail/);
+  assert.match(source, /functions\.invoke\('notifyParents', \{ kind: 'absence', recordId: record\.id \}\)/);
 });
 
-test('CrearBitacora.jsx escapes diary fields via the shared helper (no local duplicate)', () => {
+test('CrearBitacora.jsx no longer builds the diary email or the AI prompt client-side', () => {
   const source = read('src/pages/CrearBitacora.jsx');
-  assert.match(source, /import \{ escapeHtml \} from '@\/lib\/htmlEscape'/);
-  assert.doesNotMatch(source, /const escapeHtml = /);
-  assert.match(source, /escapeHtml\(data\.notes_text\)/);
-  assert.match(source, /escapeHtml\(data\.teacher_message\)/);
-  assert.match(source, /escapeHtml\(data\.teacher_name\)/);
+  assert.doesNotMatch(source, /integrations\.Core\.(SendEmail|InvokeLLM)/);
+  assert.match(source, /functions\.invoke\('notifyParents', \{ kind: 'diary', recordId: entry\.id \}\)/);
+  assert.match(source, /functions\.invoke\('aiAssist', \{/);
+});
+
+test('notifyParents/entry.ts escapes student name, reason and diary fields', () => {
+  const source = read('base44/functions/notifyParents/entry.ts');
+  assert.match(source, /function escapeHtml\(/);
+  assert.match(source, /escapeHtml\(student\?\.first_name\)/);
+  assert.match(source, /escapeHtml\(student\?\.last_name\)/);
+  assert.match(source, /escapeHtml\(reason\)/);
+  assert.match(source, /escapeHtml\(record\.notes_text\)/);
+  assert.match(source, /escapeHtml\(record\.teacher_message\)/);
+  assert.match(source, /escapeHtml\(record\.teacher_name\)/);
+});
+
+test('sendNotificationEmail/_templates.ts escapes every interpolated field (server-side mirror of templates.js)', () => {
+  const source = read('base44/functions/sendNotificationEmail/_templates.ts');
+  const mustBeEscaped = [
+    'userName', 'userEmail', 'roleName',
+    'studentName', 'conceptName', 'amountLabel', 'dueDateLabel',
+    'eventTitle', 'dateLabel', 'timeLabel', 'locationLabel', 'deadlineLabel',
+    'message',
+    'ticketNumber', 'subjectText', 'requesterName', 'categoryLabel', 'priorityLabel', 'slaDateLabel', 'description',
+    'replyBody', 'resolutionNote',
+  ];
+  for (const field of mustBeEscaped) {
+    assert.match(
+      source,
+      new RegExp(`escapeHtml\\(${field}(\\s*\\|\\|[^)]*)?\\)`),
+      `expected ${field} to be routed through escapeHtml(...) in _templates.ts`
+    );
+  }
 });

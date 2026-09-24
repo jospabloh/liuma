@@ -20,7 +20,6 @@ import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
-import { escapeHtml } from '@/lib/htmlEscape';
 
 const statusConfig = {
   present: { label: 'Presente', icon: CheckCircle2, color: 'bg-green-500', textColor: 'text-green-700', bgColor: 'bg-green-50' },
@@ -340,29 +339,14 @@ export default function Asistencia() {
 
       if (status === 'absent' && !existingRecord?.parent_notified) {
         try {
-          const parentLinks = await base44.entities.ParentStudent.filter({ student_id: student.id, status: 'ACTIVE' });
-          const allUsers = await base44.entities.User.list();
-
-          for (const link of parentLinks) {
-            const parent = allUsers.find(u => u.id === link.parent_id);
-            if (parent) {
-              await base44.integrations.Core.SendEmail({
-                from_name: 'LIUMA - Sistema Escolar',
-                to: parent.email,
-                subject: `Ausencia de ${student.first_name} ${student.last_name}`,
-                body: `
-                  <h2>Notificación de Ausencia</h2>
-                  <p>Estimado padre/madre de familia:</p>
-                  <p>Le informamos que <strong>${escapeHtml(student.first_name)} ${escapeHtml(student.last_name)}</strong> no asistió a clases el día <strong>${format(new Date(selectedDate), 'dd/MM/yyyy', { locale: es })}</strong>.</p>
-                  ${reason ? `<p><strong>Motivo registrado:</strong> ${escapeHtml(reason)}</p>` : ''}
-                  <p>Si tiene alguna pregunta, por favor contacte a la escuela.</p>
-                  <p>Atentamente,<br>Equipo LIUMA</p>
-                `
-              });
-            }
-          }
-
-          await guardedUpdate('Attendance', record.id, { parent_notified: true, notified_at: new Date().toISOString() });
+          // Destinatarios, asunto y cuerpo del correo ahora se arman y envían
+          // server-side, a partir del registro de Attendance ya guardado —
+          // el cliente sólo pasa el id. Ver
+          // base44/functions/notifyParents/entry.ts (arreglo al hallazgo
+          // "Evitar el uso no autorizado de créditos" del scan de seguridad
+          // de Base44). La función también marca parent_notified/notified_at,
+          // así que ya no hace falta el guardedUpdate aquí.
+          await base44.functions.invoke('notifyParents', { kind: 'absence', recordId: record.id });
         } catch (error) {
           console.error('Error notifying parents:', error);
         }

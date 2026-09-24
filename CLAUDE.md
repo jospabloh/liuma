@@ -872,3 +872,39 @@ cambio.
 
 **Pendiente:** `npm run deploy:entities` después de mergear, y releer `User`
 del esquema desplegado.
+
+## Protección de créditos — SendEmail e InvokeLLM salen del navegador (2026-09-24)
+
+Hallazgo del scan de seguridad de Base44, «Evitar el uso no autorizado de
+créditos» (alto). El cliente llamaba directo a `Core.SendEmail` y
+`Core.InvokeLLM` con prompt, cuerpo y destinatario armados en el navegador:
+con cualquier token se podía mandar correo a cualquier dirección o gastar LLM
+con un prompt arbitrario. Los cinco sitios pasan ahora por tres funciones:
+
+- **`sendNotificationEmail`**: el cliente manda `eventType` + `templateContext`
+  (sólo strings/números, cortados a 4000). Asunto y cuerpo se renderizan en
+  `_templates.ts`, copia a mano de `src/lib/notifications/templates.js` (cada
+  uno apunta al otro: **cámbialos juntos**). Quien llama necesita perfil en la
+  escuela con el rol del evento; el destinatario tiene que ser un `User` con
+  perfil en esa escuela y el rol del evento, o el buzón de soporte (sólo en
+  `support_ticket_escalated`, que además acepta a los dueños `is_super_admin`
+  de otra escuela — son los destinatarios de Tier-2).
+- **`notifyParents`** (`absence` | `diary`): el cliente manda sólo el id. El
+  correo se arma con el registro **guardado** y los padres salen de
+  `ParentStudent`. Una ausencia se envía una vez (`parent_notified`, que sólo se
+  marca si salió al menos un correo). La bitácora no tiene bandera propia, así
+  que sólo se envía en los 10 minutos posteriores a su creación.
+- **`aiAssist`** (`diary_draft` | `support_intake`): los prompts se arman en el
+  servidor. `aiIntake.js` conserva su normalización y su respaldo, pero el
+  prompt real vive en la función.
+
+**Fuera de alcance, a propósito:** `Core.UploadFile` (3 sitios) y el agente
+Lumi (`base44.agents.*`). Si el scan los vuelve a marcar, son otro cambio.
+
+**No verificado:** no pude leer el resultado del scan (el token MCP no tiene
+acceso a ese endpoint) ni correr `deno` aquí. Tampoco sé si Base44 sigue
+aceptando `integrations.Core.*` directo desde un navegador autenticado: si lo
+acepta, quitar nuestras llamadas satisface el scan pero no cierra la puerta.
+Después de `npm run deploy` + `npm run deploy:site`, vuelve a correr el scan.
+Prueba a mano: marcar una ausencia, crear una bitácora con envío a padres,
+«Generar con Lumi», el intake de soporte y una alerta de emergencia.

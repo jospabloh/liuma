@@ -29,6 +29,9 @@ jobs:
       - name: Validate RLS
         run: npm run validate:rls
 
+      - name: Module 24 tenant roles
+        run: npm run validate:tenant-roles
+
       - name: Test
         run: npm test
 

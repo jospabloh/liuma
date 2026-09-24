@@ -1,0 +1,20 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "school_id": {
+      "type": "string",
+      "description": "Escuela del usuario, leída por RLS como {{user.data.school_id}} (SchoolSubscription.read). Nadie la escribe hoy: la escuela vigente vive en UserProfile. write:false para que nadie pueda apuntarse a otra escuela con updateMe (módulo 24 del estándar). Si algún día se llena, que sea desde una función con service role.",
+      "rls": {
+        "write": false
+      }
+    },
+    "app_role": {
+      "type": "string",
+      "description": "Rol de app del usuario (ADMIN/TEACHER/PARENT), leído por RLS como user_condition data.app_role (SchoolSubscription.read). Nadie lo escribe hoy: el rol vive en UserProfile. write:false para que nadie se dé ADMIN a sí mismo con updateMe (módulo 24 del estándar).",
+      "rls": {
+        "write": false
+      }
+    }
+  }
+}

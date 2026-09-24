@@ -16,6 +16,7 @@
     "test:permissions": "node --test tests/unit/policy.test.js tests/integration/key-pages.test.js",
     "release:gate": "npm run test:permissions",
     "validate:rls": "node scripts/validate-rls.mjs",
+    "validate:tenant-roles": "node scripts/check-tenant-roles.mjs",
     "deploy": "node scripts/base44-deploy.mjs",
     "deploy:site": "node scripts/base44-deploy.mjs --site",
     "deploy:entities": "node scripts/base44-deploy.mjs --entities",

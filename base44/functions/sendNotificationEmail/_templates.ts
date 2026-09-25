@@ -1,22 +1,32 @@
-import { escapeHtml } from '@/lib/htmlEscape';
-
-// `subject`/`emailBody` below are mirrored server-side in
-// base44/functions/sendNotificationEmail/_templates.ts, which is now the
-// only place that actually RENDERS and SENDS these (see that function's
-// header comment — Base44 security scan, "Evitar el uso no autorizado de
-// créditos"). `inAppTitle`/`inAppContent` stay client-only, unaffected —
-// sendInApp writes a Notice row via RLS, no credit-consuming integration
-// involved. Keep the subject/emailBody halves of the two files in sync by
-// hand; each carries a comment pointing at the other.
+// _templates.ts — server-side mirror of src/lib/notifications/templates.js's
+// `subject`/`emailBody` renderers ONLY (the `inAppTitle`/`inAppContent` half
+// stays client-side, unchanged — sendInApp writes a Notice row directly via
+// RLS, it never touches a credit-consuming integration, so it isn't in scope
+// for this move). Deno functions can't import across function directories
+// (same constraint documented on guardedEntityWrite/entry.ts), so this is a
+// hand-kept copy, not a shared module — src/lib/notifications/templates.js
+// carries a comment pointing back here, and this file points back at it.
+// Keep the two in sync by hand whenever a template's copy or fields change.
 //
-// All interpolated values below are escaped before landing in an HTML email
-// body — several of them (userName/userEmail at signup, free-text ticket
-// fields, the emergency-alert message) originate from user input, so an
-// unescaped template would let that input inject HTML/script into a
-// recipient's email client (OWASP A03 / CWE-79). Escaping every interpolated
-// value uniformly, including the ones that are normally safe, keeps this
-// file safe by default as new templates/fields are added.
-export const NOTIFICATION_TEMPLATES = {
+// escapeHtml is duplicated rather than imported for the same reason
+// src/lib/htmlEscape.js exists standalone: several interpolated fields
+// (userName/userEmail at signup, free-text ticket bodies, the emergency
+// message) trace back to end-user input, so every interpolation is escaped
+// uniformly (OWASP A03 / CWE-79), even fields that are normally safe.
+export function escapeHtml(value: unknown): string {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// deno-lint-ignore no-explicit-any
+type Ctx = Record<string, any>;
+
+export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => string; emailBody: (ctx: Ctx) => string }> = {
   new_user_pending: {
     subject: ({ schoolName }) => `Nuevo usuario pendiente de aprobación - ${schoolName || 'LIUMA'}`,
     emailBody: ({ userName, userEmail, roleName }) => `
@@ -29,8 +39,6 @@ export const NOTIFICATION_TEMPLATES = {
       </ul>
       <p>Por favor, ingresa a la aplicación para aprobar o rechazar esta solicitud.</p>
     `,
-    inAppTitle: () => 'Nuevo usuario pendiente',
-    inAppContent: ({ userName, roleName }) => `${userName} (${roleName}) está pendiente de aprobación.`,
   },
   payment_due: {
     subject: ({ studentName }) => `Recordatorio: Pago próximo a vencer - ${studentName}`,
@@ -47,8 +55,6 @@ export const NOTIFICATION_TEMPLATES = {
       <p>Por favor, realice su pago antes de la fecha de vencimiento para evitar recargos.</p>
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
-    inAppTitle: () => 'Pago por vencer',
-    inAppContent: ({ studentName, dueDateLabel }) => `Tienes un pago pendiente de ${studentName} con vencimiento ${dueDateLabel}.`,
   },
   event_confirmation_reminder: {
     subject: ({ eventTitle }) => `Recordatorio: Confirma asistencia a ${eventTitle}`,
@@ -66,8 +72,6 @@ export const NOTIFICATION_TEMPLATES = {
       <p>Por favor, confirme su asistencia lo antes posible.</p>
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
-    inAppTitle: ({ eventTitle }) => `Confirma asistencia a ${eventTitle}`,
-    inAppContent: ({ studentName, deadlineLabel }) => `Confirma la asistencia de ${studentName} antes del ${deadlineLabel}.`,
   },
   emergency_alert: {
     subject: ({ schoolName }) => `🚨 Alerta de emergencia - ${schoolName || 'Escuela'}`,
@@ -76,8 +80,6 @@ export const NOTIFICATION_TEMPLATES = {
       <p>${escapeHtml(message)}</p>
       <p>Por favor, siga las instrucciones del personal de la escuela.</p>
     `,
-    inAppTitle: () => '🚨 Alerta de emergencia',
-    inAppContent: ({ message }) => message,
   },
   support_ticket_escalated: {
     subject: ({ ticketNumber, subjectText }) => `Nuevo ticket de soporte ${ticketNumber}: ${subjectText}`,
@@ -95,8 +97,6 @@ export const NOTIFICATION_TEMPLATES = {
       <p>${escapeHtml(description || '')}</p>
       <p>Ingresa a LIUMA &gt; Soporte para responder.</p>
     `,
-    inAppTitle: ({ ticketNumber }) => `Nuevo ticket ${ticketNumber}`,
-    inAppContent: ({ subjectText, priorityLabel }) => `${subjectText} (prioridad ${priorityLabel}).`,
   },
   support_ticket_reply: {
     subject: ({ ticketNumber }) => `Respuesta a tu ticket de soporte ${ticketNumber}`,
@@ -109,8 +109,6 @@ export const NOTIFICATION_TEMPLATES = {
       <p>${escapeHtml(replyBody || '')}</p>
       <p>Ingresa a LIUMA &gt; Soporte para ver la conversación completa.</p>
     `,
-    inAppTitle: ({ ticketNumber }) => `Respuesta en ${ticketNumber}`,
-    inAppContent: ({ subjectText }) => `Tu ticket "${subjectText}" tiene una nueva respuesta.`,
   },
   support_ticket_resolved: {
     subject: ({ ticketNumber }) => `Ticket de soporte ${ticketNumber} resuelto`,
@@ -122,7 +120,5 @@ export const NOTIFICATION_TEMPLATES = {
       </div>
       <p>${escapeHtml(resolutionNote || 'Si tu problema continúa, puedes reabrir el ticket desde la app.')}</p>
     `,
-    inAppTitle: ({ ticketNumber }) => `Ticket ${ticketNumber} resuelto`,
-    inAppContent: ({ subjectText }) => `Tu ticket "${subjectText}" fue marcado como resuelto.`,
   },
 };

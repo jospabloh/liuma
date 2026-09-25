@@ -80,7 +80,19 @@ export const notificationService = {
     });
   },
 
-  async sendEmail({ schoolId, email, subject, body, eventType, actorUserId }) {
+  /**
+   * Sends a templated email via the sendNotificationEmail Safe function — the
+   * sanctioned path for every credit-consuming SendEmail call in this app
+   * (see base44/functions/sendNotificationEmail/entry.ts for why: subject,
+   * body and recipient authorization are all derived/checked server-side, so
+   * the client only ever supplies an eventType + plain-value templateContext,
+   * never a subject/body). `base44.functions.invoke` throws on a non-2xx
+   * response (`error.data.error`/`error.data.code`, same convention as
+   * guardedEntityWrite/governRoleChange), so a rejected send still surfaces
+   * here as a thrown error for deliverWithRetry to retry/log exactly as it
+   * did when SendEmail itself could fail.
+   */
+  async sendEmail({ schoolId, email, eventType, templateContext, actorUserId }) {
     return deliverWithRetry({
       schoolId,
       userId: actorUserId,
@@ -88,7 +100,7 @@ export const notificationService = {
       eventType,
       channel: 'email',
       execute: async () => {
-        await base44.integrations.Core.SendEmail({ to: email, subject, body });
+        await base44.functions.invoke('sendNotificationEmail', { eventType, schoolId, email, templateContext });
       },
     });
   },
@@ -104,9 +116,8 @@ export const notificationService = {
     return this.sendEmail({
       schoolId,
       email,
-      subject: template.subject(templateContext),
-      body: template.emailBody(templateContext),
       eventType,
+      templateContext,
       actorUserId,
     });
   },
@@ -152,9 +163,8 @@ export const notificationService = {
         await this.sendEmail({
           schoolId,
           email: recipient.email,
-          subject: template.subject(templateContext),
-          body: template.emailBody(templateContext),
           eventType,
+          templateContext,
           actorUserId,
         });
       }

@@ -26,7 +26,6 @@ import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
-import { escapeHtml } from '@/lib/htmlEscape';
 
 export default function CrearBitacora() {
   const navigate = useNavigate();
@@ -99,50 +98,20 @@ export default function CrearBitacora() {
         context: { student_id: data.student_id, sent_to_parents: data.sent_to_parents }
       });
       
-      // Si se marca para enviar a padres, notificar automáticamente
+      // Si se marca para enviar a padres, notificar automáticamente. El envío
+      // (destinatarios, asunto y cuerpo) ahora lo arma y ejecuta la Safe
+      // function `notifyParents` server-side, a partir de la bitácora ya
+      // guardada — el cliente sólo pasa el id. Ver
+      // base44/functions/notifyParents/entry.ts (arreglo al hallazgo "Evitar
+      // el uso no autorizado de créditos" del scan de seguridad de Base44).
       if (data.sent_to_parents) {
         try {
-          const student = students.find(s => s.id === data.student_id);
-          const parentLinks = await base44.entities.ParentStudent.filter({
-            student_id: data.student_id,
-            status: 'ACTIVE'
-          });
-          
-          const allUsers = await base44.entities.User.list();
-          
-          for (const link of parentLinks) {
-            const parent = allUsers.find(u => u.id === link.parent_id);
-            if (parent) {
-              await base44.integrations.Core.SendEmail({
-                from_name: 'LIUMA - Bitácora Escolar',
-                to: parent.email,
-                subject: `Nueva bitácora de ${student.first_name} - ${format(new Date(), "d 'de' MMMM", { locale: es })}`,
-                body: `
-                  <h2>Bitácora de ${escapeHtml(student.first_name)} ${escapeHtml(student.last_name)}</h2>
-                  <p><strong>Fecha:</strong> ${format(new Date(), "d 'de' MMMM, yyyy", { locale: es })}</p>
-                  
-                  <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                    <p style="color: #334155; white-space: pre-wrap;">${escapeHtml(data.notes_text)}</p>
-                  </div>
-                  
-                  ${data.teacher_message ? `
-                    <div style="background: linear-gradient(to right, #fce7f3, #f3e8ff); padding: 16px; border-radius: 8px; border: 1px solid #f9a8d4; margin: 16px 0;">
-                      <p style="font-size: 12px; color: #9f1239; font-weight: bold; margin-bottom: 8px;">💌 Mensajito especial</p>
-                      <p style="color: #7c3aed;">${escapeHtml(data.teacher_message)}</p>
-                    </div>
-                  ` : ''}
-                  
-                  <p style="margin-top: 16px;">Registrado por: ${escapeHtml(data.teacher_name)}</p>
-                  <p style="color: #64748b; font-size: 12px; margin-top: 8px;">Este es un mensaje automático de LIUMA.</p>
-                `
-              });
-            }
-          }
+          await base44.functions.invoke('notifyParents', { kind: 'diary', recordId: entry.id });
         } catch (error) {
           console.error('Error sending diary notifications:', error);
         }
       }
-      
+
       return entry;
     },
     onSuccess: () => {
@@ -160,13 +129,15 @@ export default function CrearBitacora() {
     
     setIsGenerating(true);
     try {
-      const response = await base44.integrations.Core.InvokeLLM({
-        prompt: `Genera una nota de bitácora escolar en español para un alumno llamado ${selectedStudent.first_name}. 
-        La nota debe ser positiva, breve (2-3 oraciones) y mencionar actividades típicas del día escolar.
-        Solo devuelve el texto de la nota, sin comillas ni formato adicional.`,
+      // El prompt se arma server-side, a partir del studentId, en la Safe
+      // function `aiAssist` (task: 'diary_draft') — ver su comentario de
+      // cabecera. El cliente ya no llama a InvokeLLM directo.
+      const response = await base44.functions.invoke('aiAssist', {
+        task: 'diary_draft',
+        studentId: selectedStudent.id,
       });
-      
-      setFormData({ ...formData, notes_text: response });
+
+      setFormData({ ...formData, notes_text: response?.text || '' });
     } catch (error) {
       console.error('Error generating text:', error);
       toast.error('Error al generar texto');

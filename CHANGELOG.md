@@ -5,6 +5,127 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.16] - 2026-09-28
+
+### Fixed
+
+- **Production deploy was stale again — the same class of gap 1.7.14
+  fixed.** The checkpoint carrying 1.7.15's own fixes (credit-protection
+  functions below, and Module 24) had built successfully on Base44 but was
+  never pushed live: `last_deployed_at` was `null` on that checkpoint while
+  `main` sat two commits past the last real deploy (`713eb35`,
+  2026-09-24T22:40). Redeployed via the Base44 platform API and confirmed
+  by content, not just by hash: `User`'s live entity schema now shows
+  `rls.write: false` on both `school_id` and `app_role` via
+  `list_entity_schemas`, and the deployed checkpoint's `git_commit_hash`
+  matches `main`'s HEAD (`6ecb2ec`). A merge to `main` still does not
+  deploy anything by itself — every CLAUDE.md in this portfolio repeats
+  that rule, and this is the third time in six weeks LIUMA's own deploy
+  went stale under it.
+- **`CHANGELOG.md` had fallen a release behind `package.json`/
+  `VERSION_CONTROL.json`/`appConfig.js`**, which were already bumped to
+  1.7.15 (credit-protection functions + Module 24's `User` RLS lock, see
+  below) with no corresponding entry here. Backfilled.
+
+### Security
+
+Redeploying 1.7.15's code (see above) let Base44's security scan see it for
+the first time — the previous "clean" scan predated these files. It came
+back with three real findings, all in the service-role backend functions
+that write on a user's behalf, all fixed here:
+
+- **`guardedEntityWrite` wrote every field of `body.data` verbatim,
+  including attribution fields the entity's own RLS normally pins to the
+  caller** (`Attendance.recorded_by`, `DiaryEntry`/`Homework.teacher_id`,
+  `Notice.author_id`, `PaymentRecord.recorded_by`) — the service-role write
+  bypasses that RLS, so nothing stopped a caller from making a write look
+  like it came from a different teacher. Now overridden server-side from
+  the caller's own identity on create, and stripped from the patch on
+  update (no real call site ever changes it after the fact).
+- **Confirmed, medium severity: the PARENT/EVENTO `ChargeItem` carve-out
+  trusted the client's `amount`/`original_amount`/`discount_amount`/
+  `status`.** A parent accepting a paid event could submit
+  `amount: 0, status: 'PAID'` directly to `guardedEntityWrite` instead of
+  the app's own payload, and the service-role write would record the fee
+  as already settled at zero cost — a silent, self-service way to erase a
+  family's real balance from the school's billing records. Fixed by
+  deriving every financial field from the referenced `Event` record itself
+  (`cost_amount`, `cost_concept`, `confirmation_deadline`) instead of from
+  the request; the carve-out check still verifies the parent is actually
+  linked to the student.
+- **`sendNotificationEmail`'s `new_user_pending` event let any registered
+  user — including one with an already-ACTIVE profile — repeatedly email a
+  school's admins with a self-chosen display name/email/role in
+  `templateContext`, no rate limit.** Narrowed to callers whose profile is
+  actually `PENDING` (the only real scenario); `userName`/`userEmail` are
+  now checked against the caller's own identity instead of trusted as free
+  text; `roleName` is derived server-side from the caller's `app_role`
+  instead of read from the request; and the event is now idempotent **per
+  recipient** via a new `UserProfile.pending_notification_recipients`
+  array (`rls.write: false`) — a same-day Codex review on this fix's own
+  PR caught that a single sent/not-sent flag would let the first
+  successfully-notified admin block every other admin in a multi-admin
+  school from ever being notified.
+- **`notifyParents`'s diary path had no delivery-idempotency flag** (its
+  own code comment said so) — replaying the same `recordId` within the
+  10-minute window re-mailed the same parents every time. New
+  `DiaryEntry.notified_parent_emails` array (`rls.write: false`) tracks
+  delivery **per recipient**, so a call where only some parents' sends
+  succeeded still lets the next call retry exactly the ones that failed
+  instead of skipping the whole entry forever — another same-day Codex
+  catch on the first version of this fix, which used a single record-level
+  flag.
+
+Scheduled full-review audit pass. Pre-flight: repo clean, HEAD ==
+`origin/main`, zero open PRs, no secrets in tree. Two rounds of automated
+review on the PR (Codex) caught real regressions in the first version of
+the last two fixes above — both corrected same day, before merge; see
+`docs/security-audit-2026-09-28.md` for the detail. Verified, before and
+after every fix: `npm run lint` (incl. `validate:functions`, 9/40), `npm
+run typecheck`, `npm run build`, `npm run validate:rls` (33 entities),
+`npm run validate:tenant-roles`, `npm test` (283/283), `npm run
+test:permissions` (23/23), `npm run release:gate`, `npm audit` (0
+vulnerabilities) — all pass, matching every check `ci-node.yml` runs.
+`deno` isn't available in this sandbox, so the three edited functions were
+syntax-checked with a standalone `tsc --noResolve` pass (no errors beyond
+the expected `npm:`/Deno-global resolution noise) rather than run — real
+verification is `ci-deno.yml` plus this pass's own redeploy-and-rescan
+loop. See `docs/security-audit-2026-09-28.md` for the full scan output and
+the post-fix redeploy/rescan result. No entity RLS `create`/`read`/
+`update`/`delete` rule changed — only two new, unrestricted-by-RLS fields
+(service-role-only in practice, same as their siblings) and the
+service-role functions above.
+
+## [1.7.15] - 2026-09-24
+
+### Security
+
+- **Base44's security scan flagged unauthorized-credit-use risk (high):
+  `Core.SendEmail`/`Core.InvokeLLM` called directly from the browser.** The
+  client built the recipient, email body and LLM prompt itself and called
+  the integration directly — any authenticated token could send mail to an
+  arbitrary address or spend LLM credits on an arbitrary prompt. Moved all
+  five call sites (`notifications/service.js`, `Asistencia.jsx`,
+  `CrearBitacora.jsx`, `support/aiIntake.js`) behind three new backend
+  functions: `sendNotificationEmail` (server-rendered templates, caller and
+  recipient re-derived from `UserProfile`), `notifyParents` (absence/diary
+  emails built from the stored record — absence is idempotent via
+  `parent_notified`, diary is time-boxed to 10 minutes after creation), and
+  `aiAssist` (prompts built server-side). `Core.UploadFile` and the Lumi
+  agent were left unchanged (out of scope for this finding).
+- **Locked `User.school_id`/`User.app_role`** (`base44/entities/User.jsonc`,
+  Module 24). `SchoolSubscription.read`'s platform-owner branch trusts
+  `{{user.data.school_id}}`/`data.app_role` off the raw `User` record, and
+  nothing previously stopped `updateMe` from writing them — not a live leak
+  today (no code path ever wrote them; the real school/role live on
+  `UserProfile`) but a self-assigned-ADMIN/cross-school read waiting to
+  happen the day something did. `rls.write: false` on both fields, enforced
+  by `npm run validate:tenant-roles` in CI going forward.
+
+*(This entry was written retroactively by the 1.7.16 pass above — the
+release itself shipped and was documented in `VERSION_CONTROL.json` at the
+time, but `CHANGELOG.md` was never updated to match.)*
+
 ## [1.7.14] - 2026-09-21
 
 ### Fixed

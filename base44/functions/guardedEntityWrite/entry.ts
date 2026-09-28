@@ -38,6 +38,30 @@ const POLICY_WRITE: Record<string, string[]> = {
   PaymentRecord: ['ADMIN'],
 };
 const ENTITIES = Object.keys(POLICY_WRITE);
+
+// Each of these entities' OWN deployed RLS (bypassed here by the service-role
+// write below) normally pins this field to `{{user.id}}` on create/update —
+// Attendance.recorded_by, DiaryEntry/Homework.teacher_id, Notice.author_id.
+// Every real call site in src/ already sends the caller's own id/name here
+// (grepped, none do otherwise), so overriding rather than trusting the
+// client's value costs no legitimate use and closes an attribution-spoofing
+// hole a caller could otherwise use to make a write look like it came from a
+// different teacher (Base44 security scan, 2026-09-28).
+const ATTRIBUTION_FIELDS: Record<string, { id: string; name?: string }> = {
+  Attendance: { id: 'recorded_by', name: 'recorded_by_name' },
+  PaymentRecord: { id: 'recorded_by' },
+  DiaryEntry: { id: 'teacher_id', name: 'teacher_name' },
+  Homework: { id: 'teacher_id', name: 'teacher_name' },
+  Notice: { id: 'author_id', name: 'author_name' },
+};
+// Belt-and-suspenders alongside each field's own rls.write:false (Base44
+// security scan, 2026-09-28): service-role writes here bypass RLS entirely,
+// so a field an entity's own RLS marks server-only still needs stripping
+// from a client-submitted patch by hand, or a caller could set it directly
+// through this function even though direct RLS would refuse the same write.
+const SERVER_ONLY_UPDATE_FIELDS: Record<string, string[]> = {
+  DiaryEntry: ['parents_notified_at', 'notified_parent_emails'],
+};
 const READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];
 const OPERATIONS = ['create', 'update', 'delete'];
 
@@ -70,6 +94,38 @@ async function parentCanCreateEventCharge(
     status: 'ACTIVE',
   });
   return links.length > 0;
+}
+
+// The PARENT/EVENTO carve-out's financial fields (amount, status, ...) must
+// never come from the client — see the module-level comment on
+// parentCanCreateEventCharge. Re-derives them from the referenced Event
+// record itself, the only server-side source of what the fee actually is.
+// Returns null if the event doesn't check out (wrong school, no cost, or
+// doesn't exist), which the caller treats as "carve-out does not apply."
+// deno-lint-ignore no-explicit-any
+async function buildEventChargeData(
+  sr: any,
+  schoolId: string,
+  studentId: string,
+  eventId: string,
+): Promise<Record<string, unknown> | null> {
+  if (!eventId) return null;
+  const event = await sr.entities.Event.get(eventId).catch(() => null);
+  if (!event) return null;
+  if (String(event.school_id || '') !== schoolId) return null;
+  if (!event.has_cost) return null;
+  return {
+    school_id: schoolId,
+    student_id: studentId,
+    concept_type: 'EVENTO',
+    concept_name: String(event.cost_concept || event.title || 'Evento'),
+    original_amount: event.cost_amount,
+    amount: event.cost_amount,
+    discount_amount: 0,
+    status: 'PENDING',
+    due_date: event.confirmation_deadline || event.date,
+    event_id: eventId,
+  };
 }
 
 function bad(status: number, code: string, message: string): Response {
@@ -111,6 +167,10 @@ Deno.serve(async (req) => {
 
     const isPlatformOwner = user.role === 'admin';
     let profile: Profile | null = null;
+    // Populated only when the ChargeItem/PARENT/EVENTO carve-out grants
+    // access below — the create handler uses this, server-derived, instead
+    // of body.data, so a parent can't submit their own amount/status.
+    let eventChargeData: Record<string, unknown> | null = null;
     if (!isPlatformOwner) {
       const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
       profile = profiles.find((p) => p.status === 'ACTIVE') || null;
@@ -136,7 +196,16 @@ Deno.serve(async (req) => {
       // override — so it applies even when the base policy/override check above
       // denied. A deny override still wins over it, same precedence as above.
       if (!hasDeny && !allowed && entity === 'ChargeItem' && operation === 'create' && profile.app_role === 'PARENT') {
-        allowed = await parentCanCreateEventCharge(sr, user.id, body.data || {});
+        const canCreate = await parentCanCreateEventCharge(sr, user.id, body.data || {});
+        if (canCreate) {
+          eventChargeData = await buildEventChargeData(
+            sr,
+            schoolId,
+            String(body?.data?.student_id || ''),
+            String(body?.data?.event_id || ''),
+          );
+          allowed = eventChargeData !== null;
+        }
       }
       if (!allowed) return bad(403, 'FORBIDDEN', 'Not permitted to write this resource');
 
@@ -149,16 +218,37 @@ Deno.serve(async (req) => {
     }
 
     if (operation === 'create') {
-      const created = await sr.entities[entity].create(body.data || {});
+      // eventChargeData, when set, is entirely server-derived (see
+      // buildEventChargeData) and replaces body.data outright — the parent's
+      // submitted amount/status/etc. never reach the write.
+      const data: Record<string, unknown> = eventChargeData ?? { ...(body.data || {}) };
+
+      const attribution = ATTRIBUTION_FIELDS[entity];
+      if (attribution) {
+        data[attribution.id] = user.id;
+        if (attribution.name) data[attribution.name] = String(user.full_name || '');
+      }
+
+      const created = await sr.entities[entity].create(data);
       return Response.json({ ok: true, record: created });
     }
 
     if (operation === 'update') {
       // A client-submitted school_id on update could otherwise reassign the
       // record to a different tenant — always drop it, the record keeps its
-      // existing school_id.
+      // existing school_id. Same for the entity's attribution field(s): who
+      // authored a record doesn't change on edit, and no real call site ever
+      // sends one on update (only on create).
       const patch = { ...(body.data || {}) };
       delete (patch as { school_id?: unknown }).school_id;
+      const attribution = ATTRIBUTION_FIELDS[entity];
+      if (attribution) {
+        delete (patch as Record<string, unknown>)[attribution.id];
+        if (attribution.name) delete (patch as Record<string, unknown>)[attribution.name];
+      }
+      for (const field of SERVER_ONLY_UPDATE_FIELDS[entity] || []) {
+        delete (patch as Record<string, unknown>)[field];
+      }
       const updated = await sr.entities[entity].update(String((existing as { id: string }).id), patch);
       return Response.json({ ok: true, record: updated });
     }

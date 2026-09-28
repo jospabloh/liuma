@@ -48,10 +48,15 @@
       "default": false,
       "description": "Per-user flag: whether the trial welcome modal has been dismissed. Lives on the user's own profile (self-writable) so the billing SchoolSubscription entity can stay owner-write-only."
     },
-    "pending_notification_sent_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Set by sendNotificationEmail (service role only) the first time the 'new_user_pending' admin-notification email fires for this profile. Idempotency guard so a PENDING user can't replay the event to re-mail the school's admins."
+    "pending_notification_recipients": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Admin emails already sent the 'new_user_pending' notice for this profile, written by sendNotificationEmail only. Tracked per recipient (not a single flag) so a school with several active admins gets each of them notified once, rather than the first successful send blocking the rest. rls.write:false — a client (including the PENDING user this profile belongs to) must never be able to forge or clear this to suppress/replay the notice.",
+      "rls": {
+        "write": false
+      }
     }
   },
   "required": [

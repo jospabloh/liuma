@@ -54,6 +54,14 @@ const ATTRIBUTION_FIELDS: Record<string, { id: string; name?: string }> = {
   Homework: { id: 'teacher_id', name: 'teacher_name' },
   Notice: { id: 'author_id', name: 'author_name' },
 };
+// Belt-and-suspenders alongside each field's own rls.write:false (Base44
+// security scan, 2026-09-28): service-role writes here bypass RLS entirely,
+// so a field an entity's own RLS marks server-only still needs stripping
+// from a client-submitted patch by hand, or a caller could set it directly
+// through this function even though direct RLS would refuse the same write.
+const SERVER_ONLY_UPDATE_FIELDS: Record<string, string[]> = {
+  DiaryEntry: ['parents_notified_at', 'notified_parent_emails'],
+};
 const READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];
 const OPERATIONS = ['create', 'update', 'delete'];
 
@@ -237,6 +245,9 @@ Deno.serve(async (req) => {
       if (attribution) {
         delete (patch as Record<string, unknown>)[attribution.id];
         if (attribution.name) delete (patch as Record<string, unknown>)[attribution.name];
+      }
+      for (const field of SERVER_ONLY_UPDATE_FIELDS[entity] || []) {
+        delete (patch as Record<string, unknown>)[field];
       }
       const updated = await sr.entities[entity].update(String((existing as { id: string }).id), patch);
       return Response.json({ ok: true, record: updated });

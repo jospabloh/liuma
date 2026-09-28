@@ -145,24 +145,28 @@ Deno.serve(async (req) => {
     if (!record.sent_to_parents) {
       return Response.json({ ok: true, skipped: true });
     }
-    // Idempotency guard (Base44 security scan finding, 2026-09-28): without
-    // this, one diary id could be replayed to mail the same parents
-    // indefinitely, burning SendEmail credits each time. parents_notified_at
-    // is set by THIS function only, after a real send — distinct from
-    // sent_at, which the client sets at creation time as intent, not proof
-    // of delivery. The time window is kept too, as defense in depth (the
-    // send is only ever meant to fire right after CrearBitacora creates the
-    // entry).
-    if (record.parents_notified_at) {
-      return Response.json({ ok: true, skipped: true, reason: 'already_notified' });
-    }
     const createdAt = Date.parse(String(record.created_date || ''));
     if (!Number.isFinite(createdAt) || Date.now() - createdAt > DIARY_NOTIFY_WINDOW_MS) {
       return Response.json({ ok: true, skipped: true, reason: 'window_expired' });
     }
 
     const student = await sr.entities.Student.get(String(record.student_id || '')).catch(() => null);
-    const emails = await resolveParentEmails(sr, String(record.student_id || ''));
+    const allEmails = await resolveParentEmails(sr, String(record.student_id || ''));
+    // Idempotency guard (Base44 security scan finding, 2026-09-28; corrected
+    // same day per a Codex review catching the first version of this fix).
+    // Tracked PER RECIPIENT (notified_parent_emails), not a single
+    // sent/not-sent flag on the record: a single flag set after ANY
+    // successful send would let a genuinely-failed recipient (bad address,
+    // transient SendEmail error) never get retried, since the whole record
+    // would already read as "notified". Filtering to only the
+    // not-yet-notified emails on each call still closes the credit-drain
+    // replay (a fully-delivered record has nothing left to send to) while
+    // letting a partial failure recover on the next call within the window.
+    const alreadyNotified: string[] = Array.isArray(record.notified_parent_emails) ? record.notified_parent_emails : [];
+    const emails = allEmails.filter((e) => !alreadyNotified.includes(e));
+    if (emails.length === 0) {
+      return Response.json({ ok: true, skipped: true, reason: allEmails.length === 0 ? 'no_recipients' : 'already_notified' });
+    }
 
     const dateNoYear = spanishDate(String(record.date || ''), false);
     const dateWithYear = spanishDate(String(record.date || ''), true);
@@ -190,12 +194,18 @@ Deno.serve(async (req) => {
     const results = await Promise.allSettled(emails.map((to) =>
       sr.integrations.Core.SendEmail({ from_name: 'LIUMA - Bitácora Escolar', to, subject, body: emailBody })
     ));
-    const sent = results.filter((r) => r.status === 'fulfilled').length;
+    const newlyNotified = emails.filter((_, i) => results[i].status === 'fulfilled');
+    const sent = newlyNotified.length;
 
-    // Same rule as the absence path above: only a delivered email marks the
-    // record, so a request where every send failed can still be retried.
+    // Only the emails that actually delivered join notified_parent_emails —
+    // a failed one stays out, so it's picked up again by the `emails`
+    // filter above on the next call within the window, instead of being
+    // silently skipped forever.
     if (sent > 0) {
-      await sr.entities.DiaryEntry.update(recordId, { parents_notified_at: new Date().toISOString() });
+      await sr.entities.DiaryEntry.update(recordId, {
+        notified_parent_emails: [...alreadyNotified, ...newlyNotified],
+        parents_notified_at: record.parents_notified_at || new Date().toISOString(),
+      });
     }
     return Response.json({ ok: true, sent, failed: emails.length - sent });
   } catch (e) {

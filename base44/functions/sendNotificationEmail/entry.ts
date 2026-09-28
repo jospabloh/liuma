@@ -27,8 +27,10 @@
 //      definition, and an already-ACTIVE profile has nothing pending to
 //      report. `new_user_pending` additionally re-derives userName/userEmail/
 //      roleName from the caller's own identity (never templateContext) and
-//      is idempotent per profile (UserProfile.pending_notification_sent_at) —
-//      2026-09-28, Base44 security scan.
+//      is idempotent PER RECIPIENT (UserProfile.pending_notification_recipients)
+//      — 2026-09-28, Base44 security scan; per-recipient rather than a
+//      single flag per a same-day Codex review catching that a school with
+//      several admins would otherwise only notify the first one.
 //   3. The caller's `app_role` must be allowed to trigger this eventType
 //      (CALLER_ROLES below).
 //   4. The recipient email must resolve to either the fixed Tier-2 support
@@ -119,7 +121,7 @@ Deno.serve(async (req) => {
     const sr = base44.asServiceRole;
     const isPlatformOwner = user.role === 'admin';
 
-    let callerProfileRecord: { id?: string; status?: string; app_role?: string; pending_notification_sent_at?: string } | null = null;
+    let callerProfileRecord: { id?: string; status?: string; app_role?: string; pending_notification_recipients?: string[] } | null = null;
     if (!isPlatformOwner) {
       const profiles = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
       // new_user_pending is a self-registration notice: it only makes sense
@@ -136,17 +138,26 @@ Deno.serve(async (req) => {
       }
     }
 
-    // new_user_pending-specific hardening (Base44 security scan, 2026-09-28):
-    // the only legitimate caller (onboardingTenantCreation.js) always sends
-    // the caller's OWN name/email as templateContext.userName/userEmail —
-    // never trust those strings as free text, or a self-registering user
-    // could phish the school's admins with an arbitrary display
-    // name/address. And since this is a one-time onboarding event, guard it
-    // with the same idempotency pattern as the absence/diary email paths:
-    // once sent for this profile, further calls are a no-op rather than a
-    // resend.
+    // new_user_pending-specific hardening (Base44 security scan, 2026-09-28,
+    // corrected same day per a Codex review on the fix's own PR). The only
+    // legitimate caller (onboardingTenantCreation.js) always sends the
+    // caller's OWN name/email as templateContext.userName/userEmail — never
+    // trust those strings as free text, or a self-registering user could
+    // phish the school's admins with an arbitrary display name/address.
+    //
+    // Idempotency is tracked PER RECIPIENT (pending_notification_recipients,
+    // an array on the pending user's own UserProfile), not a single
+    // sent/not-sent flag: a school can have several ACTIVE admins, and
+    // sendByEvent (src/lib/notifications/service.js) calls this function
+    // once per recipient. A single boolean would let the first successful
+    // send block every later admin in the same fan-out from ever being
+    // notified — the array lets each admin be notified exactly once, and
+    // still blocks an outright replay of an admin who already got the mail.
+    const notifiedRecipients: string[] = Array.isArray(callerProfileRecord?.pending_notification_recipients)
+      ? callerProfileRecord!.pending_notification_recipients!
+      : [];
     if (eventType === 'new_user_pending' && !isPlatformOwner) {
-      if (callerProfileRecord?.pending_notification_sent_at) {
+      if (notifiedRecipients.includes(email)) {
         return Response.json({ ok: true, skipped: true, reason: 'already_notified' });
       }
       const ctx = body?.templateContext;
@@ -198,7 +209,9 @@ Deno.serve(async (req) => {
     await sr.integrations.Core.SendEmail({ to: email, subject, body: emailBody });
 
     if (eventType === 'new_user_pending' && callerProfileRecord?.id) {
-      await sr.entities.UserProfile.update(callerProfileRecord.id, { pending_notification_sent_at: new Date().toISOString() });
+      await sr.entities.UserProfile.update(callerProfileRecord.id, {
+        pending_notification_recipients: [...notifiedRecipients, email],
+      });
     }
 
     return Response.json({ ok: true });

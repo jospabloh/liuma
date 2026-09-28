@@ -60,17 +60,27 @@ that write on a user's behalf, all fixed here:
   actually `PENDING` (the only real scenario); `userName`/`userEmail` are
   now checked against the caller's own identity instead of trusted as free
   text; `roleName` is derived server-side from the caller's `app_role`
-  instead of read from the request; and the event is now idempotent per
-  profile via a new `UserProfile.pending_notification_sent_at` field.
+  instead of read from the request; and the event is now idempotent **per
+  recipient** via a new `UserProfile.pending_notification_recipients`
+  array (`rls.write: false`) — a same-day Codex review on this fix's own
+  PR caught that a single sent/not-sent flag would let the first
+  successfully-notified admin block every other admin in a multi-admin
+  school from ever being notified.
 - **`notifyParents`'s diary path had no delivery-idempotency flag** (its
   own code comment said so) — replaying the same `recordId` within the
   10-minute window re-mailed the same parents every time. New
-  `DiaryEntry.parents_notified_at`, set only after a real send, closes it
-  the same way `Attendance.parent_notified` already does for the absence
-  path.
+  `DiaryEntry.notified_parent_emails` array (`rls.write: false`) tracks
+  delivery **per recipient**, so a call where only some parents' sends
+  succeeded still lets the next call retry exactly the ones that failed
+  instead of skipping the whole entry forever — another same-day Codex
+  catch on the first version of this fix, which used a single record-level
+  flag.
 
 Scheduled full-review audit pass. Pre-flight: repo clean, HEAD ==
-`origin/main`, zero open PRs, no secrets in tree. Verified, before and
+`origin/main`, zero open PRs, no secrets in tree. Two rounds of automated
+review on the PR (Codex) caught real regressions in the first version of
+the last two fixes above — both corrected same day, before merge; see
+`docs/security-audit-2026-09-28.md` for the detail. Verified, before and
 after every fix: `npm run lint` (incl. `validate:functions`, 9/40), `npm
 run typecheck`, `npm run build`, `npm run validate:rls` (33 entities),
 `npm run validate:tenant-roles`, `npm test` (283/283), `npm run

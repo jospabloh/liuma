@@ -120,7 +120,7 @@ registrant), and `templateContext.userName`/`userEmail`/`roleName` were
 trusted as free text and interpolated into an email to the school's admins
 with no check against who the caller actually is, and no rate limit.
 
-**Fix:**
+**Fix (first version):**
 - `allowedStatuses` narrowed to `['PENDING']` only.
 - `userName`/`userEmail` are now required to match the authenticated
   caller's own `user.full_name`/`user.email` (case-insensitive on email) —
@@ -128,10 +128,34 @@ with no check against who the caller actually is, and no rate limit.
 - `roleName` is no longer read from `templateContext` at all — it's derived
   server-side from the caller's own `app_role` via a new
   `PENDING_ROLE_LABELS_ES` map.
-- Idempotency: a new `UserProfile.pending_notification_sent_at` field is set
-  after a successful send and checked before every attempt — a replay is a
-  no-op (`{ ok: true, skipped: true, reason: 'already_notified' }`) instead
-  of another email.
+- Idempotency: a new `UserProfile.pending_notification_sent_at` field, set
+  after a successful send and checked before every attempt.
+
+**Correction (same day, caught by Codex review on this fix's own PR,
+comment [4119521075](https://github.com/jospabloh/liuma/pull/183)):** a
+school can have several `ACTIVE` admins, and `sendByEvent`
+(`src/lib/notifications/service.js:158-169`) calls `sendNotificationEmail`
+once per recipient. A single `pending_notification_sent_at` timestamp on
+the *pending user's own profile* — not per recipient — meant the first
+successful send (to admin #1) set the flag, and every subsequent call in
+the same fan-out (to admin #2, #3, ...) hit the idempotency guard before
+even reaching recipient validation and was skipped as `already_notified`.
+Only the first admin would ever actually be notified. **Also flagged
+separately** (comment
+[4119521081](https://github.com/jospabloh/liuma/pull/183)): the field had
+no field-level `rls.write` restriction — `UserProfile.update`'s RLS lets a
+user update their own profile, so the PENDING user this profile belongs to
+could have forged or cleared the marker directly, bypassing the guard
+entirely (same defect class Module 24 closed for `User.school_id`/
+`app_role`, just on a different entity).
+
+**Fixed:** `UserProfile.pending_notification_sent_at` → **`pending_notification_recipients`**,
+an array of already-notified admin emails, checked with `.includes(email)`
+per call instead of a single boolean/timestamp — each admin in the
+school's fan-out gets notified exactly once, and a genuine replay of an
+already-notified admin is still a no-op. The field carries
+`"rls": {"write": false}`, the same lock `base44/entities/User.jsonc`
+already uses for `school_id`/`app_role`.
 
 ### 2d. `notifyParents` — diary path had no delivery-idempotency flag (backend_functions)
 
@@ -144,11 +168,38 @@ The function's own code comment already flagged this as a known gap
 mail the same parents indefinitely") — the time window was defense in depth,
 not the actual guard.
 
-**Fix:** new `DiaryEntry.parents_notified_at` field (distinct from the
-existing `sent_at`, which the client sets at creation time as *intent*, not
-proof of delivery). Set only after a real send (`sent > 0`, same pattern the
-absence path already uses for `Attendance.notified_at`), and checked before
-every send attempt.
+**Fix (first version):** new `DiaryEntry.parents_notified_at` field
+(distinct from the existing `sent_at`, which the client sets at creation
+time as *intent*, not proof of delivery). Set only after a real send
+(`sent > 0`, same pattern the absence path already uses for
+`Attendance.notified_at`), and checked before every send attempt.
+
+**Correction (same day, caught by Codex review, comment
+[4119521085](https://github.com/jospabloh/liuma/pull/183)):** when a
+student has multiple linked parents and only *some* `SendEmail` calls
+succeed, `sent > 0` still marked the **entire entry** as notified — so a
+parent whose send transiently failed (a bad address, a momentary SendEmail
+error) would never be retried; the record-level flag made the next call
+within the window a no-op for everyone, successes and failures alike.
+**Also flagged separately** (comment
+[4119521091](https://github.com/jospabloh/liuma/pull/183)): same
+missing-`rls.write:false` gap as 2c above — `DiaryEntry.update`'s RLS lets
+the entry's own `teacher_id` update it, and `guardedEntityWrite`'s patch
+only ever stripped `school_id` and the attribution fields, not this new
+one, so the authoring teacher could have forged or cleared the marker
+through either the direct entity API or the guarded write path.
+
+**Fixed:** `DiaryEntry.parents_notified_at` (kept, informational — first
+successful send timestamp) plus a new **`notified_parent_emails`** array
+tracking exactly which recipients were actually delivered. Each call now
+filters the resolved parent-email list down to the ones *not yet* in that
+array before sending, so a partial failure only replays to the parents who
+didn't get it. Both fields carry `"rls": {"write": false}`, and
+`guardedEntityWrite`'s update handler gained a `SERVER_ONLY_UPDATE_FIELDS`
+map (currently just this entity's two fields) stripping them from any
+client-submitted patch — belt-and-suspenders, since the service-role write
+in that function bypasses RLS entirely and the RLS lock alone wouldn't
+stop it there.
 
 ## Verification
 

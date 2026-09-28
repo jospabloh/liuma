@@ -120,9 +120,22 @@
       "type": "string"
     },
     "parents_notified_at": {
-      "description": "Cu\u00e1ndo se envi\u00f3 realmente el correo a los padres (idempotencia de notifyParents; distinto de sent_at, que el cliente fija al crear la entrada)",
+      "description": "Cu\u00e1ndo se envi\u00f3 el primer correo real a un padre (informativo; distinto de sent_at, que el cliente fija al crear la entrada). La idempotencia real la lleva notified_parent_emails. Escrito solo por notifyParents (service role) \u2014 rls.write:false para que el propio maestro due\u00f1o de la entrada no pueda forjarlo ni borrarlo v\u00eda un update directo.",
       "format": "date-time",
-      "type": "string"
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "notified_parent_emails": {
+      "description": "Correos de padres ya notificados para esta bit\u00e1cora, escrito solo por notifyParents (service role). Por destinatario, no un solo flag, para que un env\u00edo parcialmente fallido pueda reintentar SOLO a los padres que no recibieron el correo, sin volver a mandarlo a los que ya lo tienen. rls.write:false por la misma raz\u00f3n que parents_notified_at.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "rls": {
+        "write": false
+      }
     },
     "school_id": {
       "type": "string"

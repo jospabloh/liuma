@@ -39,7 +39,7 @@ test('guardedEntityWrite derives the PARENT/EVENTO ChargeItem carve-out\'s finan
   assert.match(source, /const data: Record<string, unknown> = eventChargeData \?\? \{ \.\.\.\(body\.data \|\| \{\}\) \};/);
 });
 
-test('sendNotificationEmail locks new_user_pending to the caller\'s own identity and makes it idempotent', () => {
+test('sendNotificationEmail locks new_user_pending to the caller\'s own identity and is idempotent PER RECIPIENT', () => {
   const source = read('base44/functions/sendNotificationEmail/entry.ts');
   // Only a genuinely PENDING profile may trigger it (not ACTIVE, not any role).
   assert.match(source, /const allowedStatuses = eventType === 'new_user_pending' \? \['PENDING'\] : \['ACTIVE'\];/);
@@ -48,20 +48,40 @@ test('sendNotificationEmail locks new_user_pending to the caller\'s own identity
   assert.match(source, /claimedEmail !== String\(user\.email \|\| ''\)/);
   // roleName is derived server-side from the caller's own app_role, not templateContext.
   assert.match(source, /templateContext\.roleName = PENDING_ROLE_LABELS_ES\[String\(callerProfileRecord\?\.app_role\)\]/);
-  // Idempotency: skip if already notified, and mark it after a real send.
-  assert.match(source, /if \(callerProfileRecord\?\.pending_notification_sent_at\) \{/);
-  assert.match(source, /pending_notification_sent_at: new Date\(\)\.toISOString\(\)/);
+  // Idempotency keyed on the recipient email, not a single boolean/timestamp —
+  // a Codex review on this fix's own PR caught that a single flag would let
+  // the first successful send (to admin #1) block every other admin in the
+  // same school from ever being notified.
+  assert.match(source, /notifiedRecipients\.includes\(email\)/);
+  assert.match(source, /pending_notification_recipients: \[\.\.\.notifiedRecipients, email\],/);
+  assert.doesNotMatch(source, /pending_notification_sent_at/);
 });
 
-test('notifyParents makes the diary send idempotent via DiaryEntry.parents_notified_at', () => {
+test('notifyParents retries only the parents a diary send actually failed for, not the whole entry', () => {
   const source = read('base44/functions/notifyParents/entry.ts');
-  assert.match(source, /if \(record\.parents_notified_at\) \{/);
-  assert.match(source, /sr\.entities\.DiaryEntry\.update\(recordId, \{ parents_notified_at: new Date\(\)\.toISOString\(\) \}\)/);
+  // Filters OUT already-notified recipients rather than gating the whole
+  // record on one flag — a Codex review on this fix's own PR caught that a
+  // record-level flag set after ANY successful send would permanently skip
+  // retrying the parents whose send actually failed.
+  assert.match(source, /const emails = allEmails\.filter\(\(e\) => !alreadyNotified\.includes\(e\)\);/);
+  assert.match(source, /notified_parent_emails: \[\.\.\.alreadyNotified, \.\.\.newlyNotified\],/);
+  assert.doesNotMatch(source, /if \(record\.parents_notified_at\) \{/);
 });
 
-test('DiaryEntry and UserProfile schemas declare the new idempotency fields', () => {
+test('the new idempotency-tracking fields are server-only (rls.write:false) and stripped from guarded client updates', () => {
   const diaryEntry = read('base44/entities/DiaryEntry.jsonc');
-  assert.match(diaryEntry, /"parents_notified_at":/);
+  assert.match(diaryEntry, /"notified_parent_emails":/);
+  assert.match(diaryEntry, /"parents_notified_at":[\s\S]{0,600}?"write": false/);
+  assert.match(diaryEntry, /"notified_parent_emails":[\s\S]{0,600}?"write": false/);
+
   const userProfile = read('base44/entities/UserProfile.jsonc');
-  assert.match(userProfile, /"pending_notification_sent_at":/);
+  assert.match(userProfile, /"pending_notification_recipients":[\s\S]{0,600}?"write": false/);
+
+  // guardedEntityWrite bypasses RLS with the service role, so the RLS lock
+  // alone isn't enough — it must also strip these fields from a client
+  // patch by hand (same defense-in-depth reasoning as the attribution
+  // fields and school_id above them in the same function).
+  const guardedEntityWrite = read('base44/functions/guardedEntityWrite/entry.ts');
+  assert.match(guardedEntityWrite, /DiaryEntry: \['parents_notified_at', 'notified_parent_emails'\],/);
+  assert.match(guardedEntityWrite, /for \(const field of SERVER_ONLY_UPDATE_FIELDS\[entity\] \|\| \[\]\) \{/);
 });

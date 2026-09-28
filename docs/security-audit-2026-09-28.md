@@ -258,22 +258,95 @@ Confirmed live **by content**, not just by checkpoint hash:
   the deployed function source matches the fix, not just the entity schemas.
 
 A fresh Base44 security scan was triggered against the redeployed code
-(`POST /api/apps/{app_id}/security/scan`). At the time of writing it had not
-yet settled to `status: up_to_date` — Base44's own scan runs an LLM over the
-app's code in the background and can take upward of 15–20 minutes per this
-session's own earlier scan (triggered ~07:08, still returning `scanning`
-minutes later). The 4 findings' fixes are verified here by the strongest
-alternative evidence available — the deployed function source read directly
-from the live sandbox matches the reviewed, tested, merged code — rather
-than by the scan result alone.
+(`POST /api/apps/{app_id}/security/scan`) and, after ~15 minutes in the
+background, settled to `status: up_to_date` at `2026-09-28T07:34:30`. Result:
+**`backend_functions: []`** — all 4 findings from the first scan are
+confirmed closed. It also surfaced new findings, covered next.
+
+## Finding 5 (confirmed) — `notifyParents` never checked the student belongs to the record's own school
+
+The second scan's `static_code_findings` included one `verdict: confirmed`
+result this pass hadn't seen before:
+
+> *"notifyParents... resolves recipients from the record's student_id...
+> [but] the student referenced by the record is never verified to belong to
+> that school, nor that the caller authored the record. guardedEntityWrite's
+> create path accepts DiaryEntry/Attendance with any client-supplied
+> student_id — only school_id is tied to the caller's profile."*
+
+Root cause, traced to `guardedEntityWrite`: `schoolId` is re-derived from the
+caller's own `UserProfile` (correct, and unchanged by this finding), but
+`student_id` was taken from the request as-is with no check that the student
+actually belongs to that school. A teacher in school A could create an
+`Attendance`/`DiaryEntry` row with `school_id: A` but `student_id` pointing
+at a school-B student; `notifyParents` would then look up that foreign
+student's real parents and mail them content the school-A caller wrote,
+presented as an official LIUMA notice. Scan's own severity call: low
+(exploitability depends on obtaining a foreign student id, which isn't
+enumerable through RLS) — but confirmed, and cheap to close.
+
+**Fixed in two places:**
+- `guardedEntityWrite`'s `create` handler now checks, whenever `data.student_id`
+  is present, that `Student.get(studentId).school_id` matches the resolved
+  `schoolId` — `400 STUDENT_NOT_IN_SCHOOL` otherwise. Its `update` handler
+  now also strips `student_id` from the patch (same treatment as `school_id`
+  already gets, on the same reasoning: no real call site ever reassigns it).
+- `notifyParents` gained its own `assertStudentInSchool()`, called right
+  after fetching the student on both the absence and diary paths — defense
+  in depth in case a record ever reaches it through a path other than
+  `guardedEntityWrite`.
+
+Not changed: the scan's suggestion to also require the caller authored the
+record. `GestionAusencias.jsx`'s legitimate flow has an ADMIN correct a
+different teacher's attendance record and notify on their behalf — requiring
+same-authorship would break that. The actual exploit (cross-**school**
+targeting) is what the fix closes; same-school notification by any
+TEACHER/ADMIN with an active profile remains intended behavior, unchanged.
+
+## Findings not fixed this pass (deferred, documented)
+
+The second scan surfaced two more `static_code_findings` (`verdict:
+plausible`, not `confirmed`) and one `rls_recommendations` entry, all
+**pre-existing** (not introduced by anything in this pass) and each a
+larger, separate piece of work than a same-day fix warrants:
+
+- **`ContactosEmergencia.jsx` creates `EmergencyContact` rows (including the
+  `is_authorized_pickup` flag) for a `student_id` read straight from the URL,
+  with no backend check that the caller is actually linked to that student**
+  — medium severity, category `unauthorized_access`. The scan's own
+  recommendation is to route this through a backend function that re-derives
+  `ParentStudent` linkage server-side, mirroring the `ChargeItem`/EVENTO
+  carve-out. Real work: a new guarded write path, not a one-line fix.
+- **`src/lib/support/tickets.js`'s `addSupportMessage()` creates
+  `SupportTicketMessage` rows directly from the browser with no check that
+  the caller owns the `ticket_id` they're posting to**, and `author_role` is
+  client-chosen — medium severity. Same shape of fix: a backend function
+  re-deriving ticket ownership and the caller's real role.
+- **`rls_recommendations`: `UserProfile.create`/`update` should require
+  `user_condition: {role: admin}`** (platform owner) instead of the current
+  `data.user_id: {{user.id}}` self-service rule, to close self-activation
+  and school-reassignment paths. This is a materially different access
+  model from what's deployed today — onboarding
+  (`provisionOnboardingProfile`, `onboardingTenantCreation.js`) currently
+  relies on a user being able to create/update their own `UserProfile`
+  directly; adopting this recommendation as-is would need that flow audited
+  and likely rewritten first, not just an RLS flip.
+
+All three are flagged here, with fingerprints recorded below, for whoever
+next has the scope to take them on:
+`95a1dcdd9a22eaa82ecfc4a6359094a197cbd491d7e913cb17f038c1a2029217` (RLS),
+`9aa9f68bc3df5bd8ee4d50a2b2f974c2e3083704dedff0139f79212dc5984fe1`
+(EmergencyContact),
+`fa32228d89e25f949fe844f6a66c004c5a10fb178d39185389c53883948faf17`
+(SupportTicketMessage).
 
 ## Not verified
 
-- **Base44's fresh security scan hadn't settled to `status: up_to_date`** by
-  the time this document was written. See the "Post-merge redeploy" section
-  above for the alternative evidence (direct read of the deployed function
-  source) this pass relied on instead. Worth a follow-up check once the scan
-  actually completes, if anything unexpected turns up.
+- **A third security scan, re-run after Finding 5's fix deployed, to confirm
+  it too closes.** Not done as part of this pass — the second scan alone
+  took ~15 minutes in the background, and this document's own writing had
+  to conclude; whoever deploys Finding 5's fix should trigger one more scan
+  and confirm `notifyParents`/`guardedEntityWrite` no longer appear.
 - No live authenticated session (any role, any school) — not reachable from
   this sandbox. UI/UX/cross-device review was limited to source reading.
 - The 32 entities *other than* `User` were not individually re-read against

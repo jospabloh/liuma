@@ -85,3 +85,24 @@ test('the new idempotency-tracking fields are server-only (rls.write:false) and 
   assert.match(guardedEntityWrite, /DiaryEntry: \['parents_notified_at', 'notified_parent_emails'\],/);
   assert.match(guardedEntityWrite, /for \(const field of SERVER_ONLY_UPDATE_FIELDS\[entity\] \|\| \[\]\) \{/);
 });
+
+// 2026-09-28, second scan (post-redeploy): a re-scan against the fixes
+// above found a further CONFIRMED finding — school_id was tied to the
+// caller's own profile, but student_id was never checked against it, so a
+// record (Attendance, DiaryEntry, ...) could be created in the caller's own
+// school while pointing at a student from a DIFFERENT school. notifyParents
+// would then happily mail that foreign student's real parents.
+
+test('guardedEntityWrite rejects a student_id that does not belong to the target school, on create and strips it on update', () => {
+  const source = read('base44/functions/guardedEntityWrite/entry.ts');
+  assert.match(source, /if \(!student \|\| String\(student\.school_id \|\| ''\) !== schoolId\) \{\s*\n\s*return bad\(400, 'STUDENT_NOT_IN_SCHOOL'/);
+  assert.match(source, /delete \(patch as \{ student_id\?: unknown \}\)\.student_id;/);
+});
+
+test('notifyParents fails closed when the record\'s student is not in the record\'s own school', () => {
+  const source = read('base44/functions/notifyParents/entry.ts');
+  assert.match(source, /function assertStudentInSchool\(/);
+  // Called on both the absence and diary paths, right after fetching the student.
+  const calls = source.match(/assertStudentInSchool\(student, String\(record\.school_id \|\| ''\)\);/g) || [];
+  assert.equal(calls.length, 2, 'expected assertStudentInSchool on both the absence and diary paths');
+});

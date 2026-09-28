@@ -119,6 +119,11 @@
       "description": "MIS PAP\u00c1S DICEN - Respuesta de los padres",
       "type": "string"
     },
+    "parents_notified_at": {
+      "description": "Cu\u00e1ndo se envi\u00f3 realmente el correo a los padres (idempotencia de notifyParents; distinto de sent_at, que el cliente fija al crear la entrada)",
+      "format": "date-time",
+      "type": "string"
+    },
     "school_id": {
       "type": "string"
     },

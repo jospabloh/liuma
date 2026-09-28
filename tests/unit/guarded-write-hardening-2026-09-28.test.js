@@ -1,0 +1,67 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+function read(path) {
+  return fs.readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+}
+
+// 2026-09-28: Base44's own security scan, re-run against the freshly
+// redeployed code from this pass, found three real findings in the three
+// service-role backend functions that write on a user's behalf. Deno isn't
+// runnable in this sandbox (documented throughout CLAUDE.md), so — same
+// convention as tests/unit/email-html-escaping.test.js's notifyParents
+// checks — these assert the fix is present in the function's own source
+// rather than exercising it at runtime.
+
+test('guardedEntityWrite overrides attribution fields instead of trusting the client, on both create and update', () => {
+  const source = read('base44/functions/guardedEntityWrite/entry.ts');
+  assert.match(source, /const ATTRIBUTION_FIELDS: Record<string, \{ id: string; name\?: string \}> = \{/);
+  for (const entityName of ['Attendance', 'PaymentRecord', 'DiaryEntry', 'Homework', 'Notice']) {
+    assert.match(source, new RegExp(`${entityName}: \\{ id: '`), `expected an ATTRIBUTION_FIELDS entry for ${entityName}`);
+  }
+  // create: the field is SET from user.id/user.full_name, never read from body.data.
+  assert.match(source, /data\[attribution\.id\] = user\.id;/);
+  assert.match(source, /data\[attribution\.name\] = String\(user\.full_name \|\| ''\);/);
+  // update: the field is DELETED from the patch, so an existing record's
+  // attribution can't be reassigned to someone else after the fact.
+  assert.match(source, /delete \(patch as Record<string, unknown>\)\[attribution\.id\];/);
+});
+
+test('guardedEntityWrite derives the PARENT/EVENTO ChargeItem carve-out\'s financial fields from the Event record, not the client', () => {
+  const source = read('base44/functions/guardedEntityWrite/entry.ts');
+  assert.match(source, /async function buildEventChargeData\(/);
+  // The Event's own cost_amount, not body.data.amount, is what ends up on the record.
+  assert.match(source, /amount: event\.cost_amount,/);
+  assert.match(source, /status: 'PENDING',/);
+  // The create handler uses buildEventChargeData's result outright instead of
+  // spreading body.data when the carve-out granted access.
+  assert.match(source, /const data: Record<string, unknown> = eventChargeData \?\? \{ \.\.\.\(body\.data \|\| \{\}\) \};/);
+});
+
+test('sendNotificationEmail locks new_user_pending to the caller\'s own identity and makes it idempotent', () => {
+  const source = read('base44/functions/sendNotificationEmail/entry.ts');
+  // Only a genuinely PENDING profile may trigger it (not ACTIVE, not any role).
+  assert.match(source, /const allowedStatuses = eventType === 'new_user_pending' \? \['PENDING'\] : \['ACTIVE'\];/);
+  // userName/userEmail must match the authenticated caller, never free text.
+  assert.match(source, /claimedName !== String\(user\.full_name \|\| ''\)/);
+  assert.match(source, /claimedEmail !== String\(user\.email \|\| ''\)/);
+  // roleName is derived server-side from the caller's own app_role, not templateContext.
+  assert.match(source, /templateContext\.roleName = PENDING_ROLE_LABELS_ES\[String\(callerProfileRecord\?\.app_role\)\]/);
+  // Idempotency: skip if already notified, and mark it after a real send.
+  assert.match(source, /if \(callerProfileRecord\?\.pending_notification_sent_at\) \{/);
+  assert.match(source, /pending_notification_sent_at: new Date\(\)\.toISOString\(\)/);
+});
+
+test('notifyParents makes the diary send idempotent via DiaryEntry.parents_notified_at', () => {
+  const source = read('base44/functions/notifyParents/entry.ts');
+  assert.match(source, /if \(record\.parents_notified_at\) \{/);
+  assert.match(source, /sr\.entities\.DiaryEntry\.update\(recordId, \{ parents_notified_at: new Date\(\)\.toISOString\(\) \}\)/);
+});
+
+test('DiaryEntry and UserProfile schemas declare the new idempotency fields', () => {
+  const diaryEntry = read('base44/entities/DiaryEntry.jsonc');
+  assert.match(diaryEntry, /"parents_notified_at":/);
+  const userProfile = read('base44/entities/UserProfile.jsonc');
+  assert.match(userProfile, /"pending_notification_sent_at":/);
+});

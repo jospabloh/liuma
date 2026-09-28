@@ -145,11 +145,17 @@ Deno.serve(async (req) => {
     if (!record.sent_to_parents) {
       return Response.json({ ok: true, skipped: true });
     }
-    // DiaryEntry has no "notified" flag to make this idempotent the way
-    // Attendance.parent_notified does, so the send is only honored right
-    // after the entry is created (CrearBitacora invokes this immediately).
-    // Without it, one diary id could be replayed to mail the same parents
-    // indefinitely.
+    // Idempotency guard (Base44 security scan finding, 2026-09-28): without
+    // this, one diary id could be replayed to mail the same parents
+    // indefinitely, burning SendEmail credits each time. parents_notified_at
+    // is set by THIS function only, after a real send — distinct from
+    // sent_at, which the client sets at creation time as intent, not proof
+    // of delivery. The time window is kept too, as defense in depth (the
+    // send is only ever meant to fire right after CrearBitacora creates the
+    // entry).
+    if (record.parents_notified_at) {
+      return Response.json({ ok: true, skipped: true, reason: 'already_notified' });
+    }
     const createdAt = Date.parse(String(record.created_date || ''));
     if (!Number.isFinite(createdAt) || Date.now() - createdAt > DIARY_NOTIFY_WINDOW_MS) {
       return Response.json({ ok: true, skipped: true, reason: 'window_expired' });
@@ -181,11 +187,17 @@ Deno.serve(async (req) => {
       <p style="color: #64748b; font-size: 12px; margin-top: 8px;">Este es un mensaje automático de LIUMA.</p>
     `;
 
-    await Promise.all(emails.map((to) =>
-      sr.integrations.Core.SendEmail({ from_name: 'LIUMA - Bitácora Escolar', to, subject, body: emailBody }).catch(() => {})
+    const results = await Promise.allSettled(emails.map((to) =>
+      sr.integrations.Core.SendEmail({ from_name: 'LIUMA - Bitácora Escolar', to, subject, body: emailBody })
     ));
+    const sent = results.filter((r) => r.status === 'fulfilled').length;
 
-    return Response.json({ ok: true, sent: emails.length });
+    // Same rule as the absence path above: only a delivered email marks the
+    // record, so a request where every send failed can still be retried.
+    if (sent > 0) {
+      await sr.entities.DiaryEntry.update(recordId, { parents_notified_at: new Date().toISOString() });
+    }
+    return Response.json({ ok: true, sent, failed: emails.length - sent });
   } catch (e) {
     if (e && typeof e === 'object' && 'status' in e) {
       const err = e as { status: number; code: string; message: string };

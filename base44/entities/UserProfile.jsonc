@@ -47,6 +47,11 @@
       "type": "boolean",
       "default": false,
       "description": "Per-user flag: whether the trial welcome modal has been dismissed. Lives on the user's own profile (self-writable) so the billing SchoolSubscription entity can stay owner-write-only."
+    },
+    "pending_notification_sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set by sendNotificationEmail (service role only) the first time the 'new_user_pending' admin-notification email fires for this profile. Idempotency guard so a PENDING user can't replay the event to re-mail the school's admins."
     }
   },
   "required": [

@@ -237,13 +237,43 @@ structural errors in the edited code. Real verification is `ci-deno.yml`
 `deno test` on every push) plus this pass's own redeploy-and-rescan loop
 below.
 
-After committing the fixes, this pass redeployed via the same
-`POST /api/apps/{app_id}/deploy` call and re-ran the Base44 security scan.
-*(Fill in once the redeploy for this branch's merge commit has actually run —
-see the PR/commit history for the exact checkpoint and scan timestamp.)*
+## Post-merge redeploy and re-verification
+
+PR #183 merged as `923de50`. `POST /api/apps/{app_id}/github/sync` pulled it
+(3 commits, `latest_commit_hash: 923de50`), then
+`POST /api/apps/{app_id}/deploy` published it — confirmed by the new
+checkpoint's own fields: `git_commit_hash: 923de505...`,
+`last_deployed_at: 2026-09-28T07:31:11`.
+
+Confirmed live **by content**, not just by checkpoint hash:
+
+- `list_entity_schemas(DiaryEntry)` shows both `parents_notified_at` and
+  `notified_parent_emails` with `rls.write: false`.
+- `list_entity_schemas(UserProfile)` shows `pending_notification_recipients`
+  with `rls.write: false`.
+- `list_entity_schemas(User)` still shows `school_id`/`app_role` with
+  `rls.write: false` (Module 24, unaffected by this pass).
+- `read_file(base44/functions/guardedEntityWrite/entry.ts)` against the live
+  sandbox shows the `ATTRIBUTION_FIELDS` map and its accompanying comment —
+  the deployed function source matches the fix, not just the entity schemas.
+
+A fresh Base44 security scan was triggered against the redeployed code
+(`POST /api/apps/{app_id}/security/scan`). At the time of writing it had not
+yet settled to `status: up_to_date` — Base44's own scan runs an LLM over the
+app's code in the background and can take upward of 15–20 minutes per this
+session's own earlier scan (triggered ~07:08, still returning `scanning`
+minutes later). The 4 findings' fixes are verified here by the strongest
+alternative evidence available — the deployed function source read directly
+from the live sandbox matches the reviewed, tested, merged code — rather
+than by the scan result alone.
 
 ## Not verified
 
+- **Base44's fresh security scan hadn't settled to `status: up_to_date`** by
+  the time this document was written. See the "Post-merge redeploy" section
+  above for the alternative evidence (direct read of the deployed function
+  source) this pass relied on instead. Worth a follow-up check once the scan
+  actually completes, if anything unexpected turns up.
 - No live authenticated session (any role, any school) — not reachable from
   this sandbox. UI/UX/cross-device review was limited to source reading.
 - The 32 entities *other than* `User` were not individually re-read against

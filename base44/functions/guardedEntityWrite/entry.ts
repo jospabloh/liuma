@@ -229,6 +229,22 @@ Deno.serve(async (req) => {
         if (attribution.name) data[attribution.name] = String(user.full_name || '');
       }
 
+      // Base44 security scan, 2026-09-28 (confirmed, found via notifyParents
+      // but rooted here): school_id is tied to the caller's own profile
+      // above, but student_id was taken from the client as-is — a caller
+      // could create a record (Attendance, DiaryEntry, ...) in their OWN
+      // school that points at a student who belongs to a DIFFERENT school,
+      // and anything downstream that trusts "record.school_id says who can
+      // see this" (e.g. notifyParents) would act on it. Fail closed if the
+      // two disagree.
+      const studentId = data.student_id;
+      if (typeof studentId === 'string' && studentId) {
+        const student: { school_id?: string } | null = await sr.entities.Student.get(studentId).catch(() => null);
+        if (!student || String(student.school_id || '') !== schoolId) {
+          return bad(400, 'STUDENT_NOT_IN_SCHOOL', 'student_id does not belong to this school');
+        }
+      }
+
       const created = await sr.entities[entity].create(data);
       return Response.json({ ok: true, record: created });
     }
@@ -236,11 +252,15 @@ Deno.serve(async (req) => {
     if (operation === 'update') {
       // A client-submitted school_id on update could otherwise reassign the
       // record to a different tenant — always drop it, the record keeps its
-      // existing school_id. Same for the entity's attribution field(s): who
-      // authored a record doesn't change on edit, and no real call site ever
-      // sends one on update (only on create).
+      // existing school_id. Same for student_id (2026-09-28 scan finding,
+      // same reasoning as the create-side check above — reassigning an
+      // existing record to a different student is never a legitimate edit,
+      // and no real call site ever sends one) and the entity's attribution
+      // field(s): who authored a record doesn't change on edit, and no real
+      // call site ever sends one on update (only on create).
       const patch = { ...(body.data || {}) };
       delete (patch as { school_id?: unknown }).school_id;
+      delete (patch as { student_id?: unknown }).student_id;
       const attribution = ATTRIBUTION_FIELDS[entity];
       if (attribution) {
         delete (patch as Record<string, unknown>)[attribution.id];

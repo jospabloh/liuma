@@ -95,6 +95,23 @@ Deno.serve(async (req) => {
       if (!profile) throw { status: 403, code: 'NO_PROFILE', message: 'Requires an active TEACHER or ADMIN profile in this school' };
     }
 
+    // Base44 security scan, 2026-09-28 (confirmed): assertCallerCanNotify
+    // only checks the CALLER's profile against the RECORD's school_id — it
+    // never checks that the STUDENT the record points at is actually in
+    // that school. guardedEntityWrite's create path ties school_id to the
+    // caller's own profile but takes student_id from the client as-is, so a
+    // teacher in school A could create an Attendance/DiaryEntry row with
+    // school_id: A but student_id pointing at a school-B student, then have
+    // this function mail that student's real parents. Failing closed here
+    // if the two disagree closes that cross-school targeting without
+    // touching the (legitimate) same-school case of an ADMIN notifying for
+    // a different teacher's record.
+    function assertStudentInSchool(student: { school_id?: string } | null, schoolId: string) {
+      if (!student || String(student.school_id || '') !== schoolId) {
+        throw { status: 404, code: 'NOT_FOUND', message: 'Student not found in this school' };
+      }
+    }
+
     if (kind === 'absence') {
       const record = await sr.entities.Attendance.get(recordId).catch(() => null);
       if (!record) return bad(404, 'NOT_FOUND', 'Attendance record not found');
@@ -107,6 +124,7 @@ Deno.serve(async (req) => {
       }
 
       const student = await sr.entities.Student.get(String(record.student_id || '')).catch(() => null);
+      assertStudentInSchool(student, String(record.school_id || ''));
       const emails = await resolveParentEmails(sr, String(record.student_id || ''));
 
       const firstName = escapeHtml(student?.first_name);
@@ -151,6 +169,7 @@ Deno.serve(async (req) => {
     }
 
     const student = await sr.entities.Student.get(String(record.student_id || '')).catch(() => null);
+    assertStudentInSchool(student, String(record.school_id || ''));
     const allEmails = await resolveParentEmails(sr, String(record.student_id || ''));
     // Idempotency guard (Base44 security scan finding, 2026-09-28; corrected
     // same day per a Codex review catching the first version of this fix).

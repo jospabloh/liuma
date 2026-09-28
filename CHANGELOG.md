@@ -5,6 +5,42 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.7.17] - 2026-09-28
+
+### Security
+
+- **Confirmed: `notifyParents` never checked that a record's student
+  actually belongs to that record's own school.** A re-scan of v1.7.16's
+  redeployed code (triggered after that pass's fixes went live) surfaced
+  this: `guardedEntityWrite` ties `school_id` to the caller's own profile
+  but took `student_id` from the request as-is, so a teacher could create
+  an `Attendance`/`DiaryEntry` row in their own school pointing at a
+  different school's student — and `notifyParents` would mail that
+  student's real parents. Fixed in both places: `guardedEntityWrite`'s
+  `create` now rejects a `student_id` that doesn't resolve to a `Student`
+  in the target school (`400 STUDENT_NOT_IN_SCHOOL`) and its `update`
+  strips `student_id` from any patch outright (same treatment `school_id`
+  already gets); `notifyParents` independently verifies the student's
+  school on both the absence and diary paths as defense in depth. Low
+  severity per the scan (a foreign student id isn't enumerable through
+  RLS), but confirmed and cheap to close. Full detail in
+  `docs/security-audit-2026-09-28.md`.
+
+Two further findings from the same re-scan (`plausible`, not confirmed —
+`EmergencyContact` creation not verifying parent-student linkage in
+`ContactosEmergencia.jsx`, and `SupportTicketMessage` creation not
+verifying ticket ownership in `tickets.js`) plus one RLS recommendation
+(tightening `UserProfile.create`/`update` to admin-only) are **deferred,
+not fixed here** — each needs its own guarded backend function or an
+onboarding-flow audit, larger than a same-day follow-up. Documented with
+fingerprints in `docs/security-audit-2026-09-28.md` for a dedicated pass.
+
+Verified: `npm run lint` (incl. `validate:functions`, 9/40), `npm run
+typecheck`, `npm run build`, `npm run validate:rls` (33 entities), `npm
+run validate:tenant-roles`, `npm test` (285/285), `npm run
+test:permissions` (23/23), `npm run release:gate`, `npm audit` (0
+vulnerabilities) — all pass.
+
 ## [1.7.16] - 2026-09-28
 
 ### Fixed

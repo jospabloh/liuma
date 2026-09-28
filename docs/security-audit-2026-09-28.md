@@ -349,9 +349,10 @@ next has the scope to take them on:
   and confirm `notifyParents`/`guardedEntityWrite` no longer appear.
 - No live authenticated session (any role, any school) — not reachable from
   this sandbox. UI/UX/cross-device review was limited to source reading.
-- The 32 entities *other than* `User` were not individually re-read against
-  the live schema this pass — `validate:rls` covers the repo file, and this
-  pass's Base44 MCP reads were targeted at `User` (finding 1) rather than an
-  exhaustive re-walk.
+- The 30 entities other than `User`, `DiaryEntry` and `UserProfile` were not
+  individually re-read against the live schema this pass — `validate:rls`
+  covers the repo file, and this pass's Base44 MCP reads were targeted at
+  those three (finding 1, and the post-merge verification above) rather
+  than an exhaustive re-walk.
 - `npm run test:smoke` — this sandbox's outbound proxy doesn't reach
   `*.base44.app`; it runs in `smoke.yml` on GitHub Actions instead.

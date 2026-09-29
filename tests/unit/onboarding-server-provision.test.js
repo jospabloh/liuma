@@ -53,7 +53,7 @@ test('the browser no longer writes platform-only entities or the phantom bootstr
   ]) {
     assert.doesNotMatch(client, pattern);
   }
-  assert.match(client, /functions\.invoke\('provisionOnboardingProfile'/);
+  assert.match(client, /invokeFunction\(base44, 'provisionOnboardingProfile'/);
 });
 
 test('onboarding UI: Spanish labels, inline errors, labelled inputs', () => {

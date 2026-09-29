@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { indexMembers, memberEmail, memberName } from './memberDirectory';
 
 /**
@@ -22,7 +23,7 @@ export function useSchoolMembers(schoolId, { enabled = true } = {}) {
   const query = useQuery({
     queryKey: ['schoolMembers', schoolId],
     queryFn: async () => {
-      const result = await base44.functions.invoke('listSchoolMembers', { schoolId });
+      const result = await invokeFunction(base44, 'listSchoolMembers', { schoolId });
       return Array.isArray(result?.users) ? result.users : [];
     },
     enabled: Boolean(schoolId) && enabled,

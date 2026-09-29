@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 
 /**
  * Thin client wrapper around the guardedFamilyWrite function — the only
@@ -13,16 +14,16 @@ import { base44 } from '@/api/base44Client';
  * invoke call throws with `error.data.code` / `error.data.error`.
  */
 export async function familyCreate(entity, data) {
-  const result = await base44.functions.invoke('guardedFamilyWrite', { entity, operation: 'create', data });
-  return result?.record;
+  const body = await invokeFunction(base44, 'guardedFamilyWrite', { entity, operation: 'create', data });
+  return body?.record;
 }
 
 /** Returns `{ record, pickupRevoked }` — see EmergencyContact in the function. */
 export async function familyUpdate(entity, id, data) {
-  const result = await base44.functions.invoke('guardedFamilyWrite', { entity, operation: 'update', id, data });
-  return { record: result?.record, pickupRevoked: result?.pickupRevoked === true };
+  const body = await invokeFunction(base44, 'guardedFamilyWrite', { entity, operation: 'update', id, data });
+  return { record: body?.record, pickupRevoked: body?.pickupRevoked === true };
 }
 
 export async function familyDelete(entity, id) {
-  await base44.functions.invoke('guardedFamilyWrite', { entity, operation: 'delete', id });
+  await invokeFunction(base44, 'guardedFamilyWrite', { entity, operation: 'delete', id });
 }

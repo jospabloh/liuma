@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -32,7 +33,6 @@ import {
 import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
-import { unwrapFunctionResponse } from '@/lib/functionResponse';
 
 const PENDING_CHANGE_ENTITY = 'PendingChange';
 // The "plantillas de rol" grid and the tenant "Danger Zone" spec table that
@@ -185,7 +185,7 @@ export default function PermisosRoles() {
       // Role mutations go exclusively through the server-authoritative function;
       // it re-validates and creates the PendingChange with the service role, so
       // the maker-checker cannot be bypassed from the client (findings C1/C2).
-      await base44.functions.invoke('governRoleChange', {
+      await invokeFunction(base44, 'governRoleChange', {
         action: 'request',
         targetProfileId: selectedProfile.id,
         toRole: selectedRole,
@@ -252,7 +252,7 @@ export default function PermisosRoles() {
     try {
       // The server function re-checks approver != requester and applies the role
       // with the service role; the client never writes the approval directly.
-      await base44.functions.invoke('governRoleChange', {
+      await invokeFunction(base44, 'governRoleChange', {
         action: 'decide',
         changeId: change.id,
         decision,
@@ -465,10 +465,10 @@ export default function PermisosRoles() {
   const handleExportSchoolData = async () => {
     setIsExporting(true);
     try {
-      // invoke resolves to the axios response; the export is its `.data`.
+      // invokeFunction unwraps the axios response to the export body.
       // Export has to work in read-only mode — it is the half of "solo
       // lectura" that promises nothing is held hostage.
-      const payload = unwrapFunctionResponse(await base44.functions.invoke('exportSchoolData', {}));
+      const payload = await invokeFunction(base44, 'exportSchoolData', {});
       if (!payload?.ok) throw new Error(payload?.error || 'export failed');
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

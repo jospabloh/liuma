@@ -63,14 +63,14 @@ test('notification email templates escape every interpolated field', () => {
 test('Asistencia.jsx no longer builds the absence email client-side', () => {
   const source = read('src/pages/Asistencia.jsx');
   assert.doesNotMatch(source, /integrations\.Core\.SendEmail/);
-  assert.match(source, /functions\.invoke\('notifyParents', \{ kind: 'absence', recordId: record\.id \}\)/);
+  assert.match(source, /invokeFunction\(base44, 'notifyParents', \{ kind: 'absence', recordId: record\.id \}\)/);
 });
 
 test('CrearBitacora.jsx no longer builds the diary email or the AI prompt client-side', () => {
   const source = read('src/pages/CrearBitacora.jsx');
   assert.doesNotMatch(source, /integrations\.Core\.(SendEmail|InvokeLLM)/);
-  assert.match(source, /functions\.invoke\('notifyParents', \{ kind: 'diary', recordId: entry\.id \}\)/);
-  assert.match(source, /functions\.invoke\('aiAssist', \{/);
+  assert.match(source, /invokeFunction\(base44, 'notifyParents', \{ kind: 'diary', recordId: entry\.id \}\)/);
+  assert.match(source, /invokeFunction\(base44, 'aiAssist', \{/);
 });
 
 test('notifyParents/entry.ts escapes student name, reason and diary fields', () => {

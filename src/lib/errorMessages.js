@@ -7,9 +7,11 @@
 // and for the SDK is whatever axios said. The global QueryCache/MutationCache
 // handlers in query-client.js route every unhandled failure through here.
 //
-// Pure and import-free so `node --test` can load it.
+// Pure so `node --test` can load it (its one import is import-free too).
 
-/** Error codes our backend functions return in `error.data.code`. */
+import { functionErrorCode } from './functionResponse.js';
+
+/** Error codes our backend functions return in their error body's `code`. */
 const CODE_MESSAGES = {
   WRITE_BLOCKED: 'Tu escuela está en modo solo lectura. Reactiva la licencia para guardar cambios.',
   FORBIDDEN: 'No tienes permiso para hacer este cambio.',
@@ -57,7 +59,9 @@ export function isNetworkError(error) {
 /** One user-facing Spanish sentence for any thrown error. */
 export function humanizeError(error) {
   if (!error) return GENERIC_ERROR_MESSAGE;
-  const code = error.data?.code;
+  // A function's refusal body: Base44Error `.data`, or AxiosError
+  // `.response.data` (functions.invoke rejects with the raw axios error).
+  const code = functionErrorCode(error);
   if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code];
   if (isNetworkError(error)) return NETWORK_ERROR_MESSAGE;
   const status = errorStatus(error);

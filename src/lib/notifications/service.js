@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { NOTIFICATION_TEMPLATES } from './templates';
 import { recordAuditRow } from '@/lib/audit';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
@@ -109,7 +110,7 @@ export const notificationService = {
       eventType,
       channel: 'email',
       execute: async () => {
-        await base44.functions.invoke('sendNotificationEmail', { eventType, schoolId, email, templateContext });
+        await invokeFunction(base44, 'sendNotificationEmail', { eventType, schoolId, email, templateContext });
       },
     });
   },
@@ -164,7 +165,7 @@ export const notificationService = {
    * invoke) on a non-2xx: 403 for the wrong role, 429 when rate limited.
    */
   async sendBulk(payload) {
-    return base44.functions.invoke('sendBulkNotification', payload);
+    return invokeFunction(base44, 'sendBulkNotification', payload);
   },
 
   /**

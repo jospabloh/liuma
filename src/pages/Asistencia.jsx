@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -432,7 +433,7 @@ export default function Asistencia() {
           // "Evitar el uso no autorizado de créditos" del scan de seguridad
           // de Base44). La función también marca parent_notified/notified_at,
           // así que ya no hace falta el guardedUpdate aquí.
-          await base44.functions.invoke('notifyParents', { kind: 'absence', recordId: record.id });
+          await invokeFunction(base44, 'notifyParents', { kind: 'absence', recordId: record.id });
         } catch (error) {
           console.error('Error notifying parents:', error);
         }

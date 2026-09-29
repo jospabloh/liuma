@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { notificationService } from '@/lib/notifications/service';
 import {
@@ -52,7 +53,7 @@ async function allocateTicketNumber(schoolId) {
  * @param {{ ticketId: string, body: string, kind?: 'reply'|'note'|'ai_summary' }} args
  */
 async function postTicketMessage({ ticketId, body, kind = 'reply' }) {
-  const result = await base44.functions.invoke('postTicketMessage', { ticketId, body, kind });
+  const result = await invokeFunction(base44, 'postTicketMessage', { ticketId, body, kind });
   return result?.message;
 }
 
@@ -176,7 +177,7 @@ export async function createSupportTicket({
 
   // Push en tiempo real a ACACIA Mission Control (no bloquea el flujo): refleja
   // el ticket sin sincronización manual y dispara la alerta unificada al soporte.
-  base44.functions.invoke('notifyTicketCreated', { ticketId: ticket.id }).catch(() => {});
+  invokeFunction(base44, 'notifyTicketCreated', { ticketId: ticket.id }).catch(() => {});
 
   return ticket;
 }

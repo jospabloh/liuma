@@ -43,7 +43,7 @@ test('SchoolSubscription read is platform-only; tenants read through getMySubscr
   assert.match(fn, /profile\.status !== 'ACTIVE'/, 'only an ACTIVE profile reads its school license');
 
   const hook = read('src/hooks/useSubscription.js');
-  assert.match(hook, /functions\.invoke\('getMySubscription'/);
+  assert.match(hook, /invokeFunction\(base44, 'getMySubscription'/);
   assert.doesNotMatch(hook, /entities\.SchoolSubscription/);
   assert.doesNotMatch(read('src/pages/Home.jsx'), /entities\.SchoolSubscription/);
 });

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -50,7 +51,7 @@ export default function Aprobaciones() {
     // target's own school, that the target is still PENDING and not the
     // caller themself, and writes the AuditLog row — all server-side.
     mutationFn: ({ profileId, decision }) =>
-      base44.functions.invoke('approveProfile', { profileId, decision }),
+      invokeFunction(base44, 'approveProfile', { profileId, decision }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingUsers'] });
       queryClient.invalidateQueries({ queryKey: ['schoolMembers'] });

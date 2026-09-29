@@ -78,7 +78,7 @@ test('approveProfile checks the ADMIN against the TARGET\'s stored school, PENDI
   assert.match(source, /target\.app_role === 'ADMIN' && decision\.status === 'ACTIVE' && !isPlatformOwner/);
 
   const page = read('src/pages/Aprobaciones.jsx');
-  assert.match(page, /functions\.invoke\('approveProfile', \{ profileId, decision \}\)/);
+  assert.match(page, /invokeFunction\(base44, 'approveProfile', \{ profileId, decision \}\)/);
   assert.doesNotMatch(page, /UserProfile\.update\(/);
 });
 

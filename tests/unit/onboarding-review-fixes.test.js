@@ -32,7 +32,8 @@ test('functions.invoke resolves to the axios response: call sites read the body 
     ['src/lib/onboardingTenantCreation.js', 'provisionOnboardingProfile'],
     ['src/pages/PermisosRoles.jsx', 'exportSchoolData'],
   ]) {
-    assert.match(code(file), new RegExp(`unwrapFunctionResponse\\(await base44\\.functions\\.invoke\\('${fn}'`), `${file} unwraps ${fn}`);
+    // Since integration: invokeFunction (src/lib/functionResponse.js) is the one wrapper.
+    assert.match(code(file), new RegExp(`invokeFunction\\(base44, '${fn}'`), `${file} unwraps ${fn}`);
   }
 });
 

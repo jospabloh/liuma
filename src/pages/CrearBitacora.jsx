@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -124,7 +125,7 @@ export default function CrearBitacora() {
       // el uso no autorizado de créditos" del scan de seguridad de Base44).
       if (data.sent_to_parents) {
         try {
-          await base44.functions.invoke('notifyParents', { kind: 'diary', recordId: entry.id });
+          await invokeFunction(base44, 'notifyParents', { kind: 'diary', recordId: entry.id });
         } catch (error) {
           console.error('Error sending diary notifications:', error);
         }
@@ -155,7 +156,7 @@ export default function CrearBitacora() {
       // 'diary_draft') a partir de lo que la maestra ya escribió y eligió —
       // la instrucción es redactar SIN inventar actividades. Ver su comentario
       // de cabecera. El cliente ya no llama a InvokeLLM directo.
-      const response = await base44.functions.invoke('aiAssist', {
+      const response = await invokeFunction(base44, 'aiAssist', {
         task: 'diary_draft',
         studentId: selectedStudent.id,
         draft: formData.notes_text,

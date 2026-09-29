@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 
 export const AUDIT_ENTITIES = {
   ATTENDANCE: 'Attendance',
@@ -70,7 +71,7 @@ export function canReadPermissionChangeAudit({ row, user, userProfile }) {
  */
 export async function recordAuditRow({ schoolId, action, entity, entityId, reason, context }) {
   if (!schoolId || !action) return;
-  await base44.functions.invoke('recordAuditEvent', {
+  await invokeFunction(base44, 'recordAuditEvent', {
     schoolId,
     action,
     entity: entity || null,

@@ -94,6 +94,9 @@ export default function LumiChat({ onClose, userProfile }) {
   const dialogRef = useRef(null);
   const textareaRef = useRef(null);
   const lastPromptRef = useRef('');
+  // Latest server messages, for the reply-timeout callback (which must not
+  // restart its 30s clock on every streamed update).
+  const messagesRef = useRef([]);
   const titleId = useId();
 
   const addNotice = useCallback((notice) => {
@@ -181,19 +184,29 @@ export default function LumiChat({ onClose, userProfile }) {
   // The echo of the user's own message arrives first; the wait only ends
   // when an assistant turn with text exists after it (hasReplyForTurn).
   useEffect(() => {
+    messagesRef.current = messages;
     if (awaiting && hasReplyForTurn(messages, awaiting.expectedUserTurns)) {
       setAwaiting(null);
-      setNotices((prev) => prev.filter((notice) => notice.kind !== 'timeout'));
     }
+    // A reply that lands after the timeout notice makes the notice (and its
+    // Reintentar, which would re-ask the same question) wrong: drop it.
+    setNotices((prev) => {
+      const stale = (notice) => notice.kind === 'timeout' && hasReplyForTurn(messages, notice.expectedUserTurns);
+      return prev.some(stale) ? prev.filter((notice) => !stale(notice)) : prev;
+    });
   }, [messages, awaiting]);
 
   useEffect(() => {
     if (!awaiting) return undefined;
     const timer = setTimeout(() => {
       setAwaiting(null);
+      const shown = visibleMessages(messagesRef.current);
       addNotice({
         kind: 'timeout',
-        afterMessageId: null,
+        // After the last thing on screen (normally the user's own question),
+        // not at the top of a long conversation where nobody would see it.
+        afterMessageId: shown.length ? shown[shown.length - 1].id : null,
+        expectedUserTurns: awaiting.expectedUserTurns,
         text: 'Lumi está tardando más de lo normal. Si la respuesta no aparece, intenta de nuevo.',
         retry: { type: 'send', prompt: awaiting.prompt, intent: awaiting.intent },
       });
@@ -300,8 +313,14 @@ export default function LumiChat({ onClose, userProfile }) {
         return;
       }
       if (event.key !== 'Tab') return;
+      // Skip display:none controls too: the header has a phone-only "Volver"
+      // and a desktop-only "Cerrar". Wrapping to a hidden one is a no-op
+      // focus() after preventDefault, which left Tab stuck on the last
+      // control.
       const focusable = Array.from(dialog.querySelectorAll(selector))
-        .filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+        .filter((el) => !el.hasAttribute('disabled')
+          && el.getAttribute('aria-hidden') !== 'true'
+          && el.getClientRects().length > 0);
       if (focusable.length === 0) {
         event.preventDefault();
         return;
@@ -359,7 +378,10 @@ export default function LumiChat({ onClose, userProfile }) {
   const handleTextareaKeyDown = (event) => {
     // Enter sends, Shift+Enter is a newline. Never send mid-IME composition
     // (accents typed via dead keys, dictation) — that would cut the message.
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+    // Safari reports the composition-ending Enter as keyCode 229 with
+    // isComposing already false.
+    const composing = event.nativeEvent.isComposing || event.keyCode === 229;
+    if (event.key === 'Enter' && !event.shiftKey && !composing) {
       event.preventDefault();
       handleSend();
     }

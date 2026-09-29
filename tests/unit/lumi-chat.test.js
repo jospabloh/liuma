@@ -111,10 +111,13 @@ test('the corner ThemeSwitcher sits above the Lumi bubble on phones and desktop'
   const mobileHeight = rem(button.match(/(?:\s)h-(\d+)/)[1]);
   const desktopHeight = rem(button.match(/md:h-(\d+)/)[1]);
 
-  const desktopVar = Number(css.match(/:root\s*\{\s*--theme-switcher-bottom:\s*([\d.]+)rem/)[1]);
-  const mobileVar = Number(css.match(/max-width:\s*767px\)\s*\{\s*:root\s*\{\s*--theme-switcher-bottom:\s*([\d.]+)rem/)[1]);
+  // The lift applies only while the bubble is on screen (html[data-lumi-bubble]
+  // is set by GlobalLumiBubble), so read the values under that selector.
+  const desktopVar = Number(css.match(/^html\[data-lumi-bubble\]\s*\{\s*--theme-switcher-bottom:\s*([\d.]+)rem/m)[1]);
+  const mobileVar = Number(css.match(/max-width:\s*767px\)\s*\{\s*html\[data-lumi-bubble\]\s*\{\s*--theme-switcher-bottom:\s*([\d.]+)rem/)[1]);
 
   assert.ok(mobileVar >= mobileBottom + mobileHeight + 0.5, `phone: switcher ${mobileVar}rem vs Lumi top ${mobileBottom + mobileHeight}rem`);
   assert.ok(desktopVar >= desktopBottom + desktopHeight + 0.5, `desktop: switcher ${desktopVar}rem vs Lumi top ${desktopBottom + desktopHeight}rem`);
   assert.match(css, /html\[data-lumi-open\] \[data-theme-switcher\]\s*\{\s*visibility:\s*hidden/);
+  assert.match(bubble, /'data-lumi-bubble'/, 'GlobalLumiBubble must set the attribute the CSS keys off');
 });

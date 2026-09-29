@@ -68,15 +68,6 @@ export default function PagosAdmin() {
   });
 
   const { data: students = [] } = useSchoolStudents(userProfile?.school_id);
-  const { data: school, isFetched: schoolFetched } = useQuery({
-    queryKey: ['school', userProfile?.school_id],
-    queryFn: async () => {
-      const schools = await base44.entities.School.filter({ id: userProfile.school_id });
-      return schools[0];
-    },
-    enabled: !!userProfile?.school_id,
-  });
-
   const { data: charges = [], isLoading } = useQuery({
     queryKey: ['allCharges', userProfile?.school_id],
     queryFn: async () => {
@@ -268,72 +259,36 @@ export default function PagosAdmin() {
   const remindersHandled = useRef(new Set());
 
   // Enviar recordatorio automático para pagos próximos a vencer (dentro de los
-  // 7 días previos; ver isPaymentReminderDue).
-  // TODO(P8): swap this browser fan-out for the server-side
-  // sendBulkNotification function once it merges; that also removes the
-  // client-side User.list() below.
+  // 7 días previos; ver isPaymentReminderDue). The fan-out runs server-side in
+  // sendBulkNotification (P8, wired at integration): the client names the
+  // charge, and the server re-checks the caller is an ACTIVE ADMIN of the
+  // charge's stored school, resolves the parents through ParentStudent, applies
+  // the school's notification_preferences and writes reminder_sent itself. The
+  // old browser loop read parents' emails from the client User directory, which
+  // only ever returns the caller's own row — so no parent was ever emailed.
   React.useEffect(() => {
-    // Read-only license: reminder_sent cannot be written, so every load would
-    // re-send the same reminder.
+    // Read-only license: the server would refuse to mark reminder_sent, and
+    // every load would try the same reminder again.
     if (!canWrite || !userProfile?.school_id || !user) return;
-    // Wait for the school row: its notification_preferences decide whether a
-    // payment_due mail may go out, and a reminder is only attempted once per
-    // session — sending before it loads would ignore a school that opted out.
-    if (!schoolFetched) return;
     const due = pendingCharges.filter(
       (charge) => isPaymentReminderDue(charge) && !remindersHandled.current.has(charge.id),
     );
-    if (due.length === 0 || students.length === 0) return;
+    if (due.length === 0) return;
     due.forEach((charge) => remindersHandled.current.add(charge.id));
 
     const sendReminders = async () => {
-      let allUsers = null;
       for (const charge of due) {
         try {
-          const student = students.find(s => s.id === charge.student_id);
-          if (!student) continue;
-
-          const parentLinks = await base44.entities.ParentStudent.filter({
-            school_id: userProfile.school_id,
-            student_id: student.id,
-            status: 'ACTIVE'
-          });
-
-          if (!allUsers) allUsers = await base44.entities.User.list();
-
-          for (const link of parentLinks) {
-            const parent = allUsers.find(u => u.id === link.parent_id);
-            if (parent) {
-              await notificationService.sendByEvent({
-                eventType: 'payment_due',
-                schoolId: userProfile.school_id,
-                actorUserId: user.id,
-                recipients: [{
-                  user_id: parent.id,
-                  app_role: 'PARENT',
-                  email: parent.email,
-                  school_notification_preferences: school?.notification_preferences || {},
-                }],
-                templateContext: {
-                  studentName: `${student.first_name} ${student.last_name}`,
-                  conceptName: charge.concept_name,
-                  amountLabel: `$${charge.amount?.toLocaleString()}`,
-                  dueDateLabel: formatDueDate(charge.due_date, "d 'de' MMMM, yyyy"),
-                },
-                channels: ['email', 'in_app'],
-              });
-            }
-          }
-
-          await guardedUpdate('ChargeItem', charge.id, { reminder_sent: true });
+          await notificationService.sendBulk({ eventType: 'payment_due', chargeId: charge.id });
         } catch (error) {
           console.error('Error sending payment reminder:', error);
         }
       }
+      queryClient.invalidateQueries({ queryKey: ['allCharges'] });
     };
 
     sendReminders();
-  }, [pendingCharges, students, school, schoolFetched, userProfile, user, canWrite]);
+  }, [pendingCharges, userProfile, user, canWrite, queryClient]);
 
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 

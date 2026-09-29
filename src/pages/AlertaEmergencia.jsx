@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useMutation } from '@tanstack/react-query';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
+import { useSubscription } from '@/hooks/useSubscription';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -34,14 +34,9 @@ export default function AlertaEmergencia() {
 
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: school } = useQuery({
-    queryKey: ['school', userProfile?.school_id],
-    queryFn: async () => {
-      const schools = await base44.entities.School.filter({ id: userProfile.school_id });
-      return schools[0];
-    },
-    enabled: !!userProfile?.school_id,
-  });
+  // School name from getMySubscription: School.read is platform-only under
+  // RLS, so a direct read showed a blank name to a real director.
+  const { school } = useSubscription();
 
   // The whole alert — the school-wide banner, one email per parent/teacher,
   // and the audit row — is sent server-side by
@@ -137,7 +132,7 @@ export default function AlertaEmergencia() {
               Enviar alerta URGENTE
             </h2>
             <p className="text-muted-foreground mt-1">
-              Esta alerta se enviará a TODA la comunidad de {school?.name}.
+              Esta alerta se enviará a TODA la comunidad de {school?.name || 'tu escuela'}.
             </p>
           </div>
 

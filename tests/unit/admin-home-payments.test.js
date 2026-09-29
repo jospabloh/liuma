@@ -193,9 +193,13 @@ test('admin home stats show "—" instead of a confident 0 while loading or afte
   assert.match(source, /statValue\(overdueCharges\.length, overdueChargesQuery\)/);
 });
 
-test('payment reminders wait for the school row (its notification preferences)', () => {
+test('payment reminders fan out on the server, which applies the school\'s notification preferences', () => {
   const source = read('src/pages/PagosAdmin.jsx');
-  assert.match(source, /if \(!schoolFetched\) return;/);
+  // Integration (P5 + P8): the browser loop and its client User.list() are
+  // gone; sendBulkNotification reads the school's preferences and parents.
+  assert.match(source, /notificationService\.sendBulk\(\{ eventType: 'payment_due', chargeId: charge\.id \}\)/);
+  assert.doesNotMatch(source, /User\.list\(/);
+  assert.doesNotMatch(source, /entities\.School\./);
   // A malformed due date renders a fallback instead of crashing the page.
   assert.doesNotMatch(source, /format\(parseLocalDate\(/);
 });

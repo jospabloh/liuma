@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -44,7 +44,7 @@ export default function Pagos() {
     queryFn: async () => {
       if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'ChargeItem')) return [];
       const scopedFilter = buildScopedFilter({ role: userProfile?.app_role, entity: 'ChargeItem', schoolId: userProfile?.school_id, studentIds });
-      const allCharges = await base44.entities.ChargeItem.filter(scopedFilter || { school_id: userProfile.school_id }, '-due_date');
+      const allCharges = await schoolRead('ChargeItem', scopedFilter || { school_id: userProfile.school_id }, '-due_date');
 
       // El estado "Vencido" se deriva localmente para mostrar (ver isOverdue más
       // abajo). Los cargos los gestiona la administración: la vista de padres no

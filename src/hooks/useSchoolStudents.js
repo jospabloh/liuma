@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import {
   schoolStudentsFilter,
   schoolStudentsQueryKey,
@@ -12,7 +12,7 @@ import {
 export function useSchoolStudents(schoolId, { activeOnly = true, enabled = true } = {}) {
   return useQuery({
     queryKey: schoolStudentsQueryKey(schoolId, { activeOnly }),
-    queryFn: () => base44.entities.Student.filter(schoolStudentsFilter(schoolId, { activeOnly })),
+    queryFn: () => schoolRead('Student', schoolStudentsFilter(schoolId, { activeOnly })),
     enabled: !!schoolId && enabled,
   });
 }

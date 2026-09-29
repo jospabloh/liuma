@@ -7,9 +7,10 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [1.8.0] - 2026-09-29
 
-Sales-readiness pass: twelve fix packages (P0–P9, P11, P12) built in parallel,
+Sales-readiness pass: thirteen fix packages (P0–P12) built in parallel,
 each adversarially reviewed, integrated on one branch. Detail per package in
-CLAUDE.md → "Pase de preparación para venta (2026-09-29)".
+CLAUDE.md → "Pase de preparación para venta (2026-09-29)" and "Lecturas por
+inquilino (P10)".
 
 ### Fixed (live production bugs)
 
@@ -41,6 +42,21 @@ CLAUDE.md → "Pase de preparación para venta (2026-09-29)".
   caps (P2). `listSchoolMembers`, `approveProfile`, `sendBulkNotification`
   replace client directory reads and fan-outs (P8).
 - CI runs `deno lint` + `deno check` over `base44/functions/` (P12).
+- **Tenant read path (P10, audit F01).** The deployed RLS lets only the
+  platform owner (or a record's own author) read school data, so a real
+  director, teacher or parent saw empty screens. Owner decision: the RLS stays
+  strict and school users read through one new service-role function,
+  `schoolRead`, which re-derives school/role/classrooms/children from the
+  caller's own current `UserProfile` (never the request), applies a per-entity
+  × role allowlist with field projection (`_scope.ts`, shared byte for byte
+  with `lumiQuery`/`lumiWrite` so Lumi can never see more than the UI), and
+  rejects unknown entities, fields, operators and any other school. Every
+  school-scoped client read in `src/` migrated to `src/lib/data/schoolRead.js`;
+  a test fails on a new direct read. Also fixed on the way: directors now see
+  parent-added emergency contacts, pending approvals and audit rows;
+  requesters see staff replies on their tickets; parents' notice list no longer
+  drops school-wide notices; teacher/parent homes load their scope in one
+  request instead of three chained reads.
 
 ### Added
 

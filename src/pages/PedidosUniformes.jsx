@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -46,7 +46,7 @@ export default function PedidosUniformes() {
   const { data: catalog } = useQuery({
     queryKey: ['uniformCatalog', userProfile?.school_id],
     queryFn: async () => {
-      const docs = await base44.entities.OfficialDocument.filter({
+      const docs = await schoolRead('OfficialDocument', {
         school_id: userProfile.school_id,
         document_type: 'UNIFORM_CATALOG',
         is_current: true
@@ -58,7 +58,7 @@ export default function PedidosUniformes() {
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ['uniformOrders', user?.id],
-    queryFn: () => base44.entities.UniformOrder.filter({ parent_id: user.id }, '-created_date'),
+    queryFn: () => schoolRead('UniformOrder', { parent_id: user.id }, '-created_date'),
     enabled: !!user?.id,
   });
 

@@ -1001,7 +1001,8 @@ uno con revisión adversarial, integrados en `integration/sales-readiness`:
 P0 fechas · P1 chat de Lumi · P2 agente Lumi · P3 armazón/rutas · P4
 asistencia/reportes · P5 inicio del director/pagos · P6 onboarding/licencia ·
 P7 caminos de escritura · P8 notificaciones/directorio · P9 oscuro/fechas ·
-P11 legal/ayuda/manual · P12 CI/bundle. (P10, lecturas por inquilino, no está.)
+P11 legal/ayuda/manual · P12 CI/bundle · P10 lecturas por inquilino (sección
+propia al final).
 
 **Lo que hay que saber antes de tocar cualquiera de estas piezas:**
 
@@ -1032,13 +1033,9 @@ P11 legal/ayuda/manual · P12 CI/bundle. (P10, lecturas por inquilino, no está.
   ADMIN (`VITE_LIUMA_PAYMENT_URL` o WhatsApp). Única excepción: la alerta de
   emergencia de un ADMIN. La gracia de una licencia pagada vencida es de
   Mission Control (8 días → `view_only`).
-- **Lecturas de inquilino (decisión pendiente, P10):** la dirección de que las
-  lecturas de la escuela vayan por funciones con service role está decidida
-  pero no construida. Hoy sólo lo hacen `getMySubscription`, `lumiQuery` y
-  `listSchoolMembers`; el resto de pantallas de ADMIN (School, Classroom,
-  Student, TeacherClassroom, ParentStudent, EmergencyContact…) siguen leyendo
-  por RLS y **para un director real muchas vuelven vacías**. Mostrar «—» en vez
-  de 0 (P5) evita mentir, no arregla el dato.
+- **Lecturas de inquilino (P10, hecho):** toda lectura de datos de la escuela
+  desde `src/` va por la función `schoolRead` (`src/lib/data/schoolRead.js`).
+  Ver «Lecturas por inquilino (P10)» abajo.
 - **Legal y Ayuda:** `/aviso-de-privacidad` y `/terminos` son rutas públicas
   montadas en `App` antes de `AuthenticatedApp`; el texto es **BORRADOR** (lo
   dice la página, con sus puntos pendientes de revisión legal) y vive sólo en
@@ -1082,3 +1079,68 @@ por campo a un usuario sobre su propia fila, ni si una creación con service
 role llena `created_by_id`. Las pantallas autenticadas no se vieron en
 navegador. Los textos legales no los ha revisado un abogado.
 
+## Lecturas por inquilino (P10, 2026-09-29)
+
+Cierra F01. Decisión del dueño: **la RLS de las entidades se queda estricta**
+(dueño de plataforma, o las filas propias) y los usuarios de escuela leen por
+una función con service role. No se aflojó ninguna regla `read`;
+`tests/unit/school-read-client.test.js` falla si alguna empieza a mencionar
+`school_id`, `app_role` o `{{user.data.*}}`.
+
+- **`base44/functions/schoolRead`** — una sola función, hermana de lectura de
+  `guardedEntityWrite`. Escuela y rol salen del `UserProfile` vigente del que
+  llama (`selectCurrentProfile`, la misma regla que `selectCurrentUserProfile`);
+  salones de `TeacherClassroom` activos, hijos de `ParentStudent` ACTIVE **y**
+  cuyo `Student` sea de la misma escuela. Nada del cuerpo nombra la escuela: un
+  `school_id` en el filtro tiene que ser el propio o es 403 `SCHOOL_MISMATCH`.
+  Formas: `{entity, filter, sort, limit≤1000, skip}`, `{queries:[…≤12]}` (una
+  derivación de alcance para varias listas) y `{action:'context'}` (rol,
+  salones, hijos con sus filas).
+- **`_scope.ts` es la lista blanca**, entidad × rol, y es **idéntico byte a
+  byte** en `schoolRead/`, `lumiQuery/` y `lumiWrite/` (`_lumiCore.ts` lo
+  reexporta): Lumi y las pantallas responden con las mismas reglas. ADMIN: toda
+  su escuela. TEACHER: sus salones (alumnos, asistencia, bitácora, tarea,
+  vínculos padre-alumno de sus alumnos), avisos/eventos de escuela o de sus
+  salones, perfiles ACTIVE sin teléfono; nada de cobros, contactos de
+  emergencia, descuentos, auditoría ni cambios pendientes. PARENT: sólo sus
+  hijos y lo que cuelga de ellos, más lo dirigido a toda la escuela o a los
+  salones de sus hijos. `created_by` (correo de otro adulto) y
+  `notified_parent_emails` nunca salen para no-ADMIN.
+- **Los filtros sólo estrechan.** Campos fuera de la lista, `$or/$and/$regex/
+  $exists/$not` y objetos anidados se rechazan; sobre el campo por el que el rol
+  está acotado, el valor se intersecta con su conjunto. Con una sola rama la
+  condición del rol va en la consulta (limit/skip cuentan filas visibles); con
+  varias (Notice/Event/OfficialDocument para no-ADMIN) se recorre la escuela en
+  orden y se filtra, con tope de 5000 filas crudas (`truncated`). Toda fila se
+  revisa (`rowVisible`) y se proyecta antes de salir.
+- **Excepciones directas, a propósito y con prueba**: el propio `UserProfile`
+  (`user_id: user.id`), las ramas del dueño de plataforma en soporte
+  (`listQueueTickets`/`listTicketMessages` con `isOwner`), `LicenseAdmin`,
+  onboarding de un PENDING y `SeedTestData`. Lista en
+  `school-read-client.test.js`; cualquier otra lectura directa la hace fallar.
+- `useCurrentProfile` ahora elige con `selectCurrentUserProfile` (antes
+  `profiles[0]` sin orden): la escuela que manda la página tiene que ser la que
+  deriva el servidor.
+
+**Pruebas:** `school-read-scope.test.js` corre el planificador y el ejecutor
+reales contra una base en memoria con dos escuelas y varias familias
+(`tests/fixtures/fake-entity-db.js`, que lanza ante cualquier operador que no
+soporte, para que un `$or` no pase en silencio): ningún rol cruza de escuela,
+un padre no ve al compañero del mismo salón, un vínculo a un alumno de otra
+escuela no da nada, un maestro no ve salones inactivos, el hilo de un ticket
+propio incluye la respuesta del personal y el ajeno no.
+
+**Despliegue:** `npm run deploy` (función nueva `schoolRead` + `lumiQuery`/
+`lumiWrite` con `_scope.ts`) **antes o junto con** `npm run deploy:site`: el
+sitio nuevo sin la función deja todas las pantallas en error. No toca
+entidades.
+
+**No verificado:** nada contra Base44 en vivo — ni que la API acepte
+`limit+1`/`skip` como el SDK documenta, ni tiempos con una escuela real (cada
+llamada de maestro/padre re-deriva el alcance: 2–3 consultas extra). Siguen
+abiertas las **escrituras** directas del cliente sobre entidades cuyo `create/
+update/delete` es sólo del dueño de plataforma (Classroom, Student, Event,
+Discount, OfficialDocument, SchoolSetupGuide, TeacherClassroom,
+ParentStudent, PermissionOverride, PendingChange; NoticeDelivery salvo su
+destinatario): leer ya funciona para un director; crear un salón o un
+descuento todavía no.

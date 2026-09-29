@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
@@ -43,7 +44,7 @@ export default function GestionAlumno() {
   const { data: student, isLoading } = useQuery({
     queryKey: ['student', studentId],
     queryFn: async () => {
-      const students = await base44.entities.Student.filter({ id: studentId });
+      const students = await schoolRead('Student', { id: studentId });
       return students[0];
     },
     enabled: !!studentId,
@@ -52,7 +53,7 @@ export default function GestionAlumno() {
   const { data: classroom } = useQuery({
     queryKey: ['classroom', student?.classroom_id],
     queryFn: async () => {
-      const classrooms = await base44.entities.Classroom.filter({ id: student.classroom_id });
+      const classrooms = await schoolRead('Classroom', { id: student.classroom_id });
       return classrooms[0];
     },
     enabled: !!student?.classroom_id,
@@ -60,13 +61,13 @@ export default function GestionAlumno() {
 
   const { data: parentLinks = [] } = useQuery({
     queryKey: ['studentParentLinks', studentId],
-    queryFn: () => base44.entities.ParentStudent.filter({ student_id: studentId }),
+    queryFn: () => schoolRead('ParentStudent', { student_id: studentId }),
     enabled: !!studentId,
   });
 
   const { data: parentProfiles = [] } = useQuery({
     queryKey: ['parentProfiles', userProfile?.school_id],
-    queryFn: () => base44.entities.UserProfile.filter({ 
+    queryFn: () => schoolRead('UserProfile', { 
       school_id: userProfile.school_id,
       app_role: 'PARENT',
       status: 'ACTIVE'

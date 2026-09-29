@@ -1,31 +1,24 @@
-import { base44 } from '@/api/base44Client';
-import { loadStudentsByIds } from '@/lib/data-loaders/batchedEntityLoaders';
+import { schoolReadContext } from '@/lib/data/schoolRead';
 import { partitionLinkedStudents } from '@/lib/relations/partitionLinkedStudents';
 
+// A parent's children. One request: schoolRead's `context` re-derives the
+// ParentStudent links and loads the linked Student rows server-side (P10).
+// Before, this read ParentStudent and then Student from the client — and
+// Student.read under RLS is creator-or-platform-owner, so a real parent got
+// every child back as "orphaned".
 export async function getLinkedStudents(user) {
   if (!user?.id) {
     return { students: [], studentIds: [], orphanedLinkIds: [] };
   }
 
-  const parentLinks = await base44.entities.ParentStudent.filter({
-    parent_id: user.id,
-    status: 'ACTIVE',
-  });
-
-  // Parent→student linkage is the ParentStudent table. (There used to be a
-  // `user.data.linked_student_ids` fallback here, but base44.auth.me() returns
-  // the user flat on the client — `user.data` is always undefined — so it was
-  // dead code. `linked_student_ids` only exists as a server-side RLS token and
-  // has no client-accessible source, so the fallback is removed rather than
-  // wired to a non-existent field.)
-  const studentIds = [...new Set(parentLinks.map((l) => l.student_id).filter(Boolean))];
-  if (studentIds.length === 0) {
+  const { linkStudentIds, students } = await schoolReadContext();
+  // Parent→student linkage is the ParentStudent table, resolved on the server
+  // for the caller only (there is no client-side `user.data.linked_student_ids`:
+  // auth.me() returns the user flat, so it was always undefined).
+  if (linkStudentIds.length === 0) {
     return { students: [], studentIds: [], orphanedLinkIds: [] };
   }
-
-  // One `id: { $in }` query for every child instead of one per child.
-  const { items } = await loadStudentsByIds(studentIds);
-  return partitionLinkedStudents(studentIds, items);
+  return partitionLinkedStudents(linkStudentIds, students);
 }
 
 export async function getLinkedStudentIds(user) {

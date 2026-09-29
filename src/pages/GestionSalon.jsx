@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -48,7 +49,7 @@ export default function GestionSalon() {
   const { data: classroom, isLoading } = useQuery({
     queryKey: ['classroom', classroomId],
     queryFn: async () => {
-      const classrooms = await base44.entities.Classroom.filter({ id: classroomId });
+      const classrooms = await schoolRead('Classroom', { id: classroomId });
       return classrooms[0];
     },
     enabled: !!classroomId,
@@ -56,7 +57,7 @@ export default function GestionSalon() {
 
   const { data: students = [] } = useQuery({
     queryKey: ['classroomStudents', classroomId],
-    queryFn: () => base44.entities.Student.filter({ 
+    queryFn: () => schoolRead('Student', { 
       classroom_id: classroomId,
       is_active: true 
     }),
@@ -65,7 +66,7 @@ export default function GestionSalon() {
 
   const { data: teacherAssignments = [] } = useQuery({
     queryKey: ['classroomTeachers', classroomId],
-    queryFn: () => base44.entities.TeacherClassroom.filter({ 
+    queryFn: () => schoolRead('TeacherClassroom', { 
       classroom_id: classroomId,
       is_active: true 
     }),
@@ -74,7 +75,7 @@ export default function GestionSalon() {
 
   const { data: teacherProfiles = [] } = useQuery({
     queryKey: ['teacherProfiles', userProfile?.school_id],
-    queryFn: () => base44.entities.UserProfile.filter({ 
+    queryFn: () => schoolRead('UserProfile', { 
       school_id: userProfile.school_id,
       app_role: 'TEACHER',
       status: 'ACTIVE'

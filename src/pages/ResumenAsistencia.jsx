@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -20,7 +20,7 @@ export default function ResumenAsistencia() {
   const { data: classrooms = [] } = useQuery({
     queryKey: ['classrooms', userProfile?.school_id],
     queryFn: async () => {
-      return await base44.entities.Classroom.filter({ 
+      return await schoolRead('Classroom', { 
         school_id: userProfile.school_id, 
         is_active: true 
       });
@@ -59,7 +59,7 @@ export default function ResumenAsistencia() {
       if (selectedClassroom !== 'all') {
         filter.classroom_id = selectedClassroom;
       }
-      return await base44.entities.Attendance.filter(filter);
+      return await schoolRead('Attendance', filter);
     },
     enabled: !!userProfile?.school_id
   });
@@ -71,7 +71,7 @@ export default function ResumenAsistencia() {
       if (selectedClassroom !== 'all') {
         filter.classroom_id = selectedClassroom;
       }
-      return await base44.entities.Student.filter(filter);
+      return await schoolRead('Student', filter);
     },
     enabled: !!userProfile?.school_id
   });

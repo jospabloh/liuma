@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { selectCurrentUserProfile } from '@/lib/tenantSelection';
 
 /**
  * Loads just the authenticated Base44 user. Pages that only need the user (not
@@ -31,8 +32,12 @@ export function useCurrentProfile() {
   const profileQuery = useQuery({
     queryKey: ['userProfile', user?.id],
     queryFn: async () => {
-      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
-      return profiles[0];
+      // Own rows only (UserProfile.read is own-row under RLS). The SAME
+      // deterministic pick as the server (selectCurrentUserProfile): pages hand
+      // this profile's school_id to schoolRead, which refuses a school other
+      // than the one it derives itself.
+      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date');
+      return selectCurrentUserProfile(profiles) || undefined;
     },
     enabled: !!user,
   });

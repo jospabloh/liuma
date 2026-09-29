@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -27,13 +28,13 @@ export default function Reportes() {
 
   const { data: students = [] } = useQuery({
     queryKey: ['allStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({ school_id: userProfile.school_id }),
+    queryFn: () => schoolRead('Student', { school_id: userProfile.school_id }),
     enabled: !!userProfile,
   });
 
   const { data: classrooms = [] } = useQuery({
     queryKey: ['allClassrooms', userProfile?.school_id],
-    queryFn: () => base44.entities.Classroom.filter({ school_id: userProfile.school_id, is_active: true }),
+    queryFn: () => schoolRead('Classroom', { school_id: userProfile.school_id, is_active: true }),
     enabled: !!userProfile,
   });
 
@@ -66,13 +67,13 @@ export default function Reportes() {
 
   const { data: pendingCharges = [] } = useQuery({
     queryKey: ['pendingCharges', userProfile?.school_id],
-    queryFn: () => base44.entities.ChargeItem.filter({ school_id: userProfile.school_id, status: 'PENDING' }),
+    queryFn: () => schoolRead('ChargeItem', { school_id: userProfile.school_id, status: 'PENDING' }),
     enabled: !!userProfile && canReadEntity(role, 'ChargeItem'),
   });
 
   const { data: notices = [] } = useQuery({
     queryKey: ['notices', userProfile?.school_id],
-    queryFn: () => base44.entities.Notice.filter({ school_id: userProfile.school_id }, '-created_date', 100),
+    queryFn: () => schoolRead('Notice', { school_id: userProfile.school_id }, '-created_date', 100),
     enabled: !!userProfile && canReadEntity(role, 'Notice'),
   });
 
@@ -80,7 +81,7 @@ export default function Reportes() {
     queryKey: ['upcomingEvents', userProfile?.school_id],
     // Upcoming = dated today or later, filtered by the server. Taking the first
     // 10 by date and filtering here returned nothing once a school had 10 past events.
-    queryFn: () => base44.entities.Event.filter({ school_id: userProfile.school_id, date: { $gte: today } }, 'date', 10),
+    queryFn: () => schoolRead('Event', { school_id: userProfile.school_id, date: { $gte: today } }, 'date', 10),
     enabled: !!userProfile,
   });
 

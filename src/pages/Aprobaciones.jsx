@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
@@ -35,7 +36,7 @@ export default function Aprobaciones() {
 
   const { data: pendingUsers = [], isLoading } = useQuery({
     queryKey: ['pendingUsers', userProfile?.school_id],
-    queryFn: () => base44.entities.UserProfile.filter({ 
+    queryFn: () => schoolRead('UserProfile', { 
       school_id: userProfile.school_id,
       status: 'PENDING' 
     }),

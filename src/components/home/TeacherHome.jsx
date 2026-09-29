@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead, schoolReadContext, schoolReadMany } from '@/lib/data/schoolRead';
 import { motion } from 'framer-motion';
 import { ClipboardList, BookOpen, Bell, CheckCircle, AlertCircle, Users, Calendar, ListChecks, LifeBuoy } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
@@ -9,17 +9,15 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
-import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
 import { Card } from "@/components/ui/card";
 import { formatLocalDate, parseLocalDate } from '@/lib/dates';
-import { loadActiveStudentsByClassroomIds } from '@/lib/data-loaders/batchedEntityLoaders';
 
 function UpcomingEventsSection({ schoolId, classroomIds }) {
   const { data: events = [] } = useQuery({
     queryKey: ['upcomingEvents', schoolId, classroomIds],
     queryFn: async () => {
       // Today onward, filtered server-side (YYYY-MM-DD compares as text).
-      const upcoming = await base44.entities.Event.filter({
+      const upcoming = await schoolRead('Event', {
         school_id: schoolId,
         date: { $gte: formatLocalDate() },
       }, 'date', 10);
@@ -69,27 +67,33 @@ function UpcomingEventsSection({ schoolId, classroomIds }) {
 export default function TeacherHome({ user, userProfile, subscription }) {
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  const { data: linkedClassrooms = { classrooms: [], classroomIds: [] } } = useQuery({
-    queryKey: ['linkedClassrooms', user.id],
-    queryFn: () => getLinkedClassrooms(user),
+  // One request for the teacher's classrooms AND their active students:
+  // schoolRead's `context` derives both server-side from TeacherClassroom
+  // (P10 — this used to be a TeacherClassroom read, a Classroom read and a
+  // Student read, and the student list was fetched a second time for the
+  // urgent-notice badge).
+  const { data: teacherScope = { classrooms: [], classroomIds: [], students: [] } } = useQuery({
+    queryKey: ['teacherScope', user.id],
+    queryFn: async () => {
+      const context = await schoolReadContext();
+      const byId = new Map(context.classrooms.map((c) => [c.id, c]));
+      return {
+        classroomIds: context.classroomIds,
+        classrooms: context.classroomIds.map((id) => byId.get(id)).filter(Boolean),
+        students: context.students,
+      };
+    },
   });
 
-  const classroomIds = linkedClassrooms.classroomIds;
-  const classrooms = linkedClassrooms.classrooms;
+  const classroomIds = teacherScope.classroomIds;
+  const classrooms = teacherScope.classrooms;
+  const students = teacherScope.students;
 
-  // Get students in classrooms
-  const { data: students = [] } = useQuery({
-    queryKey: ['students', classroomIds],
-    queryFn: () => loadActiveStudentsByClassroomIds(classroomIds),
-    enabled: classroomIds.length > 0,
-  });
-
-  // Get today's diary entries
+  // Today's diary entries. The server returns only this teacher's classrooms.
   const { data: todayDiaries = [] } = useQuery({
     queryKey: ['todayDiaries', today, classroomIds],
     queryFn: async () => {
-      if (classroomIds.length === 0) return [];
-      const diaries = await base44.entities.DiaryEntry.filter({ 
+      const diaries = await schoolRead('DiaryEntry', {
         date: today,
         school_id: userProfile.school_id
       });
@@ -99,20 +103,19 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   });
 
 
+  // Unread urgent notices among this teacher's families: deliveries the
+  // server already limits to the teacher's own students, joined to the
+  // school's urgent notices — both in one request.
   const { data: unreadUrgentNotices = [] } = useQuery({
     queryKey: ['teacherUnreadUrgentNotices', user.id, userProfile.school_id],
     queryFn: async () => {
-      const rows = await base44.entities.NoticeDelivery.filter({
-        school_id: userProfile.school_id,
-        status: 'SENT',
-      }, '-created_date', 100);
-      // Only this teacher's classrooms — not every student RLS happens to expose.
-      const studentRows = await loadActiveStudentsByClassroomIds(classroomIds);
-      const classStudentIds = new Set(studentRows.map((student) => student.id));
-      const relevantDeliveries = rows.filter((row) => classStudentIds.has(row.student_id));
-      const urgentNotices = await base44.entities.Notice.filter({ school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50);
-      const urgentIds = new Set(urgentNotices.map((notice) => notice.id));
-      return relevantDeliveries.filter((row) => urgentIds.has(row.notice_id));
+      const { deliveries, urgent } = await schoolReadMany({
+        deliveries: ['NoticeDelivery', { school_id: userProfile.school_id, status: 'SENT' }, '-created_date', 100],
+        urgent: ['Notice', { school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50],
+      });
+      const classStudentIds = new Set(students.map((student) => student.id));
+      const urgentIds = new Set(urgent.map((notice) => notice.id));
+      return deliveries.filter((row) => classStudentIds.has(row.student_id) && urgentIds.has(row.notice_id));
     },
     enabled: classroomIds.length > 0,
   });

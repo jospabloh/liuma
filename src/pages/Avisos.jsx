@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -12,7 +13,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
-import { canReadEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
+import { canReadEntity, filterByRowLevel } from '@/lib/authorization/policy';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import {
   Dialog,
@@ -52,8 +53,11 @@ export default function Avisos() {
     queryKey: ['notices', userProfile?.school_id, classroomIds, studentIds],
     queryFn: async () => {
       if (!canReadEntity(userProfile?.app_role, 'Notice')) return [];
-      const scopedFilter = buildScopedFilter({ role: userProfile?.app_role, entity: 'Notice', schoolId: userProfile?.school_id, classroomIds, studentIds });
-      const allNotices = await base44.entities.Notice.filter(scopedFilter || { school_id: userProfile.school_id }, '-created_date', 50);
+      // schoolRead applies the notice audience server-side (school-wide, the
+      // children's classrooms, the children themselves). The old client filter
+      // ANDed student_id and classroom_id, which dropped every school-wide
+      // notice for a parent.
+      const allNotices = await schoolRead('Notice', { school_id: userProfile.school_id }, '-created_date', 50);
       return filterByRowLevel({ role: userProfile?.app_role, entity: 'Notice', rows: allNotices, classroomIds, studentIds });
     },
     enabled: !!userProfile,
@@ -64,7 +68,7 @@ export default function Avisos() {
   const { data: deliveries = [] } = useQuery({
     queryKey: ['noticeDeliveries', user?.id, userProfile?.school_id],
     queryFn: async () => {
-      const rows = await base44.entities.NoticeDelivery.filter({
+      const rows = await schoolRead('NoticeDelivery', {
         school_id: userProfile.school_id,
         recipient_user_id: user.id,
       }, '-created_date', 100);

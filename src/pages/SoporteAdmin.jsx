@@ -75,8 +75,8 @@ export default function SoporteAdmin() {
   }, [tickets, activeTicket, openedDeepLink]);
 
   const { data: messages = [] } = useQuery({
-    queryKey: ['supportTicketMessages', activeTicket?.id],
-    queryFn: () => listTicketMessages(activeTicket.id),
+    queryKey: ['supportTicketMessages', activeTicket?.id, isOwner],
+    queryFn: () => listTicketMessages(activeTicket.id, { isOwner }),
     enabled: !!activeTicket,
   });
 

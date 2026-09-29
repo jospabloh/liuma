@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useSubscription } from '@/hooks/useSubscription';
 import { PAYWALL_GATING_ENABLED } from '@/lib/featureGates';
 import { evaluateStudentQuota } from '@/lib/license/licenseModel';
@@ -19,7 +19,7 @@ export function useStudentQuota() {
   const { data: activeStudentCount = 0, isLoading: countLoading } = useQuery({
     queryKey: ['activeStudentCount', schoolId],
     queryFn: async () => {
-      const students = await base44.entities.Student.filter({ school_id: schoolId, is_active: true });
+      const students = await schoolRead('Student', { school_id: schoolId, is_active: true });
       return students.length;
     },
     enabled: !!schoolId,

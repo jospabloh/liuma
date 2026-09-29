@@ -1,4 +1,4 @@
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { notificationService } from '@/lib/notifications/service';
 import { selectEventsNeedingReminder, selectNonResponders } from './reminder-selection.js';
 
@@ -21,7 +21,7 @@ export { selectEventsNeedingReminder, selectNonResponders };
 export async function sendDueEventReminders({ schoolId, now = new Date() } = {}) {
   if (!schoolId) return 0;
 
-  const events = await base44.entities.Event.filter({ school_id: schoolId, requires_confirmation: true });
+  const events = await schoolRead('Event', { school_id: schoolId, requires_confirmation: true });
   const due = selectEventsNeedingReminder(events, now);
   if (due.length === 0) return 0;
 

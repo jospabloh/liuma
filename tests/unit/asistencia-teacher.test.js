@@ -8,7 +8,7 @@ test("teacher classroom lookup filters on `id` — Base44 silently ignores `_id`
   // With `_id` the query returned no classroom, so every teacher saw an empty
   // salón selector and could not take attendance at all.
   assert.doesNotMatch(page, /[{\s]_id: \{ \$in/);
-  assert.match(page, /Classroom\.filter\(\{ id: \{ \$in: classroomIds \}/);
+  assert.match(page, /schoolRead\('Classroom', \{ id: \{ \$in: classroomIds \}/);
 });
 
 test('each empty case says what is actually wrong', () => {

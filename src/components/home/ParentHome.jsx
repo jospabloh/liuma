@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { motion } from 'framer-motion';
 import { Users, BookOpen, ClipboardList, Bell, CreditCard, Calendar, ShoppingBag, CheckSquare, CalendarX, ListChecks, LifeBuoy } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
@@ -28,7 +28,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
   const { data: notices = [] } = useQuery({
     queryKey: ['urgentNotices', userProfile.school_id],
     queryFn: async () => {
-      const allNotices = await base44.entities.Notice.filter({ 
+      const allNotices = await schoolRead('Notice', { 
         school_id: userProfile.school_id 
       }, '-created_date', 10);
       return allNotices.filter(n => 
@@ -41,7 +41,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
   const { data: unreadUrgentDeliveries = [] } = useQuery({
     queryKey: ['unreadUrgentDeliveries', user.id, userProfile.school_id],
     queryFn: async () => {
-      const rows = await base44.entities.NoticeDelivery.filter({
+      const rows = await schoolRead('NoticeDelivery', {
         school_id: userProfile.school_id,
         recipient_user_id: user.id,
         status: 'SENT',
@@ -57,7 +57,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
     queryFn: async () => {
       // Ask the server for today-onward (YYYY-MM-DD compares as text), or the
       // first 5 events ever would crowd out the upcoming ones.
-      return base44.entities.Event.filter({
+      return schoolRead('Event', {
         school_id: userProfile.school_id,
         date: { $gte: formatLocalDate() },
       }, 'date', 5);
@@ -69,7 +69,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
     queryKey: ['pendingCharges', studentIds],
     queryFn: async () => {
       if (studentIds.length === 0) return [];
-      const charges = await base44.entities.ChargeItem.filter({
+      const charges = await schoolRead('ChargeItem', {
         school_id: userProfile.school_id,
         status: 'PENDING'
       });

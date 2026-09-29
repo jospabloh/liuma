@@ -85,8 +85,11 @@ test('a parent sees only their own children, their classrooms and school-wide ro
 });
 
 test('a teacher sees their classrooms but never family charges', () => {
-  assert.equal(rowVisible(teacher, 'Attendance', { school_id: 'A', student_id: 's2' }), true);
-  assert.equal(rowVisible(teacher, 'DiaryEntry', { school_id: 'A', student_id: 's3' }), false);
+  // P10: a teacher's attendance/diary rows are the ones filed in THEIR
+  // classrooms (every row carries classroom_id) — the shared _scope.ts rule.
+  assert.equal(rowVisible(teacher, 'Attendance', { school_id: 'A', classroom_id: 'c1', student_id: 's2' }), true);
+  assert.equal(rowVisible(teacher, 'Attendance', { school_id: 'A', classroom_id: 'c2', student_id: 's2' }), false);
+  assert.equal(rowVisible(teacher, 'DiaryEntry', { school_id: 'A', classroom_id: 'c2', student_id: 's3' }), false);
   assert.equal(rowVisible(teacher, 'ChargeItem', { school_id: 'A', student_id: 's1' }), false);
   assert.equal(rowVisible(teacher, 'Event', { school_id: 'A', scope: 'CLASSROOM', classroom_id: 'c2' }), false);
 });

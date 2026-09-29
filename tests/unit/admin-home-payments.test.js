@@ -136,8 +136,10 @@ test('emergency contacts load in one school-wide query, not one request per stud
   for (const path of ['src/components/home/AdminHome.jsx', 'src/pages/ConfiguracionInicial.jsx']) {
     const source = read(path);
     assert.doesNotMatch(source, /for \(const student of students\)/, `${path} still loops per student`);
-    assert.doesNotMatch(source, /EmergencyContact\.filter\(\{\s*student_id/, `${path} still filters per student`);
-    assert.match(source, /EmergencyContact\.filter\(\s*\{\s*school_id: userProfile\.school_id\s*\}/);
+    assert.doesNotMatch(source, /'EmergencyContact',\s*\{\s*student_id/, `${path} still filters per student`);
+    // Through schoolRead (P10): the RLS showed a director only the contacts
+    // they created, never the ones parents added.
+    assert.match(source, /schoolRead\('EmergencyContact',\s*\{\s*school_id: userProfile\.school_id\s*\}/);
   }
 });
 

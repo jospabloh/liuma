@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -51,7 +52,7 @@ export default function AvisosAdmin() {
 
   const { data: classrooms = [] } = useQuery({
     queryKey: ['allClassrooms', userProfile?.school_id],
-    queryFn: () => base44.entities.Classroom.filter({ 
+    queryFn: () => schoolRead('Classroom', { 
       school_id: userProfile.school_id,
       is_active: true 
     }),
@@ -62,7 +63,7 @@ export default function AvisosAdmin() {
 
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['adminNotices', userProfile?.school_id],
-    queryFn: () => base44.entities.Notice.filter({ 
+    queryFn: () => schoolRead('Notice', { 
       school_id: userProfile.school_id 
     }, '-created_date', 30),
     enabled: !!userProfile,
@@ -74,7 +75,7 @@ export default function AvisosAdmin() {
 
       // Scoped to this school: the client-side filter below already drops other
       // schools' links, but there is no reason to download them first.
-      const activeLinks = await base44.entities.ParentStudent.filter({
+      const activeLinks = await schoolRead('ParentStudent', {
         school_id: userProfile.school_id,
         status: 'ACTIVE',
       });

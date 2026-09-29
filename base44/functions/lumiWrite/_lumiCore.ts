@@ -6,9 +6,12 @@
 // tests/unit/lumi-core.test.js fails if the two drift apart. Edit one, copy it
 // over the other.
 //
-// Import-free on purpose: `node --test` loads this file directly (Node 22
-// strips the type annotations), so the rules that decide WHO sees WHAT through
-// Lumi are exercised by real tests, not by grepping the source.
+// Its only import is ./_scope.ts (P10, 2026-09-29): who the caller is and
+// which rows they may see is decided there, shared byte for byte with the
+// app's own read path (schoolRead), so Lumi can never show more than the UI.
+// Both files are plain TypeScript with no Deno globals and no SDK, so
+// `node --test` loads them directly (Node 22 strips the type annotations) and
+// the rules are exercised by real tests, not by grepping the source.
 //
 // Why these rules live server-side at all: Lumi used to get raw entity tools
 // (read Student/Homework/…, create DiaryEntry/Attendance). Those ran under the
@@ -18,51 +21,14 @@
 // classrooms and children from their own UserProfile on every call — never
 // from anything the chat (or the model) says.
 
-export type Profile = {
-  id?: string;
-  user_id?: string;
-  school_id?: string;
-  app_role?: string;
-  status?: string;
-  onboarding_completed?: boolean;
-  created_date?: string;
-};
-
-export type Scope = {
-  userId: string;
-  schoolId: string;
-  role: 'ADMIN' | 'TEACHER' | 'PARENT';
-  classroomIds: string[];
-  studentIds: string[];
-};
-
-export const ROLES = ['ADMIN', 'TEACHER', 'PARENT'] as const;
-
-// Mirrors src/lib/tenantSelection.js's selectCurrentUserProfile — the ONE rule
-// for "which school am I looking at" (module 14 finding: two readers with two
-// rules could pick different schools). Newest ACTIVE+onboarded profile; else
-// the newest profile at all. Deterministic regardless of filter() order.
-export function selectCurrentProfile(profiles: Profile[] = []): Profile | null {
-  const sorted = [...profiles].sort((a, b) =>
-    String(b.created_date || '').localeCompare(String(a.created_date || '')));
-  const eligible = sorted.filter((p) => p.status === 'ACTIVE' && p.onboarding_completed);
-  return eligible[0] || sorted[0] || null;
-}
-
-// The selected profile must itself be usable. Returns an error code, or null.
-// The platform owner is NOT exempt: Lumi answers inside the owner's own school
-// profile like anyone else, so a demo never mixes several customers' data.
-export function profileProblem(profile: Profile | null): string | null {
-  if (!profile) return 'NO_PROFILE';
-  if (profile.status !== 'ACTIVE') return 'INACTIVE_PROFILE';
-  if (!profile.school_id) return 'NO_SCHOOL';
-  if (!ROLES.includes(profile.app_role as typeof ROLES[number])) return 'INVALID_ROLE';
-  return null;
-}
+// Identity, school selection and row visibility live in ./_scope.ts.
+import type { Role } from './_scope.ts';
+export type { Profile, Scope, Role } from './_scope.ts';
+export { ROLES, selectCurrentProfile, profileProblem, rowVisible, scopeRows } from './_scope.ts';
 
 // --- Intents -----------------------------------------------------------------
 
-export const QUERY_INTENTS: Record<string, Array<Scope['role']>> = {
+export const QUERY_INTENTS: Record<string, Role[]> = {
   my_context: ['ADMIN', 'TEACHER', 'PARENT'],
   my_children_summary: ['PARENT'],
   resolve_student_by_name: ['ADMIN', 'TEACHER', 'PARENT'],
@@ -79,78 +45,18 @@ export const QUERY_INTENTS: Record<string, Array<Scope['role']>> = {
 };
 
 export function canRunIntent(role: string, intent: string): boolean {
-  return (QUERY_INTENTS[intent] || []).includes(role as Scope['role']);
+  return (QUERY_INTENTS[intent] || []).includes(role as Role);
 }
 
 // Writes Lumi may perform, and who may ask for them. PARENT is never here:
 // a parent cannot mark attendance or write a bitácora by asking the chat.
-export const WRITE_KINDS: Record<string, Array<Scope['role']>> = {
+export const WRITE_KINDS: Record<string, Role[]> = {
   attendance: ['ADMIN', 'TEACHER'],
   diary: ['ADMIN', 'TEACHER'],
 };
 
 export function canWriteKind(role: string, kind: string): boolean {
-  return (WRITE_KINDS[kind] || []).includes(role as Scope['role']);
-}
-
-// --- Row scoping -------------------------------------------------------------
-
-type Row = Record<string, unknown>;
-
-// Belt and braces on top of the school-filtered queries in entry.ts: every row
-// must belong to the caller's school, and within it to what their role can see.
-// ADMIN: whole school. TEACHER: their classrooms (and students in them).
-// PARENT: their linked children (and those children's classrooms, for
-// classroom-wide rows like homework and class notices).
-export function rowVisible(scope: Scope, entity: string, row: Row): boolean {
-  if (!row || String(row.school_id || '') !== scope.schoolId) return false;
-  if (scope.role === 'ADMIN') return true;
-
-  const classroomId = String(row.classroom_id || '');
-  const studentId = String(row.student_id || '');
-  const inClassrooms = !!classroomId && scope.classroomIds.includes(classroomId);
-  const inStudents = !!studentId && scope.studentIds.includes(studentId);
-
-  switch (entity) {
-    case 'Student':
-      return scope.studentIds.includes(String(row.id || ''));
-    case 'Homework':
-      return inClassrooms;
-    case 'Attendance':
-    case 'DiaryEntry':
-    case 'ChargeItem':
-    case 'UniformOrder':
-      if (entity === 'ChargeItem' && scope.role !== 'PARENT') return false;
-      if (entity === 'UniformOrder' && scope.role !== 'PARENT') return false;
-      return inStudents;
-    case 'Notice': {
-      const s = String(row.scope || 'SCHOOL');
-      if (s === 'SCHOOL') return true;
-      if (s === 'CLASSROOM') return inClassrooms;
-      if (s === 'STUDENT') return inStudents;
-      return false;
-    }
-    case 'Event': {
-      const s = String(row.scope || 'SCHOOL');
-      if (s === 'SCHOOL') return true;
-      return inClassrooms;
-    }
-    case 'OfficialDocument': {
-      const audience = String(row.target_audience || 'TODOS');
-      if (audience === 'TODOS') return true;
-      if (scope.role === 'PARENT') return audience === 'PADRES';
-      if (scope.role === 'TEACHER') return audience === 'MAESTROS';
-      return false;
-    }
-    case 'WeeklyMenu':
-      return true;
-    default:
-      return false;
-  }
-}
-
-export function scopeRows<T extends Row>(scope: Scope, entity: string, rows: T[] = []): T[] {
-  return (rows || []).filter((row) => rowVisible(scope, entity, row));
+  return (WRITE_KINDS[kind] || []).includes(role as Role);
 }
 
 // --- Dates (America/Mexico_City) ---------------------------------------------

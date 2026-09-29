@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -56,7 +57,7 @@ export default function AvisosMaestro() {
 
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['teacherNotices', user?.id],
-    queryFn: () => base44.entities.Notice.filter({ 
+    queryFn: () => schoolRead('Notice', { 
       author_id: user.id 
     }, '-created_date', 20),
     enabled: !!user,
@@ -66,9 +67,9 @@ export default function AvisosMaestro() {
     mutationFn: async (data) => {
       const notice = await guardedCreate('Notice', data);
 
-      const activeLinks = await base44.entities.ParentStudent.filter({ status: 'ACTIVE' });
+      const activeLinks = await schoolRead('ParentStudent', { status: 'ACTIVE' });
       const classroomStudentIds = new Set(
-        (await base44.entities.Student.filter({ classroom_id: data.classroom_id, is_active: true })).map((student) => student.id)
+        (await schoolRead('Student', { classroom_id: data.classroom_id, is_active: true })).map((student) => student.id)
       );
       const recipients = activeLinks.filter((link) => classroomStudentIds.has(link.student_id));
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -43,7 +43,7 @@ export default function ContactosEmergencia() {
   const { data: student } = useQuery({
     queryKey: ['student', studentId],
     queryFn: async () => {
-      const students = await base44.entities.Student.filter({ id: studentId });
+      const students = await schoolRead('Student', { id: studentId });
       return students[0];
     },
     enabled: !!studentId,
@@ -51,7 +51,7 @@ export default function ContactosEmergencia() {
 
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: ['emergencyContacts', studentId],
-    queryFn: () => base44.entities.EmergencyContact.filter({ student_id: studentId }),
+    queryFn: () => schoolRead('EmergencyContact', { student_id: studentId }),
     enabled: !!studentId,
   });
 

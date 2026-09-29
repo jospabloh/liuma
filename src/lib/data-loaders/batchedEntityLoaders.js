@@ -1,4 +1,8 @@
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
+
+// Reads go through schoolRead (P10): the server scopes every list to the
+// caller's school and role, so these loaders return only what the caller may
+// see (a parent's own children, a teacher's own classrooms).
 
 const normalizeIds = (ids = []) => [...new Set(ids.filter(Boolean))].sort();
 
@@ -10,7 +14,12 @@ const loadIndexedEntitiesById = async (entityName, ids = []) => {
     return { items: [], byId: {} };
   }
 
-  const rows = await base44.entities[entityName].filter({ id: { $in: normalizedIds } });
+  // The server caps an $in list at 500 values; chunk rather than truncate.
+  const rows = [];
+  for (let i = 0; i < normalizedIds.length; i += 500) {
+    const chunk = normalizedIds.slice(i, i + 500);
+    rows.push(...await schoolRead(entityName, { id: { $in: chunk } }, undefined, chunk.length));
+  }
   const byId = rows.reduce((acc, row) => {
     acc[row.id] = row;
     return acc;
@@ -32,7 +41,8 @@ export const ACTIVE_STUDENTS_LIMIT = 5000;
 export const loadActiveStudentsByClassroomIds = async (classroomIds = []) => {
   const normalizedClassroomIds = normalizeIds(classroomIds);
   if (normalizedClassroomIds.length === 0) return [];
-  return base44.entities.Student.filter(
+  return schoolRead(
+    'Student',
     { classroom_id: { $in: normalizedClassroomIds }, is_active: true },
     undefined,
     ACTIVE_STUDENTS_LIMIT,
@@ -45,7 +55,7 @@ export const loadHomeworkByClassroomIds = async (classroomIds = [], limit) => {
     return { items: [], byClassroomId: {} };
   }
 
-  const homework = await base44.entities.Homework.filter({ classroom_id: { $in: normalizedClassroomIds } }, '-created_date', limit);
+  const homework = await schoolRead('Homework', { classroom_id: { $in: normalizedClassroomIds } }, '-created_date', limit);
   const byClassroomId = homework.reduce((acc, row) => {
     if (!acc[row.classroom_id]) acc[row.classroom_id] = [];
     acc[row.classroom_id].push(row);

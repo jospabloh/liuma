@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { DENIAL_REASON_CODES } from '@/lib/authorization/policy';
 
 const ENTITY = 'PermissionOverride';
@@ -25,7 +26,9 @@ function assertOverrideSafety(input) {
 
 export async function listPermissionOverrides({ schoolId }) {
   if (!schoolId) return [];
-  return base44.entities[ENTITY].filter({ school_id: schoolId });
+  // Through schoolRead (P10): PermissionOverride.read is platform-owner only
+  // under RLS, so a director listed nothing.
+  return schoolRead(ENTITY, { school_id: schoolId });
 }
 
 export async function createPermissionOverride(input) {

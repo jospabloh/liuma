@@ -102,7 +102,7 @@ export default function LegalDocumentPage({ doc }) {
 
         <footer className="mt-10 border-t border-border pt-6 text-sm text-muted-foreground flex flex-wrap gap-x-4 gap-y-2">
           {others.map((d) => (
-            <Link key={d.id} to={d.path} className="text-brand underline">{d.title}</Link>
+            <Link key={d.id} to={d.path} className="text-foreground underline">{d.title}</Link>
           ))}
           <span>LIUMA es un producto de ACACIA.</span>
         </footer>

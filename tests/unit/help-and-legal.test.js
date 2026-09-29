@@ -103,9 +103,17 @@ test('the privacy notice covers what a Mexican school compliance review asks for
 
 test('every data processor is named, including the AI provider', () => {
   const names = processorNames();
-  for (const expected of ['Base44', 'Resend', 'Anthropic']) {
+  for (const expected of ['Base44', 'Anthropic']) {
     assert.ok(names.includes(expected), `${expected} must be disclosed`);
   }
+  // Name only processors LIUMA actually uses. Every email goes through Base44's
+  // Core.SendEmail; if a function ever calls Resend directly, it must be named.
+  const functionsDir = new URL('../../base44/functions/', import.meta.url);
+  const usesResend = fs.readdirSync(functionsDir).some((fn) => {
+    const entry = new URL(`${fn}/entry.ts`, functionsDir);
+    return fs.existsSync(entry) && /api\.resend\.com|from ['"](npm:)?resend/.test(fs.readFileSync(entry, 'utf8'));
+  });
+  assert.equal(names.includes('Resend'), usesResend, 'Resend is named if and only if a function calls it');
   assert.ok(PRIVACY_NOTICE.sections.some((s) => s.processors), 'a section must render the processor list');
   for (const p of DATA_PROCESSORS) assert.ok(p.role && p.location, `${p.name} needs a purpose and a location`);
 });

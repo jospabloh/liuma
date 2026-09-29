@@ -42,7 +42,7 @@ export const HELP_SECTIONS = [
     steps: [
       'Entra con tu correo y elige «Soy Directivo». Escribe el nombre de tu escuela, acepta el Aviso de Privacidad y listo: tu escuela queda creada y empieza tu prueba gratuita de 30 días.',
       'Abre Configuración y sigue la lista de pasos (datos de la escuela, documentos, calendario). Puedes marcarlos conforme avanzas.',
-      'En Gestión de escuela crea tus salones y da de alta a tus alumnos, con sus alergias, tipo de sangre y notas médicas si las tienes.',
+      'En Gestión de escuela crea tus salones y da de alta a tus alumnos (nombre, salón y fecha de nacimiento).',
       'En tu Inicio verás el código de tu escuela. Compártelo con tus maestros y con las familias: lo necesitan para registrarse.',
       'Cada persona que se registra con tu código queda pendiente. Apruébala en Aprobaciones; hasta entonces no ve nada de la escuela.',
       // Today only a TEACHER can open GestionAlumno (routeAccess.js), so the
@@ -69,7 +69,7 @@ export const HELP_SECTIONS = [
     pages: ['MisHijos'],
     steps: [
       'Pide a la escuela su código. Entra con tu correo, elige «Soy Padre/Madre» y escribe el código.',
-      'Acepta el Aviso de Privacidad y el consentimiento para los datos de salud de tus hijos. Sin ese consentimiento la escuela no puede registrar sus alergias ni notas médicas en LIUMA.',
+      'Acepta el Aviso de Privacidad y da tu consentimiento expreso para que la escuela trate los datos de salud de tus hijos (tipo de sangre, alergias y notas médicas) para su cuidado.',
       'La escuela aprueba tu cuenta y te vincula con tus hijos. Cuando eso pase, los verás en Mis hijos.',
       'Si ya pasó un día y no ves a tus hijos, pregunta en la escuela si tu cuenta ya está aprobada y vinculada.',
     ],
@@ -97,7 +97,7 @@ export const HELP_SECTIONS = [
       'Ausencias: aprueba o rechaza las solicitudes de las familias.',
       'Reportes: indicadores de asistencia, bitácoras, pagos y avisos, con exportación.',
       'Licencias: el estado de tu suscripción y cuántos días quedan de prueba.',
-      'Permisos y roles: cambios de rol, permisos por persona y «Descargar mis datos».',
+      'Permisos y roles: cambios de rol, permisos por persona y «Descargar datos de la escuela».',
     ],
   },
   {
@@ -134,7 +134,7 @@ export const HELP_SECTIONS = [
     pages: [],
     paragraphs: [
       'Cada escuela nueva tiene 30 días de prueba. Antes de que termine, la dirección verá un aviso con cómo pagar.',
-      'Si la licencia no está pagada, la escuela queda en solo lectura: todos pueden consultar y descargar la información, pero no registrar nada nuevo. Al pagar se restablece todo, sin perder datos.',
+      'Si la licencia no está pagada, la escuela queda en solo lectura: todos pueden consultar la información y la dirección puede descargarla, pero nadie puede registrar nada nuevo. Al pagar se restablece todo, sin perder datos.',
     ],
   },
   {
@@ -152,7 +152,7 @@ export const HELP_SECTIONS = [
     roles: ALL,
     pages: [],
     paragraphs: [
-      'Lumi responde preguntas sobre la información de tu escuela según tu rol (tareas, avisos, asistencia, pagos). Sus respuestas son de apoyo: la información oficial es la que publica la escuela. Lumi no da consejo médico, de alergias ni de nutrición.',
+      'Lumi responde preguntas sobre la información de tu escuela según tu rol (tareas, avisos, asistencia, pagos). Sus respuestas son de apoyo: no sustituyen el criterio médico, y la información oficial es la que publica la escuela.',
     ],
   },
   {

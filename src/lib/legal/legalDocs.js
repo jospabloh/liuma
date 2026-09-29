@@ -54,17 +54,12 @@ export const LIFECYCLE_GRACE_DAYS = {
 export const DATA_PROCESSORS = [
   {
     name: 'Base44',
-    role: 'Plataforma en la nube donde se ejecuta LIUMA y se almacena su base de datos y archivos.',
-    location: 'Estados Unidos',
-  },
-  {
-    name: 'Resend',
-    role: 'Envío de correos electrónicos (avisos, notificaciones de ausencia y bitácora, confirmaciones y soporte).',
+    role: 'Plataforma en la nube donde se ejecuta LIUMA, se almacenan su base de datos y sus archivos, y desde la que se envían los correos (avisos, ausencias, bitácoras, recordatorios de licencia y soporte).',
     location: 'Estados Unidos',
   },
   {
     name: 'Anthropic',
-    role: 'Modelo de inteligencia artificial que usa el asistente Lumi y la redacción asistida de bitácoras y solicitudes de soporte. Recibe sólo el texto necesario para responder la solicitud en curso.',
+    role: 'Modelo de inteligencia artificial, al que LIUMA accede a través de Base44, para el asistente Lumi y la redacción asistida de bitácoras y solicitudes de soporte. Recibe sólo el texto necesario para responder la solicitud en curso.',
     location: 'Estados Unidos',
   },
   {
@@ -87,7 +82,7 @@ export const PRIVACY_NOTICE = {
     'La escuela en la que te registras es la responsable de tus datos y de los de tus hijos. ACACIA opera LIUMA por encargo de la escuela y sólo trata los datos para prestarle el servicio.',
     'Tratamos datos de identificación y contacto de familias y personal, y datos de alumnos menores de edad, incluidos datos sensibles de salud (tipo de sangre, alergias, notas médicas) y la bitácora diaria.',
     'Los datos sensibles de los menores sólo se tratan con el consentimiento expreso de su madre, padre o tutor, y sólo para su cuidado y la operación escolar.',
-    'No vendemos ni usamos los datos para publicidad. Los proveedores que nos ayudan a operar (Base44, Resend, Anthropic) están en Estados Unidos y sólo pueden usarlos para prestarnos su servicio.',
+    'No vendemos ni usamos los datos para publicidad. Los proveedores que nos ayudan a operar (Base44 y, para la inteligencia artificial, Anthropic) están en Estados Unidos y sólo pueden usarlos para prestarnos su servicio.',
     'Puedes ejercer tus derechos de Acceso, Rectificación, Cancelación y Oposición (ARCO) ante tu escuela o escribiendo a ' + ACACIA_CONTACT_EMAIL + '.',
   ],
   sections: [
@@ -107,8 +102,9 @@ export const PRIVACY_NOTICE = {
         'Alumnos (menores de edad): nombre, fecha de nacimiento, fotografía (opcional), salón, asistencia, tareas, bitácora diaria (ánimo, alimentación, sueño, baño, aprendizaje, conducta, incidencias), cargos y pagos escolares, pedidos de uniforme (tallas y medidas), solicitudes de ausencia y su motivo.',
         'Datos sensibles de los alumnos: tipo de sangre, alergias y notas médicas. También puede revelar información de salud el motivo de una ausencia o una incidencia registrada en la bitácora.',
         'Contactos de emergencia y personas autorizadas para recoger al alumno: nombre, parentesco, teléfono y notas. Si registras a otra persona, te corresponde informarle que lo haces.',
-        'Personal de la escuela (dirección y maestros): nombre, correo electrónico, teléfono, rol y salones asignados.',
-        'Datos técnicos: sesiones activas (tipo de navegador y sistema operativo), registro de auditoría de acciones sensibles y, cuando abres un ticket de soporte, un diagnóstico de la pantalla y la versión de la app. No registramos el contenido de las páginas que visitas.',
+        'Personal de la escuela (dirección y maestros): nombre, correo electrónico, teléfono, fotografía (opcional), rol y salones asignados.',
+        'Uso de la app: confirmaciones de lectura de avisos, respuestas a eventos, tickets de soporte y sus mensajes, y lo que escribes a Lumi.',
+        'Datos técnicos: sesiones activas (tipo de navegador y sistema operativo), el nombre de las pantallas de la app que abres (no su contenido), registro de auditoría de acciones sensibles y, cuando abres un ticket de soporte, un diagnóstico técnico (pantalla, versión de la app, navegador y eventos recientes).',
       ],
     },
     {
@@ -128,7 +124,7 @@ export const PRIVACY_NOTICE = {
       id: 'sensibles',
       heading: '4. Datos sensibles y de menores de edad',
       paragraphs: [
-        'Los datos de salud de los alumnos son datos personales sensibles. Sólo se tratan con el consentimiento expreso de la madre, padre o tutor que ejerce la patria potestad, que se otorga en LIUMA marcando la casilla de consentimiento expreso al registrarse. La app guarda la fecha y la versión de este aviso que aceptaste.',
+        'Los datos de salud de los alumnos son datos personales sensibles. Sólo se tratan con el consentimiento expreso de la madre, padre o tutor que ejerce la patria potestad, que se otorga en LIUMA marcando la casilla de consentimiento expreso al registrarse. LIUMA registra la fecha y la versión de este aviso que aceptaste.',
         'Dentro de la escuela sólo los ven quienes los necesitan para cuidar al alumno: la dirección y los maestros de su salón. Las familias sólo ven la información de sus propios hijos, y ninguna escuela ve datos de otra.',
         'El personal de la escuela, al registrarse, se compromete a tratar estos datos sólo para el cuidado del alumno y la operación escolar.',
       ],
@@ -137,8 +133,8 @@ export const PRIVACY_NOTICE = {
       id: 'ia',
       heading: '5. Asistente de inteligencia artificial (Lumi)',
       paragraphs: [
-        'LIUMA incluye un asistente, Lumi, y funciones de redacción asistida. Cuando los usas, el texto de tu solicitud y la información de la escuela necesaria para responderla se envían al proveedor del modelo (Anthropic) para generar la respuesta. ACACIA no autoriza al proveedor a usar esa información para fines propios ni para entrenar sus modelos.',
-        'Lumi no da consejo médico, de alergias ni de nutrición. Sus respuestas son de apoyo y la información oficial es la que publica la escuela.',
+        'LIUMA incluye un asistente, Lumi, y funciones de redacción asistida. Cuando los usas, el texto de tu solicitud y la información de la escuela necesaria para responderla (que puede incluir datos del alumno) se envían, a través de Base44, al proveedor del modelo (Anthropic) para generar la respuesta. ACACIA no autoriza al proveedor a usar esa información para fines propios ni para entrenar sus modelos.',
+        'Las respuestas de Lumi son de apoyo: no sustituyen el criterio médico ni la información oficial que publica la escuela.',
       ],
     },
     {
@@ -196,9 +192,12 @@ export const PRIVACY_NOTICE = {
     'Figura del responsable: este texto hace a la escuela responsable y a ACACIA encargado. Confirmar si la escuela debe emitir su propio aviso (y LIUMA mostrar el suyo) o si basta este modelo; en ese caso, el nombre y domicilio de cada escuela deberían insertarse en la página.',
     'Consentimiento expreso para datos sensibles de menores: hoy es una casilla electrónica con versión y fecha registradas. Confirmar si cumple el requisito de consentimiento expreso (y, en su caso, por escrito o firma electrónica) de la ley vigente.',
     'Autoridad: la ley de datos personales de 2025 cambió la autoridad garante. Confirmar la denominación correcta y si hay que citarla expresamente.',
-    'Remisiones internacionales: Base44, Resend y Anthropic operan en EE. UU. Confirmar si basta con informarlas o si hacen falta cláusulas contractuales específicas con cada proveedor, y que el proveedor del modelo de IA sea efectivamente Anthropic en la configuración de Base44 y que la cadena contractual (Base44 → proveedor del modelo) prohíba el entrenamiento con estos datos, como promete la sección 5.',
+    'Remisiones internacionales: Base44 y Anthropic operan en EE. UU. Confirmar si basta con informarlas o si hacen falta cláusulas contractuales específicas con cada proveedor, y que el proveedor del modelo de IA sea efectivamente Anthropic en la configuración de Base44 y que la cadena contractual (Base44 → proveedor del modelo) prohíba el entrenamiento con estos datos, como promete la sección 5.',
     'Plazos de conservación: los ' + LIFECYCLE_GRACE_DAYS.toDeletionEligible + ' días vienen de la configuración del ciclo de licencias de Mission Control y son una propuesta; fijar el plazo real y el de respaldos.',
     'Falta un contrato de encargo (DPA) firmado entre cada escuela y ACACIA. Los términos del servicio incluyen sus cláusulas mínimas como borrador.',
+    'Correo: el dueño listó a Resend como proveedor, pero LIUMA no usa Resend: todos sus correos (y los recordatorios de licencia que dispara Mission Control a través del puente) salen por el servicio de correo de Base44 (Core.SendEmail). Confirmar con Base44 qué subencargado usa por debajo y si hay que nombrarlo.',
+    'Constancia del consentimiento: hoy sólo queda una fila de AuditLog escrita en el mejor esfuerzo; la entidad ConsentRecord que el código intenta usar no existe en Base44. Mientras no se escriba del lado del servidor, la afirmación "LIUMA registra la fecha y la versión" no está garantizada.',
+    'Momento del consentimiento: nada impide que la escuela registre datos de un alumno antes de que su madre, padre o tutor se registre y otorgue el consentimiento expreso. Hoy ninguna pantalla captura tipo de sangre, alergias ni notas médicas (sólo se muestran en Mis hijos), pero el modelo de datos los tiene y pueden cargarse por otras vías. Definir si la escuela debe recabar el consentimiento por su cuenta (p. ej., en la inscripción) y decirlo aquí.',
   ],
 };
 
@@ -222,8 +221,8 @@ export const SERVICE_TERMS = {
   isDraft: draft,
   summary: [
     'La prueba gratuita dura ' + TRIAL_DURATION_DAYS + ' días y no pide tarjeta.',
-    'Si la licencia no está pagada, la escuela pasa a modo de solo lectura: se puede consultar y descargar todo, pero no registrar nada nuevo hasta pagar. No se borra nada por vencer la prueba.',
-    'El pago es mensual por Mercado Pago; LIUMA avisa antes del vencimiento y muestra cómo pagar.',
+    'Si la licencia no está pagada, la escuela pasa a modo de solo lectura: se puede consultar todo y la dirección puede descargar los datos, pero no se registra nada nuevo hasta pagar. No se borra nada por vencer la prueba.',
+    'El pago es mensual, por Mercado Pago; LIUMA avisa antes del vencimiento y muestra cómo pagar.',
     'Los datos son de la escuela: puede descargarlos cuando quiera y pedir su eliminación.',
   ],
   sections: [
@@ -247,14 +246,14 @@ export const SERVICE_TERMS = {
       heading: '3. Planes y pagos',
       paragraphs: ['Planes vigentes (precios mensuales en pesos mexicanos):'],
       items: planItems(),
-      closing: 'El cobro se hace por Mercado Pago; ACACIA no almacena datos de tarjetas. Las renovaciones automáticas se cobran el día 1 de cada mes. Puede aplicar una cuota de activación única, que se informa antes de contratar. LIUMA avisa en la app antes de que venza la licencia, con el enlace para pagar.',
+      closing: 'El cobro se hace por Mercado Pago; ACACIA no almacena datos de tarjetas. Cada pago confirmado extiende la licencia por el periodo pagado. Puede aplicar una cuota de activación única, que se informa antes de contratar. LIUMA avisa en la app antes de que venza la licencia, con el enlace para pagar.',
     },
     {
       id: 'vencimiento',
       heading: '4. Si la licencia no está pagada',
       items: [
-        'Al terminar la prueba sin pago, o si no existe una licencia activa, la escuela entra en modo de solo lectura: todos pueden ver y descargar la información, pero no se pueden crear ni modificar registros.',
-        'Si una renovación no se paga, hay ' + LIFECYCLE_GRACE_DAYS.toReadOnly + ' días de gracia con acceso completo; después, solo lectura; a los ' + LIFECYCLE_GRACE_DAYS.toSuspended + ' días el acceso se suspende.',
+        'Al terminar la prueba sin pago, o si no existe una licencia activa, la escuela entra en modo de solo lectura: todos pueden consultar la información y la dirección puede descargarla, pero no se pueden crear ni modificar registros.',
+        'Si una renovación no se paga, la escuela pasa a solo lectura; a los ' + LIFECYCLE_GRACE_DAYS.toSuspended + ' días la cuenta se marca como suspendida, que sigue siendo de solo lectura.',
         'Al pagar, el acceso completo se restablece sin perder información.',
         'A los ' + LIFECYCLE_GRACE_DAYS.toDeletionEligible + ' días sin pago los datos pueden eliminarse, siempre con aviso previo a la dirección de la escuela.',
       ],
@@ -264,7 +263,7 @@ export const SERVICE_TERMS = {
       heading: '5. Cancelación y tus datos',
       paragraphs: [
         'La escuela puede cancelar cuando quiera escribiendo a ' + ACACIA_CONTACT_EMAIL + '. La cancelación aplica al terminar el periodo pagado; no hay reembolsos por periodos ya cobrados salvo error imputable a ACACIA.',
-        'La escuela puede descargar todos sus datos en cualquier momento desde Permisos y roles → Descargar mis datos, y solicitar la eliminación de la escuela desde la misma pantalla.',
+        'La escuela puede descargar todos sus datos en cualquier momento desde Permisos y roles → Descargar datos de la escuela, y solicitar la eliminación de la escuela desde la misma pantalla.',
       ],
     },
     {
@@ -308,7 +307,8 @@ export const SERVICE_TERMS = {
   ],
   reviewNotes: [
     'Los términos generales de acaciaco.com.mx (terminos.html, sección 2) todavía dicen que la prueba de 30 días es sólo para StockFlow y FlowFin. Hay que alinearlos con este texto.',
-    'Solo lectura por falta de pago: el dueño decidió que una licencia vencida o inexistente deja la escuela en solo lectura. Confirmar que ese efecto y los plazos de gracia (' + LIFECYCLE_GRACE_DAYS.toReadOnly + ' / ' + LIFECYCLE_GRACE_DAYS.toSuspended + ' / ' + LIFECYCLE_GRACE_DAYS.toDeletionEligible + ' días, tomados de Mission Control) son los que se quieren comprometer por escrito.',
+    'Solo lectura por falta de pago: el dueño decidió que una licencia vencida o inexistente deja la escuela en solo lectura. Mission Control, por su parte, sólo escribe view_only a los ' + LIFECYCLE_GRACE_DAYS.toReadOnly + ' días de una renovación impaga (suspended a los ' + LIFECYCLE_GRACE_DAYS.toSuspended + ', elegible para borrado a los ' + LIFECYCLE_GRACE_DAYS.toDeletionEligible + '). Este texto no promete esos ' + LIFECYCLE_GRACE_DAYS.toReadOnly + ' días de gracia: si la regla del servidor (paquete de licencias) trata una licencia vencida como solo lectura desde el día en que vence, esa gracia no existe en la práctica. Confirmar cuál de las dos se quiere comprometer por escrito.',
+    'Avisos y enlace de pago: los avisos antes del vencimiento, el contador de días de prueba y el enlace a Mercado Pago dependen del paquete de licencias (lectura de la suscripción por función de servidor y solo lectura fail-closed). Sin él, la dirección no puede leer su propia suscripción y el banner de solo lectura lleva a un formulario de contacto. Publicar estos términos junto con ese paquete o después, nunca antes.',
     'Cuota de activación: el catálogo interno la tiene; decidir si se publica el monto aquí.',
     'La sección 7 son las cláusulas mínimas de un contrato de encargo; conviene un contrato de encargo firmado por escuela.',
     'Aceptación: hoy el onboarding sólo pide aceptar el Aviso de Privacidad. Definir si la dirección que crea la escuela debe aceptar también estos términos, y cómo se registra.',

@@ -29,7 +29,9 @@ vive en `src/lib/help/helpContent.js`. Si cambias un flujo, actualiza los dos.
 2. **Configuración** (`/ConfiguracionInicial`): la lista de pasos de arranque
    (datos de la escuela, documentos, calendario). Se marcan conforme avanzas.
 3. **Gestión de escuela** (`/GestionEscuela`): crea los salones y da de alta a
-   los alumnos, con tipo de sangre, alergias y notas médicas cuando las haya.
+   los alumnos (nombre, salón, fecha de nacimiento). Hoy ninguna pantalla
+   captura tipo de sangre, alergias ni notas médicas: el modelo `Student` los
+   tiene y *Mis hijos* los muestra si existen, pero no hay formulario para ellos.
 4. **Invitar.** En tu **Inicio** aparece el **código de la escuela**. Compártelo
    con maestros y familias: lo piden al registrarse.
 5. **Aprobar** (`/Aprobaciones`): cada persona que se registra con el código
@@ -61,7 +63,7 @@ vive en `src/lib/help/helpContent.js`. Si cambias un flujo, actualiza los dos.
 
 | Rol | Lo del día a día |
 |---|---|
-| **Dirección** | *Operación diaria* para el resumen; *Avisos* y *Alerta de emergencia* para comunicar; *Pagos* para conceptos, cargos y pagos; *Ausencias* para aprobar solicitudes; *Reportes* para indicadores; *Licencias* para el estado de la suscripción; *Permisos y roles* para roles y «Descargar mis datos». |
+| **Dirección** | *Operación diaria* para el resumen; *Avisos* y *Alerta de emergencia* para comunicar; *Pagos* para conceptos, cargos y pagos; *Ausencias* para aprobar solicitudes; *Reportes* para indicadores; *Licencias* para el estado de la suscripción; *Permisos y roles* para roles y «Descargar datos de la escuela». |
 | **Maestros** | *Asistencia* (salón + fecha → presente/ausente/tarde/justificado); *Bitácoras* para ver quién tiene la del día y *Crear bitácora* para hacerla; *Tareas*; *Avisos* a las familias del salón. |
 | **Familias** | *Hoy* con todo lo del día; *Avisos*, *Tareas* y *Bitácora* de tus hijos; *Pagos*; *Solicitar ausencia*; *Contactos de emergencia*. |
 
@@ -260,12 +262,19 @@ bloquea (`student_scope_mismatch`).
 - **Suscripción y prueba:** cada escuela nueva empieza con una **prueba de 30
   días**. Sin licencia pagada —prueba vencida, falta de pago o escuela sin
   registro de suscripción— la escuela queda en **sólo lectura**: se puede
-  consultar y descargar todo, pero no registrar nada, hasta pagar (decisión del
-  dueño, 2026-09-29: fallar cerrado). La dirección ve avisos **antes** del
+  consultar todo y la dirección puede descargar los datos, pero no registrar
+  nada, hasta pagar (decisión del dueño, 2026-09-29: fallar cerrado). La dirección ve avisos **antes** del
   vencimiento y un banner de sólo lectura **después**, siempre con la forma de
-  pagar (Mercado Pago). El ciclo de vida lo corre Mission Control, no LIUMA
-  (estándar ACACIA, módulo 1). Plazos tras una renovación impaga: 8 días de
-  gracia → sólo lectura; 15 → suspendida; 45 → elegible para borrado con aviso.
+  pagar (Mercado Pago). **Esto depende del paquete de licencias** (lectura de
+  la suscripción por función de servidor + solo lectura fail-closed en el
+  servidor): hasta que se despliegue, la dirección no puede leer su propia
+  `SchoolSubscription` (módulo 24), los avisos no tienen datos y el banner de
+  solo lectura lleva a un formulario de contacto. El ciclo de vida lo corre Mission Control, no LIUMA
+  (estándar ACACIA, módulo 1). Plazos que escribe Mission Control tras una renovación
+  impaga: 8 días → `view_only`; 15 → `suspended` (en LIUMA también es sólo
+  lectura); 45 → elegible para borrado con aviso. Los Términos no prometen los 8
+  días de gracia: si el servidor trata la licencia vencida como sólo lectura
+  desde que vence, esa gracia no existe en la práctica.
   La licencia se consulta en `/LicenseAdmin`. Detalle comercial en los
   [Términos del servicio](/terminos).
 
@@ -309,8 +318,10 @@ con un latido cada 60 segundos.
 - **Aviso de Privacidad:** público dentro de la app en
   [`/aviso-de-privacidad`](/aviso-de-privacidad) (sin sesión, porque quien lo
   lee todavía no tiene perfil). La escuela es la **responsable** y ACACIA el
-  **encargado**; nombra a los proveedores (Base44, Resend, Anthropic para Lumi,
-  Mercado Pago sólo para el cobro de la licencia), la conservación y cómo
+  **encargado**; nombra a los proveedores (Base44 —hosting, datos y correo—,
+  Anthropic para Lumi vía Base44, Mercado Pago sólo para el cobro de la
+  licencia; **no** Resend: LIUMA no lo usa, todo correo sale por
+  `Core.SendEmail` de Base44), la conservación y cómo
   ejercer los derechos ARCO. **Es un BORRADOR pendiente de revisión legal** y la
   página lo dice arriba; el texto vive en `src/lib/legal/legalDocs.js`.
 - **Consentimiento (LFPDPPP):** el onboarding pide aceptar el aviso y, para

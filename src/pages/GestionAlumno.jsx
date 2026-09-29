@@ -9,6 +9,7 @@ import LoadingScreen from '@/components/ui/LoadingScreen';
 import { User, Link, Unlink, UserPlus, Mail, Loader2, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate } from '@/lib/dates';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -170,9 +171,9 @@ export default function GestionAlumno() {
                 <Badge variant="secondary" className="mt-1">
                   {classroom?.name || 'Sin salón'}
                 </Badge>
-                {student.birth_date && (
+                {parseLocalDate(student.birth_date) && (
                   <p className="text-sm text-muted-foreground mt-1">
-                    {format(new Date(student.birth_date), "d 'de' MMMM, yyyy", { locale: es })}
+                    {format(parseLocalDate(student.birth_date), "d 'de' MMMM, yyyy", { locale: es })}
                   </p>
                 )}
               </div>

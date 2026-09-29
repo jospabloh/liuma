@@ -74,16 +74,9 @@ const NATIVE_PARSE = new RegExp(
 // Files another fix package of the same pass is rewriting (P4 attendance and
 // reports, P5 admin home/payments/setup). They carry the same defect and fix it
 // there with parseLocalDate; drop each entry once its package merges.
-const PENDING_IN_OTHER_PACKAGES = new Set([
-  'src/components/home/AdminHome.jsx',
-  'src/pages/PagosAdmin.jsx',
-  'src/pages/GestionPedidosAdmin.jsx',
-  'src/pages/ConfiguracionInicial.jsx',
-  'src/pages/Asistencia.jsx',
-  'src/pages/Reportes.jsx',
-  'src/pages/GestionAlumno.jsx',
-  'src/pages/AvisosAdmin.jsx',
-]);
+// Emptied at integration (2026-09-29): every package of the pass has merged.
+// Keep it empty — a new file must follow the convention, not join a list.
+const PENDING_IN_OTHER_PACKAGES = new Set([]);
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

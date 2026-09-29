@@ -90,8 +90,8 @@ export default function AlertaEmergencia() {
           animate={{ scale: 1, opacity: 1 }}
           className="text-center"
         >
-          <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+          <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-950/40 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-2">
             Alerta enviada
@@ -130,8 +130,8 @@ export default function AlertaEmergencia() {
       >
         <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-6">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
+            <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
             </div>
             <h2 className="text-xl font-bold text-card-foreground">
               Enviar alerta URGENTE
@@ -141,8 +141,8 @@ export default function AlertaEmergencia() {
             </p>
           </div>
 
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-            <p className="text-sm text-red-800 font-medium">
+          <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl p-4 mb-6">
+            <p className="text-sm text-red-800 dark:text-red-300 font-medium">
               ⚠️ Usa esta función solo en casos de emergencia real. 
               Todos los padres y maestros recibirán la notificación inmediatamente.
             </p>

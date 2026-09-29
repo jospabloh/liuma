@@ -120,15 +120,15 @@ export default function Aprobaciones() {
               className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border"
             >
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-                  <User className="w-6 h-6 text-amber-600" />
+                <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
+                  <User className="w-6 h-6 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-card-foreground">
                       {getUserName(profile.user_id)}
                     </h3>
-                    <Badge className="bg-amber-100 text-amber-800">
+                    <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
                       <Clock className="w-3 h-3 mr-1" /> Pendiente
                     </Badge>
                   </div>

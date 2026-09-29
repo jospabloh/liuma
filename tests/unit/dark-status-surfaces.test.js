@@ -19,22 +19,9 @@ const LIGHT_TINT = /(?<![\w:/-])bg-(?:red|amber|green|emerald|blue|sky|yellow|or
 // attendance/reports, P5 admin home/payments/setup, P7 emergency contacts,
 // P8 approvals/alerts/classroom/student, P2 CrearBitacora). Each applies the
 // same convention there; remove the entry once that package merges.
-const PENDING_IN_OTHER_PACKAGES = new Set([
-  'src/pages/Home.jsx',
-  'src/components/UserNotRegisteredError.jsx',
-  'src/pages/Asistencia.jsx',
-  'src/pages/Reportes.jsx',
-  'src/pages/PagosAdmin.jsx',
-  'src/pages/GestionPedidosAdmin.jsx',
-  'src/pages/ConfiguracionInicial.jsx',
-  'src/pages/GestionEscuela.jsx',
-  'src/pages/ContactosEmergencia.jsx',
-  'src/pages/Aprobaciones.jsx',
-  'src/pages/AlertaEmergencia.jsx',
-  'src/pages/GestionSalon.jsx',
-  'src/pages/GestionAlumno.jsx',
-  'src/pages/CrearBitacora.jsx',
-]);
+// Emptied at integration (2026-09-29): every package of the pass has merged.
+// Keep it empty — a new file must follow the convention, not join a list.
+const PENDING_IN_OTHER_PACKAGES = new Set([]);
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

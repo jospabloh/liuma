@@ -42,6 +42,7 @@ function fail(status: number, code: string): Response {
 
 // deno-lint-ignore no-explicit-any
 type Sr = any;
+// deno-lint-ignore no-explicit-any
 type Row = Record<string, any>;
 
 // Student rows buildScope already loaded for a PARENT/TEACHER scope, so each

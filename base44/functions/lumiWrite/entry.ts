@@ -40,6 +40,7 @@ import {
   mexicoToday, validateWrite, confirmationCode, describeWrite, fullName, errorMessage, label,
 } from './_lumiCore.ts';
 
+// deno-lint-ignore no-explicit-any
 type Row = Record<string, any>;
 
 function fail(status: number, code: string, extra: Row = {}): Response {
@@ -48,6 +49,7 @@ function fail(status: number, code: string, extra: Row = {}): Response {
 
 // functions.invoke's return shape differs across SDK builds (the body itself,
 // or an axios-style { data }). Normalize to the function's JSON body.
+// deno-lint-ignore no-explicit-any
 function unwrap(result: any): Row {
   if (result && typeof result === 'object' && result.data && typeof result.data === 'object' && 'ok' in result.data) {
     return result.data;
@@ -55,6 +57,7 @@ function unwrap(result: any): Row {
   return result || {};
 }
 
+// deno-lint-ignore no-explicit-any
 function invokeError(e: any): Row {
   return e?.response?.data || e?.data || { code: 'WRITE_FAILED' };
 }

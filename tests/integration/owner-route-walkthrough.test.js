@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import { ROUTE_ACCESS, getRouteAccessDecision } from '../../src/lib/authorization/routeAccess.js';
 import { getOwnerScopedAccess } from '../../src/lib/authorization/policy.js';
 
-const OWNER_USER = { id: 'owner-user-1', email: 'owner@example.com' };
+// role 'admin' = the Base44 platform owner, the only identity allowed on
+// PLATFORM_OWNER_ROUTES (SeedTestData).
+const OWNER_USER = { id: 'owner-user-1', email: 'owner@example.com', role: 'admin' };
 const OWNER_PROFILE = {
   id: 'owner-profile-1',
   user_id: OWNER_USER.id,
@@ -56,10 +58,12 @@ test('owner walkthrough covers every registered guarded deep-link route', () => 
       role: OWNER_PROFILE.app_role,
       routeName,
       ownerAccess,
+      profileStatus: OWNER_PROFILE.status,
+      isPlatformOwner: OWNER_USER.role === 'admin',
     });
 
     assert.equal(decision.allowed, true, `${routeName} should be allowed for owner`);
-    assert.match(decision.precedence, /^(route_role_allow|owner_override)$/);
+    assert.match(decision.precedence, /^(route_role_allow|owner_override|platform_owner)$/);
   }
 });
 

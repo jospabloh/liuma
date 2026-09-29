@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Lock, Loader2 } from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 
 // Piezas compartidas por las pantallas de autenticación, para que se vean
 // consistentes con la marca.
@@ -43,7 +43,11 @@ export function EmailField(props) {
   );
 }
 
-export function PasswordField({ id = "password", label = "Contraseña", labelRight = null, ...props }) {
+// Show/hide toggle: on a phone, a mistyped password with no way to see it is
+// the most common reason a parent "forgets" it. The placeholder is words, not
+// dots — "••••••••" looked like a saved password already filled in.
+export function PasswordField({ id = "password", label = "Contraseña", labelRight = null, placeholder = "Tu contraseña", ...props }) {
+  const [visible, setVisible] = useState(false);
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -52,8 +56,35 @@ export function PasswordField({ id = "password", label = "Contraseña", labelRig
       </div>
       <div className="relative">
         <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <Input id={id} type="password" placeholder="••••••••" className="h-12 pl-10" required {...props} />
+        <Input
+          id={id}
+          type={visible ? "text" : "password"}
+          placeholder={placeholder}
+          className="h-12 pl-10 pr-12"
+          required
+          {...props}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+          aria-pressed={visible}
+          aria-controls={id}
+          className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {visible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+        </button>
       </div>
+    </div>
+  );
+}
+
+/** A green confirmation line, the counterpart of AuthError. */
+export function AuthNotice({ children }) {
+  if (!children) return null;
+  return (
+    <div className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" role="status">
+      {children}
     </div>
   );
 }

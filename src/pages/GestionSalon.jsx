@@ -39,6 +39,9 @@ export default function GestionSalon() {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
 
   const { user, userProfile } = useCurrentProfile();
+  // Assigning teachers to a classroom is the director's job; the backend
+  // rejects it from a TEACHER anyway, so don't offer a button that always fails.
+  const canManageTeachers = userProfile?.app_role === 'ADMIN';
 
   const { data: classroom, isLoading } = useQuery({
     queryKey: ['classroom', classroomId],
@@ -128,7 +131,7 @@ export default function GestionSalon() {
         title={classroom?.name || 'Salón'}
         subtitle={`${students.length} alumnos`}
         showBack
-        backTo={createPageUrl('GestionEscuela')}
+        backTo={createPageUrl(canManageTeachers ? 'GestionEscuela' : 'Home')}
       />
 
       <ReadOnlyBanner />
@@ -145,14 +148,16 @@ export default function GestionSalon() {
               <GraduationCap className="w-5 h-5 text-brand" />
               Maestros asignados
             </h3>
-            <Button
-              onClick={() => setShowTeacherForm(true)}
-              size="sm"
-              variant="outline"
-              className="gap-1"
-            >
-              <Plus className="w-4 h-4" /> Asignar
-            </Button>
+            {canManageTeachers && (
+              <Button
+                onClick={() => setShowTeacherForm(true)}
+                size="sm"
+                variant="outline"
+                className="gap-1"
+              >
+                <Plus className="w-4 h-4" /> Asignar
+              </Button>
+            )}
           </div>
 
           {teacherAssignments.length === 0 ? (
@@ -173,14 +178,16 @@ export default function GestionSalon() {
                       <Badge className="bg-brand/10 text-brand">Principal</Badge>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeTeacherMutation.mutate(assignment.id)}
-                    className="text-red-600 hover:bg-red-50"
-                  >
-                    Remover
-                  </Button>
+                  {canManageTeachers && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeTeacherMutation.mutate(assignment.id)}
+                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                    >
+                      Remover
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>

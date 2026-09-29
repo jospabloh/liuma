@@ -1,5 +1,4 @@
 import React from 'react';
-import { Toaster } from "sonner";
 import GlobalLumiBubble from '@/components/lumi/GlobalLumiBubble';
 import BottomNav from '@/components/nav/BottomNav';
 import SideNav from '@/components/nav/SideNav';
@@ -45,16 +44,8 @@ export default function Layout({ children, currentPageName }) {
         }
       `}</style>
       
-      <Toaster 
-        position="top-center" 
-        richColors 
-        expand={false}
-        toastOptions={{
-          style: {
-            borderRadius: '12px',
-          }
-        }}
-      />
+      {/* The app's single toaster is mounted in App.jsx (components/ui/sonner),
+          so toasts also show outside this Layout and follow the theme. */}
       
       <NavProvider>
         {/* Persistent desktop rail (md+); mobile uses the BottomNav below. The

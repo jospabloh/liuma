@@ -1,29 +1,27 @@
-"use client";
-import { useTheme } from "next-themes"
 import { Toaster as Sonner } from "sonner"
+import { useTheme } from "@/lib/ThemeContext"
 
-const Toaster = ({
-  ...props
-}) => {
-  const { theme = "system" } = useTheme()
+// The app's ONE toaster (mounted in App.jsx). It follows LIUMA's own theme —
+// the resolved light/dark from ThemeContext, which honours the user's
+// Claro/Oscuro/Sistema choice — instead of next-themes, whose provider this
+// app never mounts (so it always said "system" and ignored a forced theme).
+// Before this there were two toasters: shadcn's (unused) in App.jsx and a
+// sonner one in Layout.jsx with no theme at all, so toasts stayed white in
+// dark mode and never showed outside the Layout (login, onboarding).
+const Toaster = (props) => {
+  const { resolvedTheme = "light" } = useTheme() || {}
 
   return (
-    (<Sonner
-      theme={theme}
-      className="toaster group"
-      toastOptions={{
-        classNames: {
-          toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-muted-foreground",
-          actionButton:
-            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-          cancelButton:
-            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
-        },
-      }}
-      {...props} />)
-  );
+    <Sonner
+      theme={resolvedTheme}
+      position="top-center"
+      richColors
+      closeButton
+      expand={false}
+      toastOptions={{ style: { borderRadius: "12px" } }}
+      {...props}
+    />
+  )
 }
 
 export { Toaster }

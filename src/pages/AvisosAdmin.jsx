@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,7 +17,7 @@ import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
-import { guardedCreate } from '@/lib/authorization/guardedWrite';
+import { guardedCreate, publishNoticeDeliveries } from '@/lib/authorization/guardedWrite';
 import { useSchoolStudents } from '@/hooks/useSchoolStudents';
 import {
   Dialog,
@@ -73,41 +72,11 @@ export default function AvisosAdmin() {
     mutationFn: async (data) => {
       const notice = await guardedCreate('Notice', data);
 
-      // Scoped to this school: the client-side filter below already drops other
-      // schools' links, but there is no reason to download them first.
-      const activeLinks = await schoolRead('ParentStudent', {
-        school_id: userProfile.school_id,
-        status: 'ACTIVE',
-      });
-      const schoolStudentIds = new Set(students.map((student) => student.id));
-      const recipients = activeLinks.filter((link) => {
-        if (!schoolStudentIds.has(link.student_id)) return false;
-        if (data.scope === 'SCHOOL') return true;
-        if (data.scope === 'STUDENT') return link.student_id === data.student_id;
-        if (data.scope === 'CLASSROOM') {
-          const linkedStudent = students.find((student) => student.id === link.student_id);
-          return linkedStudent?.classroom_id === data.classroom_id;
-        }
-        return false;
-      });
-
-      const escalationDueAt = data.priority === 'URGENT'
-        ? new Date(Date.now() + (24 * 60 * 60 * 1000)).toISOString()
-        : null;
-
-      await Promise.all(
-        recipients.map((recipient) => base44.entities.NoticeDelivery.create({
-          school_id: userProfile.school_id,
-          notice_id: notice.id,
-          recipient_user_id: recipient.parent_id,
-          recipient_role: 'PARENT',
-          student_id: recipient.student_id,
-          classroom_id: data.classroom_id || null,
-          status: 'SENT',
-          sent_at: notice.sent_at || new Date().toISOString(),
-          escalation_due_at: escalationDueAt,
-        }))
-      );
+      // The server picks the recipients (the ACTIVE parents of this school's
+      // students in the notice's scope) and the school, from the stored
+      // notice (P10b). NoticeDelivery create is service-role only: the client
+      // used to name both, and could name any school.
+      const recipients = await publishNoticeDeliveries(notice.id);
       
       await logAuditEvent({
         user,
@@ -116,7 +85,7 @@ export default function AvisosAdmin() {
         entityId: notice.id,
         action: 'NOTICE_SENT',
         reason: 'Notice publishing flow',
-        context: { scope: data.scope, priority: data.priority, recipients: recipients.length }
+        context: { scope: data.scope, priority: data.priority, recipients }
       });
       
       return notice;

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useSchoolStudents } from '@/hooks/useSchoolStudents';
+import { guardedUpdate } from '@/lib/authorization/guardedWrite';
 
 export default function GestionPedidosAdmin() {
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -37,7 +37,7 @@ export default function GestionPedidosAdmin() {
   const { data: students } = useSchoolStudents(userProfile?.school_id, { activeOnly: false });
 
   const updateOrderMutation = useMutation({
-    mutationFn: ({ orderId, data }) => base44.entities.UniformOrder.update(orderId, data),
+    mutationFn: ({ orderId, data }) => guardedUpdate('UniformOrder', orderId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allUniformOrders'] });
       toast.success('Pedido actualizado');

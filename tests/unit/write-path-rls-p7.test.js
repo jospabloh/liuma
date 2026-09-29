@@ -33,6 +33,10 @@ const SERVICE_ROLE_WRITES = {
   // school by this row, so it must not rest on per-field locks) — the welcome
   // flag goes through markWelcomeShown.
   UserProfile: ['create', 'update'],
+  // P10b: the server derives the school and the recipients/requester
+  // (guardedEntityWrite); the old rules let anyone file one under any school.
+  NoticeDelivery: ['create', 'update'],
+  SupportTicket: ['create'],
 };
 
 for (const [entity, ops] of Object.entries(SERVICE_ROLE_WRITES)) {
@@ -73,22 +77,11 @@ function walk(dir, out = []) {
   return out;
 }
 
-// Known, documented exceptions — each already failed for everyone but the
-// platform owner BEFORE P7 (their old rule was "parent_id is you", or the
-// Notice had no author_id), so P7 changes nothing for them. They belong to
-// other packages; keep this list shrinking, never growing.
-const KNOWN_EXCEPTIONS = [
-  // School-side review screens: need the tenant read/write model (P10).
-  'src/pages/GestionAusencias.jsx: AbsenceNotification.update',
-  'src/pages/GestionPedidosAdmin.jsx: UniformOrder.update',
-  // Approving another user's profile (status): a school ADMIN could never
-  // update someone else's UserProfile under the own-row rule, and status is
-  // now field-locked. P8's approveProfile function replaces this call.
-  'src/pages/Aprobaciones.jsx: UserProfile.update',
-  // In-app per-user notice (scope 'USER', no author): replaced by P8's
-  // server-side fan-out.
-  'src/lib/notifications/service.js: Notice.create',
-];
+// Known, documented exceptions. Empty since P10b moved the last ones
+// (GestionAusencias, GestionPedidosAdmin, the in-app Notice) to
+// guardedEntityWrite or removed them; tests/unit/write-path-p10b.test.js
+// extends this check to every owner-only entity. Keep it empty.
+const KNOWN_EXCEPTIONS = [];
 
 test('no client code writes the locked entities directly', () => {
   const srcDir = new URL('src/', ROOT).pathname;

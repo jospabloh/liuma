@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
@@ -30,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
+import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
 
 export default function GestionSalon() {
   const queryClient = useQueryClient();
@@ -91,7 +91,7 @@ export default function GestionSalon() {
   const availableTeachers = teacherProfiles.filter(p => !assignedTeacherIds.includes(p.user_id));
 
   const assignTeacherMutation = useMutation({
-    mutationFn: (data) => base44.entities.TeacherClassroom.create(data),
+    mutationFn: (data) => guardedCreate('TeacherClassroom', data),
     onSuccess: () => {
       queryClient.invalidateQueries(['classroomTeachers']);
       toast.success('Maestro asignado');
@@ -101,7 +101,7 @@ export default function GestionSalon() {
   });
 
   const removeTeacherMutation = useMutation({
-    mutationFn: (assignmentId) => base44.entities.TeacherClassroom.update(assignmentId, { is_active: false }),
+    mutationFn: (assignmentId) => guardedUpdate('TeacherClassroom', assignmentId, { is_active: false }),
     onSuccess: () => {
       queryClient.invalidateQueries(['classroomTeachers']);
       toast.success('Maestro removido');

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
@@ -37,6 +36,7 @@ import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { ENTERPRISE_CONTACT_THRESHOLD } from '@/lib/license/licenseModel';
 import { useSchoolStudents, invalidateSchoolStudents } from '@/hooks/useSchoolStudents';
 import { countLabel } from '@/lib/spanishText';
+import { guardedCreate } from '@/lib/authorization/guardedWrite';
 
 const CONTACT_FORM_URL = 'https://forms.gle/jLQ4EtWmQhkSsahy9';
 
@@ -81,7 +81,7 @@ export default function GestionEscuela() {
 
   const createClassroomMutation = useMutation({
     mutationFn: async (data) => {
-      const classroom = await base44.entities.Classroom.create(data);
+      const classroom = await guardedCreate('Classroom', data);
       await recordAuditRow({
         schoolId: userProfile.school_id,
         action: 'CLASSROOM_CREATED',
@@ -103,7 +103,7 @@ export default function GestionEscuela() {
 
   const createStudentMutation = useMutation({
     mutationFn: async (data) => {
-      const student = await base44.entities.Student.create(data);
+      const student = await guardedCreate('Student', data);
       await recordAuditRow({
         schoolId: userProfile.school_id,
         action: 'STUDENT_CREATED',

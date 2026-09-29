@@ -35,7 +35,10 @@ function matches(row, query) {
 
 export function makeFakeDb(tables) {
   const calls = [];
+  // Every create/update/delete, in order (P10b write-path tests).
+  const writes = [];
   const entities = {};
+  let nextId = 1;
   for (const [name, rows] of Object.entries(tables)) {
     entities[name] = {
       async filter(query, sort = '-created_date', limit = 5000, skip = 0) {
@@ -55,7 +58,31 @@ export function makeFakeDb(tables) {
         if (!row) throw new Error('not found');
         return { ...row };
       },
+      async create(data) {
+        const row = { id: `new-${name}-${nextId++}`, created_date: '2026-09-29T12:00:00.000Z', ...data };
+        rows.push(row);
+        writes.push({ entity: name, op: 'create', data: { ...data }, id: row.id });
+        return { ...row };
+      },
+      async bulkCreate(list) {
+        const out = [];
+        for (const data of list) out.push(await this.create(data));
+        return out;
+      },
+      async update(id, patch) {
+        const row = rows.find((r) => r.id === id);
+        if (!row) throw new Error('not found');
+        Object.assign(row, patch);
+        writes.push({ entity: name, op: 'update', id, data: { ...patch } });
+        return { ...row };
+      },
+      async delete(id) {
+        const index = rows.findIndex((r) => r.id === id);
+        if (index < 0) throw new Error('not found');
+        rows.splice(index, 1);
+        writes.push({ entity: name, op: 'delete', id });
+      },
     };
   }
-  return { entities, calls };
+  return { entities, calls, writes };
 }

@@ -16,6 +16,7 @@ import { resolveSupportRouting } from './routing.js';
 import { computeSlaDueAt, selectTicketsToAutoEscalate } from './sla.js';
 import { generateTicketNumber } from './ticketNumber.js';
 import { assertTransition } from './statusMachine.js';
+import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
 
 /**
  * Allocate the next per-year ticket number for a school.
@@ -144,7 +145,12 @@ export async function createSupportTicket({
   // deployed yet in Base44.
   if (aiBrief) ticketPayload.ai_brief = aiBrief;
 
-  const ticket = await base44.entities.SupportTicket.create(ticketPayload);
+  // Through guardedEntityWrite (P10b): SupportTicket create is service-role
+  // only, because the old RLS let a requester file a ticket under any
+  // school_id. The server takes the school, the requester fields, the tier
+  // and the SLA from the caller's own profile; the ones above are the same
+  // values, kept so the local routing/audit below reads them.
+  const ticket = await guardedCreate('SupportTicket', ticketPayload);
 
   // Seed the thread: the requester's description (and the AI attempt, if any).
   // The function denormalizes `requester_user_id` onto every message so Base44
@@ -218,7 +224,7 @@ export async function addSupportMessage({ user, userProfile, ticket, body, autho
   // First staff reply stops the SLA clock.
   if (isStaffReply && !ticket.first_response_at) {
     try {
-      await base44.entities.SupportTicket.update(ticket.id, {
+      await guardedUpdate('SupportTicket', ticket.id, {
         first_response_at: new Date().toISOString(),
         status: ticket.status === SUPPORT_STATUS.ESCALATED ? SUPPORT_STATUS.IN_PROGRESS : ticket.status,
       });
@@ -267,7 +273,7 @@ export async function transitionTicketStatus({ user, userProfile, ticket, toStat
   const patch = { status: toStatus };
   if (toStatus === SUPPORT_STATUS.RESOLVED) patch.resolved_at = new Date().toISOString();
 
-  await base44.entities.SupportTicket.update(ticket.id, patch);
+  await guardedUpdate('SupportTicket', ticket.id, patch);
 
   if (note) {
     await postTicketMessage({ ticketId: ticket.id, body: note, kind: 'note' });
@@ -333,7 +339,9 @@ export async function escalateTicketToSupport({ user, userProfile, ticket, trigg
     escalated_at: nowIso,
   };
   const updated = { ...ticket, ...patch };
-  await base44.entities.SupportTicket.update(ticket.id, patch);
+  // A director may move only the tickets routed to them (tier SCHOOL_ADMIN);
+  // the server stamps the new SLA and assignee itself (P10b).
+  await guardedUpdate('SupportTicket', ticket.id, patch);
 
   const systemNote =
     note ||

@@ -1194,4 +1194,69 @@ update/delete` es sólo del dueño de plataforma (Classroom, Student, Event,
 Discount, OfficialDocument, SchoolSetupGuide, TeacherClassroom,
 ParentStudent, PermissionOverride, PendingChange; NoticeDelivery salvo su
 destinatario): leer ya funciona para un director; crear un salón o un
-descuento todavía no.
+descuento todavía no. **Cerrado en P10b, abajo.**
+
+## Escrituras por inquilino (P10b, 2026-09-29)
+
+Hermano de escritura de P10, **sin función nueva**: `guardedEntityWrite` es
+ahora el único camino de escritura de todo lo de la escuela cuya RLS es sólo
+del dueño de plataforma. La RLS no se aflojó; se **endureció**:
+`NoticeDelivery` create/update y `SupportTicket` create pasan a sólo service
+role (antes cualquiera los creaba con el `school_id` que quisiera).
+
+- **Dos caminos, una regla de identidad.** Las 7 entidades con
+  `PermissionOverride` siguen en `entry.ts`; las demás (`SCHOOL_WRITES` en
+  `_policy.ts`: Classroom, Student, TeacherClassroom, ParentStudent, Event,
+  Discount, OfficialDocument, SchoolSetupGuide, PermissionOverride,
+  PendingChange, la revisión de AbsenceNotification/UniformOrder,
+  NoticeDelivery, SupportTicket) van a `runSchoolWrite` (`_schoolWrite.ts`,
+  import-free). En los dos, escuela y rol salen de `resolveCallerProfile`
+  (`selectCurrentProfile`, la misma regla que `schoolRead`, con prueba de
+  igualdad): en create un `school_id` del cuerpo sólo puede confirmar la
+  propia (si no, 403 `SCHOOL_MISMATCH`); en update/delete manda el registro
+  **guardado** y tiene que ser de tu escuela. El dueño de plataforma nombra la
+  escuela.
+- **Qué se escribe:** lista blanca tipada por entidad (`fields`/`updateFields`;
+  `url` sólo http(s), enums del esquema), sello del servidor (`uploaded_by`,
+  `reviewed_by`, quién completó/confirmó un paso — sólo cuando cambia el
+  estado, porque ConfiguracionInicial reenvía el paso entero —, requester/tier/
+  SLA del ticket, tipo/estado/solicitante del `PendingChange`), y toda
+  referencia (alumno, salón, aviso, perfil, maestro, padre) de la misma
+  escuela; maestro/padre además ACTIVE y con ese rol.
+- **Roles:** casi todo es sólo ADMIN. Vincular padre↔alumno y asignar
+  maestro↔salón **dan lectura** (schoolRead deriva de ahí), así que sólo el
+  ADMIN, y un vínculo existente no se re-apunta (se revoca y se crea otro). En
+  GestionAlumno el maestro ya no ve «Vincular»/«Quitar». Alumno, salón y
+  vínculos **no se borran** (no hay `delete`): `is_active:false` / `REVOKED`.
+- **Avisos:** el cliente ya no arma destinatarios. `publishNoticeDeliveries(
+  noticeId)` → el servidor lee el aviso guardado (un maestro, sólo los suyos) y
+  crea una copia por vínculo ACTIVE de cada alumno ACTIVE de la escuela en su
+  alcance, sin duplicar si se reintenta (`planNoticeDeliveries`). El
+  destinatario marca leído/escalado su propia copia; eso y los tickets no los
+  frena la licencia en solo lectura (pedir ayuda es justo la salida).
+- **Tickets:** el director mueve sólo los de nivel `SCHOOL_ADMIN`; escalar a
+  soporte lo sella el servidor (48 h, `OWNER`). Enrutamiento y SLA copiados de
+  `src/lib/support/{routing,sla}.js`, con prueba de igualdad.
+- Se quitó el canal in-app (`sendInApp`): escribía un `Notice` con scope
+  `USER` que el esquema no tiene, directo a una entidad sólo service role;
+  nunca funcionó.
+- **Espejo del cliente:** `src/lib/authorization/guardedWritePolicy.js`
+  (sólo para esconder botones; `guardedWrite.js` rechaza una entidad/operación
+  que el servidor no ofrece). `tests/unit/write-path-p10b.test.js` corre el
+  camino real contra dos escuelas en memoria (ids ajenos, `school_id`
+  falsificado, maestro/padre en entidades de personal, licencia, tickets,
+  avisos), compara las tablas, exige RLS sólo-dueño en cada operación de
+  `SCHOOL_WRITES` y **falla si `src/` escribe directo a una entidad sólo del
+  dueño** (excepción: `LicenseAdmin`, pantalla del dueño).
+
+**Despliegue:** `npm run deploy` (guardedEntityWrite) y `npm run deploy:site`
+**antes o en la misma ventana** que `deploy:entities` (NoticeDelivery,
+SupportTicket): con la RLS nueva y el sitio viejo, crear tickets y repartir
+avisos falla hasta que llegue el sitio. Encaja en el orden de P10 (UserProfile
+primero): entidades → funciones → sitio, minutos.
+
+**No verificado:** nada en vivo — ni la RLS nueva desplegada, ni que
+`bulkCreate` exista en el SDK del servidor (hay respaldo a `create` uno por
+uno), ni una sesión real de director/maestro/padre. **Sigue abierto:** el cupo
+de alumnos por plan sólo lo aplica la UI (`useStudentQuota`, detrás de
+`PAYWALL_GATING_ENABLED`); `WeeklyMenu` no tiene pantalla de escritura.

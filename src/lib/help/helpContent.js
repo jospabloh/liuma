@@ -47,7 +47,7 @@ export const HELP_SECTIONS = [
       'Cada persona que se registra con tu código queda pendiente. Apruébala en Aprobaciones; hasta entonces no ve nada de la escuela.',
       // ADMIN reaches GestionAlumno from GestionEscuela since the 2026-09-29
       // pass (routeAccess.js); the classroom teacher can still do it too.
-      'Cuando un padre o madre ya está aprobado, vincúlalo con su hijo desde la ficha del alumno (Gestión de escuela → salón → alumno → Vincular); el maestro del salón también puede hacerlo. Sin ese vínculo no verá la información del niño.',
+      'Cuando un padre o madre ya está aprobado, vincúlalo con su hijo desde la ficha del alumno (Gestión de escuela → salón → alumno → Vincular). Sólo la dirección puede hacerlo. Sin ese vínculo no verá la información del niño.',
     ],
   },
   {

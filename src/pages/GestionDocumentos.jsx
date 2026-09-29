@@ -20,6 +20,7 @@ import { parseLocalDate } from '@/lib/dates';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
 
 export default function GestionDocumentos() {
   const { canWrite } = useCanWrite();
@@ -59,12 +60,14 @@ export default function GestionDocumentos() {
         });
         
         for (const doc of previousDocs) {
-          await base44.entities.OfficialDocument.update(doc.id, { is_current: false });
+          await guardedUpdate('OfficialDocument', doc.id, { is_current: false });
         }
       }
       
       // Create the document record
-      return base44.entities.OfficialDocument.create({
+      // uploaded_by / uploaded_by_name are stamped by the server from the
+      // caller (P10b); the ones sent here are ignored.
+      return guardedCreate('OfficialDocument', {
         school_id: userProfile.school_id,
         title: data.title,
         description: data.description,
@@ -99,7 +102,7 @@ export default function GestionDocumentos() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.OfficialDocument.delete(id),
+    mutationFn: (id) => guardedDelete('OfficialDocument', id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['officialDocuments'] });
       toast.success('Documento eliminado');

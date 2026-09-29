@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSchoolStudents } from '@/hooks/useSchoolStudents';
 import { percentOfStudentsCovered } from '@/lib/schoolStudents';
+import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
 
 export default function ConfiguracionInicial() {
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -78,7 +79,7 @@ export default function ConfiguracionInicial() {
   });
 
   const createStepMutation = useMutation({
-    mutationFn: (data) => base44.entities.SchoolSetupGuide.create(data),
+    mutationFn: (data) => guardedCreate('SchoolSetupGuide', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setupGuide'] });
       queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
@@ -90,7 +91,7 @@ export default function ConfiguracionInicial() {
   });
 
   const updateStepMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.SchoolSetupGuide.update(id, data),
+    mutationFn: ({ id, data }) => guardedUpdate('SchoolSetupGuide', id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setupGuide'] });
       queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
@@ -100,7 +101,7 @@ export default function ConfiguracionInicial() {
   });
 
   const deleteStepMutation = useMutation({
-    mutationFn: (id) => base44.entities.SchoolSetupGuide.delete(id),
+    mutationFn: (id) => guardedDelete('SchoolSetupGuide', id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setupGuide'] });
       queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
@@ -224,7 +225,7 @@ export default function ConfiguracionInicial() {
     ];
 
     for (const step of defaultSteps) {
-      await base44.entities.SchoolSetupGuide.create({
+      await guardedCreate('SchoolSetupGuide', {
         ...step,
         school_id: userProfile.school_id
       });

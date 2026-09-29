@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,11 +52,8 @@ export default function GestionAusencias() {
       const notification = notifications.find(n => n.id === notificationId);
       
       // Actualizar notificación
-      await base44.entities.AbsenceNotification.update(notificationId, {
-        ...data,
-        reviewed_by: user.id,
-        reviewed_at: new Date().toISOString(),
-      });
+      // reviewed_by / reviewed_at are stamped by the server (P10b).
+      await guardedUpdate('AbsenceNotification', notificationId, data);
       
       // Si se aprueba, crear/actualizar registro de asistencia como justificado
       if (data.status === 'APPROVED') {

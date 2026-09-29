@@ -8,7 +8,8 @@ import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import PaymentStatusCard from '@/components/payments/PaymentStatusCard';
 import { CreditCard, CheckCircle, Calendar } from 'lucide-react';
-import { format, isPast, differenceInDays } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
+import { parseLocalDate, isBeforeToday, startOfLocalDay } from '@/lib/dates';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
@@ -58,10 +59,13 @@ export default function Pagos() {
     
     if (studentCharges.length === 0) return 'Al día';
     
-    const hasOverdue = studentCharges.some(c => isPast(new Date(c.due_date)));
+    const hasOverdue = studentCharges.some(c => isBeforeToday(c.due_date));
     if (hasOverdue) return 'Vencido';
     
-    const daysToNext = Math.min(...studentCharges.map(c => differenceInDays(new Date(c.due_date), new Date())));
+    const daysToNext = Math.min(...studentCharges
+      .map(c => parseLocalDate(c.due_date))
+      .filter(Boolean)
+      .map(due => differenceInDays(due, startOfLocalDay())));
     if (daysToNext <= 7) return 'Próximo a vencer';
     
     return 'Al día';
@@ -76,10 +80,11 @@ export default function Pagos() {
   const getNextDueDate = (studentId) => {
     const studentCharges = charges
       .filter(c => c.student_id === studentId && c.status !== 'PAID' && c.status !== 'CANCELLED')
-      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+      .filter(c => parseLocalDate(c.due_date))
+      .sort((a, b) => parseLocalDate(a.due_date) - parseLocalDate(b.due_date));
     
     if (studentCharges.length === 0) return null;
-    return format(new Date(studentCharges[0].due_date), "d 'de' MMM", { locale: es });
+    return format(parseLocalDate(studentCharges[0].due_date), "d 'de' MMM", { locale: es });
   };
 
   const getStudentCharges = (studentId) => {
@@ -158,13 +163,13 @@ export default function Pagos() {
                 </div>
               ) : (
                 getStudentCharges(selectedStudent.id).map((charge) => {
-                  const isOverdue = charge.status !== 'PAID' && isPast(new Date(charge.due_date));
+                  const isOverdue = charge.status !== 'PAID' && isBeforeToday(charge.due_date);
                   return (
                     <div
                       key={charge.id}
                       className={`p-4 rounded-xl border ${
-                        charge.status === 'PAID' ? 'bg-green-50 border-green-200' :
-                        isOverdue ? 'bg-red-50 border-red-200' :
+                        charge.status === 'PAID' ? 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900' :
+                        isOverdue ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900' :
                         'bg-card border-border'
                       }`}
                     >
@@ -173,15 +178,15 @@ export default function Pagos() {
                           <h4 className="font-medium text-card-foreground">{charge.concept_name}</h4>
                           <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                             <Calendar className="w-3 h-3" />
-                            Vence: {format(new Date(charge.due_date), "d 'de' MMM, yyyy", { locale: es })}
+                            Vence: {parseLocalDate(charge.due_date) ? format(parseLocalDate(charge.due_date), "d 'de' MMM, yyyy", { locale: es }) : 'sin fecha'}
                           </div>
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-lg">${charge.amount?.toLocaleString()}</p>
                           <Badge className={
-                            charge.status === 'PAID' ? 'bg-green-100 text-green-800' :
-                            isOverdue ? 'bg-red-100 text-red-800' :
-                            'bg-amber-100 text-amber-800'
+                            charge.status === 'PAID' ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' :
+                            isOverdue ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300' :
+                            'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
                           }>
                             {charge.status === 'PAID' ? 'Pagado' : isOverdue ? 'Vencido' : 'Pendiente'}
                           </Badge>

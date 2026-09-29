@@ -1,22 +1,31 @@
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
+import { routeDenialCopy } from '@/lib/authorization/routeDenialCopy';
 
-export default function RouteAccessDenied({ redirectTo = '/Home', message = 'No tienes permisos para ver esta sección.', reasonCode }) {
+// What a person sees when a route is not for them. Plain Spanish, no internal
+// codes: this used to print the raw reason code (forbidden_action) and tell
+// a school director to "solicita acceso a tu administrador" — they ARE the
+// administrator. The reason code still goes to the audit log (GuardedRoute);
+// here it only picks the wording.
+export default function RouteAccessDenied({ redirectTo = '/Home', reasonCode, profileStatus, message }) {
   const navigate = useNavigate();
+  const copy = routeDenialCopy({ reasonCode, profileStatus });
 
   return (
     <div className="min-h-[50vh] flex items-center justify-center p-4">
-      <Card className="max-w-md w-full border-amber-200">
+      <Card className="max-w-md w-full">
         <CardContent className="p-6 text-center space-y-4">
-          <AlertTriangle className="mx-auto w-8 h-8 text-amber-600" />
-          <h1 className="text-lg font-semibold text-foreground">Acceso denegado</h1>
-          <p className="text-sm text-muted-foreground">{message}</p>
-          <p className="text-xs text-muted-foreground">Si crees que esto es un error, solicita acceso a tu administrador.</p>
-          {reasonCode && <p className="text-xs text-muted-foreground">Código de referencia: {reasonCode}</p>}
-          <Button onClick={() => navigate(redirectTo)}>Volver a una ruta permitida</Button>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+            <Lock className="h-6 w-6 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          </div>
+          <h1 className="text-lg font-semibold text-foreground">{copy.title}</h1>
+          <p className="text-sm text-muted-foreground">{message || copy.body}</p>
+          {copy.action === 'reload'
+            ? <Button onClick={() => window.location.reload()}>Recargar</Button>
+            : <Button onClick={() => navigate(redirectTo)}>Ir al inicio</Button>}
         </CardContent>
       </Card>
     </div>

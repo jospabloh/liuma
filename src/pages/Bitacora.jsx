@@ -140,9 +140,9 @@ export default function Bitacora() {
               </div>
 
               {selectedEntry.teacher_message && (
-                <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-4 border border-pink-200">
-                  <p className="text-xs font-semibold text-pink-800 mb-2">💌 Mensajito especial</p>
-                  <p className="text-sm text-purple-700">{selectedEntry.teacher_message}</p>
+                <div className="bg-gradient-to-r from-pink-50 dark:from-pink-950/40 to-purple-50 dark:to-purple-950/40 rounded-xl p-4 border border-pink-200 dark:border-pink-900">
+                  <p className="text-xs font-semibold text-pink-800 dark:text-pink-300 mb-2">💌 Mensajito especial</p>
+                  <p className="text-sm text-purple-700 dark:text-purple-300">{selectedEntry.teacher_message}</p>
                 </div>
               )}
 
@@ -187,9 +187,9 @@ export default function Bitacora() {
                 </div>
               )}
               {selectedEntry.incidents && (
-                <div className="mt-4 bg-amber-50 rounded-xl p-4">
-                  <p className="text-sm font-medium text-amber-800 mb-1">Incidentes</p>
-                  <p className="text-amber-700">{selectedEntry.incidents}</p>
+                <div className="mt-4 bg-amber-50 dark:bg-amber-950/40 rounded-xl p-4">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Incidentes</p>
+                  <p className="text-amber-700 dark:text-amber-300">{selectedEntry.incidents}</p>
                 </div>
               )}
 

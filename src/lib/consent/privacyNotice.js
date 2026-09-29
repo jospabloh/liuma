@@ -10,10 +10,48 @@
  * Privacidad changes, so each consent record pins the version the user accepted.
  */
 
-export const PRIVACY_NOTICE_VERSION = '2026-06-18';
+// BORRADOR PENDIENTE DE REVISIÓN LEGAL (2026-09-29).
+//
+// The notice and terms these versions pin are drafts written by Claude from
+// the app's real data model (src/lib/legal/legalDocs.js — the ONE source of
+// both texts), published in-app so the consent checkbox finally points at a
+// page that exists (before this, PRIVACY_NOTICE_URL was a 404). They have NOT
+// been reviewed by a lawyer. When the reviewed text replaces them:
+//   1. edit src/lib/legal/legalDocs.js,
+//   2. bump PRIVACY_NOTICE_VERSION / SERVICE_TERMS_VERSION to the review date,
+//   3. set PRIVACY_NOTICE_STATUS to 'vigente' — that removes the BORRADOR
+//      banner on the page (the "-borrador" suffix in the version string is
+//      what onboarding shows next to the checkbox, so drop it too).
+// Every ConsentRecord pins the version string, so a consent given against the
+// draft stays distinguishable from one given against the reviewed text.
+//
+// MIRROR: base44/functions/provisionOnboardingProfile/entry.ts rejects a
+// consent for any other version (a cached client with the old notice), and
+// tests/unit/legal-consent.test.js fails if the two copies drift.
+export const PRIVACY_NOTICE_VERSION = '2026-09-29-borrador';
 
-// Where the full Aviso de Privacidad is published. Replace with the live URL.
-export const PRIVACY_NOTICE_URL = 'https://liuma-2232ffd8.base44.app/aviso-de-privacidad';
+/** 'borrador' until a lawyer signs off; then 'vigente'. */
+export const PRIVACY_NOTICE_STATUS = 'borrador';
+
+/** True while the published legal text is still an unreviewed draft. */
+export function legalTextIsDraft(status = PRIVACY_NOTICE_STATUS) {
+  return status !== 'vigente';
+}
+export const PRIVACY_NOTICE_IS_DRAFT = legalTextIsDraft();
+
+// Public in-app routes (src/App.jsx renders them before any auth or profile
+// gate, because the people who must read them — someone mid-onboarding, a
+// parent deciding whether to sign up — have no profile yet). Relative on
+// purpose: they work on the base44.app host and on any custom domain.
+export const PRIVACY_NOTICE_PATH = '/aviso-de-privacidad';
+export const PRIVACY_NOTICE_URL = PRIVACY_NOTICE_PATH;
+
+// Terms of service / trial terms — same draft status, same public-route rule.
+export const SERVICE_TERMS_VERSION = '2026-09-29-borrador';
+export const SERVICE_TERMS_PATH = '/terminos';
+// Aliases used by onboarding (P6).
+export const TERMS_VERSION = SERVICE_TERMS_VERSION;
+export const TERMS_URL = SERVICE_TERMS_PATH;
 
 export const CONSENT_SCOPES = {
   GENERAL: 'general_privacy_notice', // acceptance of the Aviso de Privacidad
@@ -34,9 +72,10 @@ export function sensitiveConsentLabel(role) {
 }
 
 /**
- * Build the stored consent artifact. Kept pure so it's unit-testable; the
- * onboarding flow persists the result (best-effort) to a ConsentRecord entity
- * and to the AuditLog.
+ * Shape of the stored consent artifact (ConsentRecord.jsonc). The record is
+ * written SERVER-side by provisionOnboardingProfile, which builds the same
+ * fields from its own clock and the authenticated user — this pure copy is the
+ * documented shape and what the tests pin.
  */
 export function buildConsentRecordPayload({
   user,
@@ -44,6 +83,7 @@ export function buildConsentRecordPayload({
   role,
   acceptances = {},
   noticeVersion = PRIVACY_NOTICE_VERSION,
+  termsVersion = TERMS_VERSION,
   at = new Date(),
   userAgent = null,
 } = {}) {
@@ -53,6 +93,7 @@ export function buildConsentRecordPayload({
     school_id: schoolId || null,
     app_role: role || null,
     notice_version: noticeVersion,
+    terms_version: termsVersion,
     accepted_general: Boolean(acceptances.general),
     accepted_sensitive_minor_data: Boolean(acceptances.sensitive),
     accepted_scopes: [

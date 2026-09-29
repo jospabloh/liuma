@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { recordAuditRow } from '@/lib/audit';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -8,10 +9,12 @@ import LoadingScreen from '@/components/ui/LoadingScreen';
 import { User, Link, Unlink, UserPlus, Mail, Loader2, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate } from '@/lib/dates';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
+import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import { toast } from "sonner";
 import {
   Dialog,
@@ -71,10 +74,10 @@ export default function GestionAlumno() {
     enabled: !!userProfile,
   });
 
-  const { data: allUsers = [] } = useQuery({
-    queryKey: ['allUsers'],
-    queryFn: () => base44.entities.User.list(),
-  });
+  // Parent names/emails come from the server-side member directory
+  // (UserProfile has neither, and a client User.list() only returns the
+  // caller's own row — every parent used to read "Sin nombre").
+  const { getName: getUserName, getEmail: getUserEmail } = useSchoolMembers(userProfile?.school_id);
 
   const linkedParentIds = parentLinks.map(l => l.parent_id);
   const availableParents = parentProfiles.filter(p => !linkedParentIds.includes(p.user_id));
@@ -82,14 +85,12 @@ export default function GestionAlumno() {
   const linkParentMutation = useMutation({
     mutationFn: async (data) => {
       const link = await base44.entities.ParentStudent.create(data);
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await recordAuditRow({
+        schoolId: userProfile.school_id,
         action: 'PARENT_LINKED',
-        target_type: 'ParentStudent',
-        target_id: link.id,
-        details: { student_id: studentId, parent_id: data.parent_id }
+        entity: 'ParentStudent',
+        entityId: link.id,
+        context: { student_id: studentId, parent_id: data.parent_id },
       });
       return link;
     },
@@ -107,13 +108,11 @@ export default function GestionAlumno() {
   const unlinkParentMutation = useMutation({
     mutationFn: async (linkId) => {
       await base44.entities.ParentStudent.update(linkId, { status: 'REVOKED' });
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await recordAuditRow({
+        schoolId: userProfile.school_id,
         action: 'PARENT_UNLINKED',
-        target_type: 'ParentStudent',
-        target_id: linkId,
+        entity: 'ParentStudent',
+        entityId: linkId,
       });
     },
     onSuccess: () => {
@@ -133,16 +132,6 @@ export default function GestionAlumno() {
     });
   };
 
-  const getUserName = (userId) => {
-    const u = allUsers.find(u => u.id === userId);
-    return u?.full_name || 'Sin nombre';
-  };
-
-  const getUserEmail = (userId) => {
-    const u = allUsers.find(u => u.id === userId);
-    return u?.email || '';
-  };
-
   const relationshipLabels = {
     madre: 'Madre',
     padre: 'Padre',
@@ -160,7 +149,7 @@ export default function GestionAlumno() {
       <PageHeader
         title="Gestión de alumno"
         showBack
-        backTo={createPageUrl('GestionEscuela')}
+        backTo={createPageUrl(userProfile?.app_role === 'ADMIN' ? 'GestionEscuela' : 'Home')}
       />
 
       {student && (
@@ -182,9 +171,9 @@ export default function GestionAlumno() {
                 <Badge variant="secondary" className="mt-1">
                   {classroom?.name || 'Sin salón'}
                 </Badge>
-                {student.birth_date && (
+                {parseLocalDate(student.birth_date) && (
                   <p className="text-sm text-muted-foreground mt-1">
-                    {format(new Date(student.birth_date), "d 'de' MMMM, yyyy", { locale: es })}
+                    {format(parseLocalDate(student.birth_date), "d 'de' MMMM, yyyy", { locale: es })}
                   </p>
                 )}
               </div>

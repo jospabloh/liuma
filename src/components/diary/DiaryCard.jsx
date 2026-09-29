@@ -4,6 +4,7 @@ import { Calendar, User, Smile, Frown, Meh, BookOpen, Utensils, Moon } from 'luc
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
+import { parseLocalDate } from '@/lib/dates';
 
 const moodIcons = {
   feliz: { icon: Smile, color: 'text-green-500' },
@@ -14,10 +15,10 @@ const moodIcons = {
 };
 
 const behaviorLabels = {
-  excelente: { label: 'Excelente', color: 'bg-green-100 text-green-800' },
-  bueno: { label: 'Bueno', color: 'bg-blue-100 text-blue-800' },
-  regular: { label: 'Regular', color: 'bg-amber-100 text-amber-800' },
-  necesita_apoyo: { label: 'Necesita apoyo', color: 'bg-red-100 text-red-800' },
+  excelente: { label: 'Excelente', color: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' },
+  bueno: { label: 'Bueno', color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300' },
+  regular: { label: 'Regular', color: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' },
+  necesita_apoyo: { label: 'Necesita apoyo', color: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300' },
 };
 
 export default function DiaryCard({ entry, studentName, onClick }) {
@@ -39,7 +40,7 @@ export default function DiaryCard({ entry, studentName, onClick }) {
           )}
           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
             <Calendar className="w-3 h-3" />
-            {format(new Date(entry.date), "EEEE d 'de' MMMM", { locale: es })}
+            {parseLocalDate(entry.date) ? format(parseLocalDate(entry.date), "EEEE d 'de' MMMM", { locale: es }) : 'Sin fecha'}
           </div>
         </div>
         <MoodIcon className={`w-6 h-6 ${moodColor}`} />
@@ -48,9 +49,9 @@ export default function DiaryCard({ entry, studentName, onClick }) {
       <p className="text-card-foreground text-sm mb-3 line-clamp-3">{entry.notes_text}</p>
       
       {entry.teacher_message && (
-        <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-2 mb-2 border border-pink-200">
-          <p className="text-xs font-semibold text-pink-800">💌 Mensajito especial</p>
-          <p className="text-xs text-purple-700 line-clamp-2">{entry.teacher_message}</p>
+        <div className="bg-gradient-to-r from-pink-50 dark:from-pink-950/40 to-purple-50 dark:to-purple-950/40 rounded-lg p-2 mb-2 border border-pink-200 dark:border-pink-900">
+          <p className="text-xs font-semibold text-pink-800 dark:text-pink-300">💌 Mensajito especial</p>
+          <p className="text-xs text-purple-700 dark:text-purple-300 line-clamp-2">{entry.teacher_message}</p>
         </div>
       )}
       

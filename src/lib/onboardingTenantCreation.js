@@ -1,12 +1,15 @@
 import { DEFAULT_THEME } from './tenantTheme.js';
-import { buildConsentRecordPayload } from './consent/privacyNotice.js';
-import { buildTrialSubscription } from './license/licenseModel.js';
+import { isLegacySchoolId, isValidJoinCode } from './onboarding/joinCode.js';
+import { invokeFunction } from './functionResponse.js';
 
 export const ONBOARDING_ERROR_CODES = {
   VALIDATION: 'validation_error',
   INVALID_SCHOOL_CODE: 'invalid_school_code',
   DUPLICATE_TENANT: 'duplicate_tenant',
   FORBIDDEN: 'forbidden',
+  CONSENT_REQUIRED: 'consent_required',
+  CONSENT_STALE: 'consent_stale',
+  ALREADY_ONBOARDED: 'already_onboarded',
   UNKNOWN: 'unknown_error',
 };
 
@@ -15,7 +18,30 @@ export const ONBOARDING_ERROR_MESSAGES = {
   [ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE]: 'Código de escuela inválido. Verifica con tu administrador.',
   [ONBOARDING_ERROR_CODES.DUPLICATE_TENANT]: 'Ya existe una escuela con esos datos. Revisa el nombre o contacta a soporte.',
   [ONBOARDING_ERROR_CODES.FORBIDDEN]: 'No tienes permisos para completar esta acción. Vuelve a iniciar sesión o contacta a soporte.',
-  [ONBOARDING_ERROR_CODES.UNKNOWN]: 'Hubo un error al crear la escuela. Intenta de nuevo o contacta a soporte.',
+  [ONBOARDING_ERROR_CODES.CONSENT_REQUIRED]: 'Para continuar, acepta el Aviso de Privacidad y el consentimiento de datos sensibles.',
+  [ONBOARDING_ERROR_CODES.CONSENT_STALE]: 'El Aviso de Privacidad se actualizó. Recarga la página para leer la versión vigente y vuelve a aceptarlo.',
+  [ONBOARDING_ERROR_CODES.ALREADY_ONBOARDED]: 'Tu cuenta ya pertenece a una escuela. Si necesitas cambiarte, escribe a soporte@acaciaco.com.mx.',
+  [ONBOARDING_ERROR_CODES.UNKNOWN]: 'No pudimos completar tu registro. Intenta de nuevo o escribe a soporte@acaciaco.com.mx.',
+};
+
+// Which form field an error belongs to, so Onboarding.jsx can show it next
+// to the input instead of in an alert() that names nothing.
+export const ONBOARDING_ERROR_FIELDS = {
+  [ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE]: 'schoolCode',
+  [ONBOARDING_ERROR_CODES.CONSENT_REQUIRED]: 'consent',
+  [ONBOARDING_ERROR_CODES.CONSENT_STALE]: 'consent',
+};
+
+// Server codes from provisionOnboardingProfile → user-facing codes. Checked
+// BEFORE the HTTP-status fallbacks: a 409 is not always "duplicate school".
+const SERVER_CODE_MAP = {
+  invalid_school_code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE,
+  school_not_found: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE,
+  consent_required: ONBOARDING_ERROR_CODES.CONSENT_REQUIRED,
+  consent_version_mismatch: ONBOARDING_ERROR_CODES.CONSENT_STALE,
+  already_onboarded: ONBOARDING_ERROR_CODES.ALREADY_ONBOARDED,
+  missing_school_name: ONBOARDING_ERROR_CODES.VALIDATION,
+  admin_not_allowed: ONBOARDING_ERROR_CODES.FORBIDDEN,
 };
 
 function normalizeText(value) {
@@ -36,18 +62,6 @@ function getHeader(headers, name) {
   return headers[name] || headers[name.toLowerCase()] || null;
 }
 
-export const REQUIRED_TENANT_ROLES = [
-  { role_key: 'ADMIN', name: 'Administrador', is_required: true },
-  { role_key: 'TEACHER', name: 'Maestro/a', is_required: true },
-  { role_key: 'PARENT', name: 'Padre/Madre', is_required: true },
-];
-
-export const BASELINE_PERMISSION_TEMPLATES = [
-  { role_key: 'ADMIN', name: 'Plantilla Admin', permissions: { all: true } },
-  { role_key: 'TEACHER', name: 'Plantilla Maestro', permissions: { classroom_scope: true } },
-  { role_key: 'PARENT', name: 'Plantilla Padre/Madre', permissions: { student_scope: true } },
-];
-
 export function validateOnboardingPayload({ formData, user }) {
   if (!user?.id) {
     return { valid: false, code: ONBOARDING_ERROR_CODES.VALIDATION, field: 'user.id' };
@@ -61,45 +75,28 @@ export function validateOnboardingPayload({ formData, user }) {
     return { valid: false, code: ONBOARDING_ERROR_CODES.VALIDATION, field: 'newSchoolName' };
   }
 
-  if (formData.role !== 'ADMIN' && !normalizeText(formData.schoolCode)) {
-    return { valid: false, code: ONBOARDING_ERROR_CODES.VALIDATION, field: 'schoolCode' };
+  if (formData.role !== 'ADMIN') {
+    const code = normalizeText(formData.schoolCode);
+    if (!code) return { valid: false, code: ONBOARDING_ERROR_CODES.VALIDATION, field: 'schoolCode' };
+    // Catch a mistyped code before the round trip; the server still decides.
+    if (!isValidJoinCode(code) && !isLegacySchoolId(code)) {
+      return { valid: false, code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE, field: 'schoolCode' };
+    }
   }
 
   return { valid: true };
 }
 
-export function buildSchoolPayload({ formData, user, logoUrl, themePreview }) {
+// The `newSchool` block sent to provisionOnboardingProfile. The server stamps
+// created_by_user_id and join_code itself and re-sanitises everything here;
+// is_demo is never taken from the client (only the platform marks a demo).
+export function buildSchoolPayload({ formData, logoUrl, themePreview }) {
   const payload = {
     name: normalizeText(formData.newSchoolName),
-    created_by_user_id: user.id,
     theme_settings: themePreview || DEFAULT_THEME,
   };
-
-  if (logoUrl) {
-    payload.logo_url = logoUrl;
-  }
-
-  if (formData.isDemo) {
-    payload.is_demo = true;
-    payload.data_mode = 'test-data';
-  }
-
+  if (logoUrl) payload.logo_url = logoUrl;
   return payload;
-}
-
-export function buildUserProfilePayload({ formData, user, schoolId }) {
-  const isAdmin = formData.role === 'ADMIN';
-
-  // `is_super_admin` is a privileged field owned exclusively by the backend (Base44 entity
-  // rules / RLS). The client never sets it, so it cannot self-elevate to platform owner.
-  return {
-    user_id: user.id,
-    school_id: schoolId,
-    app_role: isAdmin ? 'ADMIN' : formData.role,
-    status: isAdmin ? 'ACTIVE' : 'PENDING',
-    phone: normalizeText(formData.phone),
-    onboarding_completed: true,
-  };
 }
 
 export function extractBackendErrorDetails(error) {
@@ -119,14 +116,22 @@ export function extractBackendErrorDetails(error) {
   };
 }
 
+function withField(result, field) {
+  const resolved = field || ONBOARDING_ERROR_FIELDS[result.code] || null;
+  return resolved ? { ...result, field: resolved } : result;
+}
+
 export function mapOnboardingError(error) {
   if (error?.code && ONBOARDING_ERROR_MESSAGES[error.code]) {
-    return { code: error.code, message: ONBOARDING_ERROR_MESSAGES[error.code] };
+    return withField({ code: error.code, message: ONBOARDING_ERROR_MESSAGES[error.code] }, error.field);
   }
 
   const details = extractBackendErrorDetails(error);
   const lowerCode = String(details.backendCode || '').toLowerCase();
   const lowerMessage = String(details.backendMessage || '').toLowerCase();
+
+  const mapped = SERVER_CODE_MAP[lowerCode];
+  if (mapped) return withField({ code: mapped, message: ONBOARDING_ERROR_MESSAGES[mapped] });
 
   if (
     details.status === 400 ||
@@ -143,7 +148,7 @@ export function mapOnboardingError(error) {
     lowerCode.includes('invalid_school_code') ||
     lowerMessage.includes('invalid school code')
   ) {
-    return { code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE, message: ONBOARDING_ERROR_MESSAGES[ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE] };
+    return withField({ code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE, message: ONBOARDING_ERROR_MESSAGES[ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE] });
   }
 
   if (details.status === 403 || details.status === 401) {
@@ -169,129 +174,19 @@ export function captureOnboardingFailure({ error, requestPayload, phase, correla
   };
 }
 
-async function findSchoolById(School, schoolCode) {
-  const schools = await School.filter({ id: normalizeText(schoolCode) });
-  return schools[0] || null;
-}
-
-async function findReusableCreatedSchool(School, schoolPayload) {
-  const schools = await School.filter({
-    name: schoolPayload.name,
-    created_by_user_id: schoolPayload.created_by_user_id,
-  }, '-created_date', 1);
-  return schools[0] || null;
-}
-
-async function ensureSchoolSubscription(SchoolSubscription, schoolId) {
-  const existing = await SchoolSubscription.filter({ school_id: schoolId }, '-created_date', 1);
-  if (existing[0]) return existing[0];
-
-  // Seed the 30-day trial with its license tier/limit (mirrors FlowFin).
-  return SchoolSubscription.create(buildTrialSubscription(schoolId));
-}
-
-async function ensureMissingTenantRows(Entity, query, payload) {
-  if (!Entity?.filter || !Entity?.create) return null;
-
-  const existing = await Entity.filter(query, '-created_date', 1);
-  if (existing[0]) return existing[0];
-
-  return Entity.create(payload);
-}
-
-async function ensureTenantBootstrapRecords(base44, schoolId, ownerProfileId) {
-  const created = { roles: [], permissionTemplates: [], accessBindings: [] };
-
-  for (const role of REQUIRED_TENANT_ROLES) {
-    const row = await ensureMissingTenantRows(
-      base44.entities.Role,
-      { school_id: schoolId, role_key: role.role_key },
-      { ...role, school_id: schoolId }
-    );
-    if (row) created.roles.push(row);
-  }
-
-  for (const template of BASELINE_PERMISSION_TEMPLATES) {
-    const row = await ensureMissingTenantRows(
-      base44.entities.PermissionTemplate,
-      { school_id: schoolId, role_key: template.role_key },
-      { ...template, school_id: schoolId, is_baseline: true }
-    );
-    if (row) created.permissionTemplates.push(row);
-  }
-
-  if (ownerProfileId) {
-    const row = await ensureMissingTenantRows(
-      base44.entities.AccessBinding,
-      { school_id: schoolId, user_profile_id: ownerProfileId, binding_key: 'tenant_owner_admin' },
-      { school_id: schoolId, user_profile_id: ownerProfileId, binding_key: 'tenant_owner_admin', role_key: 'ADMIN', status: 'ACTIVE' }
-    );
-    if (row) created.accessBindings.push(row);
-  }
-
-  return created;
-}
-
-/**
- * Persist the privacy-notice consent the user gave during onboarding. Required
- * by the LFPDPPP for processing minors' sensitive data. Best-effort: a missing
- * ConsentRecord entity (not yet created in Base44) must never block onboarding,
- * so both writes are guarded. The AuditLog write provides a durable trail using
- * an entity that already exists.
- */
-async function persistOnboardingConsent({ base44, logAuditEvent, user, schoolId, role, consent }) {
-  if (!consent) return;
-
-  const payload = buildConsentRecordPayload({
-    user,
-    schoolId,
-    role,
-    acceptances: consent.acceptances,
-    noticeVersion: consent.noticeVersion,
-    at: consent.acceptedAt,
-    userAgent: consent.userAgent,
-  });
-
-  try {
-    if (base44?.entities?.ConsentRecord?.create) {
-      await base44.entities.ConsentRecord.create(payload);
-    }
-  } catch (error) {
-    console.error('consent_record_persist_failed', { message: String(error?.message || error) });
-  }
-
-  try {
-    if (typeof logAuditEvent === 'function') {
-      await logAuditEvent({
-        user,
-        userProfile: { school_id: schoolId, app_role: role },
-        entity: 'ConsentRecord',
-        entityId: user?.id || 'unknown',
-        action: 'PRIVACY_CONSENT_ACCEPTED',
-        reason: `aviso_de_privacidad ${payload.notice_version}`,
-        context: payload,
-      });
-    }
-  } catch (error) {
-    console.error('consent_audit_persist_failed', { message: String(error?.message || error) });
-  }
-}
-
-// Provision the caller's own profile through the server-authoritative function.
-// UserProfile.app_role is locked to the service role by field-level RLS, so the
-// client can no longer write it directly; the function enforces founder-only
-// ADMIN and applies the role with the service role. Returns { profileId, status }.
-async function provisionProfile(base44, { schoolId, role, phone }) {
-  const result = await base44.functions.invoke('provisionOnboardingProfile', {
-    schoolId,
-    role,
-    phone,
-  });
-  return {
-    profileId: result?.profileId || null,
-    status: result?.status || (role === 'ADMIN' ? 'ACTIVE' : 'PENDING'),
-  };
-}
+// Everything that writes School / SchoolSubscription / ConsentRecord /
+// UserProfile now happens server-side in provisionOnboardingProfile (see
+// src/lib/authorization/onboardingProvision.js for the algorithm and why).
+// What stays in the browser is only what needs the browser: validating the
+// form, uploading the logo file, and two best-effort follow-ups.
+//
+// Removed on purpose (audit F03/F26, 2026-09-29): the client School.create /
+// SchoolSubscription.create (platform-only under RLS — they always failed),
+// findSchoolById (School.read is platform-only — every code was "invalid"),
+// ensureTenantBootstrapRecords (Role / PermissionTemplate / AccessBinding do
+// not exist and nothing reads them; the SDK's entity Proxy made its
+// `Entity?.filter` guard always pass, so it threw after a partial write) and
+// the best-effort consent write (now mandatory and server-side).
 
 export async function completeOnboardingTenantCreation({
   base44,
@@ -311,94 +206,99 @@ export async function completeOnboardingTenantCreation({
     throw error;
   }
 
-  let schoolId = null;
-  let school = null;
-  let logoUrl = null;
-
-  if (formData.role === 'ADMIN') {
-    if (logoFile) {
-      const uploaded = await base44.integrations.Core.UploadFile({ file: logoFile });
-      logoUrl = uploaded.file_url;
-    }
-
-    const schoolPayload = buildSchoolPayload({ formData, user, logoUrl, themePreview });
-    school = await findReusableCreatedSchool(base44.entities.School, schoolPayload);
-    if (!school) {
-      school = await base44.entities.School.create(schoolPayload);
-    }
-    schoolId = school.id;
-    await ensureSchoolSubscription(base44.entities.SchoolSubscription, schoolId);
-  } else {
-    school = await findSchoolById(base44.entities.School, formData.schoolCode);
-    if (!school) {
-      const error = new Error('Invalid school code');
-      error.code = ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE;
-      throw error;
-    }
-    schoolId = school.id;
-  }
-
-  const { profileId, status: provisionedStatus } = await provisionProfile(base44, {
-    schoolId,
+  const request = {
     role: formData.role,
     phone: normalizeText(formData.phone),
+    consent: {
+      general: Boolean(consent?.acceptances?.general),
+      sensitive: Boolean(consent?.acceptances?.sensitive),
+      noticeVersion: consent?.noticeVersion || null,
+    },
+  };
+
+  if (formData.role === 'ADMIN') {
+    let logoUrl = null;
+    if (logoFile) {
+      const uploaded = await base44.integrations.Core.UploadFile({ file: logoFile });
+      logoUrl = uploaded?.file_url || null;
+    }
+    request.newSchool = buildSchoolPayload({ formData, logoUrl, themePreview });
+  } else {
+    request.joinCode = normalizeText(formData.schoolCode);
+  }
+
+  // invokeFunction unwraps the axios response to the function's body.
+  const result = await invokeFunction(base44, 'provisionOnboardingProfile', request);
+  const schoolId = result?.schoolId || null;
+  const profileId = result?.profileId || null;
+  const status = result?.status || (formData.role === 'ADMIN' ? 'ACTIVE' : 'PENDING');
+
+  // Best-effort follow-ups. The account already exists at this point, so a
+  // failure here must never turn into "Hubo un error al crear la escuela" and
+  // an invitation to retry.
+  if (status === 'PENDING') {
+    try {
+      await notifySchoolAdminsOfPendingUser({ base44, notificationService, user, schoolId, schoolName: result?.schoolName, role: formData.role });
+    } catch (error) {
+      console.error('pending_user_notice_failed', { message: String(error?.message || error) });
+    }
+  }
+
+  if (formData.role === 'ADMIN' && typeof logAuditEvent === 'function') {
+    try {
+      await logAuditEvent({
+        user,
+        userProfile: { school_id: schoolId, app_role: 'ADMIN' },
+        entity: 'SchoolTheme',
+        entityId: schoolId,
+        action: 'THEME_CREATED_OR_UPDATED',
+        reason: 'tenant_theme_onboarding',
+        context: { old_palette: null, new_palette: (themePreview || DEFAULT_THEME).palette, timestamp: new Date().toISOString() },
+      });
+    } catch (error) {
+      console.error('onboarding_theme_audit_failed', { message: String(error?.message || error) });
+    }
+  }
+
+  return { schoolId, profileId, status };
+}
+
+// KNOWN GAP (for the notifications package): a PENDING joiner cannot read the
+// school's admin UserProfiles or User rows under RLS, so this usually finds no
+// recipients and the admins learn about the request only from Aprobaciones.
+// sendNotificationEmail already accepts new_user_pending from a PENDING caller;
+// what is missing is resolving the admin recipients server-side.
+async function notifySchoolAdminsOfPendingUser({ base44, notificationService, user, schoolId, schoolName, role }) {
+  const adminProfiles = await base44.entities.UserProfile.filter({
+    school_id: schoolId,
+    app_role: 'ADMIN',
+    status: 'ACTIVE',
+  });
+  if (!adminProfiles?.length) return;
+  const allUsers = await base44.entities.User.list();
+  const roleNames = { TEACHER: 'Maestro/a', PARENT: 'Padre/Madre' };
+  const recipients = adminProfiles.map((profile) => {
+    const adminUser = allUsers.find((u) => u.id === profile.user_id);
+    return {
+      user_id: profile.user_id,
+      app_role: profile.app_role,
+      email: adminUser?.email,
+      notification_preferences: profile.notification_preferences || {},
+      school_notification_preferences: {},
+    };
   });
 
-  await persistOnboardingConsent({ base44, logAuditEvent, user, schoolId, role: formData.role, consent });
-
-  if (formData.role === 'ADMIN') {
-    await ensureTenantBootstrapRecords(base44, schoolId, profileId);
-  }
-
-  if (provisionedStatus === 'PENDING') {
-    const adminProfiles = await base44.entities.UserProfile.filter({
-      school_id: schoolId,
-      app_role: 'ADMIN',
-      status: 'ACTIVE'
-    });
-    const allUsers = await base44.entities.User.list();
-    const roleNames = {
-      TEACHER: 'Maestro/a',
-      PARENT: 'Padre/Madre'
-    };
-    const recipients = adminProfiles.map((profile) => {
-      const adminUser = allUsers.find((u) => u.id === profile.user_id);
-      return {
-        user_id: profile.user_id,
-        app_role: profile.app_role,
-        email: adminUser?.email,
-        notification_preferences: profile.notification_preferences || {},
-        school_notification_preferences: school?.notification_preferences || {},
-      };
-    });
-
-    await notificationService.sendByEvent({
-      eventType: 'new_user_pending',
-      schoolId,
-      actorUserId: user.id,
-      recipients,
-      templateContext: {
-        schoolName: school?.name || 'LIUMA',
-        userName: user.full_name,
-        userEmail: user.email,
-        roleName: roleNames[formData.role],
-      },
-      channels: ['email', 'in_app'],
-    });
-  }
-
-  if (formData.role === 'ADMIN') {
-    const actorProfile = { school_id: schoolId, app_role: 'ADMIN' };
-    await logAuditEvent({
-      user,
-      userProfile: actorProfile,
-      entity: 'SchoolTheme',
-      entityId: schoolId,
-      action: 'THEME_CREATED_OR_UPDATED',
-      reason: 'tenant_theme_onboarding',
-      context: { old_palette: null, new_palette: (themePreview || DEFAULT_THEME).palette, timestamp: new Date().toISOString() },
-    });
-  }
-
-  return { schoolId, profileId };
+  await notificationService.sendByEvent({
+    eventType: 'new_user_pending',
+    schoolId,
+    actorUserId: user.id,
+    recipients,
+    templateContext: {
+      schoolName: schoolName || 'LIUMA',
+      userName: user.full_name,
+      userEmail: user.email,
+      roleName: roleNames[role],
+    },
+    channels: ['email', 'in_app'],
+  });
 }

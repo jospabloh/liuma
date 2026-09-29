@@ -1,23 +1,14 @@
 import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { buildThemeCssVars, DEFAULT_THEME } from '@/lib/tenantTheme';
-import { selectCurrentUserProfile } from '@/lib/tenantSelection';
+import { useSubscription } from '@/hooks/useSubscription';
 
+// The school's palette comes from getMySubscription (via useSubscription),
+// which returns name / logo / theme_settings to every ACTIVE member. It used to
+// be read with base44.entities.School.filter — but School.read is
+// platform-only under RLS, so every school user got nothing and the palette a
+// founder picked at onboarding never rendered for anyone (audit F37).
 export default function TenantThemeRuntime() {
-  const { data: user } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-  const { data: userProfile } = useQuery({
-    queryKey: ['themeUserProfile', user?.id],
-    queryFn: async () => selectCurrentUserProfile(
-      await base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date'),
-    ),
-    enabled: !!user,
-  });
-  const { data: school } = useQuery({
-    queryKey: ['themeSchool', userProfile?.school_id],
-    queryFn: async () => (await base44.entities.School.filter({ id: userProfile.school_id }))[0],
-    enabled: !!userProfile?.school_id,
-  });
+  const { school } = useSubscription();
 
   useEffect(() => {
     const vars = buildThemeCssVars(school?.theme_settings || DEFAULT_THEME);

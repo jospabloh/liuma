@@ -86,9 +86,20 @@ export const PLAN_CATALOG = {
 
 // tier → licensed student limit (null = unlimited). Single source of truth used
 // by activation/payment-confirmation builders so the limit always tracks the tier.
-export const PLAN_LIMITS = Object.fromEntries(
-  PLAN_TIERS.map((tier) => [tier, PLAN_CATALOG[tier].studentLimit]),
-);
+export const PLAN_LIMITS = {
+  ...Object.fromEntries(PLAN_TIERS.map((tier) => [tier, PLAN_CATALOG[tier].studentLimit])),
+  // 'founder' is Mission Control's hidden, lifetime, non-paid plan
+  // (acacia-mission-control api/_lib/licenseControl.js lists it for liuma and
+  // portfolioLifecycle.js never runs the expiry cycle on it). It is NOT part of
+  // the public price ladder (PLAN_TIERS), but LIUMA must recognise it: before
+  // this, a school MC marked 'founder' was normalised as 'start' and capped at
+  // 150 students.
+  founder: null,
+};
+
+/** Every license_tier value SchoolSubscription.jsonc accepts. */
+export const ALL_LICENSE_TIERS = [...PLAN_TIERS, 'founder'];
+export const FOUNDER_TIER = 'founder';
 
 // Billing-status groups.
 export const ACTIVE_STATUSES = ['trial', 'active'];
@@ -106,6 +117,7 @@ export function getPlan(tier) {
 }
 
 export function planLabel(tier) {
+  if (tier === FOUNDER_TIER) return 'LIUMA Fundador';
   return PLAN_CATALOG[tier]?.label || tier || '—';
 }
 
@@ -146,15 +158,124 @@ export function calculateExpiry(currentExpiresAt, monthsToExtend = 1, now = new 
 }
 
 /**
+ * Effective license state — the ONE rule for "may this school write?".
+ *
+ * Owner decision (2026-09-29): a missing or expired license FAILS CLOSED to
+ * read-only. Users can still see and export everything; they cannot write
+ * until the school pays. Before this, a school with no SchoolSubscription row
+ * (every school in production) was treated as fully active forever, and a
+ * trial whose 30 days had run out stayed 'trial' with full write access.
+ *
+ *   - no row                         → read-only ('missing')
+ *   - status in READ_ONLY_STATUSES   → read-only (Mission Control put it there)
+ *   - trial past trial_end_date      → read-only ('trial_expired'). Mission
+ *     Control's lifecycle cron only counts days past license_expires_at
+ *     (portfolioLifecycle.js#computePortfolioLifecycleStage), and a trial row
+ *     has none — so NOTHING else ever ends a trial; the app has to.
+ *   - trial with no trial_end_date   → read-only ('trial_without_end'): a
+ *     malformed row must not become an unlimited trial.
+ *   - active past license_expires_at → still writable ('active_overdue').
+ *     Paid licenses have an 8-day grace that Mission Control owns and enforces
+ *     by writing view_only; locking earlier here would contradict it.
+ *   - founder tier                   → never expires by date.
+ *
+ * MIRRORED BY HAND (Deno cannot import src/): base44/functions/
+ * getMySubscription/entry.ts and guardedEntityWrite/entry.ts carry the same
+ * rule as `effectiveLicense`. tests/unit/license-lifecycle.test.js checks
+ * both copies.
+ */
+export function resolveEffectiveLicense(subscription, now = new Date()) {
+  if (!subscription) {
+    return { status: 'missing', isReadOnly: true, reason: 'missing' };
+  }
+  const status = subscription.subscription_status || 'trial';
+  if (READ_ONLY_STATUSES.includes(status)) {
+    return { status, isReadOnly: true, reason: status };
+  }
+  if (subscription.license_tier === FOUNDER_TIER) {
+    return { status, isReadOnly: false, reason: 'founder' };
+  }
+  if (status === 'trial') {
+    const end = Date.parse(subscription.trial_end_date || '');
+    if (Number.isNaN(end)) return { status: 'view_only', isReadOnly: true, reason: 'trial_without_end' };
+    if (end <= now.getTime()) return { status: 'view_only', isReadOnly: true, reason: 'trial_expired' };
+    return { status, isReadOnly: false, reason: 'trial' };
+  }
+  const expires = Date.parse(subscription.license_expires_at || '');
+  if (!Number.isNaN(expires) && expires <= now.getTime()) {
+    return { status, isReadOnly: false, reason: 'active_overdue' };
+  }
+  return { status, isReadOnly: false, reason: status };
+}
+
+// Days before expiry at which the "vence pronto" notice appears. Matches
+// Mission Control's own T-7 upcoming-renewal email
+// (renewalReminders.js UPCOMING_WINDOW_DAYS), so the banner and the email
+// start the same day. At URGENT_NOTICE_DAYS the tone escalates.
+export const UPCOMING_NOTICE_DAYS = 7;
+export const URGENT_NOTICE_DAYS = 3;
+
+function daysUntil(iso, now) {
+  const t = Date.parse(iso || '');
+  if (Number.isNaN(t)) return null;
+  return Math.ceil((t - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Which license notice (if any) to show, before and after expiry. Pure, so the
+ * thresholds are tested rather than eyeballed. Every notice carries a pay CTA
+ * (see src/lib/license/billingContact.js) except a founder/active one, which
+ * shows nothing.
+ *
+ * kinds: trial_ending | renewal_upcoming | active_overdue | read_only |
+ *        suspended | missing
+ * tone:  info | warning | danger
+ */
+export function licenseNotice(subscription, now = new Date()) {
+  const effective = resolveEffectiveLicense(subscription, now);
+  if (effective.reason === 'missing') {
+    return { kind: 'missing', tone: 'danger', daysLeft: null, effective };
+  }
+  if (effective.reason === 'suspended') {
+    return { kind: 'suspended', tone: 'danger', daysLeft: null, effective };
+  }
+  if (effective.isReadOnly) {
+    return { kind: 'read_only', tone: 'danger', daysLeft: 0, effective };
+  }
+  if (effective.reason === 'trial') {
+    const daysLeft = daysUntil(subscription.trial_end_date, now);
+    if (daysLeft != null && daysLeft <= UPCOMING_NOTICE_DAYS) {
+      return { kind: 'trial_ending', tone: daysLeft <= URGENT_NOTICE_DAYS ? 'danger' : 'warning', daysLeft, effective };
+    }
+    return null;
+  }
+  if (effective.reason === 'active_overdue') {
+    return { kind: 'active_overdue', tone: 'danger', daysLeft: 0, effective };
+  }
+  if (effective.reason === 'active' && !subscription.auto_renewal) {
+    // Auto-renewing (Mercado Pago charges on the 1st) needs no reminder here;
+    // Mission Control mails the charge notice itself.
+    const daysLeft = daysUntil(subscription.license_expires_at, now);
+    if (daysLeft != null && daysLeft <= UPCOMING_NOTICE_DAYS) {
+      return { kind: 'renewal_upcoming', tone: daysLeft <= URGENT_NOTICE_DAYS ? 'danger' : 'warning', daysLeft, effective };
+    }
+  }
+  return null;
+}
+
+/**
  * Normalize a raw SchoolSubscription row into the shape the UI consumes.
- * Grandfather clause: a missing status defaults to 'trial'.
+ * Grandfather clause: a missing status defaults to 'trial'. A missing ROW is
+ * read-only (see resolveEffectiveLicense).
  */
 export function normalizeSubscription(subscription, now = new Date()) {
   if (!subscription) {
     return {
       exists: false,
       billingStatus: null,
-      isReadOnly: false,
+      effectiveStatus: 'missing',
+      readOnlyReason: 'missing',
+      isReadOnly: true,
       licenseTier: 'start',
       licensedStudentLimit: PLAN_LIMITS.start,
       trialDaysLeft: null,
@@ -168,13 +289,16 @@ export function normalizeSubscription(subscription, now = new Date()) {
 
   const billingStatus = subscription.subscription_status || 'trial';
   const licenseTier = subscription.license_tier || 'start';
+  const effective = resolveEffectiveLicense(subscription, now);
 
   return {
     exists: true,
     id: subscription.id || null,
     schoolId: subscription.school_id || null,
     billingStatus,
-    isReadOnly: isReadOnlyStatus(billingStatus),
+    effectiveStatus: effective.status,
+    readOnlyReason: effective.isReadOnly ? effective.reason : null,
+    isReadOnly: effective.isReadOnly,
     licenseTier,
     licensedStudentLimit: subscription.licensed_student_limit ?? PLAN_LIMITS[licenseTier] ?? null,
     trialDaysLeft: billingStatus === 'trial'
@@ -219,6 +343,7 @@ export function nextTier(tier) {
  */
 export function effectiveStudentLimit(licenseTier, billingStatus) {
   if (billingStatus === 'trial') return PLAN_LIMITS.plus; // largest (null = unlimited)
+  if (licenseTier === FOUNDER_TIER) return null;
   return PLAN_LIMITS[licenseTier] ?? null;
 }
 

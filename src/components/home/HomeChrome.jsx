@@ -1,9 +1,12 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { capitalizeFirst } from '@/lib/spanishText';
 
 // Branded greeting band. The background is the tenant's own brand color
 // (bg-primary) and the text adapts to it (text-primary-foreground), so the
 // header is the school's identity rather than a hardcoded gradient.
+// The eyebrow is usually a date ("martes 29 de septiembre"): only its first
+// letter is capitalised — CSS `capitalize` produced "Martes 29 De Septiembre".
 export function HomeHeader({ eyebrow, title, subtitle, children }) {
   const reduceMotion = useReducedMotion();
   return (
@@ -17,7 +20,7 @@ export function HomeHeader({ eyebrow, title, subtitle, children }) {
         animate={{ opacity: 1, y: 0 }}
         className="relative mx-auto max-w-2xl"
       >
-        {eyebrow && <p className="text-sm capitalize text-primary-foreground/75">{eyebrow}</p>}
+        {eyebrow && <p className="text-sm text-primary-foreground/75">{capitalizeFirst(eyebrow)}</p>}
         <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary-foreground">
           {title}
         </h1>

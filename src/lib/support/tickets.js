@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { notificationService } from '@/lib/notifications/service';
 import {
@@ -6,7 +7,6 @@ import {
   SUPPORT_AUTHOR_ROLE,
   SUPPORT_CHANNEL,
   SUPPORT_TIER,
-  SUPPORT_EMAIL,
   TERMINAL_STATUSES,
   DEFAULT_CATEGORY,
   DEFAULT_PRIORITY,
@@ -44,65 +44,39 @@ async function allocateTicketNumber(schoolId) {
 }
 
 /**
- * Find the recipient profile(s) for an escalated ticket.
- *  - SCHOOL_ADMIN tier → active ADMIN profiles in the requester's school.
- *  - PLATFORM tier     → the super-admin owner profile(s).
+ * Append a message to a ticket thread through the postTicketMessage function.
+ * SupportTicketMessage create is service-role only since P7 (2026-09-29): the
+ * server re-reads the ticket, checks the caller is its requester, the
+ * platform owner or an ACTIVE ADMIN of its school, and DERIVES author_role —
+ * the client no longer gets to say who it is.
+ *
+ * @param {{ ticketId: string, body: string, kind?: 'reply'|'note'|'ai_summary' }} args
  */
-async function resolveAssigneeRecipients({ tier, schoolId }) {
-  try {
-    if (tier === SUPPORT_TIER.PLATFORM) {
-      const owners = await base44.entities.UserProfile.filter({ is_super_admin: true });
-      return owners || [];
-    }
-    const admins = await base44.entities.UserProfile.filter({
-      school_id: schoolId,
-      app_role: 'ADMIN',
-      status: 'ACTIVE',
-    });
-    return admins || [];
-  } catch (error) {
-    return [];
-  }
+async function postTicketMessage({ ticketId, body, kind = 'reply' }) {
+  const result = await invokeFunction(base44, 'postTicketMessage', { ticketId, body, kind });
+  return result?.message;
 }
 
-async function notifyAssignees({ recipients, schoolId, actorUserId, ticket, description, tier }) {
-  const templateContext = {
-    ticketNumber: ticket.ticket_number,
-    subjectText: ticket.subject,
-    requesterName: ticket.requester_name || 'Usuario',
-    categoryLabel: ticket.category,
-    priorityLabel: ticket.priority,
-    slaDateLabel: ticket.sla_due_at ? new Date(ticket.sla_due_at).toLocaleString('es-MX') : 'N/D',
-    description,
-  };
-
+/**
+ * Notify whoever owns an escalated ticket: the school's ACTIVE ADMINs for the
+ * SCHOOL_ADMIN tier, or the platform owners plus the fixed Tier-2 inbox
+ * (soporte@…, SUPPORT_EMAIL) for the PLATFORM tier.
+ *
+ * All of it happens server-side in sendBulkNotification, keyed on the stored
+ * ticket id: the recipients, their addresses and the email text are read from
+ * the ticket and its thread, never sent from here. That closes three things
+ * the old client fan-out had wrong (sales-readiness audit F09/F30): the
+ * admins' emails came from a User.list() that returns nobody but yourself; any
+ * user could email soporte any number of times with free text of their own;
+ * and the same ticket could be re-announced on every call. The server sends
+ * once per (ticket, tier, recipient) and rate-limits requesters.
+ *
+ * Never throws: a notification failure must not block ticket creation.
+ */
+async function notifyAssignees({ ticket }) {
   try {
-    if (recipients.length) {
-      await notificationService.sendByEvent({
-        eventType: 'support_ticket_escalated',
-        schoolId,
-        actorUserId,
-        recipients,
-        channels: ['in_app', 'email'],
-        priority: ticket.priority,
-        templateContext,
-      });
-    }
-
-    // Tier-2 (platform) escalations always email the fixed support inbox, so
-    // "soporte" is notified even when no owner profile exists in the directory
-    // (the is_super_admin lookup can legitimately return nobody).
-    if (tier === SUPPORT_TIER.PLATFORM) {
-      await notificationService.sendEventEmailTo({
-        eventType: 'support_ticket_escalated',
-        email: SUPPORT_EMAIL,
-        schoolId,
-        actorUserId,
-        templateContext,
-      });
-    }
+    await notificationService.sendBulk({ eventType: 'support_ticket_escalated', ticketId: ticket.id });
   } catch (error) {
-    // Notification failures are logged inside the service; never block ticket creation.
     console.error('Error notifying support assignees:', error);
   }
 }
@@ -172,30 +146,16 @@ export async function createSupportTicket({
   const ticket = await base44.entities.SupportTicket.create(ticketPayload);
 
   // Seed the thread: the requester's description (and the AI attempt, if any).
-  // `requester_user_id` is denormalized onto every message so Base44 RLS can
-  // scope reads to the ticket's own requester (it can't join to the parent).
-  await base44.entities.SupportTicketMessage.create({
-    ticket_id: ticket.id,
-    school_id: schoolId,
-    requester_user_id: user.id,
-    author_user_id: user.id,
-    author_role: SUPPORT_AUTHOR_ROLE.REQUESTER,
-    body: description,
-  });
+  // The function denormalizes `requester_user_id` onto every message so Base44
+  // RLS can scope reads to the ticket's own requester (it can't join to the
+  // parent).
+  await postTicketMessage({ ticketId: ticket.id, body: description, kind: 'reply' });
 
   if (aiAttempted && aiResolutionSummary) {
-    await base44.entities.SupportTicketMessage.create({
-      ticket_id: ticket.id,
-      school_id: schoolId,
-      requester_user_id: user.id,
-      author_user_id: null,
-      author_role: SUPPORT_AUTHOR_ROLE.AI,
-      body: aiResolutionSummary,
-    });
+    await postTicketMessage({ ticketId: ticket.id, body: aiResolutionSummary, kind: 'ai_summary' });
   }
 
-  const recipients = await resolveAssigneeRecipients({ tier: routing.tier, schoolId });
-  await notifyAssignees({ recipients, schoolId, actorUserId: user.id, ticket, description, tier: routing.tier });
+  await notifyAssignees({ ticket });
 
   await logAuditEvent({
     user,
@@ -217,27 +177,28 @@ export async function createSupportTicket({
 
   // Push en tiempo real a ACACIA Mission Control (no bloquea el flujo): refleja
   // el ticket sin sincronización manual y dispara la alerta unificada al soporte.
-  base44.functions.invoke('notifyTicketCreated', { ticketId: ticket.id }).catch(() => {});
+  invokeFunction(base44, 'notifyTicketCreated', { ticketId: ticket.id }).catch(() => {});
 
   return ticket;
 }
 
-/** Append a reply to a ticket thread and notify the other party. */
+/**
+ * Append a reply to a ticket thread and notify the other party.
+ *
+ * `authorRole` is only the caller's expectation (and the fallback if the
+ * server response carries no message): the role actually stored is the one
+ * postTicketMessage derives, and that is what decides whether this was a
+ * staff reply.
+ */
 export async function addSupportMessage({ user, userProfile, ticket, body, authorRole }) {
   if (!user || !userProfile || !ticket || !body) {
     throw new Error('addSupportMessage requires user, userProfile, ticket and body');
   }
 
-  const message = await base44.entities.SupportTicketMessage.create({
-    ticket_id: ticket.id,
-    school_id: ticket.school_id,
-    requester_user_id: ticket.requester_user_id,
-    author_user_id: user.id,
-    author_role: authorRole,
-    body,
-  });
+  const message = await postTicketMessage({ ticketId: ticket.id, body, kind: 'reply' });
+  const storedRole = message?.author_role || authorRole;
 
-  const isStaffReply = authorRole !== SUPPORT_AUTHOR_ROLE.REQUESTER;
+  const isStaffReply = storedRole !== SUPPORT_AUTHOR_ROLE.REQUESTER;
 
   // First staff reply stops the SLA clock.
   if (isStaffReply && !ticket.first_response_at) {
@@ -274,8 +235,8 @@ export async function addSupportMessage({ user, userProfile, ticket, body, autho
     entity: AUDIT_ENTITIES.SUPPORT_TICKET,
     entityId: ticket.id,
     action: 'SUPPORT_TICKET_MESSAGE',
-    reason: `Reply by ${authorRole} on ${ticket.ticket_number}`,
-    context: { ticket_number: ticket.ticket_number, author_role: authorRole },
+    reason: `Reply by ${storedRole} on ${ticket.ticket_number}`,
+    context: { ticket_number: ticket.ticket_number, author_role: storedRole },
   });
 
   return message;
@@ -294,14 +255,7 @@ export async function transitionTicketStatus({ user, userProfile, ticket, toStat
   await base44.entities.SupportTicket.update(ticket.id, patch);
 
   if (note) {
-    await base44.entities.SupportTicketMessage.create({
-      ticket_id: ticket.id,
-      school_id: ticket.school_id,
-      requester_user_id: ticket.requester_user_id,
-      author_user_id: user.id,
-      author_role: SUPPORT_AUTHOR_ROLE.SYSTEM,
-      body: note,
-    });
+    await postTicketMessage({ ticketId: ticket.id, body: note, kind: 'note' });
   }
 
   if (toStatus === SUPPORT_STATUS.RESOLVED && ticket.requester_user_id) {
@@ -371,25 +325,12 @@ export async function escalateTicketToSupport({ user, userProfile, ticket, trigg
     (trigger === 'sla_lapse'
       ? 'Escalado automáticamente a soporte: el director no respondió dentro del SLA.'
       : 'Escalado a soporte por la dirección de la escuela.');
-  await base44.entities.SupportTicketMessage.create({
-    ticket_id: ticket.id,
-    school_id: ticket.school_id,
-    requester_user_id: ticket.requester_user_id,
-    author_user_id: user?.id || null,
-    author_role: SUPPORT_AUTHOR_ROLE.SYSTEM,
-    body: systemNote,
-  });
+  await postTicketMessage({ ticketId: ticket.id, body: systemNote, kind: 'note' });
 
-  // Notify soporte: the fixed Tier-2 inbox always, plus any owner profiles.
-  const recipients = await resolveAssigneeRecipients({ tier: SUPPORT_TIER.PLATFORM, schoolId: ticket.school_id });
-  await notifyAssignees({
-    recipients,
-    schoolId: ticket.school_id,
-    actorUserId: user?.id || null,
-    ticket: updated,
-    description: systemNote,
-    tier: SUPPORT_TIER.PLATFORM,
-  });
+  // Notify soporte (tier: SUPPORT_TIER.PLATFORM now that the patch above is
+  // stored): the fixed Tier-2 inbox always, plus any owner profiles. The
+  // server reads the tier and the hand-off note from the stored ticket.
+  await notifyAssignees({ ticket: updated });
 
   if (user && userProfile) {
     await logAuditEvent({

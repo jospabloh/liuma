@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     // Base44 filter()'s unspecified order here, which could silently
     // export the wrong school's data (module 14 finding, 2026-08-23).
     const callerProfiles = (await sr.entities.UserProfile.filter({ user_id: user.id }, '-created_date')) || [];
-    const callerProfile = callerProfiles.find((p: any) => p.app_role === 'ADMIN' && p.status === 'ACTIVE') || null;
+    const callerProfile = callerProfiles.find((p: { app_role?: string; status?: string; school_id?: string }) => p.app_role === 'ADMIN' && p.status === 'ACTIVE') || null;
     if (!callerProfile) return bad(403, 'NOT_ADMIN', 'Requires an active ADMIN profile');
     const schoolId = callerProfile.school_id;
     if (!schoolId) return bad(400, 'NO_SCHOOL', 'Admin profile has no school_id');
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
 
     await Promise.all(EXPORTED_ENTITIES.map(async (entityName) => {
       try {
-        const entity = (sr.entities as Record<string, any>)[entityName];
+        const entity = (sr.entities as unknown as Record<string, { filter(q: Record<string, unknown>): Promise<unknown> }>)[entityName];
         data[entityName] = await entity.filter({ school_id: schoolId });
       } catch (e) {
         errors[entityName] = (e as Error).message;

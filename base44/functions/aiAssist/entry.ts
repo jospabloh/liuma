@@ -9,11 +9,11 @@
 // sites used to build their prompt in the browser and hand it straight to
 // InvokeLLM — a token holder could submit an arbitrary prompt (unrelated to
 // any real student or ticket) and burn credits freely. Here the client sends
-// only an id (`studentId`) or a bounded set of free-text fields, and the
-// prompt is always assembled server-side from data this function itself
-// reads (or from sanitized, length-capped copies of the client's fields for
-// the intake, mirroring what aiIntake.js already did client-side) — never
-// from a client-supplied prompt string.
+// an id (`studentId`) plus the teacher's own draft and selected fields, or a
+// bounded set of free-text fields for the intake; the prompt is always
+// assembled server-side from sanitized, length-capped copies of those —
+// never from a client-supplied prompt string. Both tasks are also capped per
+// user per day (DAILY_LIMITS).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 
 const MAX_QUESTIONS = 6; // mirrors src/lib/support/aiIntake.js's MAX_QUESTIONS
@@ -87,6 +87,83 @@ function sanitize(text = ''): string {
     .replace(/[^\p{L}\p{N}\p{P}\p{Z}\p{S}\n]/gu, '')
     .trim()
     .slice(0, 4000);
+}
+
+// Per-user daily caps (sales-readiness audit 2026-09-29, F30 / SEC-07). Both
+// tasks spend InvokeLLM credits; before this, any active user could call them
+// without limit. The count is kept in AuditLog (service role; users cannot
+// read it) as one AI_REQUEST_ALLOWED row per call, target_type
+// "aiAssist:<task>", so no new entity is needed. The day is the school's day
+// (America/Mexico_City). The platform owner is exempt: it is ACACIA's own
+// account and support work runs through it.
+const DAILY_LIMITS: Record<string, number> = {
+  diary_draft: 60, // a full classroom plus a few retries
+  support_intake: 40, // up to ~6 interview turns per ticket
+};
+
+function mexicoDayStartIso(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || '';
+  // Mexico has no DST since 2022: local midnight is 06:00 UTC.
+  return new Date(`${get('year')}-${get('month')}-${get('day')}T06:00:00.000Z`).toISOString();
+}
+
+// deno-lint-ignore no-explicit-any
+async function overDailyLimit(sr: any, user: { id: string; email?: string }, task: string, schoolId: string, exempt: boolean): Promise<Response | null> {
+  if (exempt) return null;
+  const limit = DAILY_LIMITS[task];
+  const since = mexicoDayStartIso();
+  const recent: Array<{ created_date?: string }> = await sr.entities.AuditLog.filter(
+    { user_id: user.id, action: 'AI_REQUEST_ALLOWED', target_type: `aiAssist:${task}` },
+    '-created_date',
+    limit + 1,
+  );
+  // Base44 created_date may come without a zone suffix; it is UTC.
+  const toIso = (d?: string) => {
+    const raw = String(d || '');
+    return /([zZ]|[+-]\d\d:\d\d)$/.test(raw) ? raw : `${raw}Z`;
+  };
+  const usedToday = recent.filter((r) => {
+    const t = Date.parse(toIso(r.created_date));
+    return Number.isFinite(t) && t >= Date.parse(since);
+  }).length;
+  if (usedToday >= limit) {
+    return bad(429, 'DAILY_LIMIT', 'Llegaste al límite diario de ayuda con Lumi. Vuelve a intentarlo mañana.');
+  }
+  await sr.entities.AuditLog.create({
+    school_id: schoolId || 'platform',
+    user_id: user.id,
+    user_email: user.email || '',
+    action: 'AI_REQUEST_ALLOWED',
+    target_type: `aiAssist:${task}`,
+    details: { task },
+  });
+  return null;
+}
+
+const DIARY_FIELD_LABELS: Record<string, { label: string; values: Record<string, string> }> = {
+  behavior: { label: 'Comportamiento', values: { excelente: 'excelente', bueno: 'bueno', regular: 'regular', necesita_apoyo: 'necesita apoyo' } },
+  mood: { label: 'Estado de ánimo', values: { feliz: 'feliz', tranquilo: 'tranquilo', cansado: 'cansado', inquieto: 'inquieto', triste: 'triste' } },
+  food: { label: 'Alimentación', values: { todo: 'comió todo', casi_todo: 'comió casi todo', poco: 'comió poco', nada: 'no comió' } },
+  learning: { label: 'Aprendizaje', values: { excelente: 'excelente', bueno: 'bueno', regular: 'regular', necesita_apoyo: 'necesita apoyo' } },
+};
+
+// Turns the structured fields the teacher selected into plain facts. Only
+// known enum values pass (a client cannot smuggle a prompt through them);
+// incidents is free text, sanitized and capped like every other field.
+// deno-lint-ignore no-explicit-any
+function diaryFacts(fields: any): string[] {
+  const facts: string[] = [];
+  if (!fields || typeof fields !== 'object') return facts;
+  for (const [key, def] of Object.entries(DIARY_FIELD_LABELS)) {
+    const value = def.values[String(fields[key] || '')];
+    if (value) facts.push(`${def.label}: ${value}`);
+  }
+  const incidents = sanitize(fields.incidents).slice(0, 1000);
+  if (incidents) facts.push(`Incidente reportado por la maestra: ${incidents}`);
+  return facts;
 }
 
 function systemPreamble(kind: string): string {
@@ -167,25 +244,56 @@ Deno.serve(async (req) => {
         if (!profile) return bad(403, 'NO_PROFILE', 'Requires an active TEACHER or ADMIN profile in this school');
       }
 
-      const prompt = `Genera una nota de bitácora escolar en español para un alumno llamado ${student.first_name}.
-        La nota debe ser positiva, breve (2-3 oraciones) y mencionar actividades típicas del día escolar.
-        Solo devuelve el texto de la nota, sin comillas ni formato adicional.`;
+      // Sales-readiness audit 2026-09-29 (F31 / LUMI-10): the old prompt asked
+      // for "actividades típicas del día escolar" about a real, named child —
+      // parents received activities their child never did. Now the model only
+      // gets what the teacher actually wrote or selected, and is told not to
+      // add anything. Nothing to go on -> no call (and no credit spent).
+      const draft = sanitize(body?.draft);
+      const facts = diaryFacts(body?.fields);
+      if (!draft && facts.length === 0) {
+        return bad(400, 'EMPTY_INPUT', 'Escribe algunas notas o elige comportamiento, ánimo, comida o aprendizaje primero.');
+      }
+
+      const limited = await overDailyLimit(sr, user, 'diary_draft', String(student.school_id || ''), isPlatformOwner);
+      if (limited) return limited;
+
+      const prompt = `Eres una asistente de redacción para maestras de preescolar y primaria en México.
+Redacta la nota de bitácora del día de ${sanitize(student.first_name)} para su familia, en español de México,
+en 2 a 4 oraciones, con tono cálido y profesional.
+
+REGLAS ESTRICTAS:
+- Usa ÚNICAMENTE la información de abajo. NO inventes actividades, juegos, materias, comidas,
+  personas ni emociones que no estén escritas aquí.
+- Si hay un borrador de la maestra, mejóralo (ortografía, claridad, tono) conservando todos sus hechos
+  y sin agregar ninguno.
+- Si algo es negativo (comió poco, necesita apoyo, un incidente), dilo con tacto pero no lo ocultes.
+- No des consejos médicos, de alergias ni de nutrición.
+- Devuelve sólo el texto de la nota, sin comillas, títulos ni formato.
+
+${draft ? `Borrador de la maestra:\n${draft}\n` : 'La maestra no escribió borrador; redacta sólo con los datos seleccionados.\n'}
+${facts.length ? `Datos seleccionados por la maestra:\n${facts.map((f) => `- ${f}`).join('\n')}` : ''}`;
 
       const text = await sr.integrations.Core.InvokeLLM({ prompt });
-      return Response.json({ ok: true, text });
+      return Response.json({ ok: true, text: typeof text === 'string' ? text.trim() : '' });
     }
 
     if (task === 'support_intake') {
       // Any registered user with at least one ACTIVE profile (in any school)
       // may use the intake — it's not school-scoped, it's a support/feature
       // request about the app itself. Platform owner bypasses, as usual.
+      let supportSchoolId = 'platform';
       if (!isPlatformOwner) {
-        const profiles: Array<{ status?: string }> = await sr.entities.UserProfile.filter({ user_id: user.id, status: 'ACTIVE' });
+        const profiles: Array<{ status?: string; school_id?: string }> = await sr.entities.UserProfile.filter({ user_id: user.id, status: 'ACTIVE' });
         if (!profiles.length) return bad(403, 'NO_PROFILE', 'Requires at least one active profile');
+        supportSchoolId = String(profiles[0].school_id || 'platform');
       }
 
       const kind = String(body?.kind || '');
       if (kind !== 'feature' && kind !== 'bug') return bad(400, 'BAD_KIND', 'kind must be feature or bug');
+
+      const limited = await overDailyLimit(sr, user, 'support_intake', supportSchoolId, isPlatformOwner);
+      if (limited) return limited;
 
       const subject = String(body?.subject || '');
       const description = String(body?.description || '');
@@ -193,7 +301,7 @@ Deno.serve(async (req) => {
       if (!historyRaw) return bad(400, 'BAD_HISTORY', 'history must be an array');
       if (historyRaw.length > MAX_QUESTIONS) return bad(400, 'BAD_HISTORY', `history may not exceed ${MAX_QUESTIONS} turns`);
 
-      const history = historyRaw.map((turn) => ({
+      const history = historyRaw.map((turn: { question?: unknown; answer?: unknown } | null) => ({
         question: String(turn?.question || ''),
         answer: String(turn?.answer || ''),
       }));

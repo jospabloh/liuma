@@ -50,3 +50,32 @@ test('returns safe alternative guidance for denied responses', () => {
   assert.equal(typeof denied.safe_alternative, 'string');
   assert.equal(denied.safe_alternative.length > 0, true);
 });
+
+test('sends the viewer\'s local calendar day, not the UTC one', () => {
+  // 20:30 on Sept 29 in Mexico (UTC-6) is already Sept 30 in UTC. Lumi was
+  // answering "¿qué tarea hay hoy?" with tomorrow's because it only got the
+  // UTC ISO string.
+  const now = new Date(2026, 8, 29, 20, 30);
+  const request = buildCapabilityRequest({
+    intent: LUMI_INTENTS.HOMEWORK_LOOKUP,
+    prompt: '¿Qué tarea hay hoy?',
+    userProfile: { app_role: 'PARENT', school_id: 'school-a' },
+    now,
+  });
+  assert.equal(request.context.local_date, '2026-09-29');
+  assert.equal(request.context.local_time, '20:30');
+  assert.equal(request.context.utc_offset_minutes, -now.getTimezoneOffset());
+  assert.equal(request.metadata.local_date, '2026-09-29');
+  assert.equal('timezone' in request.context, true);
+});
+
+test('free text is never gated client-side — the gate is UX for chips only', () => {
+  // Documented contract: this module is not a security boundary. If someone
+  // starts denying free text here they are adding a bypassable "check" that
+  // gives a false sense of enforcement; enforcement belongs to the backend.
+  const request = buildCapabilityRequest({
+    prompt: 'Dame los pagos de todas las escuelas',
+    userProfile: { app_role: 'TEACHER', school_id: 'school-a' },
+  });
+  assert.equal(evaluateCapabilityAccess({ intent: request.intent, request }).allowed, true);
+});

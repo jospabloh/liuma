@@ -15,6 +15,8 @@ import LoadingScreen from '@/components/ui/LoadingScreen';
 import { CheckCircle2, Circle, Upload, FileText, Plus, X, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSchoolStudents } from '@/hooks/useSchoolStudents';
+import { percentOfStudentsCovered } from '@/lib/schoolStudents';
 
 export default function ConfiguracionInicial() {
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -47,11 +49,7 @@ export default function ConfiguracionInicial() {
     queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
     enabled: !!userProfile?.school_id,
   });
-  const { data: students = [] } = useQuery({
-    queryKey: ['setupStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({ school_id: userProfile.school_id, is_active: true }),
-    enabled: !!userProfile?.school_id,
-  });
+  const { data: students = [] } = useSchoolStudents(userProfile?.school_id);
   const { data: teacherAssignments = [] } = useQuery({
     queryKey: ['setupTeacherAssignments', userProfile?.school_id],
     queryFn: () => base44.entities.TeacherClassroom.filter({ school_id: userProfile.school_id, is_active: true }),
@@ -67,43 +65,47 @@ export default function ConfiguracionInicial() {
     queryFn: () => base44.entities.PaymentConcept.filter({ school_id: userProfile.school_id, is_active: true }),
     enabled: !!userProfile?.school_id,
   });
+  // One request for the whole school instead of one per student, in sequence.
   const { data: emergencyContacts = [] } = useQuery({
     queryKey: ['setupEmergencyContacts', userProfile?.school_id],
-    queryFn: async () => {
-      const allContacts = [];
-      for (const student of students) {
-        const rows = await base44.entities.EmergencyContact.filter({ student_id: student.id });
-        allContacts.push(...rows);
-      }
-      return allContacts;
-    },
-    enabled: !!userProfile?.school_id && students.length > 0,
+    queryFn: () => base44.entities.EmergencyContact.filter(
+      { school_id: userProfile.school_id },
+      undefined,
+      5000,
+    ),
+    enabled: !!userProfile?.school_id,
   });
 
   const createStepMutation = useMutation({
     mutationFn: (data) => base44.entities.SchoolSetupGuide.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['setupGuide']);
+      queryClient.invalidateQueries({ queryKey: ['setupGuide'] });
+      queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
       toast.success('Paso agregado');
       setShowAddDialog(false);
       setNewStep({ step_name: '', description: '', category: 'GENERAL', step_number: 1, is_annual: false });
     },
+    onError: () => toast.error('No se pudo agregar el paso. Intenta de nuevo.'),
   });
 
   const updateStepMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.SchoolSetupGuide.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['setupGuide']);
+      queryClient.invalidateQueries({ queryKey: ['setupGuide'] });
+      queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
       toast.success('Paso actualizado');
     },
+    onError: () => toast.error('No se pudo guardar el cambio. Intenta de nuevo.'),
   });
 
   const deleteStepMutation = useMutation({
     mutationFn: (id) => base44.entities.SchoolSetupGuide.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries(['setupGuide']);
+      queryClient.invalidateQueries({ queryKey: ['setupGuide'] });
+      queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
       toast.success('Paso eliminado');
     },
+    onError: () => toast.error('No se pudo eliminar el paso. Intenta de nuevo.'),
   });
 
   const handleFileUpload = async (e, stepId) => {
@@ -227,33 +229,37 @@ export default function ConfiguracionInicial() {
       });
     }
     
-    queryClient.invalidateQueries(['setupGuide']);
+    queryClient.invalidateQueries({ queryKey: ['setupGuide'] });
+    queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
     toast.success('Pasos iniciales creados');
   };
 
   if (isLoading) return <LoadingScreen />;
 
   const categories = ['GENERAL', 'GUARDERIA', 'ESCUELA', 'COLEGIO'];
+  // Same labels as the category <Select> in the add-step dialog; the stored
+  // value stays the enum.
+  const categoryLabels = { GENERAL: 'General', GUARDERIA: 'Guardería', ESCUELA: 'Escuela', COLEGIO: 'Colegio' };
   const completedSteps = steps.filter(s => s.is_completed).length;
   const progress = steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0;
   const teachers = allProfiles.filter((p) => p.app_role === 'TEACHER');
   const roleBootstrap = allProfiles.length > 0 ? Math.round((allProfiles.filter((p) => p.status === 'ACTIVE').length / allProfiles.length) * 100) : 0;
   const teacherCoverage = teachers.length > 0 ? Math.round((new Set(teacherAssignments.map((a) => a.teacher_id)).size / teachers.length) * 100) : 0;
-  const parentCoverage = students.length > 0 ? Math.round((new Set(parentLinks.map((l) => l.student_id)).size / students.length) * 100) : 0;
+  const parentCoverage = percentOfStudentsCovered(students, parentLinks);
   const paymentConceptBaseline = concepts.length > 0 ? 100 : 0;
-  const emergencyCoverage = students.length > 0 ? Math.round((new Set(emergencyContacts.map((c) => c.student_id)).size / students.length) * 100) : 0;
+  const emergencyCoverage = percentOfStudentsCovered(students, emergencyContacts);
   const setupChecklist = [
-    { key: 'role_bootstrap', label: 'Role bootstrap completado', value: roleBootstrap },
-    { key: 'classroom_teacher', label: 'Cobertura maestro-salón', value: teacherCoverage },
-    { key: 'student_parent', label: 'Vinculación alumno-padre', value: parentCoverage },
-    { key: 'payment_concepts', label: 'Línea base conceptos de pago', value: paymentConceptBaseline },
-    { key: 'emergency_contacts', label: 'Cobertura contactos de emergencia', value: emergencyCoverage },
+    { key: 'role_bootstrap', label: 'Usuarios activos', value: roleBootstrap },
+    { key: 'classroom_teacher', label: 'Maestros con salón asignado', value: teacherCoverage },
+    { key: 'student_parent', label: 'Alumnos con tutor vinculado', value: parentCoverage },
+    { key: 'payment_concepts', label: 'Conceptos de pago creados', value: paymentConceptBaseline },
+    { key: 'emergency_contacts', label: 'Alumnos con contacto de emergencia', value: emergencyCoverage },
   ];
 
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
-        title="Configuración Inicial"
+        title="Configuración inicial"
         subtitle="Guía paso a paso para configurar tu escuela"
         showBack
       />
@@ -279,7 +285,7 @@ export default function ConfiguracionInicial() {
       </Card>
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-base">Checklist operativo de arranque</CardTitle>
+          <CardTitle className="text-base">Lista de arranque</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {setupChecklist.map((item) => (
@@ -302,12 +308,12 @@ export default function ConfiguracionInicial() {
           <DialogTrigger asChild>
             <Button>
               <Plus className="w-4 h-4 mr-2" />
-              Agregar Paso
+              Agregar paso
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Agregar Nuevo Paso</DialogTitle>
+              <DialogTitle>Agregar nuevo paso</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div>
@@ -368,7 +374,7 @@ export default function ConfiguracionInicial() {
                 disabled={!newStep.step_name || createStepMutation.isPending}
                 className="w-full"
               >
-                {createStepMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear Paso'}
+                {createStepMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear paso'}
               </Button>
             </div>
           </DialogContent>
@@ -376,7 +382,7 @@ export default function ConfiguracionInicial() {
 
         {steps.length === 0 && (
           <Button onClick={initializeDefaultSteps} variant="outline">
-            Cargar Pasos por Defecto
+            Cargar pasos sugeridos
           </Button>
         )}
       </div>
@@ -389,7 +395,7 @@ export default function ConfiguracionInicial() {
         return (
           <div key={category} className="mb-8">
             <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-              {category}
+              {categoryLabels[category] || category}
               <Badge variant="outline">{categorySteps.length}</Badge>
             </h2>
             <div className="space-y-3">
@@ -400,7 +406,7 @@ export default function ConfiguracionInicial() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
                 >
-                  <Card className={step.is_completed ? 'bg-green-50 border-green-200' : ''}>
+                  <Card className={step.is_completed ? 'bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-900' : ''}>
                     <CardHeader className="pb-3">
                       <div className="flex items-start gap-3">
                         <button
@@ -408,7 +414,7 @@ export default function ConfiguracionInicial() {
                           className="mt-1"
                         >
                           {step.is_completed ? (
-                            <CheckCircle2 className="w-6 h-6 text-green-600" />
+                            <CheckCircle2 className="w-6 h-6 text-green-600 dark:text-green-400" />
                           ) : (
                             <Circle className="w-6 h-6 text-muted-foreground" />
                           )}
@@ -430,7 +436,7 @@ export default function ConfiguracionInicial() {
                             </div>
                           )}
                           {step.last_confirmed_at && (
-                            <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-700">
+                            <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                               ✓ Confirmado vigente el {new Date(step.last_confirmed_at).toLocaleDateString('es-MX')}
                             </div>
                           )}
@@ -440,7 +446,7 @@ export default function ConfiguracionInicial() {
                             </div>
                           )}
                           {step.reopened_at && (
-                            <div className="mt-1 text-xs text-amber-700">
+                            <div className="mt-1 text-xs text-amber-700 dark:text-amber-300">
                               Reabierto por {step.reopened_by || 'N/D'} el {new Date(step.reopened_at).toLocaleDateString('es-MX')}
                             </div>
                           )}
@@ -463,7 +469,7 @@ export default function ConfiguracionInicial() {
                             onClick={() => handleConfirmStep(step)}
                           >
                             <Check className="w-4 h-4 mr-2" />
-                            Confirmar Vigencia
+                            Confirmar vigencia
                           </Button>
                         )}
                         {step.is_completed && (
@@ -482,12 +488,12 @@ export default function ConfiguracionInicial() {
                               setStepNotes(step.notes || '');
                             }}>
                               <FileText className="w-4 h-4 mr-2" />
-                              Agregar Notas
+                              Agregar notas
                             </Button>
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
-                              <DialogTitle>Notas del Paso</DialogTitle>
+                              <DialogTitle>Notas del paso</DialogTitle>
                             </DialogHeader>
                             <Textarea
                               value={stepNotes}
@@ -496,7 +502,7 @@ export default function ConfiguracionInicial() {
                               rows={4}
                             />
                             <Button onClick={() => handleAddNotes(step)}>
-                              Guardar Notas
+                              Guardar notas
                             </Button>
                           </DialogContent>
                         </Dialog>
@@ -509,7 +515,7 @@ export default function ConfiguracionInicial() {
                               ) : (
                                 <Upload className="w-4 h-4 mr-2" />
                               )}
-                              Subir Documento
+                              Subir documento
                             </span>
                           </Button>
                           <input
@@ -559,7 +565,7 @@ export default function ConfiguracionInicial() {
         <Card className="p-12 text-center">
           <p className="text-muted-foreground mb-4">No hay pasos configurados aún</p>
           <Button onClick={initializeDefaultSteps}>
-            Cargar Pasos por Defecto
+            Cargar pasos sugeridos
           </Button>
         </Card>
       )}

@@ -16,7 +16,7 @@
 //   INGEST_HMAC_SECRET   — shared with Mission Control (already set for acaciaControl)
 //   ACACIA_MC_INGEST_URL — e.g. https://control.acaciaco.com.mx/api/ingest/ticket
 //   ACACIA_APP_SLUG      — this app's Mission Control id: puntos|rumbo|liuma|stockflow|flowfin
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import { signAs } from './_acaciaSign.ts';
 
 // stableStringify and hmacHex used to live here, hand-mirrored against Mission
@@ -34,7 +34,10 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const ticketId = body?.ticketId;
-    const entity = typeof body?.entity === 'string' && body.entity ? body.entity : 'SupportTicket';
+    // Always SupportTicket. This used to accept `entity` from the body, so a
+    // caller could push any record they had created (an EmergencyContact, a
+    // UserProfile…) to Mission Control's ticket ingest, signed with LIUMA's
+    // key (P7, 2026-09-29). There is no second entity this function serves.
     if (!ticketId) return Response.json({ error: 'ticketId required' }, { status: 400 });
 
     const secret = Deno.env.get('INGEST_HMAC_SECRET');
@@ -46,7 +49,7 @@ Deno.serve(async (req) => {
 
     // Re-read the ticket as the service role (authoritative copy, not client input).
     const sr = base44.asServiceRole;
-    const record = await sr.entities[entity].get(ticketId).catch(() => null);
+    const record = await sr.entities.SupportTicket.get(ticketId).catch(() => null);
     if (!record) return Response.json({ error: 'ticket not found' }, { status: 404 });
 
     // Ownership guard: only notify for a ticket the caller actually raised (or an
@@ -55,6 +58,7 @@ Deno.serve(async (req) => {
     const role = String(user.role ?? '').toLowerCase();
     const isStaff = role === 'admin' || role === 'owner';
     const owns =
+      record.requester_user_id === user.id ||
       record.created_by_id === user.id ||
       record.created_by === user.email ||
       record.created_by_email === user.email;

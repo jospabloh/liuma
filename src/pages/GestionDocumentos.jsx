@@ -15,6 +15,7 @@ import { FileText, Upload, Loader2, Trash2, Download, Calendar } from 'lucide-re
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate } from '@/lib/dates';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
@@ -118,10 +119,10 @@ export default function GestionDocumentos() {
   };
 
   const documentTypeLabels = {
-    MENU: 'Menú Semanal',
-    COMMUNICATION: 'Comunicación Oficial',
+    MENU: 'Menú semanal',
+    COMMUNICATION: 'Comunicación oficial',
     MINUTA: 'Minuta',
-    UNIFORM_CATALOG: 'Catálogo de Uniformes',
+    UNIFORM_CATALOG: 'Catálogo de uniformes',
   };
 
   if (profileLoading || isLoading) {
@@ -133,7 +134,7 @@ export default function GestionDocumentos() {
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <ReadOnlyBanner />
         <PageHeader
-          title="Documentos Oficiales"
+          title="Documentos oficiales"
           subtitle="Gestiona menús, comunicaciones, minutas y catálogos"
           showBack
           action={
@@ -146,11 +147,11 @@ export default function GestionDocumentos() {
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Subir Documento</DialogTitle>
+                  <DialogTitle>Subir documento</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label>Tipo de Documento</Label>
+                    <Label>Tipo de documento</Label>
                     <Select
                       value={formData.document_type}
                       onValueChange={(value) => setFormData({ ...formData, document_type: value })}
@@ -159,10 +160,10 @@ export default function GestionDocumentos() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="MENU">Menú Semanal</SelectItem>
-                        <SelectItem value="COMMUNICATION">Comunicación Oficial</SelectItem>
+                        <SelectItem value="MENU">Menú semanal</SelectItem>
+                        <SelectItem value="COMMUNICATION">Comunicación oficial</SelectItem>
                         <SelectItem value="MINUTA">Minuta</SelectItem>
-                        <SelectItem value="UNIFORM_CATALOG">Catálogo de Uniformes</SelectItem>
+                        <SelectItem value="UNIFORM_CATALOG">Catálogo de uniformes</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -280,7 +281,7 @@ export default function GestionDocumentos() {
                         <div className="flex items-center gap-2 mb-1">
                           <CardTitle className="text-lg">{doc.title}</CardTitle>
                           {doc.is_current && (
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                            <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs rounded-full">
                               Vigente
                             </span>
                           )}
@@ -302,7 +303,7 @@ export default function GestionDocumentos() {
                           variant="outline"
                           onClick={() => deleteMutation.mutate(doc.id)}
                         >
-                          <Trash2 className="w-4 h-4 text-red-600" />
+                          <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                         </Button>
                       </div>
                     </div>
@@ -314,8 +315,8 @@ export default function GestionDocumentos() {
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {format(new Date(doc.valid_from), 'dd MMM yyyy', { locale: es })}
-                        {doc.valid_until && ` - ${format(new Date(doc.valid_until), 'dd MMM yyyy', { locale: es })}`}
+                        {parseLocalDate(doc.valid_from) ? format(parseLocalDate(doc.valid_from), 'dd MMM yyyy', { locale: es }) : '—'}
+                        {parseLocalDate(doc.valid_until) && ` - ${format(parseLocalDate(doc.valid_until), 'dd MMM yyyy', { locale: es })}`}
                       </div>
                       <span>•</span>
                       <span>Por {doc.uploaded_by_name}</span>

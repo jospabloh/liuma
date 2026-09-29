@@ -1,12 +1,12 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { createPageUrl } from '@/utils';
 import { toast } from 'sonner';
@@ -20,49 +20,33 @@ import {
 import { getEffectivePolicyDecision } from '@/lib/authorization/policy';
 import { hasOtherActiveAdminWithManagePermissions } from '@/lib/authorization/adminSafety';
 import { validateRoleChangeRequest, validateRoleChangeDecision } from '@/lib/authorization/roleGovernance';
-import { DANGER_ZONE_OPERATIONS, getRollbackPolicy } from '@/lib/authorization/tenantDangerZone';
+import {
+  OVERRIDE_RESOURCES,
+  POLICY_ACTIONS,
+  actionLabel,
+  changeStatusLabel,
+  effectLabel,
+  precedenceLabel,
+  resourceLabel,
+  roleLabel,
+} from '@/lib/authorization/permissionLabels';
+import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
 
-const RESOURCES = [
-  'Students',
-  'Classrooms',
-  'Attendance',
-  'Homework',
-  'Diary',
-  'Notices',
-  'Payments',
-  'Documents',
-  'Reports',
-  'AI',
-  'Audit',
-  'Tenant Danger Zone',
-];
-
-const ACTIONS = ['view', 'add', 'edit', 'delete', 'approve', 'export', 'manage_permissions'];
-
-const AI_CAPABILITIES = ['attendance_summary','payment_follow_up','behavior_report','announcements','homework_assistant'];
-
-const POLICY_ACTIONS = ['read', 'write'];
 const PENDING_CHANGE_ENTITY = 'PendingChange';
-const ROLLBACK_MODULES = ['Notice', 'Attendance', 'Homework', 'DiaryEntry', 'ChargeItem', 'PaymentConcept', 'PaymentRecord'];
+// The "plantillas de rol" grid and the tenant "Danger Zone" spec table that
+// used to live on this page were removed (sales-readiness audit F20,
+// 2026-09-29): the grid was local useState that was never saved or read
+// anywhere, and the spec table showed customers internal developer notes
+// ("Ver CLAUDE.md (Module 7)"). Everything left on this page is real and
+// persisted. tenantDangerZone.js keeps the spec for whoever builds it.
+const ROLLBACK_MODULES = OVERRIDE_RESOURCES;
 const PENDING_CHANGE_STATUSES = {
   PENDING_ADMIN_APPROVAL: 'PENDING_ADMIN_APPROVAL',
   PENDING_SECOND_ADMIN_APPROVAL: 'PENDING_SECOND_ADMIN_APPROVAL',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
-};
-
-const DEFAULT_TEMPLATE = {
-  name: 'Plantilla Admin',
-  permissions: RESOURCES.reduce((acc, resource) => {
-    acc[resource] = ACTIONS.reduce((actions, action) => {
-      actions[action] = true;
-      return actions;
-    }, {});
-    return acc;
-  }, {}),
-  ai_capabilities: AI_CAPABILITIES.reduce((acc, capability) => { acc[capability] = true; return acc; }, {}),
 };
 
 function hasMutationReason(value) {
@@ -76,10 +60,6 @@ function requireExplicitConfirmation(message) {
 export default function PermisosRoles() {
   const { user, userProfile, isLoading: profileLoading } = useCurrentProfile();
 
-  const [templates, setTemplates] = React.useState([DEFAULT_TEMPLATE]);
-  const [newTemplateName, setNewTemplateName] = React.useState('');
-  const [activeTemplateIndex, setActiveTemplateIndex] = React.useState(0);
-  const [editTemplateName, setEditTemplateName] = React.useState('');
   const [reasonText, setReasonText] = React.useState('');
   const [errorText, setErrorText] = React.useState('');
   const [selectedProfileId, setSelectedProfileId] = React.useState('');
@@ -102,11 +82,9 @@ export default function PermisosRoles() {
     enabled: !!userProfile?.school_id,
   });
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['allUsersForRoleChange'],
-    queryFn: () => base44.entities.User.list(),
-    enabled: !!schoolProfiles.length,
-  });
+  // Names come from the server-side member directory: UserProfile has no
+  // name, and a client User.list() only returns the caller's own row.
+  const { getName: getUserName } = useSchoolMembers(userProfile?.school_id);
   const { data: permissionOverrides = [], refetch: refetchOverrides } = useQuery({
     queryKey: ['permissionOverrides', userProfile?.school_id],
     queryFn: () => listPermissionOverrides({ schoolId: userProfile.school_id }),
@@ -118,7 +96,6 @@ export default function PermisosRoles() {
     enabled: !!userProfile?.school_id,
   });
 
-  const activeTemplate = templates[activeTemplateIndex] || null;
   const selectedProfile = schoolProfiles.find((profile) => profile.id === selectedProfileId) || null;
   const isAdminRoleChange = selectedProfile && (selectedProfile.app_role === 'ADMIN' || selectedRole === 'ADMIN');
   const overrideTargetProfile = schoolProfiles.find((profile) => profile.id === overrideForm.user_profile_id) || null;
@@ -132,13 +109,6 @@ export default function PermisosRoles() {
   });
   const rollbackCandidates = permissionOverrides.filter((entry) => entry.resource === rollbackModule);
   const rollbackOverride = rollbackCandidates.find((entry) => entry.id === rollbackOverrideId) || null;
-
-  const dangerZoneOperations = [
-    { key: DANGER_ZONE_OPERATIONS.DELETE_TENANT, label: 'delete tenant' },
-    { key: DANGER_ZONE_OPERATIONS.SUSPEND_TENANT, label: 'suspend tenant' },
-    { key: DANGER_ZONE_OPERATIONS.RESET_TENANT_DATA, label: 'reset tenant data' },
-    { key: DANGER_ZONE_OPERATIONS.TRANSFER_TENANT_OWNERSHIP, label: 'transfer tenant ownership' },
-  ];
 
   if (profileLoading) {
     return <LoadingScreen message="Validando permisos..." />;
@@ -157,98 +127,13 @@ export default function PermisosRoles() {
     );
   }
 
-  const requireReason = (callback) => {
-    if (!hasMutationReason(reasonText)) {
-      setErrorText('El motivo es obligatorio para cualquier cambio.');
-      return;
-    }
-    setErrorText('');
-    callback();
-    setReasonText('');
+  const overrideOwnerName = (override) => {
+    const profile = schoolProfiles.find((entry) => entry.id === override.user_profile_id);
+    return profile ? getUserName(profile.user_id) : 'esta persona';
   };
 
-  const handleAddTemplate = () => {
-    requireReason(() => {
-      const name = newTemplateName.trim();
-      if (!name) return;
-
-      const nextTemplate = {
-        name,
-        permissions: RESOURCES.reduce((acc, resource) => {
-          acc[resource] = ACTIONS.reduce((actions, action) => {
-            actions[action] = action === 'view';
-            return actions;
-          }, {});
-          return acc;
-        }, {}),
-        ai_capabilities: AI_CAPABILITIES.reduce((acc, capability) => { acc[capability] = false; return acc; }, {}),
-      };
-
-      const updated = [...templates, nextTemplate];
-      setTemplates(updated);
-      setActiveTemplateIndex(updated.length - 1);
-      setNewTemplateName('');
-    });
-  };
-
-  const handleEditTemplateName = () => {
-    requireReason(() => {
-      const nextName = editTemplateName.trim();
-      if (!nextName || !activeTemplate) return;
-      const updated = templates.map((template, index) =>
-        index === activeTemplateIndex ? { ...template, name: nextName } : template,
-      );
-      setTemplates(updated);
-      setEditTemplateName('');
-    });
-  };
-
-  const handleDeleteTemplate = () => {
-    requireReason(() => {
-      if (templates.length <= 1) return;
-      const updated = templates.filter((_, index) => index !== activeTemplateIndex);
-      setTemplates(updated);
-      setActiveTemplateIndex(0);
-    });
-  };
-
-  const handleTogglePermission = (resource, action) => {
-    requireReason(() => {
-      const updated = templates.map((template, index) => {
-        if (index !== activeTemplateIndex) return template;
-        return {
-          ...template,
-          permissions: {
-            ...template.permissions,
-            [resource]: {
-              ...template.permissions[resource],
-              [action]: !template.permissions[resource][action],
-            },
-          },
-        };
-      });
-      setTemplates(updated);
-    });
-  };
-
-
-  const handleToggleAICapability = (capability) => {
-    requireReason(() => {
-      const updated = templates.map((template, index) => {
-        if (index !== activeTemplateIndex) return template;
-        return {
-          ...template,
-          ai_capabilities: {
-            ...template.ai_capabilities,
-            [capability]: !template.ai_capabilities?.[capability],
-          },
-        };
-      });
-      setTemplates(updated);
-    });
-  };
-
-  const getUserName = (userId) => users.find((entry) => entry.id === userId)?.full_name || 'Sin nombre';
+  const describeOverride = (override) =>
+    `${overrideOwnerName(override)}: ${effectLabel(override.effect).toLowerCase()} ${actionLabel(override.action).toLowerCase()}`;
 
   const handleRoleChange = async () => {
     if (!selectedProfile) {
@@ -264,11 +149,11 @@ export default function PermisosRoles() {
       return;
     }
     if (isSelfAdminDemotion) {
-      setErrorText('Bloqueado: no puedes remover tu propio manage_permissions.');
+      setErrorText('No puedes quitarte a ti mismo el rol de directivo.');
       return;
     }
     if (isLastManagePermissionsAdminAtRisk) {
-      setErrorText('Bloqueado: debe existir otro ADMIN activo con manage_permissions antes de este cambio.');
+      setErrorText('Debe haber otro directivo activo antes de quitar este rol: la escuela no puede quedarse sin directivos.');
       return;
     }
 
@@ -291,7 +176,7 @@ export default function PermisosRoles() {
       setErrorText(requestValidation.message);
       return;
     }
-    if (isAdminRoleChange && !requireExplicitConfirmation('Confirmación de alto riesgo: este cambio modifica privilegios ADMIN. ¿Deseas continuar?')) {
+    if (isAdminRoleChange && !requireExplicitConfirmation('Este cambio da o quita el rol de directivo y requiere la aprobación de un segundo directivo. ¿Deseas continuar?')) {
       return;
     }
     setErrorText('');
@@ -300,7 +185,7 @@ export default function PermisosRoles() {
       // Role mutations go exclusively through the server-authoritative function;
       // it re-validates and creates the PendingChange with the service role, so
       // the maker-checker cannot be bypassed from the client (findings C1/C2).
-      await base44.functions.invoke('governRoleChange', {
+      await invokeFunction(base44, 'governRoleChange', {
         action: 'request',
         targetProfileId: selectedProfile.id,
         toRole: selectedRole,
@@ -367,7 +252,7 @@ export default function PermisosRoles() {
     try {
       // The server function re-checks approver != requester and applies the role
       // with the service role; the client never writes the approval directly.
-      await base44.functions.invoke('governRoleChange', {
+      await invokeFunction(base44, 'governRoleChange', {
         action: 'decide',
         changeId: change.id,
         decision,
@@ -407,15 +292,15 @@ export default function PermisosRoles() {
       return;
     }
     if (!overrideTargetProfile) {
-      setErrorText('Selecciona un usuario para el override.');
+      setErrorText('Selecciona a la persona para la excepción.');
       return;
     }
     if (isOverrideTargetAdmin) {
-      setErrorText('No se permiten overrides sobre usuarios ADMIN.');
+      setErrorText('Los directivos ya tienen todos los permisos; no se les pueden poner excepciones.');
       return;
     }
     if (overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id) {
-      setErrorText('Bloqueado: no puedes remover tu propio manage_permissions.');
+      setErrorText('No puedes cambiar tus propios permisos de administración.');
       return;
     }
     setErrorText('');
@@ -468,9 +353,9 @@ export default function PermisosRoles() {
       await refetchOverrides();
       setReasonText('');
       setEditingOverrideId('');
-      toast.success('Override guardado');
+      toast.success('Excepción guardada');
     } catch {
-      toast.error('No se pudo guardar el override');
+      toast.error('No se pudo guardar la excepción');
     } finally {
       setIsSavingOverride(false);
     }
@@ -491,7 +376,7 @@ export default function PermisosRoles() {
       setErrorText('El motivo es obligatorio para cualquier cambio.');
       return;
     }
-    if (!requireExplicitConfirmation('Confirmación: eliminar este override quitará la excepción activa. ¿Deseas continuar?')) {
+    if (!requireExplicitConfirmation('Vas a eliminar esta excepción; la persona volverá a los permisos de su rol. ¿Deseas continuar?')) {
       return;
     }
     const current = permissionOverrides.find((entry) => entry.id === overrideId);
@@ -514,7 +399,7 @@ export default function PermisosRoles() {
     });
     await refetchOverrides();
     setReasonText('');
-    toast.success('Override eliminado');
+    toast.success('Excepción eliminada');
   };
 
   const handleApplyRollback = async () => {
@@ -523,10 +408,10 @@ export default function PermisosRoles() {
       return;
     }
     if (!rollbackOverride) {
-      setErrorText('Selecciona un override para rollback.');
+      setErrorText('Selecciona la excepción que quieres revertir.');
       return;
     }
-    if (!requireExplicitConfirmation('Confirmación: esta acción revierte permisos en producción. ¿Deseas continuar?')) {
+    if (!requireExplicitConfirmation('Vas a revertir esta excepción de permisos. ¿Deseas continuar?')) {
       return;
     }
     setErrorText('');
@@ -566,9 +451,9 @@ export default function PermisosRoles() {
       await refetchPendingRoleChanges();
       setRollbackOverrideId('');
       setReasonText('');
-      toast.success(isHighRiskRollback ? 'Solicitud de rollback enviada' : 'Rollback aplicado');
+      toast.success(isHighRiskRollback ? 'Solicitud enviada: otro directivo debe aprobarla' : 'Excepción revertida');
     } catch {
-      toast.error('No se pudo aplicar el rollback');
+      toast.error('No se pudo revertir la excepción');
     } finally {
       setIsApplyingRollback(false);
     }
@@ -580,7 +465,10 @@ export default function PermisosRoles() {
   const handleExportSchoolData = async () => {
     setIsExporting(true);
     try {
-      const payload = await base44.functions.invoke('exportSchoolData', {});
+      // invokeFunction unwraps the axios response to the export body.
+      // Export has to work in read-only mode — it is the half of "solo
+      // lectura" that promises nothing is held hostage.
+      const payload = await invokeFunction(base44, 'exportSchoolData', {});
       if (!payload?.ok) throw new Error(payload?.error || 'export failed');
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -638,11 +526,13 @@ export default function PermisosRoles() {
       <PageHeader title="Permisos y Roles" subtitle="Configuración de acceso" showBack backTo={createPageUrl('Home')} />
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <Card className="p-4 space-y-4">
-        <p className="text-card-foreground">Matriz de permisos por recurso y acción.</p>
+        <p className="text-card-foreground">
+          Cambia el rol de las personas de tu escuela y da o quita permisos puntuales. Todo cambio pide un motivo y queda registrado.
+        </p>
 
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
           <p className="font-medium text-card-foreground">Cambio de rol de usuario</p>
-          <p className="text-xs text-muted-foreground">El dueño de la app está exento del maker-checker y aplica el cambio directo.</p>
+          <p className="text-xs text-muted-foreground">Los cambios que dan o quitan el rol de directivo necesitan la aprobación de un segundo directivo.</p>
           <div className="grid gap-3 md:grid-cols-2">
             <select
               className="ui-field"
@@ -652,7 +542,7 @@ export default function PermisosRoles() {
               <option value="">Selecciona un usuario</option>
               {schoolProfiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
-                  {getUserName(profile.user_id)} ({profile.app_role})
+                  {getUserName(profile.user_id)} ({roleLabel(profile.app_role)})
                 </option>
               ))}
             </select>
@@ -662,33 +552,37 @@ export default function PermisosRoles() {
               value={selectedRole}
               onChange={(event) => setSelectedRole(event.target.value)}
             >
-              <option value="PARENT">PARENT</option>
-              <option value="TEACHER">TEACHER</option>
-              <option value="ADMIN">ADMIN</option>
+              <option value="PARENT">{roleLabel('PARENT')}</option>
+              <option value="TEACHER">{roleLabel('TEACHER')}</option>
+              <option value="ADMIN">{roleLabel('ADMIN')}</option>
             </select>
           </div>
-          {isAdminRoleChange ? <p className="text-sm text-red-700">Cambio de alto riesgo: otorgar o revocar ADMIN.</p> : null}
-          {isSelfAdminDemotion ? <p className="text-sm text-red-700">Bloqueado: no puedes remover tu propio manage_permissions.</p> : null}
-          {isLastManagePermissionsAdminAtRisk ? <p className="text-sm text-red-700">Bloqueado: se requiere otro ADMIN activo para conservar manage_permissions.</p> : null}
+          {isAdminRoleChange ? <p className="text-sm text-red-700 dark:text-red-400">Este cambio da o quita el rol de directivo: requiere la aprobación de un segundo directivo.</p> : null}
+          {isSelfAdminDemotion ? <p className="text-sm text-red-700 dark:text-red-400">No puedes quitarte a ti mismo el rol de directivo.</p> : null}
+          {isLastManagePermissionsAdminAtRisk ? <p className="text-sm text-red-700 dark:text-red-400">Debe haber otro directivo activo antes de quitar este rol.</p> : null}
           <Button variant={isAdminRoleChange ? 'destructive' : 'default'} onClick={handleRoleChange} disabled={isUpdatingRole}>
-            {isUpdatingRole ? 'Guardando...' : isAdminRoleChange ? 'Solicitar cambio de rol (alto riesgo)' : 'Solicitar cambio de rol'}
+            {isUpdatingRole ? 'Guardando...' : isAdminRoleChange ? 'Solicitar cambio de rol de directivo' : 'Solicitar cambio de rol'}
           </Button>
         </div>
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
-          <p className="font-medium text-card-foreground">Rollback por módulo</p>
+          <p className="font-medium text-card-foreground">Revertir una excepción</p>
           <div className="grid gap-3 md:grid-cols-2">
             <select className="ui-field" value={rollbackModule} onChange={(event) => { setRollbackModule(event.target.value); setRollbackOverrideId(''); }}>
-              {ROLLBACK_MODULES.map((module) => <option key={module} value={module}>{module}</option>)}
+              {ROLLBACK_MODULES.map((module) => <option key={module} value={module}>{resourceLabel(module)}</option>)}
             </select>
             <select className="ui-field" value={rollbackOverrideId} onChange={(event) => setRollbackOverrideId(event.target.value)}>
-              <option value="">Selecciona override</option>
-              {rollbackCandidates.map((entry) => <option key={entry.id} value={entry.id}>{entry.action} / {entry.effect} / {entry.user_profile_id}</option>)}
+              <option value="">Selecciona la excepción</option>
+              {rollbackCandidates.map((entry) => <option key={entry.id} value={entry.id}>{describeOverride(entry)}</option>)}
             </select>
           </div>
-          {rollbackOverride ? <pre className="rounded bg-muted p-2 text-xs">{JSON.stringify({ before: rollbackOverride, after: null }, null, 2)}</pre> : null}
-          {rollbackOverride?.action === 'manage_permissions' ? <p className="text-sm text-red-700">Alto riesgo: requiere maker-checker.</p> : null}
+          {rollbackOverride ? (
+            <p className="rounded-xl bg-muted p-2 text-sm text-muted-foreground">
+              Al revertirla, {overrideOwnerName(rollbackOverride)} volverá a los permisos de su rol para {resourceLabel(rollbackOverride.resource).toLowerCase()}.
+            </p>
+          ) : null}
+          {rollbackOverride?.action === 'manage_permissions' ? <p className="text-sm text-red-700 dark:text-red-400">Requiere la aprobación de un segundo directivo.</p> : null}
           <Button variant={rollbackOverride?.action === 'manage_permissions' ? 'destructive' : 'outline'} onClick={handleApplyRollback} disabled={isApplyingRollback}>
-            {isApplyingRollback ? 'Aplicando...' : rollbackOverride?.action === 'manage_permissions' ? 'Solicitar rollback (alto riesgo)' : 'Aplicar rollback controlado'}
+            {isApplyingRollback ? 'Aplicando...' : rollbackOverride?.action === 'manage_permissions' ? 'Solicitar reversión' : 'Revertir excepción'}
           </Button>
         </div>
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
@@ -702,10 +596,10 @@ export default function PermisosRoles() {
                   const disabledByRequesterRule = change.requester_profile_id === userProfile.id;
                   return (
                     <tr key={change.id}>
-                      <td className="p-2">{targetProfile ? `${getUserName(targetProfile.user_id)} (${targetProfile.app_role})` : change.target_profile_id}</td>
-                      <td className="p-2">{change.payload?.from_role}</td>
-                      <td className="p-2">{change.payload?.to_role}</td>
-                      <td className="p-2">{change.status}</td>
+                      <td className="p-2">{targetProfile ? `${getUserName(targetProfile.user_id)} (${roleLabel(targetProfile.app_role)})` : 'Usuario no encontrado'}</td>
+                      <td className="p-2">{roleLabel(change.payload?.from_role)}</td>
+                      <td className="p-2">{roleLabel(change.payload?.to_role)}</td>
+                      <td className="p-2">{changeStatusLabel(change.status)}</td>
                       <td className="p-2 space-x-2">
                         <Button variant="outline" disabled={disabledByRequesterRule || pendingDecisionByChangeId[change.id]} onClick={() => handlePendingRoleChangeDecision(change, 'reject')}>Rechazar</Button>
                         <Button disabled={disabledByRequesterRule || pendingDecisionByChangeId[change.id]} onClick={() => handlePendingRoleChangeDecision(change, 'approve')}>Aprobar</Button>
@@ -721,7 +615,7 @@ export default function PermisosRoles() {
         <div className="space-y-2">
           <label className="text-sm font-medium">Motivo del cambio (obligatorio)</label>
           <Textarea value={reasonText} onChange={(event) => setReasonText(event.target.value)} placeholder="Describe el motivo" />
-          {errorText ? <p className="text-sm text-red-600">{errorText}</p> : null}
+          {errorText ? <p className="text-sm text-red-600 dark:text-red-400">{errorText}</p> : null}
         </div>
 
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
@@ -733,7 +627,7 @@ export default function PermisosRoles() {
             </Button>
           </div>
           <div className="space-y-2 border-t border-border pt-3">
-            <p className="text-sm font-medium text-red-700">Solicitar eliminación de la escuela</p>
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">Solicitar eliminación de la escuela</p>
             <p className="text-xs text-muted-foreground">
               No es instantáneo: se envía como solicitud al equipo de ACACIA, quien la procesará manualmente.
               Descarga tus datos primero — la eliminación no tiene marcha atrás.
@@ -750,65 +644,39 @@ export default function PermisosRoles() {
         </div>
 
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
-          <p className="font-medium text-card-foreground">Danger Zone (Permisos y Roles) — especificación, no implementada</p>
-          <p className="text-xs text-muted-foreground">
-            Documentación de una iniciativa separada y más amplia (delete/suspend/reset/transfer de tenant con
-            maker-checker propio) — no confundir con "Cuenta y zona de peligro" arriba, que sí es funcional.
-            Ver CLAUDE.md ("Module 7") para el razonamiento de por qué esto se deja como especificación.
-          </p>
-          <p className="text-xs text-red-700">Todas las operaciones son de alto riesgo, irreversibles en algunos casos, y usan maker-checker con segundo ADMIN (excepto app owner).</p>
-          <div className="overflow-auto border border-border rounded-2xl">
-            <table className="ui-table min-w-full">
-              <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Operación</th><th className="sticky top-0 bg-muted p-2 text-left">Riesgo</th><th className="sticky top-0 bg-muted p-2 text-left">Confirmación requerida</th><th className="sticky top-0 bg-muted p-2 text-left">Rollback/Compensación</th></tr></thead>
-              <tbody>
-                {dangerZoneOperations.map((operation) => (
-                  <tr key={operation.key}>
-                    <td className="p-2">{operation.label}</td>
-                    <td className="p-2 text-red-700">High-risk</td>
-                    <td className="p-2">Frase escrita + warning irreversible + preview de tenant objetivo</td>
-                    <td className="p-2">{getRollbackPolicy(operation.key)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-xs text-muted-foreground">Guardrails backend: verificación de tenant, verificación de rol ADMIN, y deny-by-default si falta contexto.</p>
-          <p className="text-xs text-muted-foreground">Auditoría obligatoria por acción: requested_by, approved_by, reason, before/after, timestamp, outcome.</p>
-        </div>
-
-        <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
-          <p className="font-medium text-card-foreground">Overrides por usuario</p>
+          <p className="font-medium text-card-foreground">Excepciones por persona</p>
+          <p className="text-xs text-muted-foreground">Da o quita un permiso a una persona concreta, por encima de lo que permite su rol.</p>
           <div className="grid gap-3 md:grid-cols-4">
             <select className="ui-field" value={overrideForm.user_profile_id} onChange={(event) => setOverrideForm((prev) => ({ ...prev, user_profile_id: event.target.value }))}>
-              <option value="">Selecciona usuario</option>
-              {schoolProfiles.map((profile) => <option key={profile.id} value={profile.id}>{getUserName(profile.user_id)} ({profile.app_role})</option>)}
+              <option value="">Selecciona a la persona</option>
+              {schoolProfiles.map((profile) => <option key={profile.id} value={profile.id}>{getUserName(profile.user_id)} ({roleLabel(profile.app_role)})</option>)}
             </select>
             <select className="ui-field" value={overrideForm.resource} onChange={(event) => setOverrideForm((prev) => ({ ...prev, resource: event.target.value }))}>
-              {['Notice', 'Attendance', 'Homework', 'DiaryEntry', 'ChargeItem', 'PaymentConcept', 'PaymentRecord'].map((resource) => <option key={resource} value={resource}>{resource}</option>)}
+              {OVERRIDE_RESOURCES.map((resource) => <option key={resource} value={resource}>{resourceLabel(resource)}</option>)}
             </select>
             <select className="ui-field" value={overrideForm.action} onChange={(event) => setOverrideForm((prev) => ({ ...prev, action: event.target.value }))}>
-              {POLICY_ACTIONS.map((action) => <option key={action} value={action}>{action}</option>)}
+              {POLICY_ACTIONS.map((action) => <option key={action} value={action}>{actionLabel(action)}</option>)}
             </select>
             <select className="ui-field" value={overrideForm.effect} onChange={(event) => setOverrideForm((prev) => ({ ...prev, effect: event.target.value }))}>
-              <option value="deny">deny</option>
-              <option value="allow">allow</option>
+              <option value="deny">{effectLabel('deny')}</option>
+              <option value="allow">{effectLabel('allow')}</option>
             </select>
           </div>
-          {isOverrideTargetAdmin ? <p className="text-sm text-red-700">Bloqueado: no se permiten overrides para ADMIN.</p> : null}
-          {overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id ? <p className="text-sm text-red-700">Bloqueado: no puedes cambiar tu propio manage_permissions.</p> : null}
-          <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar override de permisos' : 'Crear override de permisos'}</Button>
+          {isOverrideTargetAdmin ? <p className="text-sm text-red-700 dark:text-red-400">Los directivos ya tienen todos los permisos; no se les pueden poner excepciones.</p> : null}
+          {overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id ? <p className="text-sm text-red-700 dark:text-red-400">No puedes cambiar tus propios permisos de administración.</p> : null}
+          <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar excepción' : 'Crear excepción'}</Button>
           <div className="overflow-auto border border-border rounded-2xl">
             <table className="ui-table min-w-full">
-              <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Usuario</th><th className="sticky top-0 bg-muted p-2 text-left">Recurso</th><th className="sticky top-0 bg-muted p-2 text-left">Acción</th><th className="sticky top-0 bg-muted p-2 text-left">Efecto</th><th className="sticky top-0 bg-muted p-2 text-left">Preview</th><th className="sticky top-0 bg-muted p-2 text-left">Acciones</th></tr></thead>
+              <thead><tr className="bg-muted"><th className="sticky top-0 bg-muted p-2 text-left">Persona</th><th className="sticky top-0 bg-muted p-2 text-left">Sección</th><th className="sticky top-0 bg-muted p-2 text-left">Permiso</th><th className="sticky top-0 bg-muted p-2 text-left">Excepción</th><th className="sticky top-0 bg-muted p-2 text-left">Resultado</th><th className="sticky top-0 bg-muted p-2 text-left">Acciones</th></tr></thead>
               <tbody>
                 {permissionOverrides.map((override) => {
                   const profile = schoolProfiles.find((entry) => entry.id === override.user_profile_id);
                   const preview = getEffectivePolicyDecision({ role: profile?.app_role, entity: override.resource, action: override.action, userProfileId: override.user_profile_id, overrides: permissionOverrides });
                   return (
                     <tr key={override.id}>
-                      <td className="p-2">{profile ? `${getUserName(profile.user_id)} (${profile.app_role})` : override.user_profile_id}</td>
-                      <td className="p-2">{override.resource}</td><td className="p-2">{override.action}</td><td className="p-2">{override.effect}</td>
-                      <td className="p-2">{preview.allowed ? 'Permitido' : 'Denegado'} ({preview.precedence})</td>
+                      <td className="p-2">{profile ? `${getUserName(profile.user_id)} (${roleLabel(profile.app_role)})` : 'Usuario no encontrado'}</td>
+                      <td className="p-2">{resourceLabel(override.resource)}</td><td className="p-2">{actionLabel(override.action)}</td><td className="p-2">{effectLabel(override.effect)}</td>
+                      <td className="p-2">{preview.allowed ? 'Permitido' : 'Denegado'} ({precedenceLabel(preview.precedence)})</td>
                       <td className="p-2 space-x-2"><Button variant="outline" onClick={() => handleEditOverride(override)}>Editar</Button><Button variant="destructive" onClick={() => handleDeleteOverride(override.id)}>Eliminar</Button></td>
                     </tr>
                   );
@@ -818,79 +686,6 @@ export default function PermisosRoles() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-          <Input value={newTemplateName} onChange={(event) => setNewTemplateName(event.target.value)} placeholder="Nombre de nueva plantilla" />
-          <Button onClick={handleAddTemplate}>Agregar plantilla</Button>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-3">
-          {templates.map((template, index) => (
-            <button
-              key={`${template.name}-${index}`}
-              type="button"
-              onClick={() => setActiveTemplateIndex(index)}
-              className={`rounded-2xl border p-2 text-left ${index === activeTemplateIndex ? 'border-brand/30 bg-brand/10 text-foreground' : 'border-border bg-muted text-muted-foreground'}`}
-            >
-              {template.name}
-            </button>
-          ))}
-        </div>
-
-        {activeTemplate ? (
-          <div className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
-              <Input value={editTemplateName} onChange={(event) => setEditTemplateName(event.target.value)} placeholder="Nuevo nombre de plantilla" />
-              <Button onClick={handleEditTemplateName}>Editar nombre</Button>
-              <Button variant="destructive" onClick={handleDeleteTemplate}>Eliminar plantilla</Button>
-            </div>
-
-            <div className="overflow-auto border border-border rounded-2xl bg-card">
-              <table className="ui-table min-w-full">
-                <thead>
-                  <tr className="bg-muted">
-                    <th className="p-2 text-left">Recurso</th>
-                    {ACTIONS.map((action) => (
-                      <th key={action} className="p-2 text-left">{action}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {RESOURCES.map((resource) => (
-                    <tr key={resource}>
-                      <td className="p-2 font-medium">{resource}</td>
-                      {ACTIONS.map((action) => (
-                        <td key={`${resource}-${action}`} className="p-2">
-                          <input
-                            type="checkbox"
-                            className="accent-brand h-4 w-4 cursor-pointer"
-                            checked={Boolean(activeTemplate.permissions[resource][action])}
-                            onChange={() => handleTogglePermission(resource, action)}
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-
-            <div className="overflow-auto border border-border rounded-2xl bg-card">
-              <table className="ui-table min-w-full">
-                <thead><tr className="bg-muted"><th className="p-2 text-left">Capacidad AI</th><th className="p-2 text-left">allow</th></tr></thead>
-                <tbody>
-                  {AI_CAPABILITIES.map((capability) => (
-                    <tr key={capability}>
-                      <td className="p-2 font-medium">{capability}</td>
-                      <td className="p-2"><input type="checkbox" className="accent-brand h-4 w-4 cursor-pointer" checked={Boolean(activeTemplate.ai_capabilities?.[capability])} onChange={() => handleToggleAICapability(capability)} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-          </div>
-        ) : null}
       </Card>
       </div>
     </div>

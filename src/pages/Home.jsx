@@ -10,6 +10,9 @@ import Onboarding from '@/components/onboarding/Onboarding';
 import WelcomeTrialModal from '@/components/subscription/WelcomeTrialModal';
 import SuspendedAccountModal from '@/components/subscription/SuspendedAccountModal';
 import { selectCurrentUserProfile } from '@/lib/tenantSelection';
+import { useSubscription } from '@/hooks/useSubscription';
+import SignOutButton from '@/components/auth/SignOutButton';
+import { Ban } from 'lucide-react';
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -39,16 +42,10 @@ export default function Home() {
     }
   }, [userProfile?.id, userProfile?.app_role, userProfile?.welcome_message_shown]);
 
-  const { data: subscription } = useQuery({
-    queryKey: ['schoolSubscription', userProfile?.school_id],
-    queryFn: async () => {
-      const subs = await base44.entities.SchoolSubscription.filter({
-        school_id: userProfile.school_id
-      });
-      return subs.length > 0 ? subs[0] : null;
-    },
-    enabled: !!userProfile?.school_id,
-  });
+  // Through getMySubscription (service role, school re-derived server-side):
+  // a direct SchoolSubscription read is platform-only and returned null for
+  // every school user, so these modals and banners never had data (audit F10).
+  const { subscription } = useSubscription();
 
   const markWelcomeShownMutation = useMutation({
     mutationFn: async () => {
@@ -71,9 +68,18 @@ export default function Home() {
   }
 
   // Sin ningún perfil todavía — el onboarding de siempre, sin selector (no
-  // hay nada entre qué elegir).
+  // hay nada entre qué elegir). "Cerrar sesión" va aquí y no dentro de
+  // Onboarding: quien entró con la cuenta equivocada tiene que poder salir sin
+  // crear una escuela, y el componente de onboarding es de otro paquete.
   if (!userProfile) {
-    return <Onboarding user={user} onComplete={refetchProfiles} />;
+    return (
+      <div className="relative">
+        <div className="absolute right-4 top-4 z-10">
+          <SignOutButton />
+        </div>
+        <Onboarding user={user} onComplete={refetchProfiles} />
+      </div>
+    );
   }
 
   // Pending status
@@ -81,13 +87,19 @@ export default function Home() {
     return <PendingApproval />;
   }
 
-  // Suspended status
+  // Suspended status — with a way out, and readable in dark mode.
   if (userProfile.status === 'SUSPENDED') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-red-50 p-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-800 mb-2">Cuenta suspendida</h1>
-          <p className="text-red-600">Contacta al administrador de tu escuela.</p>
+      <div className="min-h-screen flex items-center justify-center bg-red-50 dark:bg-red-950/30 p-6">
+        <div className="max-w-md w-full rounded-3xl bg-card text-card-foreground shadow-xl p-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center mx-auto mb-5">
+            <Ban className="w-8 h-8 text-red-600 dark:text-red-400" aria-hidden="true" />
+          </div>
+          <h1 className="text-2xl font-bold text-red-800 dark:text-red-300 mb-2">Cuenta suspendida</h1>
+          <p className="text-red-700 dark:text-red-400 mb-6">
+            Tu acceso a esta escuela está suspendido. Si crees que es un error, habla con la dirección de tu escuela.
+          </p>
+          <SignOutButton />
         </div>
       </div>
     );

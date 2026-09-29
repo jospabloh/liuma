@@ -6,39 +6,41 @@ import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, C
 import BigTile from '@/components/ui/BigTile';
 import { HomeHeader } from '@/components/home/HomeChrome';
 import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
+import JoinCodeCard from '@/components/school/JoinCodeCard';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { useSchoolStudents } from '@/hooks/useSchoolStudents';
+import { selectOverdueCharges, UNPAID_CHARGE_STATUSES } from '@/lib/payments/overdue';
+import { countLabel } from '@/lib/spanishText';
+import { percentOfStudentsCovered } from '@/lib/schoolStudents';
+import { useSubscription } from '@/hooks/useSubscription';
 
 export default function AdminHome({ user, userProfile, subscription }) {
   const navigate = useNavigate();
 
   // Get pending approvals
-  const { data: pendingUsers = [] } = useQuery({
+  const pendingUsersQuery = useQuery({
     queryKey: ['pendingUsers', userProfile.school_id],
     queryFn: () => base44.entities.UserProfile.filter({ 
       school_id: userProfile.school_id,
       status: 'PENDING' 
     }),
   });
-  const { data: allProfiles = [] } = useQuery({
+  const allProfilesQuery = useQuery({
     queryKey: ['allProfiles', userProfile.school_id],
     queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
   });
 
-  // Get school info
-  const { data: school } = useQuery({
-    queryKey: ['school', userProfile.school_id],
-    queryFn: async () => {
-      const schools = await base44.entities.School.filter({ id: userProfile.school_id });
-      return schools[0];
-    },
-  });
+  // School header (name) comes from getMySubscription: School.read is
+  // platform-only under RLS, so a direct School.filter returned nothing for a
+  // real director and the header fell back to 'Administración'.
+  const { school } = useSubscription();
 
   // Get classrooms count
-  const { data: classrooms = [] } = useQuery({
+  const classroomsQuery = useQuery({
     queryKey: ['allClassrooms', userProfile.school_id],
     queryFn: () => base44.entities.Classroom.filter({ 
       school_id: userProfile.school_id,
@@ -46,51 +48,45 @@ export default function AdminHome({ user, userProfile, subscription }) {
     }),
   });
 
-  // Get students count
-  const { data: students = [] } = useQuery({
-    queryKey: ['allStudents', userProfile.school_id],
-    queryFn: () => base44.entities.Student.filter({ 
-      school_id: userProfile.school_id,
-      is_active: true 
-    }),
-  });
+  // Active students. The key carries the filter (see useSchoolStudents), so
+  // this list never shares a cache slot with an "all students" list.
+  const studentsQuery = useSchoolStudents(userProfile.school_id);
 
-  // Get overdue payments
-  const { data: overdueCharges = [] } = useQuery({
+  // Overdue payments: the same rule PagosAdmin uses (stored OVERDUE, or still
+  // PENDING past its due date), so both screens show the same number.
+  const overdueChargesQuery = useQuery({
     queryKey: ['overdueCharges', userProfile.school_id],
     queryFn: async () => {
-      const charges = await base44.entities.ChargeItem.filter({ 
+      const charges = await base44.entities.ChargeItem.filter({
         school_id: userProfile.school_id,
-        status: 'PENDING'
+        status: { $in: UNPAID_CHARGE_STATUSES },
       });
-      return charges.filter(c => new Date(c.due_date) < new Date());
+      return selectOverdueCharges(charges);
     },
   });
-  const { data: setupSteps = [] } = useQuery({
+  const setupStepsQuery = useQuery({
     queryKey: ['homeSetupGuide', userProfile.school_id],
     queryFn: () => base44.entities.SchoolSetupGuide.filter({ school_id: userProfile.school_id }),
   });
-  const { data: teacherAssignments = [] } = useQuery({
+  const teacherAssignmentsQuery = useQuery({
     queryKey: ['homeTeacherAssignments', userProfile.school_id],
     queryFn: () => base44.entities.TeacherClassroom.filter({ school_id: userProfile.school_id, is_active: true }),
   });
-  const { data: parentLinks = [] } = useQuery({
+  const parentLinksQuery = useQuery({
     queryKey: ['homeParentLinks', userProfile.school_id],
     queryFn: () => base44.entities.ParentStudent.filter({ school_id: userProfile.school_id, status: 'ACTIVE' }),
   });
-  const { data: emergencyContacts = [] } = useQuery({
-    queryKey: ['homeEmergencyContacts', userProfile.school_id, students.length],
-    queryFn: async () => {
-      const allContacts = [];
-      for (const student of students) {
-        const rows = await base44.entities.EmergencyContact.filter({ student_id: student.id });
-        allContacts.push(...rows);
-      }
-      return allContacts;
-    },
-    enabled: students.length > 0,
+  // One request for the whole school — this used to await one
+  // EmergencyContact.filter per student, in sequence (300 round-trips for a
+  // 300-student school on the director's first screen).
+  const emergencyContactsQuery = useQuery({
+    queryKey: ['homeEmergencyContacts', userProfile.school_id],
+    queryFn: () => base44.entities.EmergencyContact.filter(
+      { school_id: userProfile.school_id },
+      undefined,
+      5000,
+    ),
   });
-
 
   const { data: unreadUrgentNotices = [] } = useQuery({
     queryKey: ['adminUnreadUrgentNotices', userProfile.school_id],
@@ -102,6 +98,22 @@ export default function AdminHome({ user, userProfile, subscription }) {
     },
   });
 
+  const pendingUsers = pendingUsersQuery.data ?? [];
+  const allProfiles = allProfilesQuery.data ?? [];
+  const classrooms = classroomsQuery.data ?? [];
+  const students = studentsQuery.data ?? [];
+  const overdueCharges = overdueChargesQuery.data ?? [];
+  const setupSteps = setupStepsQuery.data ?? [];
+  const teacherAssignments = teacherAssignmentsQuery.data ?? [];
+  const parentLinks = parentLinksQuery.data ?? [];
+  const emergencyContacts = emergencyContactsQuery.data ?? [];
+
+  // A stat whose data is still loading, or failed to load, shows "—" rather
+  // than a confident 0 / 0% ("Pagos vencidos 0" while the query is in flight,
+  // or after it errored, reads as good news that nobody checked).
+  const unknown = (...queries) => queries.some((q) => q.isPending || q.isError);
+  const statValue = (value, ...queries) => (unknown(...queries) ? '—' : value);
+
   const handleEmergencyAlert = () => {
     navigate(createPageUrl('AlertaEmergencia'));
   };
@@ -109,15 +121,40 @@ export default function AdminHome({ user, userProfile, subscription }) {
   const setupProgress = setupSteps.length > 0 ? Math.round((completedSetupSteps / setupSteps.length) * 100) : 0;
   const teacherProfiles = allProfiles.filter((p) => p.app_role === 'TEACHER' && p.status === 'ACTIVE');
   const teacherCoverage = teacherProfiles.length > 0 ? Math.round((new Set(teacherAssignments.map((a) => a.teacher_id)).size / teacherProfiles.length) * 100) : 0;
-  const parentCoverage = students.length > 0 ? Math.round((new Set(parentLinks.map((l) => l.student_id)).size / students.length) * 100) : 0;
-  const emergencyCoverage = students.length > 0 ? Math.round((new Set(emergencyContacts.map((c) => c.student_id)).size / students.length) * 100) : 0;
+  const parentCoverage = percentOfStudentsCovered(students, parentLinks);
+  const emergencyCoverage = percentOfStudentsCovered(students, emergencyContacts);
+
+  const stats = [
+    { key: 'students', value: statValue(students.length, studentsQuery), label: 'Alumnos activos', tone: 'text-card-foreground' },
+    { key: 'classrooms', value: statValue(classrooms.length, classroomsQuery), label: 'Salones', tone: 'text-card-foreground' },
+    {
+      key: 'pending',
+      value: statValue(pendingUsers.length, pendingUsersQuery),
+      label: 'Usuarios por aprobar',
+      tone: 'text-amber-600 dark:text-amber-400',
+      href: createPageUrl('Aprobaciones'),
+    },
+    {
+      key: 'overdue',
+      value: statValue(overdueCharges.length, overdueChargesQuery),
+      label: 'Pagos vencidos',
+      tone: 'text-red-600 dark:text-red-400',
+      href: createPageUrl('PagosAdmin'),
+    },
+    { key: 'setup', value: statValue(`${setupProgress}%`, setupStepsQuery), label: 'Configuración completada', tone: 'text-brand', href: createPageUrl('ConfiguracionInicial') },
+    { key: 'teachers', value: statValue(`${teacherCoverage}%`, allProfilesQuery, teacherAssignmentsQuery), label: 'Maestros con salón asignado', tone: 'text-brand' },
+    { key: 'parents', value: statValue(`${parentCoverage}%`, studentsQuery, parentLinksQuery), label: 'Alumnos con tutor vinculado', tone: 'text-brand' },
+    { key: 'emergency', value: statValue(`${emergencyCoverage}%`, studentsQuery, emergencyContactsQuery), label: 'Alumnos con contacto de emergencia', tone: 'text-amber-600 dark:text-amber-400' },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
       <HomeHeader
         eyebrow={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
         title={school?.name || 'Administración'}
-        subtitle={`${classrooms.length} salones · ${students.length} alumnos`}
+        subtitle={unknown(classroomsQuery, studentsQuery)
+          ? undefined
+          : `${countLabel(classrooms.length, 'salón', 'salones')} · ${countLabel(students.length, 'alumno')}`}
       />
       {/* Emergency Button */}
       <div className="relative z-10 mx-auto max-w-2xl px-6 -mt-6">
@@ -138,6 +175,46 @@ export default function AdminHome({ user, userProfile, subscription }) {
       {/* Main Content */}
       <div className="mx-auto max-w-2xl px-6 mt-7 pb-24">
         <PaymentReminderBanner subscription={subscription} />
+
+        {/* Status first: the numbers a director opens the app to see, above the
+            navigation tiles rather than 17 tiles further down. */}
+        <section aria-labelledby="admin-home-status" className="mb-7">
+          <p id="admin-home-status" className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Resumen de hoy
+          </p>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="grid grid-cols-2 gap-3"
+          >
+            {stats.map((stat) => {
+              const content = (
+                <>
+                  <p className={`text-3xl font-bold ${stat.tone}`}>{stat.value}</p>
+                  <p className="text-sm text-muted-foreground">{stat.label}</p>
+                </>
+              );
+              const base = 'block h-full bg-card rounded-xl p-4 border border-border';
+              return stat.href ? (
+                <button
+                  key={stat.key}
+                  type="button"
+                  onClick={() => navigate(stat.href)}
+                  className={`${base} text-left transition-colors hover:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand`}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div key={stat.key} className={base}>{content}</div>
+              );
+            })}
+          </motion.div>
+        </section>
+
+        {/* Short join code, resolved server-side by getMySubscription, with
+            Copiar código / Copiar liga / WhatsApp (P6 JoinCodeCard; replaces
+            P5's client-side card, which read School — platform-only under RLS). */}
+        <JoinCodeCard className="mb-7" />
 
         {/* Main Tiles, grouped so the section labels carry the structure. */}
         <div className="space-y-7">
@@ -171,15 +248,15 @@ export default function AdminHome({ user, userProfile, subscription }) {
               />
               <BigTile
                 icon={ClipboardCheck}
-                title="Solicitudes de Ausencias"
+                title="Solicitudes de ausencias"
                 subtitle="Aprobar o rechazar"
                 href={createPageUrl('GestionAusencias')}
                 delay={0.2}
               />
               <BigTile
                 icon={ListChecks}
-                title="Operación Diaria"
-                subtitle="Timeline combinado"
+                title="Operación diaria"
+                subtitle="Todo lo del día en un solo lugar"
                 href={createPageUrl('OperacionDiaria')}
                 delay={0.25}
               />
@@ -194,7 +271,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
               <BigTile
                 icon={Bell}
                 title="Avisos"
-                subtitle={unreadUrgentNotices.length > 0 ? `${unreadUrgentNotices.length} urgentes sin leer` : 'Enviar comunicados'}
+                subtitle={unreadUrgentNotices.length > 0 ? countLabel(unreadUrgentNotices.length, 'urgente sin leer', 'urgentes sin leer') : 'Enviar comunicados'}
                 href={createPageUrl('AvisosAdmin')}
                 badge={unreadUrgentNotices.length}
                 delay={0.05}
@@ -208,7 +285,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
               />
               <BigTile
                 icon={FileText}
-                title="Documentos Oficiales"
+                title="Documentos oficiales"
                 subtitle="Menús, comunicaciones y minutas"
                 href={createPageUrl('GestionDocumentos')}
                 delay={0.15}
@@ -224,7 +301,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
               <BigTile
                 icon={CreditCard}
                 title="Pagos"
-                subtitle={overdueCharges.length > 0 ? `${overdueCharges.length} vencidos` : 'Configurar conceptos y cargos'}
+                subtitle={overdueCharges.length > 0 ? countLabel(overdueCharges.length, 'cargo vencido', 'cargos vencidos') : 'Configurar conceptos y cargos'}
                 badge={overdueCharges.length}
                 href={createPageUrl('PagosAdmin')}
                 delay={0.05}
@@ -238,7 +315,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
               />
               <BigTile
                 icon={ShoppingBag}
-                title="Pedidos de Uniformes"
+                title="Pedidos de uniformes"
                 subtitle="Gestionar pedidos de padres"
                 href={createPageUrl('GestionPedidosAdmin')}
                 delay={0.15}
@@ -274,7 +351,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
               />
               <BigTile
                 icon={KeyRound}
-                title="Permisos y Roles"
+                title="Permisos y roles"
                 subtitle="Accesos administrativos"
                 href={createPageUrl('PermisosRoles')}
                 delay={0.15}
@@ -289,7 +366,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <BigTile
                 icon={Settings}
-                title="Configuración Inicial"
+                title="Configuración inicial"
                 subtitle="Guía paso a paso"
                 href={createPageUrl('ConfiguracionInicial')}
                 delay={0.05}
@@ -312,59 +389,6 @@ export default function AdminHome({ user, userProfile, subscription }) {
           </section>
         </div>
 
-        {/* Quick Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-8 grid grid-cols-2 gap-3"
-        >
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <p className="text-3xl font-bold text-card-foreground">{students.length}</p>
-            <p className="text-sm text-muted-foreground">Alumnos activos</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <p className="text-3xl font-bold text-card-foreground">{classrooms.length}</p>
-            <p className="text-sm text-muted-foreground">Salones</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <p className="text-3xl font-bold text-amber-600">{pendingUsers.length}</p>
-            <p className="text-sm text-muted-foreground">Por aprobar</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <p className="text-3xl font-bold text-red-600">{overdueCharges.length}</p>
-            <p className="text-sm text-muted-foreground">Pagos vencidos</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <p className="text-3xl font-bold text-brand">{setupProgress}%</p>
-            <p className="text-sm text-muted-foreground">Setup general</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <p className="text-3xl font-bold text-brand">{teacherCoverage}%</p>
-            <p className="text-sm text-muted-foreground">Maestro-salón</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <p className="text-3xl font-bold text-brand">{parentCoverage}%</p>
-            <p className="text-sm text-muted-foreground">Alumno-padre</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border">
-            <p className="text-3xl font-bold text-amber-600">{emergencyCoverage}%</p>
-            <p className="text-sm text-muted-foreground">Contactos emergencia</p>
-          </div>
-        </motion.div>
-
-        {/* School Code */}
-        {school && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="mt-6 rounded-xl p-4 border border-brand/20 bg-brand/5"
-          >
-            <p className="text-sm text-brand mb-1">Código de escuela para invitar usuarios:</p>
-            <p className="text-xl font-mono font-bold text-foreground">{school.id}</p>
-          </motion.div>
-        )}
       </div>
 
     </div>

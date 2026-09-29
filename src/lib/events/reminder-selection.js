@@ -1,11 +1,16 @@
 import { differenceInDays, startOfDay } from 'date-fns';
+import { parseLocalDate } from '../dates.js';
 
 /**
  * Pure selector: which events are due for a confirmation reminder right now.
  * An event qualifies when it requires confirmation, has a deadline, hasn't been
  * reminded yet, and the deadline is exactly 3 days out. Compared at day
  * granularity (startOfDay on both sides) so a date-only deadline isn't thrown
- * off by the current time-of-day. Kept free of IO / base44 so it is
+ * off by the current time-of-day, and the deadline is read with parseLocalDate:
+ * new Date('YYYY-MM-DD') is UTC midnight, the previous evening in Mexico, which
+ * shifted the 3-day check one day early (the reminder went out 4 days before the
+ * deadline, and reminder_sent then kept it from firing on the right day). Kept
+ * free of IO / base44 so it is
  * unit-testable; the side-effecting send lives in sendDueEventReminders.
  */
 export function selectEventsNeedingReminder(events, now = new Date()) {
@@ -13,7 +18,9 @@ export function selectEventsNeedingReminder(events, now = new Date()) {
     if (!event?.requires_confirmation) return false;
     if (!event.confirmation_deadline) return false;
     if (event.reminder_sent) return false;
-    return differenceInDays(startOfDay(new Date(event.confirmation_deadline)), startOfDay(now)) === 3;
+    const deadline = parseLocalDate(event.confirmation_deadline);
+    if (!deadline) return false;
+    return differenceInDays(startOfDay(deadline), startOfDay(now)) === 3;
   });
 }
 

@@ -26,12 +26,15 @@ export default function SeedTestData() {
 
   if (isLoading) return <LoadingScreen message="Validando permisos…" />;
 
-  if (userProfile?.app_role !== 'ADMIN') {
+  // Platform owner only (Base44 user.role 'admin'), matching
+  // PLATFORM_OWNER_ROUTES in routeAccess.js. A school director must never
+  // reach this: with Test Data mode off it writes real, undeletable rows.
+  if (user?.role !== 'admin' || userProfile?.app_role !== 'ADMIN') {
     return (
       <div className="min-h-screen bg-background">
         <PageHeader title="Seed Test Data" subtitle="Acceso restringido" showBack backTo={createPageUrl('Home')} />
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6">
-          <Card className="p-4"><p className="text-card-foreground">Solo administradores pueden generar datos de prueba.</p></Card>
+          <Card className="p-4"><p className="text-card-foreground">Esta herramienta es solo para el equipo de LIUMA.</p></Card>
         </div>
       </div>
     );

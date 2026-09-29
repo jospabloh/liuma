@@ -1,21 +1,31 @@
-import { Toaster } from "@/components/ui/toaster"
+import { Toaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import SessionHeartbeat from '@/lib/SessionHeartbeat'
 import { pagesConfig } from './pages.config'
-import { Suspense, useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ContinueAs from '@/components/auth/ContinueAs';
 import { getRememberedIdentity } from '@/lib/lastIdentity';
+import { readResetToken } from '@/lib/authLinks';
 import GuardedRoute from '@/components/GuardedRoute';
+import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import Login from '@/pages/Login';
+import { PRIVACY_NOTICE, SERVICE_TERMS } from '@/lib/legal/legalDocs';
+
+const LegalDocumentPage = React.lazy(() => import('@/components/legal/LegalDocumentPage'));
+
+// Public legal pages. Rendered BEFORE AuthenticatedApp — no auth, no profile,
+// no GuardedRoute — because the onboarding consent checkbox links here and the
+// person reading it has no UserProfile yet. See src/lib/legal/legalDocs.js.
+const PUBLIC_LEGAL_DOCS = [PRIVACY_NOTICE, SERVICE_TERMS];
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -49,6 +59,14 @@ const ScrollToTopOnNavigate = () => {
   return null;
 };
 
+// Unauthenticated visitors land on /login from any path. The query string
+// travels with them so a password-reset link (?reset_token=…) still reaches
+// the login screen's reset form. See src/lib/authLinks.js.
+const RedirectToLogin = () => {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: '/login', search }} replace />;
+};
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
 
@@ -71,13 +89,16 @@ const AuthenticatedApp = () => {
       // redirectToLogin(). Otherwise render our own in-app /login page instead
       // of bouncing out to Base44's hosted login — any other path also lands
       // there, since nothing in the app is reachable while unauthenticated.
-      if (getRememberedIdentity()) {
+      // …except when the visitor arrived from a password-reset e-mail: that
+      // link must reach the reset form, not "Continuar como". (The public
+      // legal pages are matched in App, before this component renders.)
+      if (getRememberedIdentity() && !readResetToken(window.location.search)) {
         return <ContinueAs />;
       }
       return (
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<RedirectToLogin />} />
         </Routes>
       );
     }
@@ -88,7 +109,9 @@ const AuthenticatedApp = () => {
     <Routes>
       <Route path="/" element={
         <LayoutWrapper currentPageName={mainPageKey}>
-          <Suspense fallback={<PageTransitionFallback />}><MainPage /></Suspense>
+          <RouteErrorBoundary>
+            <Suspense fallback={<PageTransitionFallback />}><MainPage /></Suspense>
+          </RouteErrorBoundary>
         </LayoutWrapper>
       } />
       {/* Already authenticated — /login has nothing to do, send them home. */}
@@ -100,7 +123,9 @@ const AuthenticatedApp = () => {
           element={
             <GuardedRoute routeName={path}>
               <LayoutWrapper currentPageName={path}>
-                <Suspense fallback={<PageTransitionFallback />}><Page /></Suspense>
+                <RouteErrorBoundary>
+                  <Suspense fallback={<PageTransitionFallback />}><Page /></Suspense>
+                </RouteErrorBoundary>
               </LayoutWrapper>
             </GuardedRoute>
           }
@@ -123,7 +148,16 @@ function App() {
             <NavigationTracker />
             <SessionHeartbeat />
             <TenantThemeRuntime />
-            <AuthenticatedApp />
+            <Routes>
+              {PUBLIC_LEGAL_DOCS.map((doc) => (
+                <Route
+                  key={doc.path}
+                  path={doc.path}
+                  element={<Suspense fallback={<PageTransitionFallback />}><LegalDocumentPage doc={doc} /></Suspense>}
+                />
+              ))}
+              <Route path="*" element={<AuthenticatedApp />} />
+            </Routes>
           </Router>
           <Toaster />
           <ThemeSwitcher />

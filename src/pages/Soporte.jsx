@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { LifeBuoy, Plus, Sparkles, MessageSquare, ChevronRight } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -73,7 +74,7 @@ export default function Soporte() {
           <Sparkles className="w-5 h-5 text-brand mt-0.5 shrink-0" />
           <div className="text-sm text-foreground space-y-1">
             <p className="font-semibold text-foreground">¿Cómo funciona?</p>
-            <p>1. Pregúntale a <strong>Lumi</strong>: resuelve muchas dudas al instante con el manual de la app.</p>
+            <p>1. Pregúntale a <strong>Lumi</strong>: te explica cómo usar cada pantalla de LIUMA y consulta al instante los datos de tu perfil (tareas, avisos, asistencia, pagos).</p>
             <p>2. Si Lumi no puede ayudarte, crea un <strong>ticket</strong>: se asigna un número y se envía a la dirección de tu escuela o al equipo LIUMA según el caso.</p>
             <p>3. Da seguimiento aquí mismo hasta que se resuelva.</p>
           </div>
@@ -90,6 +91,11 @@ export default function Soporte() {
           <span className="text-sm">Crear ticket</span>
         </Button>
       </div>
+
+      <p className="text-sm text-muted-foreground mb-6 -mt-3">
+        ¿Primera vez en LIUMA?{' '}
+        <Link to={createPageUrl('Ayuda')} className="text-brand underline">Consulta la guía de ayuda</Link>.
+      </p>
 
       <h2 className="text-sm font-semibold text-muted-foreground mb-2">Mis tickets</h2>
 

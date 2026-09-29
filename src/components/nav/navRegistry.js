@@ -53,6 +53,11 @@ const ADMIN_DESTINATIONS = [
   { page: 'AuditoriaAdmin', label: 'Auditoría', icon: 'ScrollText', group: 'Configuración' },
   { page: 'SoporteAdmin', label: 'Consola de soporte', icon: 'Headset', group: 'Soporte' },
   { page: 'PanelSoporte', label: 'Panel de soporte', icon: 'LifeBuoy', group: 'Soporte' },
+  // The director's own line to ACACIA (billing, bugs, requests) — distinct from
+  // the two entries above, which are the inbox of the school's tickets (P3).
+  { page: 'Soporte', label: 'Contactar a soporte de LIUMA', icon: 'MessageCircle', group: 'Soporte' },
+  // The in-app manual (P11).
+  { page: 'Ayuda', label: 'Ayuda', icon: 'HelpCircle', group: 'Soporte' },
   { page: 'HistorialCambios', label: 'Historial de cambios', icon: 'History', group: 'Soporte' },
 ];
 
@@ -64,12 +69,16 @@ const TEACHER_DESTINATIONS = [
   { page: 'AvisosMaestro', label: 'Avisos', icon: 'Bell', group: 'Comunicación' },
   { page: 'CalendarioEscolar', label: 'Calendario', icon: 'Calendar', group: 'Comunicación' },
   { page: 'Soporte', label: 'Soporte', icon: 'Headset', group: 'Soporte' },
+  { page: 'Ayuda', label: 'Ayuda', icon: 'HelpCircle', group: 'Soporte' },
   { page: 'HistorialCambios', label: 'Historial de cambios', icon: 'History', group: 'Soporte' },
 ];
 
 const PARENT_DESTINATIONS = [
   { page: 'OperacionDiaria', label: 'Hoy', icon: 'CalendarCheck', group: 'Día a día' },
   { page: 'MisHijos', label: 'Mis hijos', icon: 'Users', group: 'Día a día' },
+  // Asistencia has a parent view (their children's records) and the route has
+  // always allowed PARENT, but nothing led there.
+  { page: 'Asistencia', label: 'Asistencia', icon: 'ClipboardCheck', group: 'Día a día' },
   { page: 'Tarea', label: 'Tareas', icon: 'BookOpen', group: 'Día a día' },
   { page: 'Bitacora', label: 'Bitácora', icon: 'NotebookPen', group: 'Día a día' },
   { page: 'Avisos', label: 'Avisos', icon: 'Bell', group: 'Comunicación' },
@@ -79,6 +88,7 @@ const PARENT_DESTINATIONS = [
   { page: 'PedidosUniformes', label: 'Uniformes', icon: 'Shirt', group: 'Trámites' },
   { page: 'SolicitarAusencia', label: 'Solicitar ausencia', icon: 'CalendarOff', group: 'Trámites' },
   { page: 'Soporte', label: 'Soporte', icon: 'Headset', group: 'Soporte' },
+  { page: 'Ayuda', label: 'Ayuda', icon: 'HelpCircle', group: 'Soporte' },
   { page: 'HistorialCambios', label: 'Historial de cambios', icon: 'History', group: 'Soporte' },
 ];
 

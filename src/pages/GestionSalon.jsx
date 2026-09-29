@@ -28,6 +28,7 @@ import {
 import { Label } from "@/components/ui/label";
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 
 export default function GestionSalon() {
   const queryClient = useQueryClient();
@@ -39,6 +40,10 @@ export default function GestionSalon() {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
 
   const { user, userProfile } = useCurrentProfile();
+  // Assigning or removing a classroom's teachers is a director's decision; the
+  // backend rejects it from a TEACHER anyway. A TEACHER opening this page (it is
+  // also their classroom view) sees who is assigned, but not the controls.
+  const canManageTeachers = userProfile?.app_role === 'ADMIN';
 
   const { data: classroom, isLoading } = useQuery({
     queryKey: ['classroom', classroomId],
@@ -77,10 +82,9 @@ export default function GestionSalon() {
     enabled: !!userProfile,
   });
 
-  const { data: allUsers = [] } = useQuery({
-    queryKey: ['allUsers'],
-    queryFn: () => base44.entities.User.list(),
-  });
+  // Teacher names come from the server-side member directory (UserProfile has
+  // no name, and a client User.list() only returns the caller's own row).
+  const { getName: getUserName } = useSchoolMembers(userProfile?.school_id);
 
   const assignedTeacherIds = teacherAssignments.map(t => t.teacher_id);
   const availableTeachers = teacherProfiles.filter(p => !assignedTeacherIds.includes(p.user_id));
@@ -114,11 +118,6 @@ export default function GestionSalon() {
     });
   };
 
-  const getUserName = (userId) => {
-    const u = allUsers.find(u => u.id === userId);
-    return u?.full_name || 'Sin nombre';
-  };
-
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
   return (
@@ -128,7 +127,7 @@ export default function GestionSalon() {
         title={classroom?.name || 'Salón'}
         subtitle={`${students.length} alumnos`}
         showBack
-        backTo={createPageUrl('GestionEscuela')}
+        backTo={createPageUrl(canManageTeachers ? 'GestionEscuela' : 'Home')}
       />
 
       <ReadOnlyBanner />
@@ -145,14 +144,16 @@ export default function GestionSalon() {
               <GraduationCap className="w-5 h-5 text-brand" />
               Maestros asignados
             </h3>
-            <Button
-              onClick={() => setShowTeacherForm(true)}
-              size="sm"
-              variant="outline"
-              className="gap-1"
-            >
-              <Plus className="w-4 h-4" /> Asignar
-            </Button>
+            {canManageTeachers && (
+              <Button
+                onClick={() => setShowTeacherForm(true)}
+                size="sm"
+                variant="outline"
+                className="gap-1"
+              >
+                <Plus className="w-4 h-4" /> Asignar
+              </Button>
+            )}
           </div>
 
           {teacherAssignments.length === 0 ? (
@@ -173,14 +174,16 @@ export default function GestionSalon() {
                       <Badge className="bg-brand/10 text-brand">Principal</Badge>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeTeacherMutation.mutate(assignment.id)}
-                    className="text-red-600 hover:bg-red-50"
-                  >
-                    Remover
-                  </Button>
+                  {canManageTeachers && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeTeacherMutation.mutate(assignment.id)}
+                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                    >
+                      Remover
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -228,7 +231,7 @@ export default function GestionSalon() {
       </div>
 
       {/* Assign Teacher Modal */}
-      <Dialog open={showTeacherForm} onOpenChange={setShowTeacherForm}>
+      <Dialog open={canManageTeachers && showTeacherForm} onOpenChange={setShowTeacherForm}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Asignar maestro</DialogTitle>
@@ -252,8 +255,8 @@ export default function GestionSalon() {
                 </SelectContent>
               </Select>
               {availableTeachers.length === 0 && (
-                <p className="text-sm text-amber-600 mt-2">
-                  No hay maestros disponibles. Deben registrarse como TEACHER y ser aprobados.
+                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                  No hay maestros disponibles. Primero deben registrarse como maestros y tú aprobarlos en Aprobaciones.
                 </p>
               )}
             </div>

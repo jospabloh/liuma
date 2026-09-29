@@ -1,0 +1,101 @@
+{
+  "name": "ConsentRecord",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Usuario que otorgó el consentimiento (id del usuario autenticado, tomado por el servidor, nunca del cuerpo de la petición)."
+    },
+    "school_id": {
+      "type": "string",
+      "description": "Escuela (responsable del tratamiento) para la que se otorgó."
+    },
+    "app_role": {
+      "type": "string",
+      "enum": [
+        "ADMIN",
+        "TEACHER",
+        "PARENT"
+      ],
+      "description": "Rol con el que se registró: define qué texto de consentimiento sensible vio (padre/madre vs. personal)."
+    },
+    "notice_version": {
+      "type": "string",
+      "description": "Versión del Aviso de Privacidad aceptada (PRIVACY_NOTICE_VERSION)."
+    },
+    "terms_version": {
+      "type": "string",
+      "description": "Versión de los Términos del servicio aceptada (TERMS_VERSION)."
+    },
+    "accepted_general": {
+      "type": "boolean",
+      "description": "Aceptó el Aviso de Privacidad y los Términos."
+    },
+    "accepted_sensitive_minor_data": {
+      "type": "boolean",
+      "description": "Consentimiento EXPRESO para datos sensibles de menores (salud, alergias, notas médicas) — LFPDPPP."
+    },
+    "accepted_scopes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Alcances aceptados (general_privacy_notice, sensitive_minor_data)."
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Momento de la aceptación, con el reloj del SERVIDOR."
+    },
+    "user_agent": {
+      "type": "string",
+      "description": "Navegador desde el que se aceptó (cabecera de la petición), como evidencia."
+    },
+    "source": {
+      "type": "string",
+      "description": "Dónde se capturó (hoy siempre 'onboarding')."
+    }
+  },
+  "required": [
+    "user_id",
+    "school_id",
+    "notice_version",
+    "accepted_at"
+  ],
+  // Append-only prueba de consentimiento (LFPDPPP, solicitudes ARCO / autoridad).
+  // Sólo provisionOnboardingProfile lo escribe, con service role (que no pasa
+  // por RLS), y el onboarding FALLA si no se pudo guardar — sin registro no hay
+  // consentimiento que acreditar. Nadie lo edita ni lo borra: el centinela
+  // __service_role_only__ no lo tiene ningún usuario (módulo 24 del estándar).
+  // Lectura: la plataforma, y cada usuario sus propios registros (derecho de
+  // acceso).
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "__service_role_only__"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "data.user_id": "{{user.id}}"
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "__service_role_only__"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "__service_role_only__"
+      }
+    }
+  }
+}

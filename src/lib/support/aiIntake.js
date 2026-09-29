@@ -33,6 +33,7 @@
  * campo estructurado `ai_brief` para render enriquecido.
  */
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 
 // —— Contexto específico de la app (lo único que cambia al portar) ———————————————
 export const APP_CONTEXT = {
@@ -116,7 +117,7 @@ function sanitize(text = '') {
  * @returns {Promise<IntakeTurnResult>}
  */
 export async function intakeTurn(kind, { subject = '', description = '', history = [] } = {}) {
-  const out = /** @type {IntakeTurnResult} */ (await base44.functions.invoke('aiAssist', {
+  const out = /** @type {IntakeTurnResult} */ (await invokeFunction(base44, 'aiAssist', {
     task: 'support_intake',
     kind,
     subject,

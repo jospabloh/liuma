@@ -151,9 +151,9 @@ export default function SoporteAdmin() {
       />
 
       {breachedCount > 0 && (
-        <Card className="p-3 mb-4 bg-red-50 border-red-200 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-          <p className="text-sm text-red-800">
+        <Card className="p-3 mb-4 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
+          <p className="text-sm text-red-800 dark:text-red-300">
             {breachedCount} ticket{breachedCount !== 1 ? 's' : ''} fuera del compromiso de respuesta (SLA).
           </p>
         </Card>
@@ -188,14 +188,14 @@ export default function SoporteAdmin() {
             return (
               <Card
                 key={ticket.id}
-                className={`p-4 cursor-pointer hover:shadow-md transition-shadow ${breached ? 'border-red-300' : ''}`}
+                className={`p-4 cursor-pointer hover:shadow-md transition-shadow ${breached ? 'border-red-300 dark:border-red-800' : ''}`}
                 onClick={() => setActiveTicket(ticket)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
-                      {breached && <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">SLA</span>}
+                      {breached && <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 rounded">SLA</span>}
                     </div>
                     <p className="font-medium text-card-foreground truncate">{ticket.subject}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{ticket.requester_name} · {ticket.requester_role}</p>
@@ -248,12 +248,12 @@ export default function SoporteAdmin() {
               {!isOwner
                 && activeTicket.tier === SUPPORT_TIER.SCHOOL_ADMIN
                 && !TERMINAL_STATUSES.includes(activeTicket.status) && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs text-amber-800 mb-2">
+                <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3">
+                  <p className="text-xs text-amber-800 dark:text-amber-300 mb-2">
                     ¿No puedes resolver este ticket en tu escuela? Escálalo a soporte LIUMA;
                     el equipo responderá en un máximo de 48 horas.
                   </p>
-                  <Button size="sm" variant="outline" className="border-amber-300" onClick={handleEscalateToSupport}>
+                  <Button size="sm" variant="outline" className="border-amber-300 dark:border-amber-800" onClick={handleEscalateToSupport}>
                     <ArrowUpCircle className="w-4 h-4 mr-1.5" />
                     Escalar a soporte
                   </Button>

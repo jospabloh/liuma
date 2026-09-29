@@ -1,0 +1,185 @@
+// guardedFamilyWrite — the only write path for the records a family writes
+// about a child: EmergencyContact (who may pick them up), AbsenceNotification,
+// EventResponse and UniformOrder.
+//
+// WHY THIS EXISTS (P7, 2026-09-29 — Base44 scan fingerprint 3e73cac8)
+// Each of these entities' create RLS checked only "parent_id is you" (or
+// "you created it") and never that the child was yours. Anyone signed in
+// could add themselves to any child's emergency contacts with
+// is_authorized_pickup:true, or file absences / event answers / uniform
+// orders for children who aren't theirs. Their create/update RLS is now
+// service-role only, and this function decides instead:
+//
+//   - the school comes from the STUDENT record, never from the request;
+//   - the caller needs an ACTIVE UserProfile in that school, and either the
+//     ADMIN role or an ACTIVE ParentStudent link to that student;
+//   - parent_id / parent_name come from the authenticated user;
+//   - status / review fields are fixed server-side, and only an ADMIN may
+//     set EmergencyContact.is_authorized_pickup (a parent editing who an
+//     authorized contact IS drops the authorization until the school
+//     confirms it again);
+//   - every write leaves a server-side AuditLog row.
+//
+// No billing read-only gate here, on purpose: an emergency contact is child
+// safety information and must stay editable whatever the subscription says.
+//
+// The pure rules live in ./_policy.ts (tested by node --test).
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { FAMILY_OPERATIONS, buildFamilyPayload, decideFamilyAccess } from './_policy.ts';
+
+type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string };
+
+function bad(status: number, code: string, message: string): Response {
+  return Response.json({ ok: false, code, error: message }, { status });
+}
+
+// deno-lint-ignore no-explicit-any
+async function writeAudit(sr: any, row: Record<string, unknown>): Promise<void> {
+  try {
+    await sr.entities.AuditLog.create({ ...row, timestamp: new Date().toISOString() });
+  } catch (e) {
+    console.error('guardedFamilyWrite audit write failed', (e as Error).message);
+  }
+}
+
+const AUDIT_ACTION: Record<string, string> = {
+  create: 'RECORD_CREATED',
+  update: 'RECORD_UPDATED',
+  delete: 'RECORD_DELETED',
+};
+
+Deno.serve(async (req) => {
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me().catch(() => null);
+    if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
+
+    const body = await req.json().catch(() => ({}));
+    const entity = String(body?.entity || '');
+    const operation = String(body?.operation || '');
+    const input: Record<string, unknown> = body?.data && typeof body.data === 'object' ? body.data : {};
+    if (!FAMILY_OPERATIONS[entity]) return bad(400, 'UNKNOWN_ENTITY', 'Unsupported entity');
+    if (!FAMILY_OPERATIONS[entity].includes(operation)) return bad(400, 'BAD_OPERATION', 'Unsupported operation');
+
+    const sr = base44.asServiceRole;
+
+    // The student decides the school. On update/delete it comes from the
+    // STORED record, so a client can't re-point an existing record.
+    let existing: Record<string, unknown> | null = null;
+    let studentId: string;
+    if (operation === 'create') {
+      studentId = String(input.student_id || '');
+      if (!studentId) return bad(400, 'MISSING_STUDENT', 'data.student_id is required');
+    } else {
+      const id = String(body?.id || '');
+      if (!id) return bad(400, 'MISSING_ID', 'id is required');
+      existing = await sr.entities[entity].get(id).catch(() => null);
+      if (!existing) return bad(404, 'NOT_FOUND', 'Record not found');
+      studentId = String(existing.student_id || '');
+    }
+
+    const student: { id?: string; school_id?: string } | null = await sr.entities.Student.get(studentId).catch(() => null);
+    if (!student) return bad(404, 'STUDENT_NOT_FOUND', 'Student not found');
+    const schoolId = String(student.school_id || '');
+    if (!schoolId) return bad(409, 'STUDENT_WITHOUT_SCHOOL', 'Student has no school');
+    if (existing && String(existing.school_id || '') !== schoolId) {
+      return bad(409, 'SCHOOL_MISMATCH', 'Record and student belong to different schools');
+    }
+
+    const isPlatformOwner = user.role === 'admin';
+    let isAdmin = isPlatformOwner;
+    let isLinkedParent = false;
+    if (!isPlatformOwner) {
+      const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
+      const profile = profiles.find((p) => p.status === 'ACTIVE') || null;
+      if (!profile) return bad(403, 'NO_PROFILE', 'No active profile in this school');
+      isAdmin = profile.app_role === 'ADMIN';
+      if (!isAdmin) {
+        const links: Array<{ school_id?: string }> = await sr.entities.ParentStudent.filter({
+          parent_id: user.id,
+          student_id: studentId,
+          status: 'ACTIVE',
+        });
+        isLinkedParent = links.some((l) => !l.school_id || String(l.school_id) === schoolId);
+      }
+    }
+
+    const access = decideFamilyAccess({ entity, operation, isAdmin, isLinkedParent, userId: String(user.id), existing });
+    if (!access.ok) return bad(403, access.code, access.message);
+
+    // Cross-record references, checked against the same school.
+    let event: { school_id?: string; has_cost?: boolean } | null = null;
+    if (entity === 'EventResponse' && operation === 'create') {
+      event = await sr.entities.Event.get(String(input.event_id || '')).catch(() => null);
+      if (!event || String(event.school_id || '') !== schoolId) {
+        return bad(400, 'EVENT_NOT_IN_SCHOOL', 'event_id does not belong to this school');
+      }
+    }
+    let chargeId: string | null = null;
+    if (entity === 'EventResponse' && operation === 'update' && typeof input.charge_id === 'string' && input.charge_id) {
+      const charge: Record<string, unknown> | null = await sr.entities.ChargeItem.get(input.charge_id).catch(() => null);
+      const matches =
+        charge &&
+        String(charge.school_id || '') === schoolId &&
+        String(charge.student_id || '') === studentId &&
+        String(charge.event_id || '') === String(existing?.event_id || '');
+      if (!matches) return bad(400, 'CHARGE_MISMATCH', 'charge_id is not this response\'s event charge');
+      chargeId = String(input.charge_id);
+    }
+
+    const auditBase = {
+      school_id: schoolId,
+      user_id: user.id,
+      user_email: user.email,
+      action: AUDIT_ACTION[operation],
+      target_type: entity,
+    };
+
+    if (operation === 'delete') {
+      const recordId = String(existing!.id);
+      await sr.entities[entity].delete(recordId);
+      await writeAudit(sr, {
+        ...auditBase,
+        target_id: recordId,
+        details: {
+          student_id: studentId,
+          as: isAdmin ? 'admin' : 'linked_parent',
+          was_authorized_pickup: existing!.is_authorized_pickup === true,
+        },
+      });
+      return Response.json({ ok: true });
+    }
+
+    const built = buildFamilyPayload(entity, operation, input, {
+      isAdmin,
+      userId: String(user.id),
+      userName: String(user.full_name || ''),
+      schoolId,
+      studentId,
+      existing,
+      event,
+      chargeId,
+    });
+    if (!built.ok) return bad(400, built.code, built.message);
+
+    const record = operation === 'create'
+      ? await sr.entities[entity].create(built.data)
+      : await sr.entities[entity].update(String(existing!.id), built.data);
+
+    await writeAudit(sr, {
+      ...auditBase,
+      target_id: String(record?.id || existing?.id || ''),
+      details: {
+        student_id: studentId,
+        as: isAdmin ? 'admin' : 'linked_parent',
+        fields: Object.keys(built.data),
+        ...(entity === 'EmergencyContact'
+          ? { is_authorized_pickup: built.data.is_authorized_pickup ?? existing?.is_authorized_pickup ?? false, pickup_revoked: built.pickupRevoked === true }
+          : {}),
+      },
+    });
+    return Response.json({ ok: true, record, pickupRevoked: built.pickupRevoked === true });
+  } catch (e) {
+    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+  }
+});

@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 
 /**
  * Thin client wrapper around the guardedEntityWrite Safe function — the
@@ -13,18 +14,19 @@ import { base44 } from '@/api/base44Client';
  * calling shape (data in, record out) so migrating a call site is a
  * near-mechanical swap. On denial the invoke call throws with
  * `error.data.error`/`error.data.code`, same convention as governRoleChange
- * and provisionOnboardingProfile.
+ * and provisionOnboardingProfile. Goes through invokeFunction
+ * (src/lib/functionResponse.js), which unwraps the axios response.
  */
 export async function guardedCreate(entity, data) {
-  const result = await base44.functions.invoke('guardedEntityWrite', { entity, operation: 'create', data });
-  return result?.record;
+  const body = await invokeFunction(base44, 'guardedEntityWrite', { entity, operation: 'create', data });
+  return body?.record;
 }
 
 export async function guardedUpdate(entity, id, data) {
-  const result = await base44.functions.invoke('guardedEntityWrite', { entity, operation: 'update', id, data });
-  return result?.record;
+  const body = await invokeFunction(base44, 'guardedEntityWrite', { entity, operation: 'update', id, data });
+  return body?.record;
 }
 
 export async function guardedDelete(entity, id) {
-  await base44.functions.invoke('guardedEntityWrite', { entity, operation: 'delete', id });
+  await invokeFunction(base44, 'guardedEntityWrite', { entity, operation: 'delete', id });
 }

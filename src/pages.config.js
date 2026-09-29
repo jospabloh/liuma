@@ -52,6 +52,7 @@ import React from 'react';
 const AlertaEmergencia = React.lazy(() => import('./pages/AlertaEmergencia'));
 const Aprobaciones = React.lazy(() => import('./pages/Aprobaciones'));
 const AuditoriaAdmin = React.lazy(() => import('./pages/AuditoriaAdmin'));
+const Ayuda = React.lazy(() => import('./pages/Ayuda'));
 const Asistencia = React.lazy(() => import('./pages/Asistencia'));
 const Avisos = React.lazy(() => import('./pages/Avisos'));
 const AvisosAdmin = React.lazy(() => import('./pages/AvisosAdmin'));
@@ -97,6 +98,7 @@ export const PAGES = {
     "AuditoriaAdmin": AuditoriaAdmin,
     "Asistencia": Asistencia,
     "Avisos": Avisos,
+    "Ayuda": Ayuda,
     "AvisosAdmin": AvisosAdmin,
     "AvisosMaestro": AvisosMaestro,
     "Bitacora": Bitacora,

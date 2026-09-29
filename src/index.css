@@ -296,3 +296,24 @@ html, body, #root {
 @media (max-width: 767px) {
   :root { --theme-switcher-bottom: 5.25rem; }
 }
+
+/* While the Lumi bubble is on screen (GlobalLumiBubble.jsx sets
+   html[data-lumi-bubble]) it owns the bottom-right corner, so the switcher
+   sits ABOVE it (module 12: "se mueve el selector, no el control"). With the
+   values above it sat on top of Lumi's centre on phones and won the tap
+   (z-50 vs z-40), so tapping Lumi opened the theme selector instead.
+     phone:   Lumi bottom-20 (5rem) + h-14 (3.5rem) = 8.5rem  -> 9.5rem
+     md+:     Lumi bottom-6 (1.5rem) + h-16 (4rem)  = 5.5rem  -> 6.5rem
+   If the Lumi bubble moves or grows, move these with it
+   (tests/unit/lumi-chat.test.js fails if they collide again). */
+html[data-lumi-bubble] { --theme-switcher-bottom: 6.5rem; }
+@media (max-width: 767px) {
+  html[data-lumi-bubble] { --theme-switcher-bottom: 9.5rem; }
+}
+
+/* Out of the way while something modal is on screen: it floated over the
+   open Lumi chat's input and over dialog footers. One rule per selector so an
+   engine without :has() still honours the other two. */
+html[data-lumi-open] [data-theme-switcher] { visibility: hidden; }
+body[data-scroll-locked] [data-theme-switcher] { visibility: hidden; }
+body:has([role="dialog"][aria-modal="true"]) [data-theme-switcher] { visibility: hidden; }

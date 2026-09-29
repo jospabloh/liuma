@@ -1,4 +1,24 @@
+// Lumi capability gate — UX ONLY, NOT A SECURITY BOUNDARY.
+//
+// Everything here runs in the browser and every input to it (role, school,
+// linked students) comes from the client, so anyone with devtools can forge
+// the envelope or skip the gate entirely. Its only jobs are:
+//   - keep the quick-action / follow-up chips from offering a role something
+//     Lumi is going to refuse anyway, with a friendly Spanish explanation;
+//   - hand the agent non-authoritative hints (role, local date, time zone).
+// Free-text messages carry no intent and are always "allowed" here on
+// purpose: the gate never sees them. What actually limits what Lumi can read
+// or write is the backend — entity RLS for the tools the agent calls, and any
+// server-side function tools that re-derive the caller's school and role from
+// their own UserProfile. Never add a check here and call it enforcement;
+// never trust `context.user_role` / `context.school_id` on the server.
+//
+// `linked_students` is read from `userProfile.linked_students`, which the
+// deployed UserProfile schema does not have, so it is always [] in practice
+// and the student_scope_mismatch branch is dormant UX, not protection.
+
 import { canReadEntity } from '../authorization/policy.js';
+import { formatLocalDate } from '../dates.js';
 
 export const CAPABILITY_ACTIONS = {
   VIEW: 'view',
@@ -47,8 +67,30 @@ export function buildLumiContext(userProfile = {}) {
   };
 }
 
-export function buildCapabilityRequest({ intent, prompt, inputs = {}, userProfile = {} }) {
-  const context = buildLumiContext(userProfile);
+/**
+ * The viewer's own clock, so "hoy" / "mañana" resolve to the school's day.
+ * `requested_at` is UTC: after 18:00 in Mexico (UTC-6) its date is already
+ * tomorrow, and the agent was answering "¿qué tarea hay hoy?" with tomorrow's.
+ */
+export function buildLocalTimeContext(now = new Date()) {
+  let timezone = null;
+  try {
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    timezone = null;
+  }
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  return {
+    local_date: formatLocalDate(now),
+    local_time: `${hh}:${mm}`,
+    timezone,
+    utc_offset_minutes: -now.getTimezoneOffset(),
+  };
+}
+
+export function buildCapabilityRequest({ intent, prompt, inputs = {}, userProfile = {}, now = new Date() }) {
+  const context = { ...buildLumiContext(userProfile), ...buildLocalTimeContext(now) };
 
   return {
     intent,
@@ -59,7 +101,9 @@ export function buildCapabilityRequest({ intent, prompt, inputs = {}, userProfil
       user_role: context.user_role,
       school_id: context.school_id,
       linked_students: context.linked_students,
-      requested_at: new Date().toISOString(),
+      local_date: context.local_date,
+      timezone: context.timezone,
+      requested_at: now.toISOString(),
     },
   };
 }
@@ -70,8 +114,9 @@ export function evaluateCapabilityAccess({ intent, request }) {
   const rule = CAPABILITY_RULES[intent];
   const entity = rule?.entity;
 
+  // Free text has no intent and is not gated here (see the header): only the
+  // chips carry an intent, and this only decides whether to offer them.
   if (!intent) return { allowed: true };
-
 
   if (!role || !rule || !entity || !canReadEntity(role, entity) || !rule.allowed_roles.includes(role)) {
     return {

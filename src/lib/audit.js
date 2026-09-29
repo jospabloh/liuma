@@ -57,6 +57,29 @@ export function canReadPermissionChangeAudit({ row, user, userProfile }) {
   return isCreatorAdmin || canViewAllTenantPermissionChanges;
 }
 
+/**
+ * Write an AuditLog row through the recordAuditEvent function.
+ *
+ * AuditLog create is service-role only since P7 (2026-09-29): with the old
+ * "data.user_id is you" rule anyone could file any action under any school.
+ * The function fills user_id / user_email / actor / role from the
+ * authenticated user and their own profile, requires a profile in `schoolId`,
+ * and only lets a role log the actions it can perform (see
+ * base44/functions/recordAuditEvent/_policy.ts). Throws on refusal, like the
+ * direct create it replaces.
+ */
+export async function recordAuditRow({ schoolId, action, entity, entityId, reason, context }) {
+  if (!schoolId || !action) return;
+  await base44.functions.invoke('recordAuditEvent', {
+    schoolId,
+    action,
+    entity: entity || null,
+    entityId: entityId || null,
+    reason: reason || null,
+    context: context || null,
+  });
+}
+
 export async function logAuditEvent({
   user,
   userProfile,
@@ -68,21 +91,13 @@ export async function logAuditEvent({
 }) {
   if (!user || !userProfile || !entity || !entityId || !action) return;
 
-  await base44.entities.AuditLog.create({
-    school_id: userProfile.school_id,
-    actor: user.id,
-    role: userProfile.app_role,
-    entity,
-    entity_id: entityId,
+  await recordAuditRow({
+    schoolId: userProfile.school_id,
     action,
-    timestamp: new Date().toISOString(),
+    entity,
+    entityId,
     reason,
     context,
-    user_id: user.id,
-    user_email: user.email,
-    target_type: entity,
-    target_id: entityId,
-    details: context,
   });
 }
 

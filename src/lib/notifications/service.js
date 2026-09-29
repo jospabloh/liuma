@@ -1,5 +1,7 @@
 import { base44 } from '@/api/base44Client';
 import { NOTIFICATION_TEMPLATES } from './templates';
+import { recordAuditRow } from '@/lib/audit';
+import { guardedCreate } from '@/lib/authorization/guardedWrite';
 
 const MAX_RETRIES = 3;
 
@@ -20,13 +22,14 @@ const isChannelEnabled = ({ schoolPrefs, userPrefs, channel, role }) => {
 
 const logDeliveryFailure = async (payload) => {
   try {
-    await base44.entities.AuditLog.create({
-      school_id: payload.schoolId,
-      user_id: payload.userId,
+    // AuditLog create is service-role only (P7); the actor is whoever is
+    // signed in, derived server-side by recordAuditEvent.
+    await recordAuditRow({
+      schoolId: payload.schoolId,
       action: 'NOTIFICATION_DELIVERY_FAILED',
-      target_type: payload.eventType,
-      target_id: payload.recipientId || payload.email || 'unknown',
-      details: payload,
+      entity: payload.eventType,
+      entityId: payload.recipientId || payload.email || 'unknown',
+      context: payload,
     });
   } catch (error) {
     console.error('Error logging notification failure telemetry:', error);
@@ -129,14 +132,15 @@ export const notificationService = {
       eventType: 'emergency_alert',
       channel: 'high_priority_alert',
       execute: async () => {
-        await base44.entities.Notice.create({
+        // Notice create is service-role only since P7: guardedEntityWrite
+        // checks the sender's role in this school and stamps author_id itself.
+        await guardedCreate('Notice', {
           school_id: schoolId,
           scope: 'SCHOOL',
           title,
           content,
           priority: 'URGENT',
           is_emergency: true,
-          author_id: actorUserId,
           sent_at: new Date().toISOString(),
         });
       },

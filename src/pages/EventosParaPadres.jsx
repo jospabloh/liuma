@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
+import { familyCreate, familyUpdate } from '@/lib/authorization/familyWrite';
 
 export default function EventosParaPadres() {
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -60,7 +61,9 @@ export default function EventosParaPadres() {
   const respondMutation = useMutation({
     mutationFn: async (data) => {
       // Crear respuesta
-      const eventResponse = await base44.entities.EventResponse.create(data);
+      // guardedFamilyWrite comprueba el vínculo con el alumno y deriva el
+      // estado de pago del evento, no de lo que mande el cliente.
+      const eventResponse = await familyCreate('EventResponse', data);
       
       // Si acepta y tiene costo, crear cargo automáticamente
       if (data.response === 'ACCEPTED' && selectedEvent.has_cost) {
@@ -78,8 +81,7 @@ export default function EventosParaPadres() {
         });
         
         // Actualizar respuesta con charge_id
-        await base44.entities.EventResponse.update(eventResponse.id, {
-          payment_status: 'PENDING',
+        await familyUpdate('EventResponse', eventResponse.id, {
           charge_id: charge.id,
         });
       }

@@ -3,10 +3,26 @@
   "type": "object",
   "properties": {
     "user_id": {
-      "type": "string"
+      "type": "string",
+      "description": "De quién es el perfil. Solo lo fija provisionOnboardingProfile (service role): reasignar un perfil a otro usuario nunca es una edición legítima (P7, 2026-09-29).",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "school_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Escuela del perfil. Bloqueado al service role: con el campo libre, un ADMIN de la escuela A se movía a la B y exportSchoolData le devolvía los datos de B (P7, 2026-09-29).",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "app_role": {
       "type": "string",
@@ -31,7 +47,15 @@
         "ACTIVE",
         "SUSPENDED"
       ],
-      "default": "PENDING"
+      "default": "PENDING",
+      "description": "PENDING hasta que un ADMIN de la escuela lo aprueba. Bloqueado al service role: con el campo libre, un usuario PENDING se aprobaba solo con UserProfile.update (P7, 2026-09-29).",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "phone": {
       "type": "string"
@@ -41,7 +65,15 @@
     },
     "onboarding_completed": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Lo marca provisionOnboardingProfile (service role). Bloqueado para que el cliente no pueda saltarse el onboarding (P7, 2026-09-29).",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "welcome_message_shown": {
       "type": "boolean",
@@ -57,6 +89,18 @@
       "rls": {
         "write": false
       }
+    },
+    "is_super_admin": {
+      "type": "boolean",
+      "default": false,
+      "description": "Marca de dueño de la plataforma que el cliente lee (src/lib/support/owner.js, tickets.js). Estaba sin declarar y por tanto era auto-escribible; ahora solo el dueño de la plataforma (role admin) la escribe (P7, 2026-09-29).",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     }
   },
   "required": [
@@ -66,16 +110,9 @@
   ],
   "rls": {
     "create": {
-      "$or": [
-        {
-          "data.user_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "$or": [

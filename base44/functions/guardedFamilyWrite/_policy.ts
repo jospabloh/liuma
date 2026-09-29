@@ -1,0 +1,237 @@
+// Pure rules for guardedFamilyWrite — no Deno globals, no SDK, no imports, so
+// the function (./_policy.ts) and `node --test`
+// (tests/unit/guarded-family-write.test.js) load the very same code.
+//
+// These are the records a FAMILY writes about a child: who may pick them up,
+// why they'll be absent, whether they go to an event, what uniform to order.
+// Before P7 each entity's create RLS only checked "parent_id is you" (or
+// "you created it"), never that the child is yours — a stranger could put
+// themselves on any child's authorized-pickup list.
+
+export const FAMILY_OPERATIONS: Record<string, string[]> = {
+  EmergencyContact: ['create', 'update', 'delete'],
+  AbsenceNotification: ['create'],
+  EventResponse: ['create', 'update'],
+  UniformOrder: ['create'],
+};
+
+export const EVENT_RESPONSES = ['ACCEPTED', 'DECLINED', 'PENDING'];
+export const PAYMENT_STATUSES = ['NOT_REQUIRED', 'PENDING', 'PAID'];
+
+const SHORT = 200;
+const LONG = 2000;
+
+export type Decision = { ok: true } | { ok: false; code: string; message: string };
+export type Built = { ok: true; data: Record<string, unknown>; pickupRevoked?: boolean } | { ok: false; code: string; message: string };
+
+function fail(code: string, message: string): { ok: false; code: string; message: string } {
+  return { ok: false, code, message };
+}
+
+function text(value: unknown, max: number): string {
+  return typeof value === 'string' ? value.trim().slice(0, max) : '';
+}
+
+/**
+ * Who may write a family record for a student. Runs after the caller's
+ * ACTIVE profile in the STUDENT's school (never a client-supplied school) has
+ * been found.
+ *
+ *  - an ADMIN of that school may write any of them;
+ *  - anyone else needs an ACTIVE ParentStudent link to that student;
+ *  - an EventResponse may only be edited by the parent who gave it;
+ *  - an EmergencyContact may only be edited or removed by whoever added it
+ *    (the pre-P7 RLS rule was "created_by_id is you"; delete was platform
+ *    only). A parent must not be able to drop a contact the school or the
+ *    other parent registered.
+ */
+export function decideFamilyAccess(input: {
+  entity: string;
+  operation: string;
+  isAdmin: boolean;
+  isLinkedParent: boolean;
+  userId: string;
+  existing?: Record<string, unknown> | null;
+}): Decision {
+  const { entity, operation, isAdmin, isLinkedParent, userId, existing } = input;
+  if (!(FAMILY_OPERATIONS[entity] || []).includes(operation)) {
+    return fail('BAD_OPERATION', `${operation} is not supported for ${entity}`);
+  }
+  if (isAdmin) return { ok: true };
+  if (!isLinkedParent) return fail('NOT_LINKED', 'You are not linked to this student');
+  if (entity === 'EventResponse' && operation === 'update' && String(existing?.parent_id || '') !== userId) {
+    return fail('NOT_OWN_RESPONSE', 'Only the parent who answered may change this response');
+  }
+  if (entity === 'EmergencyContact' && operation !== 'create') {
+    // added_by_user_id for records written through this function; created_by_id
+    // for the ones a parent created directly before P7.
+    const addedBy = String(existing?.added_by_user_id || existing?.created_by_id || '');
+    if (!addedBy || addedBy !== userId) {
+      return fail('NOT_OWN_CONTACT', 'Only whoever added this contact, or a school ADMIN, may change it');
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * The record to write, built ONLY from fields a family may set. school_id,
+ * student_id and parent_id come from the server (ctx), never from `input`;
+ * review/status fields are fixed; `is_authorized_pickup` is ADMIN-only.
+ */
+export function buildFamilyPayload(
+  entity: string,
+  operation: string,
+  input: Record<string, unknown>,
+  ctx: {
+    isAdmin: boolean;
+    userId: string;
+    userName: string;
+    schoolId: string;
+    studentId: string;
+    existing?: Record<string, unknown> | null;
+    event?: { has_cost?: boolean } | null;
+    chargeId?: string | null;
+  },
+): Built {
+  const data = input || {};
+
+  if (entity === 'EmergencyContact') {
+    if (operation === 'create') {
+      const name = text(data.name, SHORT);
+      const phone = text(data.phone, 40);
+      if (!name || !phone) return fail('MISSING_FIELDS', 'name and phone are required');
+      return {
+        ok: true,
+        data: {
+          school_id: ctx.schoolId,
+          student_id: ctx.studentId,
+          name,
+          relationship: text(data.relationship, SHORT),
+          phone,
+          notes: text(data.notes, LONG),
+          // Service-role writes don't carry the caller as created_by_id, so the
+          // read rule keys on this instead.
+          added_by_user_id: ctx.userId,
+          // Who may take a child out of school is the school's call: a parent
+          // can propose a contact, only an ADMIN can authorize the pickup.
+          is_authorized_pickup: ctx.isAdmin ? data.is_authorized_pickup === true : false,
+        },
+      };
+    }
+    // update
+    const patch: Record<string, unknown> = {};
+    for (const [field, max] of [['name', SHORT], ['relationship', SHORT], ['phone', 40], ['notes', LONG]] as Array<[string, number]>) {
+      if (field in data) patch[field] = text(data[field], max);
+    }
+    if (('name' in patch && !patch.name) || ('phone' in patch && !patch.phone)) {
+      return fail('MISSING_FIELDS', 'name and phone cannot be empty');
+    }
+    let pickupRevoked = false;
+    if (ctx.isAdmin) {
+      if ('is_authorized_pickup' in data) patch.is_authorized_pickup = data.is_authorized_pickup === true;
+    } else if (ctx.existing?.is_authorized_pickup === true) {
+      // Changing the name, phone or relationship of an authorized contact
+      // changes WHO is authorized. That goes back to the school to confirm.
+      const identityChanged = ['name', 'relationship', 'phone'].some(
+        (f) => f in patch && patch[f] !== String(ctx.existing?.[f] ?? ''),
+      );
+      if (identityChanged) {
+        patch.is_authorized_pickup = false;
+        pickupRevoked = true;
+      }
+    }
+    return { ok: true, data: patch, pickupRevoked };
+  }
+
+  if (entity === 'AbsenceNotification') {
+    const absenceDate = text(data.absence_date, 10);
+    const reason = text(data.reason, LONG);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(absenceDate) || !reason) {
+      return fail('MISSING_FIELDS', 'absence_date (YYYY-MM-DD) and reason are required');
+    }
+    return {
+      ok: true,
+      data: {
+        school_id: ctx.schoolId,
+        student_id: ctx.studentId,
+        parent_id: ctx.userId,
+        parent_name: ctx.userName,
+        absence_date: absenceDate,
+        reason,
+        // A parent files the justification; only the school reviews it.
+        status: 'PENDING',
+      },
+    };
+  }
+
+  if (entity === 'EventResponse') {
+    if (operation === 'create') {
+      const response = EVENT_RESPONSES.includes(String(data.response)) ? String(data.response) : 'PENDING';
+      return {
+        ok: true,
+        data: {
+          school_id: ctx.schoolId,
+          event_id: text(data.event_id, SHORT),
+          student_id: ctx.studentId,
+          parent_id: ctx.userId,
+          parent_name: ctx.userName,
+          response,
+          notes: text(data.notes, LONG),
+          // Derived from the Event, never from the parent: a parent must not
+          // be able to answer "PAID" for themselves.
+          payment_status: ctx.event?.has_cost && response === 'ACCEPTED' ? 'PENDING' : 'NOT_REQUIRED',
+        },
+      };
+    }
+    // update
+    const patch: Record<string, unknown> = {};
+    if ('response' in data && EVENT_RESPONSES.includes(String(data.response))) patch.response = String(data.response);
+    if ('notes' in data) patch.notes = text(data.notes, LONG);
+    if (ctx.chargeId) {
+      patch.charge_id = ctx.chargeId;
+      if (ctx.existing?.payment_status !== 'PAID') patch.payment_status = 'PENDING';
+    }
+    if (ctx.isAdmin && PAYMENT_STATUSES.includes(String(data.payment_status))) {
+      patch.payment_status = String(data.payment_status);
+    }
+    return { ok: true, data: patch };
+  }
+
+  if (entity === 'UniformOrder') {
+    const rawItems = Array.isArray(data.items) ? data.items : [];
+    const items = rawItems
+      .slice(0, 50)
+      .map((item) => {
+        const it = (item || {}) as Record<string, unknown>;
+        const quantity = Math.floor(Number(it.quantity));
+        return {
+          product: text(it.product, SHORT),
+          size: text(it.size, 40),
+          quantity: Number.isFinite(quantity) && quantity > 0 ? Math.min(quantity, 99) : 1,
+        };
+      })
+      .filter((it) => it.product && it.size);
+    if (items.length === 0) return fail('MISSING_FIELDS', 'at least one item with product and size is required');
+    const measurements: Record<string, string> = {};
+    const rawMeasurements = data.measurements && typeof data.measurements === 'object' ? data.measurements as Record<string, unknown> : {};
+    for (const [key, value] of Object.entries(rawMeasurements).slice(0, 20)) {
+      if (typeof value === 'string' || typeof value === 'number') measurements[key.slice(0, 40)] = String(value).slice(0, 40);
+    }
+    return {
+      ok: true,
+      data: {
+        school_id: ctx.schoolId,
+        student_id: ctx.studentId,
+        parent_id: ctx.userId,
+        parent_name: ctx.userName,
+        items,
+        measurements,
+        notes: text(data.notes, LONG),
+        // status / admin_notes / estimated_delivery belong to the school.
+        status: 'PENDING',
+      },
+    };
+  }
+
+  return fail('UNKNOWN_ENTITY', 'Unsupported entity');
+}

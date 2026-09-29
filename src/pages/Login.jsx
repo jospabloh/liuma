@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthError, AuthNotice, EmailField, PasswordField, SubmitButton } from "@/components/auth/parts";
 import { getRememberedIdentity, clearRememberedIdentity } from "@/lib/lastIdentity";
-import { describeLoginError, describeOtpError, describeSignupError, isNetworkError, NETWORK_ERROR_MESSAGE } from "@/lib/errorMessages";
+import { describeLoginError, describeOtpError, describeResetRequestError, describeSignupError, errorStatus, humanizeError, isNetworkError, NETWORK_ERROR_MESSAGE } from "@/lib/errorMessages";
 import { MIN_PASSWORD_LENGTH, readResetToken } from "@/lib/authLinks";
 
 // Pantalla de inicio de sesión propia de LIUMA, en lugar de la página genérica
@@ -109,11 +109,11 @@ export default function Login() {
       try {
         await base44.auth.resetPasswordRequest(email.trim());
       } catch (err) {
-        // Only a network failure is worth reporting. "No account with that
-        // e-mail" gets the same answer as success, so this form can't be used
-        // to find out who has an account at a school.
-        if (isNetworkError(err)) {
-          setError(NETWORK_ERROR_MESSAGE);
+        // Same answer as success unless the request never reached a verdict
+        // (see describeResetRequestError): no account enumeration.
+        const failure = describeResetRequestError(err);
+        if (failure) {
+          setError(failure);
           return;
         }
       }
@@ -140,10 +140,14 @@ export default function Login() {
         go("login", { keepNotice: true });
         setNotice("Listo, tu contraseña cambió. Ya puedes iniciar sesión.");
       } catch (err) {
+        // Only a 4xx says the link itself is bad; offline, a rate limit or a
+        // server error would send them to request a link they don't need.
+        const status = errorStatus(err);
+        const linkRejected = !isNetworkError(err) && status >= 400 && status < 500 && status !== 429;
         setError(
-          isNetworkError(err)
-            ? NETWORK_ERROR_MESSAGE
-            : "El enlace ya no es válido o venció. Pide uno nuevo desde «¿Olvidaste tu contraseña?».",
+          linkRejected
+            ? "El enlace ya no es válido o venció. Pide uno nuevo desde «¿Olvidaste tu contraseña?»."
+            : (isNetworkError(err) ? NETWORK_ERROR_MESSAGE : humanizeError(err)),
         );
       }
     });

@@ -23,7 +23,9 @@ export default function RouteAccessDenied({ redirectTo = '/Home', reasonCode, pr
           </div>
           <h1 className="text-lg font-semibold text-foreground">{copy.title}</h1>
           <p className="text-sm text-muted-foreground">{message || copy.body}</p>
-          <Button onClick={() => navigate(redirectTo)}>Ir al inicio</Button>
+          {copy.action === 'reload'
+            ? <Button onClick={() => window.location.reload()}>Recargar</Button>
+            : <Button onClick={() => navigate(redirectTo)}>Ir al inicio</Button>}
         </CardContent>
       </Card>
     </div>

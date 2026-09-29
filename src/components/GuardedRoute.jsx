@@ -25,10 +25,12 @@ function GuardSkeleton() {
 
 export default function GuardedRoute({ routeName, children }) {
   const { data: user, isFetched: userFetched } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-  const { data: profiles = [], isFetched: profilesFetched } = useQuery({
+  const { data: profiles = [], isFetched: profilesFetched, isError: profilesFailed } = useQuery({
     queryKey: ['profileRouteGuard', user?.id],
     queryFn: () => base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date'),
     enabled: !!user?.id,
+    // A failure here renders its own card below; a toast on top would repeat it.
+    meta: { silentError: true },
   });
   // The same rule as Home/NavContext/useSubscription — not the first row of the
   // query, which could pick a different school/role than the rest of the app.
@@ -54,7 +56,8 @@ export default function GuardedRoute({ routeName, children }) {
   });
 
   React.useEffect(() => {
-    if (!decided || routeDecision.allowed || !routeName) return;
+    // A failed profile load is not a denial: don't write it to the audit log.
+    if (!decided || profilesFailed || routeDecision.allowed || !routeName) return;
     logAccessDeniedEvent({
       user,
       userProfile: profile,
@@ -70,7 +73,7 @@ export default function GuardedRoute({ routeName, children }) {
         owner_reason: routeDecision.owner_reason || null,
       },
     });
-  }, [decided, routeDecision.allowed, routeDecision.reason_code, routeDecision.reason, routeDecision.precedence, routeDecision.owner_denied, routeDecision.owner_reason, user, profile, routeName]);
+  }, [decided, profilesFailed, routeDecision.allowed, routeDecision.reason_code, routeDecision.reason, routeDecision.precedence, routeDecision.owner_denied, routeDecision.owner_reason, user, profile, routeName]);
 
   React.useEffect(() => {
     if (routeDecision.precedence !== 'owner_override' || !user || !profile) return;
@@ -95,11 +98,16 @@ export default function GuardedRoute({ routeName, children }) {
   if (!decided) return <GuardSkeleton />;
 
   if (!routeDecision.allowed) {
+    // The profile query failing (offline, a 5xx) leaves `profiles` empty, which
+    // used to read as "your account isn't in a school yet — go create one".
     const profileMissing = Boolean(user) && profiles.length === 0;
+    const reasonCode = profilesFailed
+      ? 'profile_load_failed'
+      : (profileMissing ? 'missing_user_profile' : routeDecision.reason_code);
     return (
       <RouteAccessDenied
         redirectTo={DEFAULT_DENIED_REDIRECT}
-        reasonCode={profileMissing ? 'missing_user_profile' : routeDecision.reason_code}
+        reasonCode={reasonCode}
         profileStatus={profile?.status}
       />
     );

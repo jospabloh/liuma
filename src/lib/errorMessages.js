@@ -114,3 +114,18 @@ export function describeOtpError(error) {
   }
   return { kind: 'other', message: humanizeError(error) };
 }
+
+/**
+ * Password-reset request. Returns null when the answer must look like success
+ * — any 4xx, which is how "no account with that e-mail" comes back, so the form
+ * can't be used to find out who has an account at a school — and a message
+ * when the request never reached a verdict (offline, rate limit, server error),
+ * so nobody waits for an e-mail that was never sent.
+ */
+export function describeResetRequestError(error) {
+  if (isNetworkError(error)) return NETWORK_ERROR_MESSAGE;
+  const status = errorStatus(error);
+  if (status === 429) return STATUS_MESSAGES[429];
+  if (status && status >= 500) return SERVER_ERROR_MESSAGE;
+  return null;
+}

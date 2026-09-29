@@ -140,6 +140,7 @@ test('route denial copy is plain Spanish with no internal reason codes', () => {
   const cases = [
     {}, { reasonCode: 'forbidden_action' }, { reasonCode: 'missing_user_profile' },
     { reasonCode: 'inactive_profile', profileStatus: 'PENDING' }, { reasonCode: 'inactive_profile', profileStatus: 'SUSPENDED' },
+    { reasonCode: 'profile_load_failed' },
   ];
   for (const c of cases) {
     const { title, body } = routeDenialCopy(c);
@@ -147,6 +148,11 @@ test('route denial copy is plain Spanish with no internal reason codes', () => {
     assert.doesNotMatch(`${title} ${body}`, /_|forbidden|tenant|ruta permitida/i);
   }
   assert.match(routeDenialCopy({ reasonCode: 'inactive_profile', profileStatus: 'SUSPENDED' }).title, /suspendida/);
+  // A failed profile load must not tell a real user to go create a school.
+  const loadFailed = routeDenialCopy({ reasonCode: 'profile_load_failed' });
+  assert.doesNotMatch(`${loadFailed.title} ${loadFailed.body}`, /crear tu escuela|código/i);
+  assert.equal(loadFailed.action, 'reload');
+  assert.match(read('src/components/GuardedRoute.jsx'), /profilesFailed\s*\n?\s*\? 'profile_load_failed'/);
   const denied = read('src/components/RouteAccessDenied.jsx');
   assert.doesNotMatch(denied, /Código de referencia|\{reasonCode\}/);
 });

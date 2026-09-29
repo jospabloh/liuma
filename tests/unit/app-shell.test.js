@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { claimChunkReload, isChunkLoadError, CHUNK_RELOAD_KEY } from '../../src/lib/chunkReload.js';
 import {
   humanizeError, isNetworkError, describeLoginError, describeSignupError, describeOtpError,
-  NETWORK_ERROR_MESSAGE, GENERIC_ERROR_MESSAGE,
+  describeResetRequestError, NETWORK_ERROR_MESSAGE, GENERIC_ERROR_MESSAGE,
 } from '../../src/lib/errorMessages.js';
 import { queryErrorToast, mutationErrorToast } from '../../src/lib/queryErrorPolicy.js';
 import { readResetToken } from '../../src/lib/authLinks.js';
@@ -233,7 +233,15 @@ test('the forgot-password answer is the same whether or not the account exists',
   const login = read('src/pages/Login.jsx');
   const forgot = login.slice(login.indexOf('const handleForgot'), login.indexOf('const handleReset'));
   assert.match(forgot, /Si hay una cuenta con/);
-  assert.match(forgot, /if \(isNetworkError\(err\)\)/, 'only a network failure is reported');
+  assert.match(forgot, /describeResetRequestError\(err\)/);
+  // Any 4xx ("no such account" included) looks like success…
+  for (const status of [400, 401, 403, 404, 422]) {
+    assert.equal(describeResetRequestError({ status }), null, `status ${status} must not reveal the account`);
+  }
+  // …but a request that never got a verdict is reported, not faked as sent.
+  assert.match(describeResetRequestError({ message: 'Network Error', originalError: { code: 'ERR_NETWORK' } }), /conexión/);
+  assert.match(describeResetRequestError({ status: 429 }), /Espera/);
+  assert.match(describeResetRequestError({ status: 503 }), /servidor/);
 });
 
 test('readResetToken finds the token under the names a reset link may use', () => {

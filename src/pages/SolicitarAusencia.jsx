@@ -17,6 +17,7 @@ import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { familyCreate } from '@/lib/authorization/familyWrite';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate, isBeforeToday, formatLocalDate } from '@/lib/dates';
 import { Badge } from '@/components/ui/badge';
 
 export default function SolicitarAusencia() {
@@ -66,12 +67,9 @@ export default function SolicitarAusencia() {
       return;
     }
 
-    // Validar que la fecha sea futura o de hoy
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDate = new Date(absenceDate);
-    
-    if (selectedDate < today) {
+    // Validar que la fecha sea futura o de hoy (día calendario local: con
+    // new Date('YYYY-MM-DD') la fecha de hoy se leía como ayer y se rechazaba).
+    if (!parseLocalDate(absenceDate) || isBeforeToday(absenceDate)) {
       toast.error('La fecha debe ser hoy o futura');
       return;
     }
@@ -89,9 +87,9 @@ export default function SolicitarAusencia() {
   };
 
   const statusConfig = {
-    PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
-    APPROVED: { label: 'Aprobada', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-    REJECTED: { label: 'Rechazada', color: 'bg-red-100 text-red-800', icon: XCircle },
+    PENDING: { label: 'Pendiente', color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300', icon: Clock },
+    APPROVED: { label: 'Aprobada', color: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300', icon: CheckCircle },
+    REJECTED: { label: 'Rechazada', color: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300', icon: XCircle },
   };
 
   if (isLoading) {
@@ -102,14 +100,14 @@ export default function SolicitarAusencia() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <PageHeader
-          title="Solicitar Ausencia"
+          title="Solicitar ausencia"
           subtitle="Notifica con anticipación las ausencias de tus hijos"
           showBack
         />
 
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Nueva Solicitud</CardTitle>
+            <CardTitle>Nueva solicitud</CardTitle>
             <CardDescription>Completa el formulario para notificar una ausencia</CardDescription>
           </CardHeader>
           <CardContent>
@@ -136,7 +134,7 @@ export default function SolicitarAusencia() {
                   type="date"
                   value={absenceDate}
                   onChange={(e) => setAbsenceDate(e.target.value)}
-                  min={format(new Date(), 'yyyy-MM-dd')}
+                  min={formatLocalDate()}
                   required
                 />
               </div>
@@ -163,7 +161,7 @@ export default function SolicitarAusencia() {
                     Enviando...
                   </>
                 ) : (
-                  'Enviar Solicitud'
+                  'Enviar solicitud'
                 )}
               </Button>
             </form>
@@ -171,7 +169,7 @@ export default function SolicitarAusencia() {
         </Card>
 
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">Solicitudes Enviadas</h2>
+          <h2 className="text-lg font-semibold text-foreground">Solicitudes enviadas</h2>
           {notifications?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
@@ -199,7 +197,7 @@ export default function SolicitarAusencia() {
                             {student?.first_name} {student?.last_name}
                           </CardTitle>
                           <CardDescription>
-                            {format(new Date(notification.absence_date), "EEEE d 'de' MMMM", { locale: es })}
+                            {parseLocalDate(notification.absence_date) ? format(parseLocalDate(notification.absence_date), "EEEE d 'de' MMMM", { locale: es }) : 'Sin fecha'}
                           </CardDescription>
                         </div>
                         <Badge className={config.color}>

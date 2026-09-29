@@ -19,10 +19,10 @@ export const STATUS_LABELS = {
 const STATUS_COLORS = {
   [SUPPORT_STATUS.OPEN]: 'bg-muted text-muted-foreground',
   [SUPPORT_STATUS.AI_RESOLVED]: 'bg-brand/10 text-brand',
-  [SUPPORT_STATUS.ESCALATED]: 'bg-amber-100 text-amber-800',
-  [SUPPORT_STATUS.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
-  [SUPPORT_STATUS.WAITING_USER]: 'bg-orange-100 text-orange-800',
-  [SUPPORT_STATUS.RESOLVED]: 'bg-green-100 text-green-800',
+  [SUPPORT_STATUS.ESCALATED]: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300',
+  [SUPPORT_STATUS.IN_PROGRESS]: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300',
+  [SUPPORT_STATUS.WAITING_USER]: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300',
+  [SUPPORT_STATUS.RESOLVED]: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300',
   [SUPPORT_STATUS.CLOSED]: 'bg-muted text-muted-foreground',
 };
 
@@ -35,9 +35,9 @@ export const PRIORITY_LABELS = {
 
 const PRIORITY_COLORS = {
   [SUPPORT_PRIORITIES.LOW]: 'bg-muted text-muted-foreground',
-  [SUPPORT_PRIORITIES.NORMAL]: 'bg-blue-100 text-blue-800',
-  [SUPPORT_PRIORITIES.HIGH]: 'bg-amber-100 text-amber-800',
-  [SUPPORT_PRIORITIES.URGENT]: 'bg-red-100 text-red-800',
+  [SUPPORT_PRIORITIES.NORMAL]: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300',
+  [SUPPORT_PRIORITIES.HIGH]: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300',
+  [SUPPORT_PRIORITIES.URGENT]: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300',
 };
 
 export const CATEGORY_LABELS = {

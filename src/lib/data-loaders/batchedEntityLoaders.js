@@ -26,6 +26,19 @@ export const loadStudentsByIds = (ids = []) => loadIndexedEntitiesById('Student'
 
 export const loadClassroomsByIds = (ids = []) => loadIndexedEntitiesById('Classroom', ids);
 
+// One $in query instead of one round-trip per classroom. The explicit limit
+// matters: several classrooms together can exceed the server's default page.
+export const ACTIVE_STUDENTS_LIMIT = 5000;
+export const loadActiveStudentsByClassroomIds = async (classroomIds = []) => {
+  const normalizedClassroomIds = normalizeIds(classroomIds);
+  if (normalizedClassroomIds.length === 0) return [];
+  return base44.entities.Student.filter(
+    { classroom_id: { $in: normalizedClassroomIds }, is_active: true },
+    undefined,
+    ACTIVE_STUDENTS_LIMIT,
+  );
+};
+
 export const loadHomeworkByClassroomIds = async (classroomIds = [], limit) => {
   const normalizedClassroomIds = normalizeIds(classroomIds);
   if (normalizedClassroomIds.length === 0) {

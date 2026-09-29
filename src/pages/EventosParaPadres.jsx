@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate, isOnOrAfterToday, isBeforeToday } from '@/lib/dates';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -46,8 +47,8 @@ export default function EventosParaPadres() {
         requires_confirmation: true
       }, 'date');
       
-      // Filtrar solo eventos futuros
-      return allEvents.filter(e => new Date(e.date) >= new Date());
+      // Filtrar solo eventos de hoy en adelante (día calendario local)
+      return allEvents.filter(e => isOnOrAfterToday(e.date));
     },
     enabled: !!userProfile?.school_id,
   });
@@ -137,9 +138,9 @@ export default function EventosParaPadres() {
   };
 
   const responseConfig = {
-    ACCEPTED: { label: 'Aceptado', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-    DECLINED: { label: 'Declinado', color: 'bg-red-100 text-red-800', icon: XCircle },
-    PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
+    ACCEPTED: { label: 'Aceptado', color: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300', icon: CheckCircle },
+    DECLINED: { label: 'Declinado', color: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300', icon: XCircle },
+    PENDING: { label: 'Pendiente', color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300', icon: AlertCircle },
   };
 
   if (profileLoading || isLoading) {
@@ -166,7 +167,8 @@ export default function EventosParaPadres() {
           ) : (
             events?.map((event) => {
               const deadline = event.confirmation_deadline;
-              const isDeadlinePassed = deadline && new Date(deadline) < new Date();
+              // Se puede confirmar durante todo el día límite; vence al día siguiente.
+              const isDeadlinePassed = !!deadline && isBeforeToday(deadline);
               
               return (
                 <motion.div
@@ -180,7 +182,7 @@ export default function EventosParaPadres() {
                         <div>
                           <CardTitle className="text-lg">{event.title}</CardTitle>
                           <CardDescription>
-                            {format(new Date(event.date), "EEEE d 'de' MMMM", { locale: es })}
+                            {parseLocalDate(event.date) ? format(parseLocalDate(event.date), "EEEE d 'de' MMMM", { locale: es }) : 'Sin fecha'}
                           </CardDescription>
                         </div>
                         {event.has_cost && (
@@ -208,10 +210,10 @@ export default function EventosParaPadres() {
                             {event.location}
                           </div>
                         )}
-                        {deadline && (
+                        {parseLocalDate(deadline) && (
                           <div className="flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
-                            Confirmar antes del {format(new Date(deadline), "d MMM", { locale: es })}
+                            Confirmar a más tardar el {format(parseLocalDate(deadline), "d MMM", { locale: es })}
                           </div>
                         )}
                       </div>
@@ -269,7 +271,7 @@ export default function EventosParaPadres() {
                 <div className="p-4 bg-muted rounded-lg">
                   <p className="font-medium">{selectedEvent.title}</p>
                   <p className="text-sm text-muted-foreground">
-                    {format(new Date(selectedEvent.date), "d 'de' MMMM", { locale: es })}
+                    {parseLocalDate(selectedEvent.date) ? format(parseLocalDate(selectedEvent.date), "d 'de' MMMM", { locale: es }) : 'Sin fecha'}
                   </p>
                   {selectedEvent.has_cost && (
                     <div className="flex items-center gap-2 mt-2 text-sm">

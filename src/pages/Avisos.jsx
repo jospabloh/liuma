@@ -208,7 +208,7 @@ export default function Avisos() {
               </div>
 
               {selectedNotice.delivery?.escalation_status === 'ESCALATED' && (
-                <p className="text-xs text-red-600 text-center font-medium">
+                <p className="text-xs text-red-600 dark:text-red-400 text-center font-medium">
                   Aviso urgente escalado por falta de acuse
                 </p>
               )}

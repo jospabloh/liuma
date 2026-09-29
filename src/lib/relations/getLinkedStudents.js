@@ -1,12 +1,6 @@
 import { base44 } from '@/api/base44Client';
-
-const isActiveStudent = (student) => {
-  if (!student) return false;
-  if (student.is_active === false) return false;
-  if (student.status && student.status !== 'ACTIVE') return false;
-  if (student.enrollment_status && student.enrollment_status !== 'ACTIVE') return false;
-  return true;
-};
+import { loadStudentsByIds } from '@/lib/data-loaders/batchedEntityLoaders';
+import { partitionLinkedStudents } from '@/lib/relations/partitionLinkedStudents';
 
 export async function getLinkedStudents(user) {
   if (!user?.id) {
@@ -29,25 +23,9 @@ export async function getLinkedStudents(user) {
     return { students: [], studentIds: [], orphanedLinkIds: [] };
   }
 
-  const students = [];
-  const orphanedLinkIds = [];
-
-  for (const id of studentIds) {
-    const matches = await base44.entities.Student.filter({ id });
-    const student = matches[0];
-    if (!student) {
-      orphanedLinkIds.push(id);
-      continue;
-    }
-    if (!isActiveStudent(student)) continue;
-    students.push(student);
-  }
-
-  return {
-    students,
-    studentIds: students.map((student) => student.id),
-    orphanedLinkIds,
-  };
+  // One `id: { $in }` query for every child instead of one per child.
+  const { items } = await loadStudentsByIds(studentIds);
+  return partitionLinkedStudents(studentIds, items);
 }
 
 export async function getLinkedStudentIds(user) {

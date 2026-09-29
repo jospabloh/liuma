@@ -11,15 +11,18 @@ import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
 import { Card } from "@/components/ui/card";
+import { formatLocalDate, parseLocalDate } from '@/lib/dates';
+import { loadActiveStudentsByClassroomIds } from '@/lib/data-loaders/batchedEntityLoaders';
 
 function UpcomingEventsSection({ schoolId, classroomIds }) {
   const { data: events = [] } = useQuery({
     queryKey: ['upcomingEvents', schoolId, classroomIds],
     queryFn: async () => {
-      const allEvents = await base44.entities.Event.filter({ 
-        school_id: schoolId 
+      // Today onward, filtered server-side (YYYY-MM-DD compares as text).
+      const upcoming = await base44.entities.Event.filter({
+        school_id: schoolId,
+        date: { $gte: formatLocalDate() },
       }, 'date', 10);
-      const upcoming = allEvents.filter(e => new Date(e.date) >= new Date());
       return upcoming.filter(e => 
         e.scope === 'SCHOOL' || classroomIds.includes(e.classroom_id)
       ).slice(0, 3);
@@ -41,12 +44,14 @@ function UpcomingEventsSection({ schoolId, classroomIds }) {
         Próximos eventos
       </h2>
       <div className="space-y-2">
-        {events.map(event => (
+        {events.map(event => {
+          const eventDate = parseLocalDate(event.date);
+          return (
           <Card key={event.id} className="p-3 bg-card border-border">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-brand text-white flex flex-col items-center justify-center text-xs font-bold">
-                <span>{format(new Date(event.date), 'd')}</span>
-                <span className="text-[10px]">{format(new Date(event.date), 'MMM', { locale: es })}</span>
+                <span>{eventDate ? format(eventDate, 'd') : '—'}</span>
+                <span className="text-[10px]">{eventDate ? format(eventDate, 'MMM', { locale: es }) : ''}</span>
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-card-foreground">{event.title}</h4>
@@ -54,7 +59,8 @@ function UpcomingEventsSection({ schoolId, classroomIds }) {
               </div>
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </motion.div>
   );
@@ -74,18 +80,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   // Get students in classrooms
   const { data: students = [] } = useQuery({
     queryKey: ['students', classroomIds],
-    queryFn: async () => {
-      if (classroomIds.length === 0) return [];
-      const allStudents = [];
-      for (const id of classroomIds) {
-        const classStudents = await base44.entities.Student.filter({ 
-          classroom_id: id,
-          is_active: true 
-        });
-        allStudents.push(...classStudents);
-      }
-      return allStudents;
-    },
+    queryFn: () => loadActiveStudentsByClassroomIds(classroomIds),
     enabled: classroomIds.length > 0,
   });
 
@@ -111,8 +106,9 @@ export default function TeacherHome({ user, userProfile, subscription }) {
         school_id: userProfile.school_id,
         status: 'SENT',
       }, '-created_date', 100);
-      const studentRows = await base44.entities.Student.filter({ is_active: true });
-      const classStudentIds = new Set(studentRows.filter((student) => classroomIds.includes(student.classroom_id)).map((student) => student.id));
+      // Only this teacher's classrooms — not every student RLS happens to expose.
+      const studentRows = await loadActiveStudentsByClassroomIds(classroomIds);
+      const classStudentIds = new Set(studentRows.map((student) => student.id));
       const relevantDeliveries = rows.filter((row) => classStudentIds.has(row.student_id));
       const urgentNotices = await base44.entities.Notice.filter({ school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50);
       const urgentIds = new Set(urgentNotices.map((notice) => notice.id));
@@ -143,7 +139,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
         >
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-display font-semibold text-card-foreground">Bitácoras de hoy</h3>
-            <Badge className={diaryProgress === 100 ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
+            <Badge className={diaryProgress === 100 ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}>
               {diaryProgress === 100 ? (
                 <><CheckCircle className="w-3 h-3 mr-1" /> Completo</>
               ) : (
@@ -196,7 +192,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             />
             <BigTile
               icon={ListChecks}
-              title="Operación Diaria"
+              title="Operación diaria"
               subtitle="Mi timeline del día"
               href={createPageUrl('OperacionDiaria')}
               delay={0.2}
@@ -267,7 +263,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
                         </p>
                       </div>
                       <div className={`text-2xl font-bold ${
-                        progress === 100 ? 'text-green-600' : 'text-amber-600'
+                        progress === 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
                       }`}>
                         {progress}%
                       </div>

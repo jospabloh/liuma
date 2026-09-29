@@ -8,6 +8,7 @@ import LoadingScreen from '@/components/ui/LoadingScreen';
 import { Users, User, Calendar, Heart, Phone, Shield } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate } from '@/lib/dates';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
@@ -45,8 +46,9 @@ export default function MisHijos() {
   };
 
   const getAge = (birthDate) => {
-    if (!birthDate) return null;
-    return differenceInYears(new Date(), new Date(birthDate));
+    const born = parseLocalDate(birthDate);
+    if (!born) return null;
+    return differenceInYears(new Date(), born);
   };
 
   return (
@@ -100,7 +102,7 @@ export default function MisHijos() {
                     {student.birth_date && (
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
-                        {format(new Date(student.birth_date), "d 'de' MMMM, yyyy", { locale: es })}
+                        {parseLocalDate(student.birth_date) ? format(parseLocalDate(student.birth_date), "d 'de' MMMM, yyyy", { locale: es }) : 'Sin fecha'}
                         {getAge(student.birth_date) && (
                           <span className="text-muted-foreground">({getAge(student.birth_date)} años)</span>
                         )}
@@ -113,7 +115,7 @@ export default function MisHijos() {
                       </div>
                     )}
                     {student.allergies && (
-                      <div className="flex items-center gap-2 text-amber-600">
+                      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                         <Shield className="w-4 h-4" />
                         Alergias: {student.allergies}
                       </div>

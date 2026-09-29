@@ -49,7 +49,7 @@ export default function UpgradePlansModal({ open, onClose, currentTier, reason }
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand text-white">Popular</span>
                       )}
                       {isCurrent && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Tu plan</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Tu plan</span>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{plan.desc}</p>

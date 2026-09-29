@@ -137,7 +137,7 @@ export default function GestionDescuentos() {
   const conceptLabels = {
     INSCRIPCION: 'Inscripción',
     COLEGIATURA: 'Colegiatura',
-    HORARIO_EXTENDIDO: 'Horario Extendido',
+    HORARIO_EXTENDIDO: 'Horario extendido',
     EVENTO: 'Eventos',
     OTRO: 'Otros',
   };
@@ -151,7 +151,7 @@ export default function GestionDescuentos() {
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <ReadOnlyBanner />
         <PageHeader
-          title="Gestión de Descuentos"
+          title="Gestión de descuentos"
           subtitle="Configura descuentos para pagos escolares"
           showBack
           action={
@@ -164,7 +164,7 @@ export default function GestionDescuentos() {
               </DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>{editingDiscount ? 'Editar' : 'Nuevo'} Descuento</DialogTitle>
+                  <DialogTitle>{editingDiscount ? 'Editar' : 'Nuevo'} descuento</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
@@ -296,7 +296,7 @@ export default function GestionDescuentos() {
                         <div className="flex items-center gap-2 mb-1">
                           <CardTitle className="text-lg">{discount.name}</CardTitle>
                           {discount.is_active ? (
-                            <Badge className="bg-green-100 text-green-800">Activo</Badge>
+                            <Badge className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">Activo</Badge>
                           ) : (
                             <Badge className="bg-muted text-muted-foreground">Inactivo</Badge>
                           )}
@@ -316,7 +316,7 @@ export default function GestionDescuentos() {
                           variant="outline"
                           onClick={() => deleteDiscountMutation.mutate(discount.id)}
                         >
-                          <Trash2 className="w-4 h-4 text-red-600" />
+                          <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                         </Button>
                       </div>
                     </div>

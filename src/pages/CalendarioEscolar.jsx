@@ -14,6 +14,7 @@ import LoadingScreen from "@/components/ui/LoadingScreen";
 import EventFormDialog from "@/components/calendar/EventFormDialog";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate, isOnOrAfterToday } from '@/lib/dates';
 import { toast } from 'sonner';
 
 export default function CalendarioEscolar() {
@@ -74,11 +75,14 @@ export default function CalendarioEscolar() {
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   const getEventsForDate = (date) => {
-    return events.filter(event => isSameDay(new Date(event.date), date));
+    return events.filter(event => {
+      const eventDate = parseLocalDate(event.date);
+      return !!eventDate && isSameDay(eventDate, date);
+    });
   };
 
   const selectedDayEvents = getEventsForDate(selectedDate);
-  const upcomingEvents = events.filter(e => new Date(e.date) >= new Date()).slice(0, 5);
+  const upcomingEvents = events.filter(e => isOnOrAfterToday(e.date)).slice(0, 5);
 
   const handleDaySelect = (day) => {
     setSelectedDate(day);
@@ -109,7 +113,7 @@ export default function CalendarioEscolar() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
-        title="Calendario Escolar"
+        title="Calendario escolar"
         subtitle={format(selectedDate, "MMMM yyyy", { locale: es })}
         showBack
         action={
@@ -197,7 +201,7 @@ export default function CalendarioEscolar() {
                           className={`text-xs px-1.5 py-0.5 rounded truncate transition-colors hover:ring-2 hover:ring-brand/30 ${
                             event.scope === 'SCHOOL'
                               ? 'bg-brand/10 text-brand'
-                              : 'bg-emerald-100 text-emerald-700'
+                              : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                           }`}
                         >
                           {event.title}
@@ -247,7 +251,7 @@ export default function CalendarioEscolar() {
                           variant="ghost"
                           size="icon"
                           aria-label="Eliminar evento"
-                          className="h-6 w-6 text-red-500 hover:text-red-600"
+                          className="h-6 w-6 text-red-500 hover:text-red-600 dark:hover:text-red-400"
                           onClick={(e) => handleDeleteEvent(event.id, e)}
                         >
                           <Trash2 className="w-3 h-3" />
@@ -270,7 +274,7 @@ export default function CalendarioEscolar() {
                       <Badge className={`text-xs ${
                         event.scope === 'SCHOOL'
                           ? 'bg-brand/10 text-brand'
-                          : 'bg-emerald-100 text-emerald-700'
+                          : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                       }`}>
                         {event.scope === 'SCHOOL' ? 'Toda la escuela' : 'Por salón'}
                       </Badge>
@@ -310,7 +314,7 @@ export default function CalendarioEscolar() {
                           variant="ghost"
                           size="icon"
                           aria-label="Eliminar evento"
-                          className="h-6 w-6 text-red-500 hover:text-red-600"
+                          className="h-6 w-6 text-red-500 hover:text-red-600 dark:hover:text-red-400"
                           onClick={(e) => handleDeleteEvent(event.id, e)}
                         >
                           <Trash2 className="w-3 h-3" />
@@ -320,7 +324,7 @@ export default function CalendarioEscolar() {
                     <div className="text-xs text-muted-foreground space-y-1">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {format(new Date(event.date), "d 'de' MMMM", { locale: es })}
+                        {parseLocalDate(event.date) ? format(parseLocalDate(event.date), "d 'de' MMMM", { locale: es }) : 'Sin fecha'}
                       </div>
                       {event.time && (
                         <div className="flex items-center gap-1">
@@ -337,7 +341,7 @@ export default function CalendarioEscolar() {
                       <Badge className={`text-xs ${
                         event.scope === 'SCHOOL'
                           ? 'bg-brand/10 text-brand'
-                          : 'bg-emerald-100 text-emerald-700'
+                          : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                       }`}>
                         {event.scope === 'SCHOOL' ? 'Toda la escuela' : 'Por salón'}
                       </Badge>

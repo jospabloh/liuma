@@ -1,15 +1,18 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, User, Paperclip } from 'lucide-react';
-import { format, isToday, isTomorrow, isPast } from 'date-fns';
+import { format, isToday, isTomorrow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
+import { parseLocalDate, isBeforeToday } from '@/lib/dates';
 
 export default function HomeworkCard({ homework, onClick }) {
-  const dueDate = new Date(homework.due_date);
-  const isOverdue = isPast(dueDate) && !isToday(dueDate);
+  const dueDate = parseLocalDate(homework.due_date);
+  // Due today is not overdue; only a calendar day strictly before today is.
+  const isOverdue = isBeforeToday(dueDate);
   
   const getDueDateLabel = () => {
+    if (!dueDate) return 'Sin fecha de entrega';
     if (isToday(dueDate)) return 'Hoy';
     if (isTomorrow(dueDate)) return 'Mañana';
     return format(dueDate, "EEEE d 'de' MMMM", { locale: es });
@@ -22,7 +25,7 @@ export default function HomeworkCard({ homework, onClick }) {
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
       className={`bg-card text-card-foreground rounded-xl p-4 shadow-sm border cursor-pointer ${
-        isOverdue ? 'border-red-200 bg-red-50' : 'border-border'
+        isOverdue ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40' : 'border-border'
       }`}
     >
       <div className="flex items-start justify-between mb-2">
@@ -32,11 +35,11 @@ export default function HomeworkCard({ homework, onClick }) {
               {homework.subject}
             </Badge>
           )}
-          {isToday(dueDate) && (
-            <Badge className="bg-amber-100 text-amber-800">Hoy</Badge>
+          {dueDate && isToday(dueDate) && (
+            <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">Hoy</Badge>
           )}
           {isOverdue && (
-            <Badge className="bg-red-100 text-red-800">Vencida</Badge>
+            <Badge className="bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">Vencida</Badge>
           )}
         </div>
       </div>
@@ -48,7 +51,7 @@ export default function HomeworkCard({ homework, onClick }) {
       )}
 
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span className={`flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : ''}`}>
+        <span className={`flex items-center gap-1 ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : ''}`}>
           <Calendar className="w-3 h-3" />
           {getDueDateLabel()}
         </span>

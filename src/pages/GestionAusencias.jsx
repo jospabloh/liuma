@@ -13,6 +13,7 @@ import { Clock, CheckCircle, XCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate } from '@/lib/dates';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -120,9 +121,9 @@ export default function GestionAusencias() {
   };
 
   const statusConfig = {
-    PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
-    APPROVED: { label: 'Aprobada', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-    REJECTED: { label: 'Rechazada', color: 'bg-red-100 text-red-800', icon: XCircle },
+    PENDING: { label: 'Pendiente', color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300', icon: Clock },
+    APPROVED: { label: 'Aprobada', color: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300', icon: CheckCircle },
+    REJECTED: { label: 'Rechazada', color: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300', icon: XCircle },
   };
 
   if (isLoading) {
@@ -135,7 +136,7 @@ export default function GestionAusencias() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <PageHeader
-          title="Solicitudes de Ausencias"
+          title="Solicitudes de ausencia"
           subtitle={`${pendingCount} pendientes de revisión`}
           showBack
         />
@@ -174,7 +175,7 @@ export default function GestionAusencias() {
                             {student?.first_name} {student?.last_name}
                           </CardTitle>
                           <CardDescription>
-                            {format(new Date(notification.absence_date), "EEEE d 'de' MMMM", { locale: es })}
+                            {parseLocalDate(notification.absence_date) ? format(parseLocalDate(notification.absence_date), "EEEE d 'de' MMMM", { locale: es }) : 'Sin fecha'}
                           </CardDescription>
                         </div>
                         <Badge className={config.color}>
@@ -211,7 +212,7 @@ export default function GestionAusencias() {
         <Dialog open={!!selectedNotification} onOpenChange={closeDialog}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Revisar Solicitud</DialogTitle>
+              <DialogTitle>Revisar solicitud</DialogTitle>
             </DialogHeader>
             {selectedNotification && (
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -226,7 +227,7 @@ export default function GestionAusencias() {
                   <div>
                     <p className="text-xs text-muted-foreground">Fecha de ausencia:</p>
                     <p className="text-sm">
-                      {format(new Date(selectedNotification.absence_date), "EEEE d 'de' MMMM", { locale: es })}
+                      {parseLocalDate(selectedNotification.absence_date) ? format(parseLocalDate(selectedNotification.absence_date), "EEEE d 'de' MMMM", { locale: es }) : 'Sin fecha'}
                     </p>
                   </div>
                   <div>
@@ -249,7 +250,7 @@ export default function GestionAusencias() {
                 </div>
 
                 {newStatus === 'APPROVED' && (
-                  <div className="p-3 bg-green-50 rounded-lg text-sm text-green-800">
+                  <div className="p-3 bg-green-50 dark:bg-green-950/40 rounded-lg text-sm text-green-800 dark:text-green-300">
                     <p className="font-medium">La ausencia se marcará como justificada</p>
                     <p className="text-xs mt-1">
                       Se actualizará automáticamente el registro de asistencia.

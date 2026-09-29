@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolReadContext, schoolReadMany } from '@/lib/data/schoolRead';
+import { functionErrorCode } from '@/lib/functionResponse';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import EmptyState from '@/components/ui/EmptyState';
@@ -12,7 +13,6 @@ import { format } from 'date-fns';
 import { parseLocalDate } from '@/lib/dates';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 
 const CATEGORIES = ['ALL', 'ATTENDANCE', 'HOMEWORK', 'DIARY', 'NOTICE', 'EVENT'];
 const URGENCY = ['ALL', 'URGENT', 'NORMAL'];
@@ -31,68 +31,52 @@ const linkByCategory = {
   EVENT: 'CalendarioEscolar',
 };
 
+// Codes schoolRead answers with when the caller's own profile cannot be used.
+const PROFILE_REFUSALS = ['NO_PROFILE', 'INACTIVE_PROFILE', 'NO_SCHOOL', 'INVALID_ROLE'];
+
 export default function OperacionDiaria() {
   const navigate = useNavigate();
   const [category, setCategory] = useState('ALL');
   const [urgency, setUrgency] = useState('ALL');
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['dailyTimeline', today],
     queryFn: async () => {
-      const user = await base44.auth.me();
-      const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
-      const userProfile = profiles[0];
-      if (!userProfile) return { role: null, items: [] };
+      // One request for the caller's scope (school, role, classrooms,
+      // children — derived server-side from their own profile) and one for
+      // the five lists (P10: they used to be seven client reads, each empty
+      // for a real school user under the strict RLS). The rows come back
+      // already scoped to what this role may see.
+      // Only a profile the server refused (none, pending, no school) is
+      // "Perfil no disponible". Anything else — a 5xx, the site deployed
+      // before the function — is an error with a retry, not cached as an
+      // empty success that looks like a profile problem.
+      let context;
+      try {
+        context = await schoolReadContext();
+      } catch (error) {
+        if (PROFILE_REFUSALS.includes(functionErrorCode(error))) return { role: null, items: [] };
+        throw error;
+      }
+      const role = context.role;
+      const school_id = context.schoolId;
+      if (!role || !school_id) return { role: null, items: [] };
 
-      const role = userProfile.app_role;
-      const school_id = userProfile.school_id;
-
-      const [teacherLinks, linked] = await Promise.all([
-        role === 'TEACHER' ? base44.entities.TeacherClassroom.filter({ teacher_id: user.id, is_active: true }) : [],
-        role === 'PARENT' ? getLinkedStudents(user) : { students: [], studentIds: [] },
-      ]);
-
-      const classroomIds = teacherLinks.map((row) => row.classroom_id).filter(Boolean);
-      const studentIds = linked.studentIds || [];
-
-      const [attendanceRows, homeworkRows, diaryRows, noticeRows, eventRows] = await Promise.all([
-        base44.entities.Attendance.filter({ school_id, date: today }, '-updated_date', 200),
-        base44.entities.Homework.filter({ school_id }, '-created_date', 100),
-        base44.entities.DiaryEntry.filter({ school_id, date: today }, '-updated_date', 200),
-        base44.entities.Notice.filter({ school_id }, '-created_date', 100),
-        base44.entities.Event.filter({ school_id }, 'date', 100),
-      ]);
+      const lists = await schoolReadMany({
+        attendance: ['Attendance', { school_id, date: today }, '-updated_date', 200],
+        homework: ['Homework', { school_id }, '-created_date', 100],
+        diary: ['DiaryEntry', { school_id, date: today }, '-updated_date', 200],
+        notices: ['Notice', { school_id }, '-created_date', 100],
+        events: ['Event', { school_id, date: today }, 'date', 100],
+      });
 
       const roleFiltered = {
-        attendance: attendanceRows.filter((row) => {
-          if (role === 'ADMIN') return true;
-          if (role === 'TEACHER') return classroomIds.includes(row.classroom_id);
-          return studentIds.includes(row.student_id);
-        }),
-        homework: homeworkRows.filter((row) => {
-          if (role === 'ADMIN') return true;
-          if (role === 'TEACHER') return classroomIds.includes(row.classroom_id);
-          return studentIds.includes(row.student_id) || studentIds.length === 0 ? false : true;
-        }),
-        diary: diaryRows.filter((row) => {
-          if (role === 'ADMIN') return true;
-          if (role === 'TEACHER') return classroomIds.includes(row.classroom_id);
-          return studentIds.includes(row.student_id);
-        }),
-        notices: noticeRows.filter((row) => {
-          if (role === 'ADMIN') return true;
-          if (row.scope === 'SCHOOL') return true;
-          if (role === 'TEACHER') return classroomIds.includes(row.classroom_id);
-          return studentIds.includes(row.student_id);
-        }),
-        events: eventRows.filter((row) => {
-          if (row.date !== today) return false;
-          if (role === 'ADMIN') return true;
-          if (row.scope === 'SCHOOL') return true;
-          if (role === 'TEACHER') return classroomIds.includes(row.classroom_id);
-          return studentIds.includes(row.student_id);
-        }),
+        attendance: lists.attendance,
+        homework: lists.homework,
+        diary: lists.diary,
+        notices: lists.notices,
+        events: lists.events.filter((row) => row.date === today),
       };
 
       const items = [
@@ -117,6 +101,16 @@ export default function OperacionDiaria() {
   }, [data, category, urgency]);
 
   if (isLoading) return <LoadingScreen message="Cargando operación diaria..." />;
+  if (isError) {
+    return (
+      <EmptyState
+        icon={AlertCircle}
+        title="No se pudo cargar la operación diaria"
+        description="Revisa tu conexión e inténtalo de nuevo."
+        action={<Button onClick={() => refetch()}>Reintentar</Button>}
+      />
+    );
+  }
   if (!data?.role) return <EmptyState icon={AlertCircle} title="Perfil no disponible" />;
 
   return (

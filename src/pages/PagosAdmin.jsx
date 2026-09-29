@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -60,7 +60,7 @@ export default function PagosAdmin() {
 
   const { data: concepts = [] } = useQuery({
     queryKey: ['paymentConcepts', userProfile?.school_id],
-    queryFn: () => base44.entities.PaymentConcept.filter({ 
+    queryFn: () => schoolRead('PaymentConcept', { 
       school_id: userProfile.school_id,
       is_active: true 
     }),
@@ -71,7 +71,7 @@ export default function PagosAdmin() {
   const { data: charges = [], isLoading } = useQuery({
     queryKey: ['allCharges', userProfile?.school_id],
     queryFn: async () => {
-      const allCharges = await base44.entities.ChargeItem.filter({ 
+      const allCharges = await schoolRead('ChargeItem', { 
         school_id: userProfile.school_id 
       }, '-due_date');
       
@@ -175,7 +175,7 @@ export default function PagosAdmin() {
     const concept = concepts.find(c => c.id === chargeForm.concept_id);
     
     // Buscar descuentos aplicables
-    const discounts = await base44.entities.Discount.filter({
+    const discounts = await schoolRead('Discount', {
       school_id: userProfile.school_id,
       is_active: true
     });

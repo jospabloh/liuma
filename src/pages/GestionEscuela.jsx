@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
@@ -64,7 +65,7 @@ export default function GestionEscuela() {
   // after a visit here. Invalidating ['allClassrooms'] still hits both.
   const { data: classrooms = [], isLoading: loadingClassrooms } = useQuery({
     queryKey: ['allClassrooms', userProfile?.school_id, 'all'],
-    queryFn: () => base44.entities.Classroom.filter({ 
+    queryFn: () => schoolRead('Classroom', { 
       school_id: userProfile.school_id 
     }),
     enabled: !!userProfile,

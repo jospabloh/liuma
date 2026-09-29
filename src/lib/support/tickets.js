@@ -1,5 +1,6 @@
 import { base44 } from '@/api/base44Client';
 import { invokeFunction } from '@/lib/functionResponse';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { notificationService } from '@/lib/notifications/service';
 import {
@@ -29,7 +30,7 @@ async function allocateTicketNumber(schoolId) {
   const year = new Date().getUTCFullYear();
   let sequence = 1;
   try {
-    const existing = await base44.entities.SupportTicket.filter({ school_id: schoolId });
+    const existing = await schoolRead('SupportTicket', { school_id: schoolId });
     const thisYear = (existing || []).filter((t) => {
       const created = t.created_date || t.created_at;
       return created && new Date(created).getUTCFullYear() === year;
@@ -183,6 +184,20 @@ export async function createSupportTicket({
 }
 
 /**
+ * The requester's UserProfile rows, to notify them. A school ADMIN reads them
+ * through schoolRead (their own school only — the RLS alone showed them
+ * nothing, so requesters were never told about a reply). The ACACIA platform
+ * owner (Base44 `user.role === 'admin'`) answers tickets from every school,
+ * so they keep the direct read their owner-only RLS allows.
+ */
+async function requesterProfilesFor(user, ticket) {
+  if (user?.role === 'admin') {
+    return base44.entities.UserProfile.filter({ user_id: ticket.requester_user_id });
+  }
+  return schoolRead('UserProfile', { user_id: ticket.requester_user_id });
+}
+
+/**
  * Append a reply to a ticket thread and notify the other party.
  *
  * `authorRole` is only the caller's expectation (and the fallback if the
@@ -215,7 +230,7 @@ export async function addSupportMessage({ user, userProfile, ticket, body, autho
   // Notify the requester when staff replies.
   if (isStaffReply && ticket.requester_user_id) {
     try {
-      const requesterProfiles = await base44.entities.UserProfile.filter({ user_id: ticket.requester_user_id });
+      const requesterProfiles = await requesterProfilesFor(user, ticket);
       await notificationService.sendByEvent({
         eventType: 'support_ticket_reply',
         schoolId: ticket.school_id,
@@ -260,7 +275,7 @@ export async function transitionTicketStatus({ user, userProfile, ticket, toStat
 
   if (toStatus === SUPPORT_STATUS.RESOLVED && ticket.requester_user_id) {
     try {
-      const requesterProfiles = await base44.entities.UserProfile.filter({ user_id: ticket.requester_user_id });
+      const requesterProfiles = await requesterProfilesFor(user, ticket);
       await notificationService.sendByEvent({
         eventType: 'support_ticket_resolved',
         schoolId: ticket.school_id,
@@ -371,7 +386,7 @@ export async function autoEscalateBreachedTickets({ user, userProfile, tickets, 
 /** Tickets opened by the current user (requester view). */
 export async function listMyTickets(user) {
   if (!user) return [];
-  const tickets = await base44.entities.SupportTicket.filter({ requester_user_id: user.id }, '-created_date');
+  const tickets = await schoolRead('SupportTicket', { requester_user_id: user.id }, '-created_date');
   return tickets || [];
 }
 
@@ -392,13 +407,22 @@ export async function listQueueTickets(userProfile, { isOwner } = {}) {
     const all = await base44.entities.SupportTicket.list('-created_date');
     return all || [];
   }
-  const scoped = await base44.entities.SupportTicket.filter({ school_id: userProfile.school_id }, '-created_date');
+  const scoped = await schoolRead('SupportTicket', { school_id: userProfile.school_id }, '-created_date');
   return scoped || [];
 }
 
-/** Full message thread for a ticket. */
-export async function listTicketMessages(ticketId) {
+/**
+ * Full message thread for a ticket — staff replies included. Through
+ * schoolRead a requester reads the whole thread of their OWN tickets (the RLS
+ * showed each author only their own messages, so a parent never saw the
+ * school's answer) and a school ADMIN reads their school's threads. The
+ * platform owner's cross-school inbox passes `isOwner` and keeps the direct
+ * read its owner-only RLS allows.
+ */
+export async function listTicketMessages(ticketId, { isOwner = false } = {}) {
   if (!ticketId) return [];
-  const messages = await base44.entities.SupportTicketMessage.filter({ ticket_id: ticketId }, 'created_date');
+  const messages = isOwner
+    ? await base44.entities.SupportTicketMessage.filter({ ticket_id: ticketId }, 'created_date')
+    : await schoolRead('SupportTicketMessage', { ticket_id: ticketId }, 'created_date');
   return messages || [];
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { schoolRead, schoolReadContext } from '@/lib/data/schoolRead';
 import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -233,7 +234,7 @@ function ParentAttendanceView({ user, userProfile }) {
     queryKey: ['attendance-parent', studentIds, startDate, endDate],
     queryFn: async () => {
       if (studentIds.length === 0) return [];
-      return await base44.entities.Attendance.filter({
+      return await schoolRead('Attendance', {
         student_id: { $in: studentIds },
         date: { $gte: startDate, $lte: endDate }
       });
@@ -354,15 +355,13 @@ export default function Asistencia() {
   const { data: classrooms = [], isLoading: loadingClassrooms, isError: classroomsError } = useQuery({
     queryKey: ['attendance-classrooms', userProfile?.school_id, role, user?.id],
     queryFn: async () => {
-      if (role === 'ADMIN') return await base44.entities.Classroom.filter({ school_id: userProfile.school_id, is_active: true });
+      if (role === 'ADMIN') return await schoolRead('Classroom', { school_id: userProfile.school_id, is_active: true });
       if (role === 'TEACHER') {
-        const assignments = await base44.entities.TeacherClassroom.filter({ teacher_id: user.id, is_active: true });
-        const classroomIds = assignments.map(a => a.classroom_id);
-        if (classroomIds.length === 0) return [];
-        // The built-in record id is `id`. Base44 silently ignores `_id`, so the
-        // old `_id: { $in }` filter returned no classroom and the teacher saw
-        // an empty salón selector ("No hay alumnos en este salón").
-        return await base44.entities.Classroom.filter({ id: { $in: classroomIds }, is_active: true });
+        // The teacher's classrooms come with the server's own scope (active
+        // TeacherClassroom rows → Classroom rows), in one request instead of
+        // a TeacherClassroom read followed by a Classroom read.
+        const context = await schoolReadContext();
+        return context.classrooms.filter((c) => c.is_active !== false);
       }
       return [];
     },
@@ -377,7 +376,7 @@ export default function Asistencia() {
     queryKey: ['attendance-students', selectedClassroom],
     queryFn: async () => {
       if (!selectedClassroom) return [];
-      return await base44.entities.Student.filter({ classroom_id: selectedClassroom, is_active: true });
+      return await schoolRead('Student', { classroom_id: selectedClassroom, is_active: true });
     },
     enabled: !!selectedClassroom
   });
@@ -387,7 +386,7 @@ export default function Asistencia() {
     queryKey: currentKey,
     queryFn: async () => {
       if (!selectedClassroom || !selectedDate) return [];
-      return await base44.entities.Attendance.filter({ classroom_id: selectedClassroom, date: selectedDate });
+      return await schoolRead('Attendance', { classroom_id: selectedClassroom, date: selectedDate });
     },
     enabled: !!selectedClassroom && !!selectedDate
   });

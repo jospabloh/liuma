@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -39,7 +39,7 @@ export default function SolicitarAusencia() {
 
   const { data: notifications, isLoading } = useQuery({
     queryKey: ['absenceNotifications', user?.id],
-    queryFn: () => base44.entities.AbsenceNotification.filter({ parent_id: user.id }, '-created_date'),
+    queryFn: () => schoolRead('AbsenceNotification', { parent_id: user.id }, '-created_date'),
     enabled: !!user?.id,
   });
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { motion } from 'framer-motion';
 import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, Calendar, FileText, ShoppingBag, Percent, ClipboardCheck, Settings, ListChecks, ShieldCheck, KeyRound, Headset, BadgeCheck, Inbox } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
@@ -24,14 +24,14 @@ export default function AdminHome({ user, userProfile, subscription }) {
   // Get pending approvals
   const pendingUsersQuery = useQuery({
     queryKey: ['pendingUsers', userProfile.school_id],
-    queryFn: () => base44.entities.UserProfile.filter({ 
+    queryFn: () => schoolRead('UserProfile', { 
       school_id: userProfile.school_id,
       status: 'PENDING' 
     }),
   });
   const allProfilesQuery = useQuery({
     queryKey: ['allProfiles', userProfile.school_id],
-    queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
+    queryFn: () => schoolRead('UserProfile', { school_id: userProfile.school_id }),
   });
 
   // School header (name) comes from getMySubscription: School.read is
@@ -42,7 +42,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
   // Get classrooms count
   const classroomsQuery = useQuery({
     queryKey: ['allClassrooms', userProfile.school_id],
-    queryFn: () => base44.entities.Classroom.filter({ 
+    queryFn: () => schoolRead('Classroom', { 
       school_id: userProfile.school_id,
       is_active: true 
     }),
@@ -57,7 +57,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
   const overdueChargesQuery = useQuery({
     queryKey: ['overdueCharges', userProfile.school_id],
     queryFn: async () => {
-      const charges = await base44.entities.ChargeItem.filter({
+      const charges = await schoolRead('ChargeItem', {
         school_id: userProfile.school_id,
         status: { $in: UNPAID_CHARGE_STATUSES },
       });
@@ -66,22 +66,22 @@ export default function AdminHome({ user, userProfile, subscription }) {
   });
   const setupStepsQuery = useQuery({
     queryKey: ['homeSetupGuide', userProfile.school_id],
-    queryFn: () => base44.entities.SchoolSetupGuide.filter({ school_id: userProfile.school_id }),
+    queryFn: () => schoolRead('SchoolSetupGuide', { school_id: userProfile.school_id }),
   });
   const teacherAssignmentsQuery = useQuery({
     queryKey: ['homeTeacherAssignments', userProfile.school_id],
-    queryFn: () => base44.entities.TeacherClassroom.filter({ school_id: userProfile.school_id, is_active: true }),
+    queryFn: () => schoolRead('TeacherClassroom', { school_id: userProfile.school_id, is_active: true }),
   });
   const parentLinksQuery = useQuery({
     queryKey: ['homeParentLinks', userProfile.school_id],
-    queryFn: () => base44.entities.ParentStudent.filter({ school_id: userProfile.school_id, status: 'ACTIVE' }),
+    queryFn: () => schoolRead('ParentStudent', { school_id: userProfile.school_id, status: 'ACTIVE' }),
   });
   // One request for the whole school — this used to await one
   // EmergencyContact.filter per student, in sequence (300 round-trips for a
   // 300-student school on the director's first screen).
   const emergencyContactsQuery = useQuery({
     queryKey: ['homeEmergencyContacts', userProfile.school_id],
-    queryFn: () => base44.entities.EmergencyContact.filter(
+    queryFn: () => schoolRead('EmergencyContact', 
       { school_id: userProfile.school_id },
       undefined,
       5000,
@@ -91,9 +91,9 @@ export default function AdminHome({ user, userProfile, subscription }) {
   const { data: unreadUrgentNotices = [] } = useQuery({
     queryKey: ['adminUnreadUrgentNotices', userProfile.school_id],
     queryFn: async () => {
-      const urgentNotices = await base44.entities.Notice.filter({ school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50);
+      const urgentNotices = await schoolRead('Notice', { school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50);
       const urgentIds = new Set(urgentNotices.map((notice) => notice.id));
-      const pending = await base44.entities.NoticeDelivery.filter({ school_id: userProfile.school_id, status: 'SENT' }, '-created_date', 200);
+      const pending = await schoolRead('NoticeDelivery', { school_id: userProfile.school_id, status: 'SENT' }, '-created_date', 200);
       return pending.filter((row) => urgentIds.has(row.notice_id));
     },
   });

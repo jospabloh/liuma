@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -33,7 +34,7 @@ export default function GestionAusencias() {
 
   const { data: notifications, isLoading } = useQuery({
     queryKey: ['absenceNotifications', userProfile?.school_id],
-    queryFn: () => base44.entities.AbsenceNotification.filter({
+    queryFn: () => schoolRead('AbsenceNotification', {
       school_id: userProfile.school_id
     }, '-created_date'),
     enabled: !!userProfile?.school_id,
@@ -41,7 +42,7 @@ export default function GestionAusencias() {
 
   const { data: students } = useQuery({
     queryKey: ['allStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({
+    queryFn: () => schoolRead('Student', {
       school_id: userProfile.school_id
     }),
     enabled: !!userProfile?.school_id,
@@ -60,7 +61,7 @@ export default function GestionAusencias() {
       
       // Si se aprueba, crear/actualizar registro de asistencia como justificado
       if (data.status === 'APPROVED') {
-        const existingAttendance = await base44.entities.Attendance.filter({
+        const existingAttendance = await schoolRead('Attendance', {
           school_id: notification.school_id,
           student_id: notification.student_id,
           date: notification.absence_date,

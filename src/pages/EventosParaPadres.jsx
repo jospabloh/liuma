@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -42,7 +42,7 @@ export default function EventosParaPadres() {
   const { data: events, isLoading } = useQuery({
     queryKey: ['eventsRequiringConfirmation', userProfile?.school_id],
     queryFn: async () => {
-      const allEvents = await base44.entities.Event.filter({
+      const allEvents = await schoolRead('Event', {
         school_id: userProfile.school_id,
         requires_confirmation: true
       }, 'date');
@@ -55,7 +55,7 @@ export default function EventosParaPadres() {
 
   const { data: responses = [] } = useQuery({
     queryKey: ['eventResponses', user?.id],
-    queryFn: () => base44.entities.EventResponse.filter({ parent_id: user.id }),
+    queryFn: () => schoolRead('EventResponse', { parent_id: user.id }),
     enabled: !!user?.id,
   });
 

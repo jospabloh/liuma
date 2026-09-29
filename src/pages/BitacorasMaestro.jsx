@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead, schoolReadContext } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -11,7 +11,6 @@ import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
-import { loadClassroomsByIds, loadActiveStudentsByClassroomIds } from '@/lib/data-loaders/batchedEntityLoaders';
 
 export default function BitacorasMaestro() {
   const navigate = useNavigate();
@@ -19,32 +18,30 @@ export default function BitacorasMaestro() {
 
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: teacherClassrooms = [] } = useQuery({
-    queryKey: ['teacherClassrooms', user?.id],
-    queryFn: () => base44.entities.TeacherClassroom.filter({ 
-      teacher_id: user.id,
-      is_active: true 
-    }),
+  // The teacher's classrooms and their active students in ONE request
+  // (schoolRead `context`, derived server-side from TeacherClassroom — P10).
+  // It used to be a TeacherClassroom read, then a Classroom read and a Student
+  // read that waited on it.
+  const { data: teacherScope = { classrooms: [], students: [] }, isLoading } = useQuery({
+    queryKey: ['teacherScope', user?.id],
+    queryFn: async () => {
+      const context = await schoolReadContext();
+      const byId = new Map(context.classrooms.map((c) => [c.id, c]));
+      return {
+        classroomIds: context.classroomIds,
+        classrooms: context.classroomIds.map((id) => byId.get(id)).filter(Boolean),
+        students: context.students,
+      };
+    },
     enabled: !!user,
   });
+  const classrooms = teacherScope.classrooms;
+  const students = teacherScope.students;
 
-  const classroomIds = teacherClassrooms.map(tc => tc.classroom_id);
-
-  const { data: classrooms = [] } = useQuery({
-    queryKey: ['classrooms', classroomIds],
-    queryFn: async () => (await loadClassroomsByIds(classroomIds)).items,
-    enabled: classroomIds.length > 0,
-  });
-
-  const { data: students = [], isLoading } = useQuery({
-    queryKey: ['students', classroomIds],
-    queryFn: () => loadActiveStudentsByClassroomIds(classroomIds),
-    enabled: classroomIds.length > 0,
-  });
-
+  // Today's entries; the server returns only this teacher's classrooms.
   const { data: todayDiaries = [] } = useQuery({
     queryKey: ['todayDiaries', today, userProfile?.school_id],
-    queryFn: () => base44.entities.DiaryEntry.filter({ 
+    queryFn: () => schoolRead('DiaryEntry', { 
       date: today,
       school_id: userProfile.school_id
     }),

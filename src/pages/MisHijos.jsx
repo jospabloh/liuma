@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
-import { loadClassroomsByIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
 
 export default function MisHijos() {
   const navigate = useNavigate();
@@ -30,13 +29,8 @@ export default function MisHijos() {
   const students = linkedStudents.students;
   const studentIds = linkedStudents.studentIds;
 
-  const classroomIds = students.map(s => s.classroom_id);
-
-  const { data: classrooms = [] } = useQuery({
-    queryKey: normalizedIdQueryKey('classrooms', classroomIds),
-    queryFn: async () => (await loadClassroomsByIds(classroomIds)).items,
-    enabled: students.length > 0,
-  });
+  // The children's classrooms arrive with the same scope request.
+  const classrooms = linkedStudents.classrooms || [];
 
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 

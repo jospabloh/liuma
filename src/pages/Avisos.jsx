@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -12,8 +13,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
-import { canReadEntity, buildScopedFilter, filterByRowLevel } from '@/lib/authorization/policy';
-import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
+import { canReadEntity } from '@/lib/authorization/policy';
 import {
   Dialog,
   DialogContent,
@@ -37,24 +37,16 @@ export default function Avisos() {
   
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: linkedStudents = { students: [], studentIds: [] } } = useQuery({
-    queryKey: ['linkedStudents', user?.id],
-    queryFn: () => getLinkedStudents(user),
-    enabled: !!user,
-  });
-
-  const studentIds = linkedStudents.studentIds;
-  const students = linkedStudents.students;
-
-  const classroomIds = [...new Set(students.map(s => s.classroom_id).filter(Boolean))];
-
   const { data: notices = [], isLoading } = useQuery({
-    queryKey: ['notices', userProfile?.school_id, classroomIds, studentIds],
+    queryKey: ['notices', userProfile?.school_id],
     queryFn: async () => {
       if (!canReadEntity(userProfile?.app_role, 'Notice')) return [];
-      const scopedFilter = buildScopedFilter({ role: userProfile?.app_role, entity: 'Notice', schoolId: userProfile?.school_id, classroomIds, studentIds });
-      const allNotices = await base44.entities.Notice.filter(scopedFilter || { school_id: userProfile.school_id }, '-created_date', 50);
-      return filterByRowLevel({ role: userProfile?.app_role, entity: 'Notice', rows: allNotices, classroomIds, studentIds });
+      // schoolRead applies the notice audience server-side (school-wide —
+      // including a legacy notice stored without `scope` —, the children's
+      // classrooms, the children themselves). No client re-filter on top: a
+      // stricter copy here is how a school-wide notice showed on the parent's
+      // home and not on this page.
+      return schoolRead('Notice', { school_id: userProfile.school_id }, '-created_date', 50);
     },
     enabled: !!userProfile,
   });
@@ -64,7 +56,7 @@ export default function Avisos() {
   const { data: deliveries = [] } = useQuery({
     queryKey: ['noticeDeliveries', user?.id, userProfile?.school_id],
     queryFn: async () => {
-      const rows = await base44.entities.NoticeDelivery.filter({
+      const rows = await schoolRead('NoticeDelivery', {
         school_id: userProfile.school_id,
         recipient_user_id: user.id,
       }, '-created_date', 100);

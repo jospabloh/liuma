@@ -35,7 +35,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import {
   ATTRIBUTION_FIELDS,
+  CLASSROOM_BOUND_ENTITIES,
   POLICY_WRITE,
+  decideCreateTargets,
   decideModifyExisting,
   referencesToCheck,
   stripServerOnlyFields,
@@ -306,14 +308,36 @@ Deno.serve(async (req) => {
       // see this" (e.g. notifyParents) would act on it. Fail closed if the
       // two disagree.
       const studentId = data.student_id;
+      let studentClassroomId: string | null = null;
       if (typeof studentId === 'string' && studentId) {
-        const student: { school_id?: string } | null = await sr.entities.Student.get(studentId).catch(() => null);
+        const student: { school_id?: string; classroom_id?: string } | null = await sr.entities.Student.get(studentId).catch(() => null);
         if (!student || String(student.school_id || '') !== schoolId) {
           return bad(400, 'STUDENT_NOT_IN_SCHOOL', 'student_id does not belong to this school');
         }
+        studentClassroomId = String(student.classroom_id || '') || null;
       }
       const foreignRef = await firstForeignReference(sr, data, schoolId);
       if (foreignRef) return bad(400, 'REFERENCE_NOT_IN_SCHOOL', `${foreignRef} does not belong to this school`);
+
+      // P10 review (2026-09-29): schoolRead shows a classroom's records to its
+      // teachers and a child's to their parents, so a non-ADMIN may only file
+      // them against their OWN classrooms and the children actually in them.
+      if (profile && profile.app_role !== 'ADMIN' && (CLASSROOM_BOUND_ENTITIES.includes(entity) || entity === 'Notice')) {
+        const assignments: Array<{ school_id?: string; teacher_id?: string; classroom_id?: string; is_active?: boolean }> =
+          await sr.entities.TeacherClassroom.filter({ school_id: schoolId, teacher_id: user.id });
+        const assignedClassroomIds = assignments
+          .filter((a) => String(a.school_id || '') === schoolId && String(a.teacher_id || '') === String(user.id) && a.is_active !== false)
+          .map((a) => String(a.classroom_id || ''))
+          .filter(Boolean);
+        const target = decideCreateTargets({
+          entity,
+          appRole: String(profile.app_role || ''),
+          data,
+          assignedClassroomIds,
+          studentClassroomId,
+        });
+        if (!target.ok) return bad(403, target.code, target.message);
+      }
 
       const created = await sr.entities[entity].create(data);
       return Response.json({ ok: true, record: created });

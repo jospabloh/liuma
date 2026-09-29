@@ -17,16 +17,17 @@
 // and results come back already translated (no ids except the student
 // reference Lumi needs for lumiWrite, no English enums, money in MXN).
 //
-// NOTE on the tenant READ architecture: this function reads with the service
-// role, scoped by the caller's profile — the same pattern as exportSchoolData
-// and guardedEntityWrite. It does NOT decide the open owner question (F01:
-// service-role read functions vs. User.data-scoped RLS for the app's own
-// pages); it only makes Lumi independent of that decision.
+// Tenant READ architecture (P10, owner decision): school users read through
+// service-role functions scoped by their own profile. This function and
+// schoolRead (the app's screens) share ./_scope.ts byte for byte — the scope
+// derivation, the per-entity × role row rules and the field projection — so
+// Lumi can never show anyone more than the UI would.
 //
 // NOT VERIFIED LIVE: whether Base44 forwards the chatting user's token when an
 // agent calls a function tool. If it does not, auth.me() fails and this
 // returns UNAUTHENTICATED — it fails closed, never open.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { buildScope } from './_scope.ts';
 import {
   type Profile, type Scope,
   selectCurrentProfile, profileProblem, canRunIntent, QUERY_INTENTS, scopeRows,
@@ -49,32 +50,13 @@ type Row = Record<string, any>;
 // intent does not re-fetch them one by one (one scope object per request).
 const scopedStudents = new WeakMap<Scope, Row[]>();
 
-async function buildScope(sr: Sr, userId: string, profile: Profile): Promise<Scope> {
-  const schoolId = String(profile.school_id);
-  const role = profile.app_role as Scope['role'];
-  let classroomIds: string[] = [];
-  let studentIds: string[] = [];
-  let loaded: Row[] = [];
-
-  if (role === 'PARENT') {
-    const links: Row[] = await sr.entities.ParentStudent.filter({ parent_id: userId, school_id: schoolId, status: 'ACTIVE' });
-    studentIds = [...new Set(links.map((l) => String(l.student_id || '')).filter(Boolean))];
-    const students: Row[] = (await Promise.all(studentIds.map((id) => sr.entities.Student.get(id).catch(() => null))))
-      .filter((s: Row | null) => s && String(s.school_id) === schoolId);
-    loaded = students;
-    studentIds = students.map((s) => String(s.id));
-    classroomIds = [...new Set(students.map((s) => String(s.classroom_id || '')).filter(Boolean))];
-  } else if (role === 'TEACHER') {
-    const assignments: Row[] = await sr.entities.TeacherClassroom.filter({ teacher_id: userId, school_id: schoolId });
-    classroomIds = [...new Set(assignments.filter((a) => a.is_active !== false).map((a) => String(a.classroom_id || '')).filter(Boolean))];
-    const perClass: Row[][] = await Promise.all(classroomIds.map((cid) =>
-      sr.entities.Student.filter({ school_id: schoolId, classroom_id: cid })));
-    loaded = perClass.flat().filter((s) => s.is_active !== false && String(s.school_id) === schoolId);
-    studentIds = loaded.map((s) => String(s.id));
-  }
-  const scope: Scope = { userId, schoolId, role, classroomIds, studentIds };
-  scopedStudents.set(scope, loaded);
-  return scope;
+// The caller's scope comes from ./_scope.ts's buildScope — the same
+// derivation schoolRead uses for the app's screens (P10) — plus the Student
+// rows it had to load anyway, kept so each intent does not re-fetch them.
+async function loadScope(sr: Sr, userId: string, profile: Profile): Promise<Scope> {
+  const bundle = await buildScope(sr, userId, profile);
+  scopedStudents.set(bundle.scope, bundle.students);
+  return bundle.scope;
 }
 
 async function schoolStudents(sr: Sr, scope: Scope): Promise<Row[]> {
@@ -118,7 +100,7 @@ Deno.serve(async (req) => {
     if (problem) return fail(403, problem);
     if (!canRunIntent(String(profile!.app_role), intent)) return fail(403, 'NOT_ALLOWED_FOR_ROLE');
 
-    const scope = await buildScope(sr, user.id, profile!);
+    const scope = await loadScope(sr, String(user.id), profile!);
     const today = mexicoToday();
     const school = await sr.entities.School.get(scope.schoolId).catch(() => null);
     const base = {

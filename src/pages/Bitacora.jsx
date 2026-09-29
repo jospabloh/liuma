@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -45,7 +45,7 @@ export default function Bitacora() {
     queryKey: ['diaryEntries', studentIds, dateStr],
     queryFn: async () => {
       if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'DiaryEntry')) return [];
-      const entries = await base44.entities.DiaryEntry.filter({ 
+      const entries = await schoolRead('DiaryEntry', { 
         date: dateStr,
         school_id: userProfile?.school_id
       });

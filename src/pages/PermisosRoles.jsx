@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import PageHeader from '@/components/ui/PageHeader';
@@ -78,7 +79,7 @@ export default function PermisosRoles() {
 
   const { data: schoolProfiles = [], refetch: refetchSchoolProfiles } = useQuery({
     queryKey: ['schoolUserProfiles', userProfile?.school_id],
-    queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
+    queryFn: () => schoolRead('UserProfile', { school_id: userProfile.school_id }),
     enabled: !!userProfile?.school_id,
   });
 
@@ -92,7 +93,7 @@ export default function PermisosRoles() {
   });
   const { data: pendingRoleChanges = [], refetch: refetchPendingRoleChanges } = useQuery({
     queryKey: ['pendingRoleChanges', userProfile?.school_id],
-    queryFn: () => base44.entities[PENDING_CHANGE_ENTITY].filter({ school_id: userProfile.school_id, type: 'ROLE_CHANGE' }),
+    queryFn: () => schoolRead(PENDING_CHANGE_ENTITY, { school_id: userProfile.school_id, type: 'ROLE_CHANGE' }),
     enabled: !!userProfile?.school_id,
   });
 

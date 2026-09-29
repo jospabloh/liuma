@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ export default function ConfiguracionInicial() {
 
   const { data: steps = [], isLoading } = useQuery({
     queryKey: ['setupGuide', userProfile?.school_id],
-    queryFn: () => base44.entities.SchoolSetupGuide.filter(
+    queryFn: () => schoolRead('SchoolSetupGuide', 
       { school_id: userProfile.school_id },
       'step_number'
     ),
@@ -46,29 +47,29 @@ export default function ConfiguracionInicial() {
   });
   const { data: allProfiles = [] } = useQuery({
     queryKey: ['allUserProfiles', userProfile?.school_id],
-    queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
+    queryFn: () => schoolRead('UserProfile', { school_id: userProfile.school_id }),
     enabled: !!userProfile?.school_id,
   });
   const { data: students = [] } = useSchoolStudents(userProfile?.school_id);
   const { data: teacherAssignments = [] } = useQuery({
     queryKey: ['setupTeacherAssignments', userProfile?.school_id],
-    queryFn: () => base44.entities.TeacherClassroom.filter({ school_id: userProfile.school_id, is_active: true }),
+    queryFn: () => schoolRead('TeacherClassroom', { school_id: userProfile.school_id, is_active: true }),
     enabled: !!userProfile?.school_id,
   });
   const { data: parentLinks = [] } = useQuery({
     queryKey: ['setupParentLinks', userProfile?.school_id],
-    queryFn: () => base44.entities.ParentStudent.filter({ school_id: userProfile.school_id, status: 'ACTIVE' }),
+    queryFn: () => schoolRead('ParentStudent', { school_id: userProfile.school_id, status: 'ACTIVE' }),
     enabled: !!userProfile?.school_id,
   });
   const { data: concepts = [] } = useQuery({
     queryKey: ['setupPaymentConcepts', userProfile?.school_id],
-    queryFn: () => base44.entities.PaymentConcept.filter({ school_id: userProfile.school_id, is_active: true }),
+    queryFn: () => schoolRead('PaymentConcept', { school_id: userProfile.school_id, is_active: true }),
     enabled: !!userProfile?.school_id,
   });
   // One request for the whole school instead of one per student, in sequence.
   const { data: emergencyContacts = [] } = useQuery({
     queryKey: ['setupEmergencyContacts', userProfile?.school_id],
-    queryFn: () => base44.entities.EmergencyContact.filter(
+    queryFn: () => schoolRead('EmergencyContact', 
       { school_id: userProfile.school_id },
       undefined,
       5000,

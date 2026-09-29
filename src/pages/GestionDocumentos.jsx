@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -40,7 +41,7 @@ export default function GestionDocumentos() {
 
   const { data: documents, isLoading } = useQuery({
     queryKey: ['officialDocuments', userProfile?.school_id],
-    queryFn: () => base44.entities.OfficialDocument.filter({ school_id: userProfile.school_id }, '-created_date'),
+    queryFn: () => schoolRead('OfficialDocument', { school_id: userProfile.school_id }, '-created_date'),
     enabled: !!userProfile?.school_id,
   });
 
@@ -51,7 +52,7 @@ export default function GestionDocumentos() {
       
       // Mark previous documents of same type as not current
       if (data.document_type === 'MENU' || data.document_type === 'UNIFORM_CATALOG') {
-        const previousDocs = await base44.entities.OfficialDocument.filter({
+        const previousDocs = await schoolRead('OfficialDocument', {
           school_id: userProfile.school_id,
           document_type: data.document_type,
           is_current: true

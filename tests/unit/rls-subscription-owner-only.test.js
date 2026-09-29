@@ -58,12 +58,18 @@ test('getMySubscription gives non-admins only status, tier and trial end', () =>
 
 // The welcome flag moved off the billing entity onto the user's own profile so
 // the subscription can stay owner-write-only.
-test('welcome flag lives on the self-writable UserProfile', () => {
+test('welcome flag lives on the user\'s own UserProfile', () => {
   const profile = readJsonc('base44/entities/UserProfile.jsonc');
   assert.ok(profile.properties.welcome_message_shown, 'UserProfile declares welcome_message_shown');
 
   const home = read('src/pages/Home.jsx');
-  // Home marks the welcome shown by writing the user's own profile, not the subscription.
-  assert.match(home, /UserProfile\.update\(userProfile\.id,\s*\{\s*welcome_message_shown:\s*true/);
+  // Home marks the welcome shown on the user's own profile, not the
+  // subscription — through markWelcomeShown, since UserProfile.update is
+  // service-role only (P10 review).
+  assert.match(home, /invokeFunction\(base44, 'markWelcomeShown', \{ profileId: userProfile\.id \}\)/);
+  assert.doesNotMatch(home, /UserProfile\.update\(/);
+  const fn = read('base44/functions/markWelcomeShown/entry.ts');
+  assert.match(fn, /String\(profile\.user_id \|\| ''\) !== String\(user\.id\)/);
+  assert.match(fn, /UserProfile\.update\(profileId, \{ welcome_message_shown: true \}\)/);
   assert.doesNotMatch(home, /SchoolSubscription\.update\([^)]*welcome_message_shown/);
 });

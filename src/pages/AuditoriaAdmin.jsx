@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
@@ -20,7 +20,7 @@ export default function AuditoriaAdmin() {
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['auditLogs', userProfile?.school_id],
-    queryFn: () => base44.entities.AuditLog.filter({ school_id: userProfile.school_id }, '-created_date', 200),
+    queryFn: () => schoolRead('AuditLog', { school_id: userProfile.school_id }, '-created_date', 200),
     enabled: !!userProfile && userProfile.app_role === 'ADMIN',
   });
 

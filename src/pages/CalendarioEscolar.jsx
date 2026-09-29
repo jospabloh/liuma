@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { sendDueEventReminders } from '@/lib/events/reminders';
 import { useRunOnce } from '@/hooks/useRunOnce';
@@ -28,7 +29,7 @@ export default function CalendarioEscolar() {
   const { data: events = [], isLoading: loadingEvents } = useQuery({
     queryKey: ['events', userProfile?.school_id],
     queryFn: async () => {
-      return await base44.entities.Event.filter({ 
+      return await schoolRead('Event', { 
         school_id: userProfile.school_id 
       }, 'date');
     },
@@ -38,7 +39,7 @@ export default function CalendarioEscolar() {
   const { data: classrooms = [] } = useQuery({
     queryKey: ['classrooms', userProfile?.school_id],
     queryFn: async () => {
-      return await base44.entities.Classroom.filter({ 
+      return await schoolRead('Classroom', { 
         school_id: userProfile.school_id,
         is_active: true
       });

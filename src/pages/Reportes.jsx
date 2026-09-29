@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { schoolRead, SCHOOL_READ_ALL } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -12,7 +12,7 @@ import { createPageUrl } from '@/utils';
 import { Button } from '@/components/ui/button';
 import { canReadEntity } from '@/lib/authorization/policy';
 import { canExportReports, exportReportCSV, exportReportPDF } from '@/lib/report-export';
-import { attendanceSummary, diaryCoverage, fetchAllPages } from '@/lib/reports/kpis';
+import { attendanceSummary, diaryCoverage } from '@/lib/reports/kpis';
 import { formatLocalDate, isBeforeToday, parseLocalDate } from '@/lib/dates';
 import { toast } from 'sonner';
 
@@ -27,20 +27,23 @@ export default function Reportes() {
 
   const { data: students = [] } = useQuery({
     queryKey: ['allStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({ school_id: userProfile.school_id }),
+    queryFn: () => schoolRead('Student', { school_id: userProfile.school_id }),
     enabled: !!userProfile,
   });
 
   const { data: classrooms = [] } = useQuery({
     queryKey: ['allClassrooms', userProfile?.school_id],
-    queryFn: () => base44.entities.Classroom.filter({ school_id: userProfile.school_id, is_active: true }),
+    queryFn: () => schoolRead('Classroom', { school_id: userProfile.school_id, is_active: true }),
     enabled: !!userProfile,
   });
 
   // Date range and salón are applied by the server (same shape as
-  // ResumenAsistencia), and every cursor page is read: the page used to pull
-  // the school's whole history and filter it here, which the SDK silently cut
-  // at 5,000 records — a month of a 300-student school.
+  // ResumenAsistencia), and every page is read: the page used to pull the
+  // school's whole history and filter it here, which the SDK silently cut at
+  // 5,000 records — a month of a 300-student school. Through schoolRead
+  // (P10): the entity RLS only shows a director the rows they wrote
+  // themselves. SCHOOL_READ_ALL throws "acota las fechas" rather than
+  // report a cut total.
   const rangeValid = !!filters.dateFrom && !!filters.dateTo && filters.dateFrom <= filters.dateTo;
   const rangeQuery = (schoolId) => ({
     school_id: schoolId,
@@ -50,29 +53,25 @@ export default function Reportes() {
 
   const { data: attendances = [], isError: attendanceError, isLoading: attendanceLoading } = useQuery({
     queryKey: ['attendanceReport', userProfile?.school_id, filters.dateFrom, filters.dateTo, filters.classroomId],
-    queryFn: () => fetchAllPages(base44.entities.Attendance, rangeQuery(userProfile.school_id), {
-      fields: ['student_id', 'classroom_id', 'date', 'status'],
-    }),
+    queryFn: () => schoolRead('Attendance', rangeQuery(userProfile.school_id), 'date', SCHOOL_READ_ALL),
     enabled: !!userProfile && rangeValid && canReadEntity(role, 'Attendance'),
   });
 
   const { data: diaries = [], isError: diariesError, isLoading: diariesLoading } = useQuery({
     queryKey: ['diariesReport', userProfile?.school_id, filters.dateFrom, filters.dateTo, filters.classroomId],
-    queryFn: () => fetchAllPages(base44.entities.DiaryEntry, rangeQuery(userProfile.school_id), {
-      fields: ['student_id', 'classroom_id', 'date'],
-    }),
+    queryFn: () => schoolRead('DiaryEntry', rangeQuery(userProfile.school_id), 'date', SCHOOL_READ_ALL),
     enabled: !!userProfile && rangeValid && canReadEntity(role, 'DiaryEntry'),
   });
 
   const { data: pendingCharges = [] } = useQuery({
     queryKey: ['pendingCharges', userProfile?.school_id],
-    queryFn: () => base44.entities.ChargeItem.filter({ school_id: userProfile.school_id, status: 'PENDING' }),
+    queryFn: () => schoolRead('ChargeItem', { school_id: userProfile.school_id, status: 'PENDING' }),
     enabled: !!userProfile && canReadEntity(role, 'ChargeItem'),
   });
 
   const { data: notices = [] } = useQuery({
     queryKey: ['notices', userProfile?.school_id],
-    queryFn: () => base44.entities.Notice.filter({ school_id: userProfile.school_id }, '-created_date', 100),
+    queryFn: () => schoolRead('Notice', { school_id: userProfile.school_id }, '-created_date', 100),
     enabled: !!userProfile && canReadEntity(role, 'Notice'),
   });
 
@@ -80,7 +79,7 @@ export default function Reportes() {
     queryKey: ['upcomingEvents', userProfile?.school_id],
     // Upcoming = dated today or later, filtered by the server. Taking the first
     // 10 by date and filtering here returned nothing once a school had 10 past events.
-    queryFn: () => base44.entities.Event.filter({ school_id: userProfile.school_id, date: { $gte: today } }, 'date', 10),
+    queryFn: () => schoolRead('Event', { school_id: userProfile.school_id, date: { $gte: today } }, 'date', 10),
     enabled: !!userProfile,
   });
 

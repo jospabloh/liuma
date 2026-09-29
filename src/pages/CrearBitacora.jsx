@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -75,7 +76,7 @@ export default function CrearBitacora() {
   const { data: classroom } = useQuery({
     queryKey: ['classroom', classroomId],
     queryFn: async () => {
-      const classrooms = await base44.entities.Classroom.filter({ id: classroomId });
+      const classrooms = await schoolRead('Classroom', { id: classroomId });
       return classrooms[0];
     },
     enabled: !!classroomId,
@@ -83,7 +84,7 @@ export default function CrearBitacora() {
 
   const { data: students = [], isLoading } = useQuery({
     queryKey: ['students', classroomId],
-    queryFn: () => base44.entities.Student.filter({ 
+    queryFn: () => schoolRead('Student', { 
       classroom_id: classroomId,
       is_active: true 
     }),
@@ -92,7 +93,7 @@ export default function CrearBitacora() {
 
   const { data: todayDiaries = [] } = useQuery({
     queryKey: ['todayDiaries', today, classroomId],
-    queryFn: () => base44.entities.DiaryEntry.filter({ 
+    queryFn: () => schoolRead('DiaryEntry', { 
       date: today,
       classroom_id: classroomId
     }),

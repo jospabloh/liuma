@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -27,7 +28,7 @@ export default function GestionPedidosAdmin() {
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ['allUniformOrders', userProfile?.school_id],
-    queryFn: () => base44.entities.UniformOrder.filter({ school_id: userProfile.school_id }, '-created_date'),
+    queryFn: () => schoolRead('UniformOrder', { school_id: userProfile.school_id }, '-created_date'),
     enabled: !!userProfile?.school_id,
   });
 

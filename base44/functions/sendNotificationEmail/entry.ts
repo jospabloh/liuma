@@ -121,7 +121,8 @@ Deno.serve(async (req) => {
     const sr = base44.asServiceRole;
     const isPlatformOwner = user.role === 'admin';
 
-    let callerProfileRecord: { id?: string; status?: string; app_role?: string; pending_notification_recipients?: string[] } | null = null;
+    type CallerProfileRecord = { id?: string; status?: string; app_role?: string; pending_notification_recipients?: string[] };
+    let callerProfileRecord: CallerProfileRecord | null = null;
     if (!isPlatformOwner) {
       const profiles = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
       // new_user_pending is a self-registration notice: it only makes sense
@@ -130,7 +131,7 @@ Deno.serve(async (req) => {
       const allowedStatuses = eventType === 'new_user_pending' ? ['PENDING'] : ['ACTIVE'];
       const callerProfile = profiles.find((p: { status?: string }) => allowedStatuses.includes(String(p.status))) || null;
       if (!callerProfile) return bad(403, 'NO_PROFILE', 'No qualifying profile in this school');
-      callerProfileRecord = callerProfile as typeof callerProfileRecord;
+      callerProfileRecord = callerProfile as CallerProfileRecord;
 
       const allowedCallerRoles = CALLER_ROLES[eventType];
       if (allowedCallerRoles && !allowedCallerRoles.includes(String((callerProfile as { app_role?: string }).app_role))) {

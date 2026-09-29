@@ -6,12 +6,12 @@ import pluginUnusedImports from "eslint-plugin-unused-imports";
 
 export default [
   {
-    files: [
-      "src/components/**/*.{js,mjs,cjs,jsx}",
-      "src/pages/**/*.{js,mjs,cjs,jsx}",
-      "src/Layout.jsx",
-    ],
-    ignores: ["src/lib/**/*", "src/components/ui/**/*"],
+    // All of src/ — lib/ (authorization, notifications, license model),
+    // hooks/, api/, App.jsx and main.jsx used to be skipped entirely, so a
+    // typo there shipped without a single check. ui/ stays out: it is the
+    // generated shadcn kit, not code this repo maintains.
+    files: ["src/**/*.{js,mjs,cjs,jsx}"],
+    ignores: ["src/components/ui/**/*"],
     ...pluginJs.configs.recommended,
     ...pluginReact.configs.flat.recommended,
     languageOptions: {
@@ -55,6 +55,11 @@ export default [
         { ignore: ["cmdk-input-wrapper", "toast-close"] },
       ],
       "react-hooks/rules-of-hooks": "error",
+      // Warn, not error: a stale closure in an effect is a real bug class,
+      // but the existing call sites need a case-by-case read, not a blanket
+      // autofix. Warnings are visible because `npm run lint` no longer runs
+      // with --quiet.
+      "react-hooks/exhaustive-deps": "warn",
     },
   },
 ];

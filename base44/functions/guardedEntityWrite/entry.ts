@@ -79,8 +79,8 @@ type Override = { user_profile_id?: string; resource?: string; action?: string; 
 // client-accessible source (base44.auth.me() never populates user.data on the
 // client), so this function re-derives the same linkage the RLS token can't
 // be read from, via the ParentStudent table directly (asServiceRole).
-// deno-lint-ignore no-explicit-any
 async function parentCanCreateEventCharge(
+  // deno-lint-ignore no-explicit-any
   sr: any,
   userId: string,
   data: Record<string, unknown>,
@@ -102,8 +102,8 @@ async function parentCanCreateEventCharge(
 // record itself, the only server-side source of what the fee actually is.
 // Returns null if the event doesn't check out (wrong school, no cost, or
 // doesn't exist), which the caller treats as "carve-out does not apply."
-// deno-lint-ignore no-explicit-any
 async function buildEventChargeData(
+  // deno-lint-ignore no-explicit-any
   sr: any,
   schoolId: string,
   studentId: string,

@@ -17,8 +17,22 @@ jobs:
       - name: Check formatting
         run: deno fmt --check deno/
 
+      # Lints deno/ AND base44/functions/ (see deno.json's lint.include).
+      # `no-import-prefix` is excluded there on purpose: every Base44 function
+      # deploys on its own, without this repo's deno.json, so the inline
+      # `npm:@base44/sdk@x` specifier is the only import form that resolves in
+      # production.
       - name: Lint
-        run: deno lint deno/
+        run: deno lint deno/ base44/functions/
+
+      # Type-checks every deployed backend function. Before this step nothing
+      # in CI looked at base44/functions/ at all, so a typo in
+      # guardedEntityWrite / notifyParents / sendNotificationEmail was first
+      # found by a paying school. --node-modules-dir=none because the repo
+      # root has a package.json (the Vite app) whose node_modules is not
+      # installed in this job; the functions only import `npm:` specifiers.
+      - name: Type-check Base44 functions
+        run: deno check --node-modules-dir=none base44/functions/*/entry.ts
 
       - name: Test
         run: deno test --no-prompt deno/

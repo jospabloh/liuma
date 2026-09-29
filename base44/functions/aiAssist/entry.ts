@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
       if (!historyRaw) return bad(400, 'BAD_HISTORY', 'history must be an array');
       if (historyRaw.length > MAX_QUESTIONS) return bad(400, 'BAD_HISTORY', `history may not exceed ${MAX_QUESTIONS} turns`);
 
-      const history = historyRaw.map((turn) => ({
+      const history = historyRaw.map((turn: { question?: unknown; answer?: unknown } | null) => ({
         question: String(turn?.question || ''),
         answer: String(turn?.answer || ''),
       }));

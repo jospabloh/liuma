@@ -87,13 +87,14 @@ Deno.serve(async (req) => {
 
     const sr = base44.asServiceRole;
     const isPlatformOwner = user.role === 'admin';
+    const userId = user.id;
 
-    async function assertCallerCanNotify(schoolId: string) {
+    const assertCallerCanNotify = async (schoolId: string) => {
       if (isPlatformOwner) return;
-      const profiles: Array<{ status?: string; app_role?: string }> = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
+      const profiles: Array<{ status?: string; app_role?: string }> = await sr.entities.UserProfile.filter({ user_id: userId, school_id: schoolId });
       const profile = profiles.find((p) => p.status === 'ACTIVE' && ['TEACHER', 'ADMIN'].includes(String(p.app_role)));
       if (!profile) throw { status: 403, code: 'NO_PROFILE', message: 'Requires an active TEACHER or ADMIN profile in this school' };
-    }
+    };
 
     // Base44 security scan, 2026-09-28 (confirmed): assertCallerCanNotify
     // only checks the CALLER's profile against the RECORD's school_id — it
@@ -106,11 +107,11 @@ Deno.serve(async (req) => {
     // if the two disagree closes that cross-school targeting without
     // touching the (legitimate) same-school case of an ADMIN notifying for
     // a different teacher's record.
-    function assertStudentInSchool(student: { school_id?: string } | null, schoolId: string) {
+    const assertStudentInSchool = (student: { school_id?: string } | null, schoolId: string) => {
       if (!student || String(student.school_id || '') !== schoolId) {
         throw { status: 404, code: 'NOT_FOUND', message: 'Student not found in this school' };
       }
-    }
+    };
 
     if (kind === 'absence') {
       const record = await sr.entities.Attendance.get(recordId).catch(() => null);

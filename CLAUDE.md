@@ -592,8 +592,10 @@ ve en runtime como `bad signature` en cada llamada, que parece un secreto mal
 puesto y no lo es— y afirma lo que este módulo promete: un cuerpo firmado por
 una app que dice ser otra **no** verifica. No tiene imports externos ni toca la
 red, así que corre en un sandbox donde `jsr.io` y `deno.land` están bloqueados.
-El test canónico está en el repo estándar. Ojo: `ci-deno.yml` lintea `deno/`,
-**no** `base44/functions/`, así que este directorio no está gateado por CI.
+El test canónico está en el repo estándar. **Actualizado 2026-09-29:**
+`ci-deno.yml` ya corre `deno lint` y `deno check --node-modules-dir=none` sobre
+`base44/functions/` (antes sólo miraba `deno/`); `deno fmt` y `deno test`
+siguen acotados a `deno/`.
 
 **La criptografía en línea que esto reemplaza ya no está.** Cada `acaciaControl`
 llevaba su propio `stableStringify` / `hmacHex` / `timingSafeEqual`, copiados a

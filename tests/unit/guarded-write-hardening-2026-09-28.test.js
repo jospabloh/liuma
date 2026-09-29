@@ -101,7 +101,8 @@ test('guardedEntityWrite rejects a student_id that does not belong to the target
 
 test('notifyParents fails closed when the record\'s student is not in the record\'s own school', () => {
   const source = read('base44/functions/notifyParents/entry.ts');
-  assert.match(source, /function assertStudentInSchool\(/);
+  // Declared as a const arrow since deno lint (no-inner-declarations) runs in CI.
+  assert.match(source, /(?:function assertStudentInSchool\(|const assertStudentInSchool = \()/);
   // Called on both the absence and diary paths, right after fetching the student.
   const calls = source.match(/assertStudentInSchool\(student, String\(record\.school_id \|\| ''\)\);/g) || [];
   assert.equal(calls.length, 2, 'expected assertStudentInSchool on both the absence and diary paths');

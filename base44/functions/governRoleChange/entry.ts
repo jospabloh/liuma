@@ -184,7 +184,9 @@ Deno.serve(async (req) => {
 
     let appliedProfile: Profile | null = null;
     if (decision === 'approve') {
-      appliedProfile = await sr.entities.UserProfile.update(change.target_profile_id, { app_role: toRole });
+      // `target` was resolved from change.target_profile_id and is non-null on
+      // this path (checked above), so this is the same id, typed as a string.
+      appliedProfile = await sr.entities.UserProfile.update(String(change.target_profile_id), { app_role: toRole });
     }
 
     return Response.json({ ok: true, change: updatedChange, applied: appliedProfile });

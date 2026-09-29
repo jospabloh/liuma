@@ -29,7 +29,9 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    const user = await base44.auth.me().catch(() => null);
+    // The pinned SDK (0.8.6) types auth.me() as an AxiosResponse, but at runtime
+    // its interceptor resolves to the user record itself.
+    const user = (await base44.auth.me().catch(() => null)) as { id?: string; email?: string; role?: string } | null;
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
@@ -46,7 +48,8 @@ Deno.serve(async (req) => {
 
     // Re-read the ticket as the service role (authoritative copy, not client input).
     const sr = base44.asServiceRole;
-    const record = await sr.entities[entity].get(ticketId).catch(() => null);
+    const entities = sr.entities as unknown as Record<string, { get(id: string): Promise<Record<string, unknown>> }>;
+    const record = await entities[entity].get(ticketId).catch(() => null);
     if (!record) return Response.json({ error: 'ticket not found' }, { status: 404 });
 
     // Ownership guard: only notify for a ticket the caller actually raised (or an

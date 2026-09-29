@@ -6,11 +6,15 @@
     "include": ["deno/"]
   },
   "lint": {
-    "include": ["deno/"]
+    "include": ["deno/", "base44/functions/"],
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
   },
   "tasks": {
     "fmt": "deno fmt --check deno/",
-    "lint": "deno lint deno/",
+    "lint": "deno lint deno/ base44/functions/",
+    "check:functions": "deno check --node-modules-dir=none base44/functions/*/entry.ts",
     "test": "deno test --no-prompt deno/"
   }
 }

@@ -18,6 +18,7 @@ import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
+import { useSchoolStudents } from '@/hooks/useSchoolStudents';
 import {
   Dialog,
   DialogContent,
@@ -57,14 +58,7 @@ export default function AvisosAdmin() {
     enabled: !!userProfile,
   });
 
-  const { data: students = [] } = useQuery({
-    queryKey: ['allStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({ 
-      school_id: userProfile.school_id,
-      is_active: true 
-    }),
-    enabled: !!userProfile,
-  });
+  const { data: students = [] } = useSchoolStudents(userProfile?.school_id);
 
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['adminNotices', userProfile?.school_id],
@@ -78,7 +72,12 @@ export default function AvisosAdmin() {
     mutationFn: async (data) => {
       const notice = await guardedCreate('Notice', data);
 
-      const activeLinks = await base44.entities.ParentStudent.filter({ status: 'ACTIVE' });
+      // Scoped to this school: the client-side filter below already drops other
+      // schools' links, but there is no reason to download them first.
+      const activeLinks = await base44.entities.ParentStudent.filter({
+        school_id: userProfile.school_id,
+        status: 'ACTIVE',
+      });
       const schoolStudentIds = new Set(students.map((student) => student.id));
       const recipients = activeLinks.filter((link) => {
         if (!schoolStudentIds.has(link.student_id)) return false;
@@ -122,7 +121,8 @@ export default function AvisosAdmin() {
       return notice;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['adminNotices']);
+      queryClient.invalidateQueries({ queryKey: ['adminNotices'] });
+      queryClient.invalidateQueries({ queryKey: ['adminUnreadUrgentNotices'] });
       toast.success('Aviso enviado correctamente');
       setShowWizard(false);
       resetForm();

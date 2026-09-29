@@ -19,6 +19,20 @@ const CODE_MESSAGES = {
   UNAUTHENTICATED: 'Tu sesión expiró. Vuelve a iniciar sesión.',
   NOT_FOUND: 'Ese registro ya no existe. Recarga la página.',
   STUDENT_NOT_IN_SCHOOL: 'Ese alumno no pertenece a tu escuela.',
+  // guardedEntityWrite, P10b.
+  SCHOOL_MISMATCH: 'Ese registro es de otra escuela. Recarga la página.',
+  REFERENCE_NOT_IN_SCHOOL: 'Uno de los datos elegidos no pertenece a tu escuela. Recarga la página.',
+  USER_NOT_IN_SCHOOL: 'Esa persona ya no está activa en tu escuela con ese rol.',
+  INVALID_FIELD: 'Uno de los datos no tiene un formato válido. Revísalo e inténtalo de nuevo.',
+  MISSING_FIELDS: 'Falta un dato obligatorio.',
+  NOT_RECIPIENT: 'Este aviso no está dirigido a ti.',
+  INACTIVE_PROFILE: 'Tu perfil no está activo en esta escuela.',
+  TOO_MANY_RECIPIENTS: 'Este aviso tiene demasiados destinatarios para enviarse de una vez.',
+  TICKET_NOT_SCHOOL_TIER: 'Este ticket ya lo atiende soporte LIUMA.',
+  NOT_AUTHOR: 'Solo quien lo creó o la dirección puede hacer este cambio.',
+  CLASSROOM_NOT_ASSIGNED: 'Ese salón no está asignado a ti.',
+  STUDENT_NOT_IN_CLASSROOM: 'Ese alumno no está en ese salón.',
+  SCHOOL_NOTICE_ADMIN_ONLY: 'Solo la dirección puede enviar avisos a toda la escuela.',
 };
 
 const STATUS_MESSAGES = {

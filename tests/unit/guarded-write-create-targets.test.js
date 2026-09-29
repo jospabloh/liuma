@@ -32,8 +32,9 @@ test('notices: CLASSROOM and STUDENT targets inside the teacher\'s classrooms', 
   assert.equal(teacher('Notice', { scope: 'STUDENT', student_id: 's2' }, 'c2').code, 'CLASSROOM_NOT_ASSIGNED');
   assert.equal(teacher('Notice', { scope: 'STUDENT', student_id: 's1', classroom_id: 'c9' }, 'c1').code, 'STUDENT_NOT_IN_CLASSROOM');
   assert.equal(teacher('Notice', { scope: 'STUDENT' }).code, 'CLASSROOM_NOT_ASSIGNED');
-  // A school-wide notice is not a classroom target (unchanged).
-  assert.equal(teacher('Notice', { scope: 'SCHOOL' }).ok, true);
+  // A school-wide notice is ADMIN-only since the P10b review: publishing it
+  // fans out to every family in the school.
+  assert.equal(teacher('Notice', { scope: 'SCHOOL' }).code, 'SCHOOL_NOTICE_ADMIN_ONLY');
 });
 
 test('an ADMIN is not restricted, and unrelated entities pass', () => {
@@ -44,6 +45,8 @@ test('an ADMIN is not restricted, and unrelated entities pass', () => {
 test('guardedEntityWrite applies it on create for every non-ADMIN', () => {
   const entry = fs.readFileSync(new URL('../../base44/functions/guardedEntityWrite/entry.ts', import.meta.url), 'utf8');
   assert.match(entry, /decideCreateTargets\(\{/);
-  assert.match(entry, /TeacherClassroom\.filter\(\{ school_id: schoolId, teacher_id: user\.id \}\)/);
+  assert.match(entry, /assignedClassroomIds: await assignedClassroomIdsFor\(sr, schoolId, String\(user\.id\)\)/);
+  const helper = fs.readFileSync(new URL('../../base44/functions/guardedEntityWrite/_schoolWrite.ts', import.meta.url), 'utf8');
+  assert.match(helper, /TeacherClassroom\.filter\(\{ school_id: schoolId, teacher_id: userId \}\)/);
   assert.match(entry, /profile\.app_role !== 'ADMIN' && \(CLASSROOM_BOUND_ENTITIES\.includes\(entity\) \|\| entity === 'Notice'\)/);
 });

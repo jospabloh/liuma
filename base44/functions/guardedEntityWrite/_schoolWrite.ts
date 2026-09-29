@@ -28,10 +28,13 @@
 // thing against an in-memory database with two schools.
 import {
   buildSchoolWrite,
+  decideCreateTargets,
   decideSchoolRecord,
   effectiveLicenseIsReadOnly,
   licenseExempt,
+  licenseExemptPatch,
   planNoticeDeliveries,
+  reactivatesGrant,
   profileProblem,
   referencesToCheck,
   schoolWriteRule,
@@ -88,6 +91,19 @@ export async function writeAudit(sr: Db, row: Record<string, unknown>, now = new
   }
 }
 
+/**
+ * The classrooms `userId` is ACTIVELY assigned to in `schoolId` — what a
+ * non-ADMIN's targets are held to (decideCreateTargets). Shared with entry.ts.
+ */
+export async function assignedClassroomIdsFor(sr: Db, schoolId: string, userId: string): Promise<string[]> {
+  const rows: Array<{ school_id?: string; teacher_id?: string; classroom_id?: string; is_active?: boolean }> =
+    await sr.entities.TeacherClassroom.filter({ school_id: schoolId, teacher_id: userId });
+  return (rows || [])
+    .filter((a) => String(a.school_id || '') === schoolId && String(a.teacher_id || '') === String(userId) && a.is_active !== false)
+    .map((a) => String(a.classroom_id || ''))
+    .filter(Boolean);
+}
+
 async function firstForeignUser(sr: Db, entity: string, data: Record<string, unknown>, schoolId: string): Promise<string | null> {
   for (const [field, roles, userId] of userReferencesToCheck(entity, data)) {
     const profiles: CallerProfile[] = await sr.entities.UserProfile.filter({ user_id: userId, school_id: schoolId });
@@ -115,27 +131,53 @@ async function fanOutNoticeDeliveries(args: {
   if (!notice || String(notice.school_id || '') !== schoolId) {
     return fail(400, 'REFERENCE_NOT_IN_SCHOOL', 'notice_id does not belong to this school');
   }
-  // A teacher publishes their own notices only (guardedEntityWrite already
-  // held that notice to their classrooms when it was created).
-  if (!isPlatformOwner && profile?.app_role !== 'ADMIN' && String(notice.author_id || '') !== String(user.id)) {
+  const isStaffAdmin = isPlatformOwner || profile?.app_role === 'ADMIN';
+  // A teacher publishes their own notices only…
+  if (!isStaffAdmin && String(notice.author_id || '') !== String(user.id)) {
     return fail(403, 'NOT_AUTHOR', 'Only the notice\'s author or a school ADMIN may publish it');
   }
 
   const scope = String(notice.scope || 'SCHOOL');
   let students: Array<Record<string, unknown>> = [];
+  let studentClassroomId: string | null = null;
   if (scope === 'STUDENT') {
     const one = notice.student_id ? await sr.entities.Student.get(String(notice.student_id)).catch(() => null) : null;
     students = one ? [one] : [];
-  } else if (scope === 'CLASSROOM') {
+    studentClassroomId = one && String(one.school_id || '') === schoolId ? String(one.classroom_id || '') || null : null;
+  }
+  // …and only to the classrooms they teach TODAY. Checked here, at publish
+  // time, against the stored notice — not trusted from the create-time check:
+  // the notice may have been re-targeted since, or the assignment revoked.
+  if (!isStaffAdmin) {
+    const target = decideCreateTargets({
+      entity: 'Notice',
+      appRole: String(profile?.app_role || ''),
+      data: notice,
+      assignedClassroomIds: await assignedClassroomIdsFor(sr, schoolId, String(user.id)),
+      studentClassroomId,
+    });
+    if (!target.ok) return fail(403, target.code, target.message);
+  }
+  if (scope === 'CLASSROOM') {
     students = notice.classroom_id
       ? await sr.entities.Student.filter({ school_id: schoolId, classroom_id: String(notice.classroom_id) }, '-created_date', 5000)
       : [];
-  } else {
+  } else if (scope !== 'STUDENT') {
     students = await sr.entities.Student.filter({ school_id: schoolId }, '-created_date', 5000);
   }
   const links = await sr.entities.ParentStudent.filter({ school_id: schoolId, status: 'ACTIVE' }, '-created_date', 5000);
+  // A parent who left the school (profile no longer ACTIVE) keeps no link that
+  // matters, even if nobody revoked it.
+  const parents: CallerProfile[] = await sr.entities.UserProfile.filter(
+    { school_id: schoolId, app_role: 'PARENT', status: 'ACTIVE' }, '-created_date', 5000);
+  const activeParentIds = (parents || [])
+    .filter((p) => String(p.school_id || '') === schoolId && p.app_role === 'PARENT' && p.status === 'ACTIVE')
+    .map((p) => String(p.user_id || ''))
+    .filter(Boolean);
   const existing = await sr.entities.NoticeDelivery.filter({ notice_id: noticeId }, '-created_date', 5000);
-  const rows = planNoticeDeliveries({ notice, students: students || [], links: links || [], existing: existing || [], schoolId, now });
+  const rows = planNoticeDeliveries({
+    notice, students: students || [], links: links || [], existing: existing || [], schoolId, now, activeParentIds,
+  });
   if (rows.length > MAX_FANOUT) return fail(400, 'TOO_MANY_RECIPIENTS', 'Too many recipients for one notice');
 
   const handler = sr.entities.NoticeDelivery;
@@ -205,7 +247,8 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
   let authorizedAs = 'platform_owner';
   if (!isPlatformOwner) {
     if (!(rule.roles[operation] || []).includes(appRole)) return fail(403, 'FORBIDDEN', 'Not permitted to write this resource');
-    if (!licenseExempt(entity, operation) && await licenseIsReadOnly(sr, schoolId, now)) {
+    if (!licenseExempt(entity, operation) && !licenseExemptPatch(entity, operation, input)
+      && await licenseIsReadOnly(sr, schoolId, now)) {
       return fail(403, 'WRITE_BLOCKED', 'This school\'s subscription is read-only');
     }
     if (existing) {
@@ -252,7 +295,10 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
   }
   const badRef = await firstForeignReference(sr, data, schoolId);
   if (badRef) return fail(400, 'REFERENCE_NOT_IN_SCHOOL', `${badRef} does not belong to this school`);
-  const badUser = await firstForeignUser(sr, entity, data, schoolId);
+  // On create the patch names the person; re-activating a grant re-checks the
+  // stored one (teacher_id/parent_id cannot be changed by an update).
+  const userData = operation === 'update' && existing && reactivatesGrant(entity, data) ? { ...existing, ...data } : data;
+  const badUser = await firstForeignUser(sr, entity, userData, schoolId);
   if (badUser) return fail(400, 'USER_NOT_IN_SCHOOL', `${badUser} is not an active member of this school with that role`);
   if (entity === 'PendingChange') {
     // The rollback must name an override of this school, aimed at the same person.
@@ -263,6 +309,16 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
     if (!override || String(override.school_id || '') !== schoolId || override.user_profile_id !== data.target_profile_id) {
       return fail(400, 'REFERENCE_NOT_IN_SCHOOL', 'payload.override_id is not an override of this school for that profile');
     }
+    // The payload is what a second ADMIN will be asked to approve, so it is
+    // rebuilt from the STORED override — never what the requester wrote
+    // (governRoleChange, for one, reads payload.to_role).
+    data.payload = {
+      override_id: String(override.id),
+      module: override.resource ?? null,
+      action: override.action ?? null,
+      effect: override.effect ?? null,
+      risk_level: 'HIGH',
+    };
   }
 
   if (operation === 'create') {

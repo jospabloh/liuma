@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
+import { humanizeError } from '@/lib/errorMessages';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -82,12 +83,13 @@ export default function GestionEscuela() {
   const createClassroomMutation = useMutation({
     mutationFn: async (data) => {
       const classroom = await guardedCreate('Classroom', data);
+      // Best-effort: the classroom exists already (and the server audited it).
       await recordAuditRow({
         schoolId: userProfile.school_id,
         action: 'CLASSROOM_CREATED',
         entity: 'Classroom',
         entityId: classroom.id,
-      });
+      }).catch((e) => console.error('audit CLASSROOM_CREATED failed', e));
       return classroom;
     },
     onSuccess: () => {
@@ -96,20 +98,21 @@ export default function GestionEscuela() {
       setShowClassroomForm(false);
       setClassroomForm({ name: '', grade: '' });
     },
-    onError: () => {
-      toast.error('Error al crear salón');
+    onError: (error) => {
+      toast.error(`Error al crear salón. ${humanizeError(error)}`);
     }
   });
 
   const createStudentMutation = useMutation({
     mutationFn: async (data) => {
       const student = await guardedCreate('Student', data);
+      // Best-effort: the student exists already (and the server audited it).
       await recordAuditRow({
         schoolId: userProfile.school_id,
         action: 'STUDENT_CREATED',
         entity: 'Student',
         entityId: student.id,
-      });
+      }).catch((e) => console.error('audit STUDENT_CREATED failed', e));
       return student;
     },
     onSuccess: () => {
@@ -119,8 +122,8 @@ export default function GestionEscuela() {
       setShowStudentForm(false);
       setStudentForm({ first_name: '', last_name: '', classroom_id: '', birth_date: '' });
     },
-    onError: () => {
-      toast.error('Error al agregar alumno');
+    onError: (error) => {
+      toast.error(`Error al agregar alumno. ${humanizeError(error)}`);
     }
   });
 

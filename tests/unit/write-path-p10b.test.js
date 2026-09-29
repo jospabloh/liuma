@@ -10,6 +10,9 @@ import {
   POLICY_WRITE,
   decideCreateTargets,
   guardedWriteTable,
+  licenseExemptPatch,
+  planNoticeDeliveries,
+  retargetsRecord,
   selectCurrentProfile as writeSelect,
   profileProblem as writeProblem,
   supportRouting,
@@ -392,6 +395,134 @@ test('only the recipient updates a delivery, and only its read state', async () 
   r = await write('parentA', { entity: 'NoticeDelivery', operation: 'update', id: 'dA1', data: { status: 'READ', read_at: '2000-01-01T00:00:00Z', recipient_user_id: 'u-parentA2', notice_id: 'nB1', school_id: 'sB' } });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.deepEqual(r.dataWrites.at(-1).data, { status: 'READ', read_at: NOW.toISOString() });
+});
+
+// --- P10b review: the fan-out reaches only the teacher's own classrooms -------------
+
+async function withNotice(notice, db = freshDb()) {
+  await db.entities.Notice.create({ school_id: 'sA', author_id: 'u-teacherA', priority: 'NORMAL', ...notice });
+  return db;
+}
+const lastNoticeId = (db) => db.writes.filter((w) => w.entity === 'Notice' && w.op === 'create').at(-1).id;
+
+test('a teacher cannot fan a notice out beyond the classrooms they teach', async () => {
+  // (a) a school-wide notice the teacher wrote
+  let db = await withNotice({ scope: 'SCHOOL' });
+  let r = await write('teacherA', { entity: 'NoticeDelivery', operation: 'create', data: { notice_id: lastNoticeId(db) } }, db);
+  assert.equal(r.status, 403, JSON.stringify(r.body));
+  assert.equal(r.body.code, 'SCHOOL_NOTICE_ADMIN_ONLY');
+  assert.equal(r.db.writes.filter((w) => w.entity === 'NoticeDelivery').length, 0);
+  // (b) a classroom notice pointed at a classroom they do not teach
+  db = await withNotice({ scope: 'CLASSROOM', classroom_id: 'cA2' });
+  r = await write('teacherA', { entity: 'NoticeDelivery', operation: 'create', data: { notice_id: lastNoticeId(db) } }, db);
+  assert.equal(r.body.code, 'CLASSROOM_NOT_ASSIGNED');
+  // (c) a student notice about a child of another classroom
+  db = await withNotice({ scope: 'STUDENT', student_id: 'stuA2' });
+  r = await write('teacherA', { entity: 'NoticeDelivery', operation: 'create', data: { notice_id: lastNoticeId(db) } }, db);
+  assert.equal(r.body.code, 'CLASSROOM_NOT_ASSIGNED');
+  // (d) their own classroom notice, after the assignment was revoked
+  db = freshDb();
+  await db.entities.TeacherClassroom.update('tcA1', { is_active: false });
+  r = await write('teacherA', { entity: 'NoticeDelivery', operation: 'create', data: { notice_id: 'nA1' } }, db);
+  assert.equal(r.body.code, 'CLASSROOM_NOT_ASSIGNED');
+  // An ADMIN still publishes a school-wide notice.
+  db = await withNotice({ scope: 'SCHOOL', author_id: 'u-adminA' });
+  r = await write('adminA', { entity: 'NoticeDelivery', operation: 'create', data: { notice_id: lastNoticeId(db) } }, db);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+});
+
+test('a teacher cannot create a school-wide notice', () => {
+  const d = decideCreateTargets({ entity: 'Notice', appRole: 'TEACHER', data: { scope: 'SCHOOL' }, assignedClassroomIds: ['cA1'], studentClassroomId: null });
+  assert.equal(d.code, 'SCHOOL_NOTICE_ADMIN_ONLY');
+  const missing = decideCreateTargets({ entity: 'Notice', appRole: 'TEACHER', data: {}, assignedClassroomIds: ['cA1'], studentClassroomId: null });
+  assert.equal(missing.code, 'SCHOOL_NOTICE_ADMIN_ONLY', 'no scope reads as SCHOOL');
+});
+
+test('an update that moves a record\'s classroom or scope is re-checked (entry.ts)', () => {
+  assert.equal(retargetsRecord({ classroom_id: 'cA1' }, { title: 'x' }), false);
+  assert.equal(retargetsRecord({ classroom_id: 'cA1' }, { classroom_id: 'cA1' }), false, 'same value is not a move');
+  assert.equal(retargetsRecord({ classroom_id: 'cA1' }, { classroom_id: 'cA2' }), true);
+  assert.equal(retargetsRecord({ scope: 'CLASSROOM' }, { scope: 'SCHOOL' }), true);
+  assert.equal(retargetsRecord({ scope: 'CLASSROOM', classroom_id: 'cA1' }, { classroom_id: null }), true);
+  const entry = read('base44/functions/guardedEntityWrite/entry.ts');
+  const update = entry.slice(entry.indexOf("if (operation === 'update') {"));
+  assert.match(update, /retargetsRecord\(existing as Record<string, unknown>, patch\)/);
+  assert.match(update, /const merged = \{ \.\.\.\(existing as Record<string, unknown>\), \.\.\.patch \};/);
+  assert.match(update, /decideCreateTargets\(\{[\s\S]*?data: merged,/);
+  assert.ok(update.indexOf('decideCreateTargets') < update.indexOf('sr.entities[entity].update('), 'checked before the write');
+});
+
+test('a parent whose profile is no longer ACTIVE gets no new notices', async () => {
+  const db = freshDb();
+  await db.entities.UserProfile.update('p-parentA', { status: 'INACTIVE' });
+  const r = await write('teacherA', { entity: 'NoticeDelivery', operation: 'create', data: { notice_id: 'nA1' } }, db);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.created, 0);
+  // Pure planner: the member list is applied when given.
+  const rows = planNoticeDeliveries({
+    notice: { id: 'n', school_id: 'sA', scope: 'SCHOOL' },
+    students: [{ id: 's1', school_id: 'sA' }, { id: 's2', school_id: 'sA' }],
+    links: [{ parent_id: 'p1', student_id: 's1', status: 'ACTIVE' }, { parent_id: 'p2', student_id: 's2', status: 'ACTIVE' }],
+    existing: [],
+    schoolId: 'sA',
+    now: NOW,
+    activeParentIds: ['p1'],
+  });
+  assert.deepEqual(rows.map((row) => row.recipient_user_id), ['p1']);
+});
+
+test('re-activating an assignment or a link re-checks the person is still a member', async () => {
+  // The teacher left; their old assignment cannot be revived.
+  let db = freshDb();
+  await db.entities.TeacherClassroom.update('tcA1', { is_active: false });
+  await db.entities.UserProfile.update('p-teacherA', { status: 'REVOKED' });
+  let r = await write('adminA', { entity: 'TeacherClassroom', operation: 'update', id: 'tcA1', data: { is_active: true } }, db);
+  assert.equal(r.body.code, 'USER_NOT_IN_SCHOOL');
+  // A former parent who is now a teacher cannot be re-linked as a parent.
+  db = freshDb();
+  await db.entities.UserProfile.update('p-parentA2', { app_role: 'TEACHER' });
+  r = await write('adminA', { entity: 'ParentStudent', operation: 'update', id: 'psA2r', data: { status: 'ACTIVE' } }, db);
+  assert.equal(r.body.code, 'USER_NOT_IN_SCHOOL');
+  // Still a parent: the link comes back.
+  r = await write('adminA', { entity: 'ParentStudent', operation: 'update', id: 'psA2r', data: { status: 'ACTIVE' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+});
+
+test('a read-only license still lets a director REVOKE access, and nothing else', async () => {
+  const db = () => freshDb({ subscriptions: [{ id: 'subA', school_id: 'sA', subscription_status: 'suspended' }] });
+  let r = await write('adminA', { entity: 'ParentStudent', operation: 'update', id: 'psA1', data: { status: 'REVOKED' } }, db());
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  r = await write('adminA', { entity: 'TeacherClassroom', operation: 'update', id: 'tcA1', data: { is_active: false } }, db());
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  // Granting, or revoking with anything else in the patch, stays blocked.
+  r = await write('adminA', { entity: 'ParentStudent', operation: 'update', id: 'psA2r', data: { status: 'ACTIVE' } }, db());
+  assert.equal(r.body.code, 'WRITE_BLOCKED');
+  r = await write('adminA', { entity: 'ParentStudent', operation: 'update', id: 'psA1', data: { status: 'REVOKED', is_primary: true } }, db());
+  assert.equal(r.body.code, 'WRITE_BLOCKED');
+  assert.equal(licenseExemptPatch('TeacherClassroom', 'create', { is_active: false }), false);
+  assert.equal(licenseExemptPatch('Student', 'update', { is_active: false }), false);
+});
+
+test('a permission-rollback request carries the STORED override, not the requester\'s payload', async () => {
+  const r = await write('adminA', {
+    entity: 'PendingChange', operation: 'create',
+    data: { target_profile_id: 'p-teacherA', payload: { override_id: 'poA', to_role: 'ADMIN', module: 'Notice', effect: 'allow', risk_level: 'LOW' } },
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.record.payload, { override_id: 'poA', module: 'Homework', action: 'write', effect: 'deny', risk_level: 'HIGH' });
+  const govern = read('base44/functions/governRoleChange/entry.ts');
+  assert.match(govern, /change\.type && change\.type !== 'ROLE_CHANGE'/);
+});
+
+test('an uploaded file URL may carry the original file name', async () => {
+  let r = await write('adminA', { entity: 'OfficialDocument', operation: 'create', data: { title: 'Menú', document_type: 'MENU', file_url: 'https://files.base44.app/x/Menú semanal.pdf' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  r = await write('adminA', { entity: 'SchoolSetupGuide', operation: 'update', id: 'sgA', data: { documents: [{ name: 'Acta constitutiva.pdf', url: 'https://files.base44.app/x/Acta constitutiva.pdf' }] } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  for (const bad of ['javascript:alert(1)', ' javascript:alert(1)', 'data:text/html,x', 'https://', 'ftp://f/x.pdf', 'https://a b/x']) {
+    r = await write('adminA', { entity: 'OfficialDocument', operation: 'create', data: { title: 'X', document_type: 'MENU', file_url: bad } });
+    assert.equal(r.body.code, 'INVALID_FIELD', bad);
+  }
 });
 
 // --- platform owner ---------------------------------------------------------------

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
+import { humanizeError } from '@/lib/errorMessages';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -93,13 +94,16 @@ export default function GestionAlumno() {
   const linkParentMutation = useMutation({
     mutationFn: async (data) => {
       const link = await guardedCreate('ParentStudent', data);
+      // Best-effort: the link is already written (and the server audited it
+      // as RECORD_CREATED) — a failed extra audit row must not report an
+      // error that invites a duplicate retry.
       await recordAuditRow({
         schoolId: userProfile.school_id,
         action: 'PARENT_LINKED',
         entity: 'ParentStudent',
         entityId: link.id,
         context: { student_id: studentId, parent_id: data.parent_id },
-      });
+      }).catch((e) => console.error('audit PARENT_LINKED failed', e));
       return link;
     },
     onSuccess: () => {
@@ -108,8 +112,8 @@ export default function GestionAlumno() {
       setShowLinkForm(false);
       setSelectedParentId('');
     },
-    onError: () => {
-      toast.error('Error al vincular');
+    onError: (error) => {
+      toast.error(`Error al vincular. ${humanizeError(error)}`);
     }
   });
 
@@ -121,14 +125,14 @@ export default function GestionAlumno() {
         action: 'PARENT_UNLINKED',
         entity: 'ParentStudent',
         entityId: linkId,
-      });
+      }).catch((e) => console.error('audit PARENT_UNLINKED failed', e));
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['studentParentLinks']);
       toast.success('Vinculación removida');
     },
-    onError: () => {
-      toast.error('No se pudo quitar la vinculación');
+    onError: (error) => {
+      toast.error(`No se pudo quitar la vinculación. ${humanizeError(error)}`);
     },
   });
 

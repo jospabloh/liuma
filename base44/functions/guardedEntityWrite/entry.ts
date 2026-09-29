@@ -50,10 +50,17 @@ import {
   decideCreateTargets,
   decideModifyExisting,
   effectiveLicenseIsReadOnly,
+  retargetsRecord,
   schoolWriteRule,
   stripServerOnlyFields,
 } from './_policy.ts';
-import { firstForeignReference, resolveCallerProfile, runSchoolWrite, writeAudit } from './_schoolWrite.ts';
+import {
+  assignedClassroomIdsFor,
+  firstForeignReference,
+  resolveCallerProfile,
+  runSchoolWrite,
+  writeAudit,
+} from './_schoolWrite.ts';
 
 const ENTITIES = Object.keys(POLICY_WRITE);
 // effectiveLicenseIsReadOnly (fail closed: no row or an expired trial is
@@ -305,17 +312,11 @@ Deno.serve(async (req) => {
       // teachers and a child's to their parents, so a non-ADMIN may only file
       // them against their OWN classrooms and the children actually in them.
       if (profile && profile.app_role !== 'ADMIN' && (CLASSROOM_BOUND_ENTITIES.includes(entity) || entity === 'Notice')) {
-        const assignments: Array<{ school_id?: string; teacher_id?: string; classroom_id?: string; is_active?: boolean }> =
-          await sr.entities.TeacherClassroom.filter({ school_id: schoolId, teacher_id: user.id });
-        const assignedClassroomIds = assignments
-          .filter((a) => String(a.school_id || '') === schoolId && String(a.teacher_id || '') === String(user.id) && a.is_active !== false)
-          .map((a) => String(a.classroom_id || ''))
-          .filter(Boolean);
         const target = decideCreateTargets({
           entity,
           appRole: String(profile.app_role || ''),
           data,
-          assignedClassroomIds,
+          assignedClassroomIds: await assignedClassroomIdsFor(sr, schoolId, String(user.id)),
           studentClassroomId,
         });
         if (!target.ok) return bad(403, target.code, target.message);
@@ -346,6 +347,33 @@ Deno.serve(async (req) => {
       }
       const foreignRef = await firstForeignReference(sr, patch, schoolId);
       if (foreignRef) return bad(400, 'REFERENCE_NOT_IN_SCHOOL', `${foreignRef} does not belong to this school`);
+
+      // P10b review: the create-time target rule held on update too. Without
+      // it an author could move a diary entry or homework to a classroom they
+      // don't teach (schoolRead then shows it to that classroom's teachers),
+      // or a CLASSROOM notice to another classroom / the whole school and
+      // then publish it. Only an update that CHANGES the target is checked,
+      // over the stored record merged with the patch, so an ordinary edit of
+      // an old record keeps working.
+      if (profile && profile.app_role !== 'ADMIN' && (CLASSROOM_BOUND_ENTITIES.includes(entity) || entity === 'Notice')
+        && retargetsRecord(existing as Record<string, unknown>, patch)) {
+        const merged = { ...(existing as Record<string, unknown>), ...patch };
+        const storedStudentId = String((existing as { student_id?: string }).student_id || '');
+        let studentClassroomId: string | null = null;
+        if (storedStudentId) {
+          const student: { school_id?: string; classroom_id?: string } | null =
+            await sr.entities.Student.get(storedStudentId).catch(() => null);
+          studentClassroomId = student && String(student.school_id || '') === schoolId ? String(student.classroom_id || '') || null : null;
+        }
+        const target = decideCreateTargets({
+          entity,
+          appRole: String(profile.app_role || ''),
+          data: merged,
+          assignedClassroomIds: await assignedClassroomIdsFor(sr, schoolId, String(user.id)),
+          studentClassroomId,
+        });
+        if (!target.ok) return bad(403, target.code, target.message);
+      }
 
       const updated = await sr.entities[entity].update(recordId, patch);
       await writeAudit(sr, {

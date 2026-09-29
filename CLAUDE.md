@@ -1260,3 +1260,46 @@ primero): entidades → funciones → sitio, minutos.
 uno), ni una sesión real de director/maestro/padre. **Sigue abierto:** el cupo
 de alumnos por plan sólo lo aplica la UI (`useStudentQuota`, detrás de
 `PAYWALL_GATING_ENABLED`); `WeeklyMenu` no tiene pantalla de escritura.
+
+**Revisión de P10b (2026-09-29), lo que cambió:**
+
+- **Un maestro sólo reparte avisos a los salones que da hoy.** El reparto
+  (`fanOutNoticeDeliveries`) comprobaba sólo la autoría: un maestro de 1A
+  mandaba copias (con escalamiento URGENT) a las familias de 2A con un aviso
+  `SCHOOL`, o con uno de su salón re-apuntado después a otro. Ahora corre
+  `decideCreateTargets` sobre el aviso **guardado**, al publicar, contra sus
+  `TeacherClassroom` activos (`assignedClassroomIdsFor`, compartido con
+  `entry.ts`). Y un aviso `SCHOOL` (o sin alcance) es **sólo ADMIN** también al
+  crearlo (`SCHOOL_NOTICE_ADMIN_ONLY`): ninguna pantalla de maestro lo ofrecía y
+  `schoolRead` ya se lo muestra a todos los padres.
+- **Un update que mueve el destino se vuelve a comprobar** (`entry.ts`): si el
+  parche cambia `classroom_id` o `scope` de Attendance/DiaryEntry/Homework/
+  Notice (`retargetsRecord`), un no-ADMIN pasa `decideCreateTargets` sobre el
+  registro guardado + parche. Sólo cuando cambia: editar una entrada vieja cuyo
+  alumno ya se movió sigue funcionando.
+- El reparto se salta a los padres cuyo `UserProfile` en la escuela ya no es
+  ACTIVE PARENT aunque nadie haya revocado el vínculo. Reactivar una
+  asignación o un vínculo (`is_active:true` / `status:'ACTIVE'`) vuelve a
+  exigir que maestro/padre sea miembro ACTIVE con ese rol.
+- **La licencia en solo lectura ya no impide QUITAR acceso:**
+  `{status:'REVOKED'}` de ParentStudent y `{is_active:false}` de
+  TeacherClassroom, exactos (`licenseExemptPatch`). Conceder sigue bloqueado.
+- `PendingChange.payload` se reconstruye del `PermissionOverride` guardado
+  (`override_id`, `module`, `action`, `effect`, `risk_level:'HIGH'`), nunca
+  del que escribió el solicitante; y `governRoleChange` rechaza decidir un
+  `PendingChange` cuyo `type` no sea `ROLE_CHANGE` (leía `payload.to_role` de
+  cualquiera).
+- Las URL (`url`/`files`) se validan con `new URL()` (http/https con host), no
+  con una regex sin espacios: `Core.UploadFile` puede devolver el nombre
+  original del archivo, y un documento así bloqueaba cada edición posterior
+  del paso de configuración.
+- Cliente: SoporteAdmin sólo ofrece cambiar estado en tickets de nivel
+  `SCHOOL_ADMIN` (o al dueño), y los errores de las pantallas de P10b pasan por
+  `humanizeError` con texto en español para los códigos nuevos. La auditoría
+  extra del cliente tras crear salón/alumno/vínculo es best-effort: el
+  servidor ya auditó, y un fallo ahí invitaba a reintentar y duplicar.
+
+**Antes de desplegar:** cada escuela real necesita su fila de
+`SchoolSubscription` (paso 1 del orden de arriba) — sin ella la licencia falla
+cerrada y **toda** escritura de P10b responde 403 `WRITE_BLOCKED`.
+`governRoleChange` también se redespliega (va en `npm run deploy`).

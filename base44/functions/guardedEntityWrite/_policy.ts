@@ -125,7 +125,15 @@ export const CLASSROOM_BOUND_ENTITIES = ['Attendance', 'DiaryEntry', 'Homework']
  *    currently be in that classroom.
  *  - Notice: a CLASSROOM notice must target one of the caller's classrooms;
  *    a STUDENT notice a student of one of them (and, if it also names a
- *    classroom, that student's). A SCHOOL notice is unchanged.
+ *    classroom, that student's). A SCHOOL notice (or any other scope) is
+ *    ADMIN-only: since P10b a published notice fans out NoticeDelivery rows
+ *    to every family in its audience, and schoolRead already shows a SCHOOL
+ *    notice to every parent — no teacher screen ever offered it
+ *    (AvisosMaestro sends CLASSROOM only).
+ *
+ * Also run on an UPDATE that re-targets a record (retargetsRecord), over the
+ * stored record merged with the patch, and by the notice fan-out at publish
+ * time — so a target can't be moved after the create-time check.
  *
  * `studentClassroomId` is the named student's CURRENT classroom (null when no
  * student is named or found). ADMIN is never restricted here.
@@ -160,8 +168,22 @@ export function decideCreateTargets(input: {
       if (classroomId && classroomId !== input.studentClassroomId) return wrongClassroom;
       return { ok: true, reason: 'assigned_teacher' };
     }
+    return { ok: false, code: 'SCHOOL_NOTICE_ADMIN_ONLY', message: 'Only a school ADMIN may address the whole school' };
   }
   return { ok: true, reason: 'untargeted' };
+}
+
+/**
+ * Does this update patch move the record's target (its classroom or, for a
+ * Notice, its scope) away from what is stored? Only then does the update
+ * re-run decideCreateTargets: an edit that leaves the target alone must keep
+ * working even if the author has since lost the classroom or the child moved.
+ * student_id never reaches here — it is stripped from every patch.
+ */
+export function retargetsRecord(existing: Record<string, unknown>, patch: Record<string, unknown>): boolean {
+  return ['classroom_id', 'scope'].some((field) =>
+    Object.prototype.hasOwnProperty.call(patch || {}, field)
+    && String(patch[field] ?? '') !== String(existing?.[field] ?? ''));
 }
 
 // ===========================================================================
@@ -447,7 +469,23 @@ const MAX_LONGTEXT = 20000;
 const MAX_JSON = 50000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const URL_RE = /^https?:\/\/[^\s]+$/i;
+
+// http(s) only: these land in an <a href>/<img src>, and a javascript: URL
+// there is script in every other user's browser. Parsed rather than matched
+// by a whitespace-free regex: Core.UploadFile may hand back a file_url with
+// the original file name in it ("Menú semanal.pdf"), and rejecting that would
+// also block every later edit of a setup step that carries it (…step is
+// re-sent whole).
+function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || !value || value.length > 2000) return false;
+  if (!/^https?:\/\//i.test(value.trim())) return false;
+  try {
+    const url = new URL(value.trim());
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !!url.hostname;
+  } catch {
+    return false;
+  }
+}
 
 type Cleaned = { ok: true; value: unknown } | { ok: false };
 
@@ -482,9 +520,7 @@ export function cleanFieldValue(type: FieldType, value: unknown): Cleaned {
     case 'datetime':
       return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? { ok: true, value } : { ok: false };
     case 'url':
-      // http(s) only: these land in an <a href>/<img src>, and a javascript:
-      // URL there is script in every other user's browser.
-      return typeof value === 'string' && value.length <= 2000 && URL_RE.test(value) ? { ok: true, value } : { ok: false };
+      return isHttpUrl(value) ? { ok: true, value: value.trim() } : { ok: false };
     case 'strings':
       if (!Array.isArray(value) || value.length > 50) return { ok: false };
       if (!value.every((v) => typeof v === 'string')) return { ok: false };
@@ -494,9 +530,8 @@ export function cleanFieldValue(type: FieldType, value: unknown): Cleaned {
       const files = [];
       for (const item of value) {
         const it = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
-        const url = typeof it.url === 'string' ? it.url : '';
-        if (!URL_RE.test(url) || url.length > 2000) return { ok: false };
-        files.push({ name: typeof it.name === 'string' ? it.name.slice(0, 200) : '', url });
+        if (!isHttpUrl(it.url)) return { ok: false };
+        files.push({ name: typeof it.name === 'string' ? it.name.slice(0, 200) : '', url: it.url.trim() });
       }
       return { ok: true, value: files };
     }
@@ -746,11 +781,40 @@ export function licenseExempt(entity: string, operation: string): boolean {
   return !!rule && (rule.licenseExempt || []).includes(operation as Op);
 }
 
+// Patches that only TAKE AWAY access: revoking a parent link, removing a
+// teacher from a classroom. schoolRead derives a parent's children and a
+// teacher's classrooms from exactly these rows, so a director whose license
+// lapsed must still be able to cut them (a custody change does not wait for
+// a renewal). Exact match only — the patch may carry nothing else.
+const REVOKING_PATCHES: Record<string, [string, unknown]> = {
+  ParentStudent: ['status', 'REVOKED'],
+  TeacherClassroom: ['is_active', false],
+};
+
+/** Is this update a pure revocation that the license gate must not block? */
+export function licenseExemptPatch(entity: string, operation: string, input: Record<string, unknown>): boolean {
+  if (operation !== 'update' || !Object.prototype.hasOwnProperty.call(REVOKING_PATCHES, entity)) return false;
+  const [field, value] = REVOKING_PATCHES[entity];
+  const keys = Object.keys(input && typeof input === 'object' ? input : {});
+  return keys.length === 1 && keys[0] === field && input[field] === value;
+}
+
+// Updates that GRANT access again: re-activating a teacher assignment or a
+// parent link. Its person must still be an ACTIVE member with the right role
+// (userRefs), exactly as on create — they may have left or changed role since.
+export function reactivatesGrant(entity: string, patch: Record<string, unknown>): boolean {
+  if (entity === 'TeacherClassroom') return patch?.is_active === true;
+  if (entity === 'ParentStudent') return patch?.status === 'ACTIVE';
+  return false;
+}
+
 // --- Notice fan-out -----------------------------------------------------------
 
 /**
- * The NoticeDelivery rows one notice needs: one per ACTIVE parent link of
- * every ACTIVE student of THIS school in the notice's audience (the whole
+ * The NoticeDelivery rows one notice needs: one per ACTIVE parent link (whose
+ * parent still has an ACTIVE PARENT profile in the school, when
+ * activeParentIds is given) of every ACTIVE student of THIS school in the
+ * notice's audience (the whole
  * school, one classroom, or one child), minus the rows that already exist
  * (so a retry does not double-send). Recipients, school and dates never come
  * from the client.
@@ -762,6 +826,8 @@ export function planNoticeDeliveries(input: {
   existing: Array<Record<string, unknown>>;
   schoolId: string;
   now: Date;
+  /** user_ids with an ACTIVE PARENT profile in this school; a link whose parent left is skipped. */
+  activeParentIds?: string[] | null;
 }): Array<Record<string, unknown>> {
   const { notice, schoolId, now } = input;
   if (!schoolId || String(notice?.school_id || '') !== schoolId) return [];
@@ -780,11 +846,13 @@ export function planNoticeDeliveries(input: {
   );
   const nowIso = now.toISOString();
   const escalationDueAt = notice.priority === 'URGENT' ? new Date(now.getTime() + 24 * 3600 * 1000).toISOString() : null;
+  const members = input.activeParentIds ? new Set(input.activeParentIds.map(String)) : null;
   const rows: Array<Record<string, unknown>> = [];
   for (const link of input.links) {
     const parentId = String(link.parent_id || '');
     const studentId = String(link.student_id || '');
     if (!parentId || !studentIds.has(studentId) || link.status !== 'ACTIVE') continue;
+    if (members && !members.has(parentId)) continue;
     if (link.school_id && String(link.school_id) !== schoolId) continue;
     const key = `${parentId}|${studentId}`;
     if (seen.has(key)) continue;

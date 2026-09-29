@@ -36,6 +36,7 @@ type Profile = {
 type PendingChange = {
   id: string;
   school_id?: string;
+  type?: string;
   status?: string;
   requester_profile_id?: string;
   requester_user_id?: string;
@@ -150,6 +151,10 @@ Deno.serve(async (req) => {
     const change: PendingChange | null = await sr.entities.PendingChange.get(changeId).catch(() => null);
     if (!change) return bad(404, 'CHANGE_NOT_FOUND', 'Pending change not found');
     if (change.school_id !== schoolId) return bad(403, 'CROSS_TENANT', 'Change belongs to another school');
+    // Only role changes are decided here. A PERMISSION_ROLLBACK request
+    // (guardedEntityWrite, P10b) shares the entity; approving one through this
+    // path would apply a role change nobody asked for.
+    if (change.type && change.type !== 'ROLE_CHANGE') return bad(409, 'NOT_A_ROLE_CHANGE', 'This request is not a role change');
     if (!OPEN_STATUSES.includes(String(change.status))) {
       return bad(409, 'NOT_OPEN', 'This request was already resolved');
     }

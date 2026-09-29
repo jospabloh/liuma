@@ -3,6 +3,7 @@ import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { sendDueEventReminders } from '@/lib/events/reminders';
 import { useRunOnce } from '@/hooks/useRunOnce';
+import { humanizeError } from '@/lib/errorMessages';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Calendar, Plus, Trash2, MapPin, Clock } from 'lucide-react';
@@ -53,7 +54,7 @@ export default function CalendarioEscolar() {
       queryClient.invalidateQueries(['events']);
       toast.success('Evento eliminado');
     },
-    onError: () => toast.error('No se pudo eliminar el evento. Intenta de nuevo.'),
+    onError: (error) => toast.error(humanizeError(error)),
   });
 
   // No cron in this app, so confirmation reminders run opportunistically when an

@@ -90,6 +90,17 @@ inquilino (P10)".
   in-app `Notice` (scope `USER`, not in the schema) was removed. Tested
   against an in-memory two-school database (`tests/unit/write-path-p10b`),
   plus a scan that fails on any direct client write to an owner-only entity.
+- **P10b review.** A teacher's notice now fans out only to the classrooms
+  they actively teach, checked on the stored notice at publish time;
+  school-wide notices are ADMIN-only. An update that moves a
+  classroom-bound record or a notice to another classroom/scope re-runs the
+  create-time target check. The fan-out skips parents whose profile is no
+  longer ACTIVE; re-activating a teacher assignment or parent link re-checks
+  membership. A read-only license no longer blocks revoking a parent link or
+  removing a teacher. `PendingChange.payload` is rebuilt from the stored
+  override, and `governRoleChange` only decides `ROLE_CHANGE` requests. URLs
+  are parsed (file names with spaces pass). SoporteAdmin hides status
+  actions on tickets it can't move; P10b errors show Spanish reasons.
 
 ### Added
 

@@ -29,6 +29,7 @@ import { isSlaBreached } from '@/lib/support/sla';
 import { nextStatusesFor } from '@/lib/support/statusMachine';
 import { isPlatformOwner } from '@/lib/support/owner';
 import { useRunOnce } from '@/hooks/useRunOnce';
+import { humanizeError } from '@/lib/errorMessages';
 import { SUPPORT_AUTHOR_ROLE, SUPPORT_STATUS, SUPPORT_TIER, TERMINAL_STATUSES } from '@/lib/support/constants';
 import TicketThread from '@/components/support/TicketThread';
 import { SupportStatusBadge, SupportPriorityBadge, STATUS_LABELS } from '@/components/support/labels.jsx';
@@ -110,7 +111,7 @@ export default function SoporteAdmin() {
       toast.success(`Ticket actualizado: ${STATUS_LABELS[toStatus] || toStatus}`);
       refresh();
     } catch (error) {
-      toast.error(error.message || 'No se pudo cambiar el estado.');
+      toast.error(humanizeError(error));
     }
   };
 
@@ -122,7 +123,7 @@ export default function SoporteAdmin() {
       toast.success('Ticket escalado a soporte LIUMA (48 h de respuesta).');
       refresh();
     } catch (error) {
-      toast.error(error.message || 'No se pudo escalar a soporte.');
+      toast.error(humanizeError(error));
     }
   };
 
@@ -231,8 +232,11 @@ export default function SoporteAdmin() {
                 )}
               </p>
 
-              {/* Status actions */}
-              {nextStatusesFor(activeTicket.status).length > 0 && (
+              {/* Status actions. A director moves only the tickets routed to
+                  them (tier SCHOOL_ADMIN); guardedEntityWrite refuses the
+                  rest (TICKET_NOT_SCHOOL_TIER), so don't offer them. */}
+              {(isOwner || activeTicket.tier === SUPPORT_TIER.SCHOOL_ADMIN)
+                && nextStatusesFor(activeTicket.status).length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {nextStatusesFor(activeTicket.status).map((status) => (
                     <Button key={status} size="sm" variant="outline" onClick={() => handleStatusChange(status)}>

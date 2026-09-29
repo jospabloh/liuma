@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Switch } from "@/components/ui/switch";
 import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
+import { humanizeError } from '@/lib/errorMessages';
 
 export default function EventFormDialog({ isOpen, onClose, event, schoolId, classrooms }) {
   const queryClient = useQueryClient();
@@ -80,8 +81,8 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
       toast.success(event ? 'Evento actualizado' : 'Evento creado');
       onClose();
     },
-    onError: () => {
-      toast.error('No se pudo guardar el evento. Intenta de nuevo.');
+    onError: (error) => {
+      toast.error(humanizeError(error));
     },
   });
 

@@ -215,9 +215,16 @@ Deno.serve(async (req) => {
       if (!allowed) return bad(403, 'FORBIDDEN', 'Not permitted to write this resource');
 
       // Billing write-gate — same statuses the client already treats as read-only.
+      // One exception: an ADMIN's emergency alert (AlertaEmergencia →
+      // notificationService.sendHighPriorityAlert). Before P7 that Notice was a
+      // direct create the billing gate never saw, and the alert aborts before
+      // any email goes out if this write fails — child safety is not gated on
+      // the subscription (same reasoning as guardedFamilyWrite).
+      const isEmergencyAlert = entity === 'Notice' && operation === 'create'
+        && profile.app_role === 'ADMIN' && body?.data?.is_emergency === true;
       const subs: Array<{ subscription_status?: string }> = await sr.entities.SchoolSubscription.filter({ school_id: schoolId });
       const sub = subs[0] || null;
-      if (sub && READ_ONLY_STATUSES.includes(String(sub.subscription_status))) {
+      if (!isEmergencyAlert && sub && READ_ONLY_STATUSES.includes(String(sub.subscription_status))) {
         return bad(403, 'WRITE_BLOCKED', 'This school\'s subscription is read-only');
       }
 

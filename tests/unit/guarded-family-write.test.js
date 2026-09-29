@@ -47,6 +47,24 @@ test('only the parent who answered may change an event response', () => {
   assert.equal(other.code, 'NOT_OWN_RESPONSE');
 });
 
+test('a parent may only change or remove an emergency contact they added themselves', () => {
+  const base = { entity: 'EmergencyContact', isAdmin: false, isLinkedParent: true, userId: 'parent-2' };
+  for (const operation of ['update', 'delete']) {
+    assert.equal(decideFamilyAccess({ ...base, operation, existing: { added_by_user_id: 'parent-1' } }).code, 'NOT_OWN_CONTACT', operation);
+    assert.equal(decideFamilyAccess({ ...base, operation, existing: {} }).code, 'NOT_OWN_CONTACT', operation);
+    assert.equal(decideFamilyAccess({ ...base, operation, existing: { added_by_user_id: 'parent-2' } }).ok, true, operation);
+    // Pre-P7 rows, created directly by the parent, carry only created_by_id.
+    assert.equal(decideFamilyAccess({ ...base, operation, existing: { created_by_id: 'parent-2' } }).ok, true, operation);
+    assert.equal(decideFamilyAccess({ ...base, isAdmin: true, operation, existing: { added_by_user_id: 'parent-1' } }).ok, true, operation);
+  }
+  // The stored author is set by the server, so the parent keeps read access
+  // (EmergencyContact.read keys on data.added_by_user_id).
+  const built = buildFamilyPayload('EmergencyContact', 'create', { name: 'X', phone: '1', added_by_user_id: 'someone' }, ctx);
+  assert.equal(built.data.added_by_user_id, 'parent-1');
+  const schema = JSON.parse(read('base44/entities/EmergencyContact.jsonc').replace(/^\s*\/\/.*$/gm, ''));
+  assert.ok(schema.rls.read.$or.some((rule) => rule['data.added_by_user_id'] === '{{user.id}}'));
+});
+
 test('a parent cannot authorize a pickup contact; an ADMIN can', () => {
   const byParent = buildFamilyPayload('EmergencyContact', 'create', { name: 'Tío Juan', phone: '4491234567', is_authorized_pickup: true }, ctx);
   assert.equal(byParent.ok, true);

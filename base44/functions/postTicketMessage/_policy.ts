@@ -39,7 +39,11 @@ export function decideTicketAuthor(input: {
     if (!input.aiAttempted || input.hasAiMessage) {
       return { ok: false, code: 'AI_SUMMARY_NOT_ALLOWED', message: 'This ticket has no pending Lumi summary' };
     }
-    return { ok: true, authorRole: 'AI', attributeToCaller: false };
+    // Attributed to the requester who posted it: SupportTicketMessage.read
+    // keys on data.author_user_id (a service-role create has no useful
+    // created_by_id), so a null author would hide the summary from the very
+    // person whose ticket it is. author_role still says it was Lumi.
+    return { ok: true, authorRole: 'AI', attributeToCaller: true };
   }
 
   const isStaff = isPlatformOwner || isSchoolAdmin;

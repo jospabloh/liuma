@@ -30,13 +30,15 @@ test('someone unrelated to the ticket cannot post in it at all', () => {
 
 test('SYSTEM notes are staff-only', () => {
   assert.equal(decideTicketAuthor({ ...base, kind: 'note', isRequester: true }).ok, false);
+  // A director moving a ticket they filed themselves is still staff.
+  assert.equal(decideTicketAuthor({ ...base, kind: 'note', isRequester: true, isSchoolAdmin: true }).authorRole, 'SYSTEM');
   assert.equal(decideTicketAuthor({ ...base, kind: 'note', isSchoolAdmin: true }).authorRole, 'SYSTEM');
 });
 
 test('the Lumi summary is posted once, by the requester, only on a ticket that went through Lumi', () => {
   assert.deepEqual(
     decideTicketAuthor({ ...base, kind: 'ai_summary', isRequester: true, aiAttempted: true }),
-    { ok: true, authorRole: 'AI', attributeToCaller: false },
+    { ok: true, authorRole: 'AI', attributeToCaller: true },
   );
   assert.equal(decideTicketAuthor({ ...base, kind: 'ai_summary', isRequester: true, aiAttempted: true, hasAiMessage: true }).ok, false);
   assert.equal(decideTicketAuthor({ ...base, kind: 'ai_summary', isRequester: true, aiAttempted: false }).ok, false);

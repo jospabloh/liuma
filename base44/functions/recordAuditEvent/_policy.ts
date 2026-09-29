@@ -18,13 +18,18 @@
 export const ACTION_TIER: Record<string, string> = {
   PRIVACY_CONSENT_ACCEPTED: 'ANY_PROFILE',
   access_denied: 'ANY_PROFILE',
+  // createSupportTicket / addSupportMessage await this row AFTER the ticket
+  // or message exists, and postTicketMessage lets any requester write
+  // (asking why one's approval is stuck is a real ticket). Refusing the audit
+  // row would surface an error for a write that already happened and invite
+  // a duplicate retry.
+  SUPPORT_TICKET_CREATED: 'ANY_PROFILE',
+  SUPPORT_TICKET_MESSAGE: 'ANY_PROFILE',
 
   POLICY_DECISION: 'ACTIVE',
   owner_override: 'ACTIVE',
   AI_REQUEST_ALLOWED: 'ACTIVE',
   AI_REQUEST_DENIED: 'ACTIVE',
-  SUPPORT_TICKET_CREATED: 'ACTIVE',
-  SUPPORT_TICKET_MESSAGE: 'ACTIVE',
   SUPPORT_TICKET_STATUS_CHANGE: 'ACTIVE',
   NOTIFICATION_DELIVERY_FAILED: 'ACTIVE',
 

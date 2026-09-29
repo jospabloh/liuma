@@ -39,7 +39,9 @@ Deno.serve(async (req) => {
     const isPlatformOwner = user.role === 'admin';
     const isRequester = String(ticket.requester_user_id || '') === String(user.id);
     let isSchoolAdmin = false;
-    if (!isPlatformOwner && !isRequester && schoolId) {
+    // A 'note' needs staff standing even from the requester (a director
+    // moving a ticket they filed themselves), so look it up in that case too.
+    if (!isPlatformOwner && schoolId && (!isRequester || kind === 'note')) {
       const profiles: Array<{ app_role?: string; status?: string }> = await sr.entities.UserProfile.filter({
         user_id: user.id,
         school_id: schoolId,

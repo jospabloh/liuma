@@ -39,7 +39,11 @@ function text(value: unknown, max: number): string {
  *
  *  - an ADMIN of that school may write any of them;
  *  - anyone else needs an ACTIVE ParentStudent link to that student;
- *  - an EventResponse may only be edited by the parent who gave it.
+ *  - an EventResponse may only be edited by the parent who gave it;
+ *  - an EmergencyContact may only be edited or removed by whoever added it
+ *    (the pre-P7 RLS rule was "created_by_id is you"; delete was platform
+ *    only). A parent must not be able to drop a contact the school or the
+ *    other parent registered.
  */
 export function decideFamilyAccess(input: {
   entity: string;
@@ -57,6 +61,14 @@ export function decideFamilyAccess(input: {
   if (!isLinkedParent) return fail('NOT_LINKED', 'You are not linked to this student');
   if (entity === 'EventResponse' && operation === 'update' && String(existing?.parent_id || '') !== userId) {
     return fail('NOT_OWN_RESPONSE', 'Only the parent who answered may change this response');
+  }
+  if (entity === 'EmergencyContact' && operation !== 'create') {
+    // added_by_user_id for records written through this function; created_by_id
+    // for the ones a parent created directly before P7.
+    const addedBy = String(existing?.added_by_user_id || existing?.created_by_id || '');
+    if (!addedBy || addedBy !== userId) {
+      return fail('NOT_OWN_CONTACT', 'Only whoever added this contact, or a school ADMIN, may change it');
+    }
   }
   return { ok: true };
 }
@@ -97,6 +109,9 @@ export function buildFamilyPayload(
           relationship: text(data.relationship, SHORT),
           phone,
           notes: text(data.notes, LONG),
+          // Service-role writes don't carry the caller as created_by_id, so the
+          // read rule keys on this instead.
+          added_by_user_id: ctx.userId,
           // Who may take a child out of school is the school's call: a parent
           // can propose a contact, only an ADMIN can authorize the pickup.
           is_authorized_pickup: ctx.isAdmin ? data.is_authorized_pickup === true : false,

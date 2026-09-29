@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
-import { familyCreate, familyDelete } from '@/lib/authorization/familyWrite';
+import { familyCreate, familyDelete, familyUpdate } from '@/lib/authorization/familyWrite';
 import {
   Dialog,
   DialogContent,
@@ -85,6 +85,20 @@ export default function ContactosEmergencia() {
     },
   });
 
+  // La dirección confirma (o retira) la autorización de recoger sobre un
+  // contacto que ya existe — p. ej. uno que agregó un padre.
+  const togglePickupMutation = useMutation({
+    mutationFn: ({ contactId, authorized }) =>
+      familyUpdate('EmergencyContact', contactId, { is_authorized_pickup: authorized }),
+    onSuccess: (_result, { authorized }) => {
+      queryClient.invalidateQueries(['emergencyContacts']);
+      toast.success(authorized ? 'Autorizado para recoger' : 'Autorización retirada');
+    },
+    onError: () => {
+      toast.error('No se pudo actualizar la autorización');
+    },
+  });
+
   const handleSubmit = (e) => {
     e.preventDefault();
     // La escuela la deduce el servidor a partir del alumno.
@@ -148,8 +162,22 @@ export default function ContactosEmergencia() {
                       <Phone className="w-4 h-4" />
                       {contact.phone}
                     </a>
-                    {contact.is_authorized_pickup && (
-                      <Badge className="mt-2 bg-green-100 text-green-800 gap-1">
+                    {canAuthorizePickup ? (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Switch
+                          id={`pickup-${contact.id}`}
+                          checked={!!contact.is_authorized_pickup}
+                          disabled={togglePickupMutation.isPending}
+                          onCheckedChange={(checked) =>
+                            togglePickupMutation.mutate({ contactId: contact.id, authorized: checked })
+                          }
+                        />
+                        <Label htmlFor={`pickup-${contact.id}`} className="text-sm cursor-pointer">
+                          Autorizado para recoger
+                        </Label>
+                      </div>
+                    ) : contact.is_authorized_pickup && (
+                      <Badge className="mt-2 bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300 gap-1">
                         <Shield className="w-3 h-3" /> Autorizado para recoger
                       </Badge>
                     )}

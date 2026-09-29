@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { LifeBuoy, Plus, Sparkles, MessageSquare, ChevronRight } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -90,6 +91,11 @@ export default function Soporte() {
           <span className="text-sm">Crear ticket</span>
         </Button>
       </div>
+
+      <p className="text-sm text-muted-foreground mb-6 -mt-3">
+        ¿Primera vez en LIUMA?{' '}
+        <Link to={createPageUrl('Ayuda')} className="text-brand underline">Consulta la guía de ayuda</Link>.
+      </p>
 
       <h2 className="text-sm font-semibold text-muted-foreground mb-2">Mis tickets</h2>
 

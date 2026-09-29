@@ -4,7 +4,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import SessionHeartbeat from '@/lib/SessionHeartbeat'
 import { pagesConfig } from './pages.config'
-import { Suspense, useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -16,6 +16,14 @@ import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import Login from '@/pages/Login';
+import { PRIVACY_NOTICE, SERVICE_TERMS } from '@/lib/legal/legalDocs';
+
+const LegalDocumentPage = React.lazy(() => import('@/components/legal/LegalDocumentPage'));
+
+// Public legal pages. Rendered BEFORE AuthenticatedApp — no auth, no profile,
+// no GuardedRoute — because the onboarding consent checkbox links here and the
+// person reading it has no UserProfile yet. See src/lib/legal/legalDocs.js.
+const PUBLIC_LEGAL_DOCS = [PRIVACY_NOTICE, SERVICE_TERMS];
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -123,7 +131,16 @@ function App() {
             <NavigationTracker />
             <SessionHeartbeat />
             <TenantThemeRuntime />
-            <AuthenticatedApp />
+            <Routes>
+              {PUBLIC_LEGAL_DOCS.map((doc) => (
+                <Route
+                  key={doc.path}
+                  path={doc.path}
+                  element={<Suspense fallback={<PageTransitionFallback />}><LegalDocumentPage doc={doc} /></Suspense>}
+                />
+              ))}
+              <Route path="*" element={<AuthenticatedApp />} />
+            </Routes>
           </Router>
           <Toaster />
           <ThemeSwitcher />

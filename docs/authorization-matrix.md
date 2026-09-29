@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-07-13 · Version 1.7.0**
+**Last updated: 2026-09-29 · Version 1.7.17** (route matrix and consent rows; entity section unchanged since 2026-07-13)
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 
@@ -8,91 +8,89 @@ This matrix is the authoritative reference for LIUMA role-based access control. 
 
 ## Route-access matrix
 
-Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
+Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`, enforced
+by `GuardedRoute.jsx`. The platform owner reaches every ADMIN route through the
+owner override (`getOwnerScopedAccess`), not through this table.
 
-### ADMIN-only routes
+**This table is checked by a test.** `tests/unit/help-and-legal.test.js` parses
+every `| /Route |` row below and fails if the set of routes, or the roles on any
+of them, differs from `ROUTE_ACCESS`. The previous version of this document had
+drifted (it was missing `/HistorialCambios` and `/SeedTestData`), so when you
+change `routeAccess.js`, change the row here in the same commit.
 
-| Route | Description |
-|---|---|
-| /Aprobaciones | User approval queue |
-| /AlertaEmergencia | Emergency alert broadcast |
-| /AuditoriaAdmin | Audit log viewer |
-| /AvisosAdmin | School notice management |
-| /ConfiguracionInicial | Initial school setup |
-| /GestionDescuentos | Discount management |
-| /GestionDocumentos | Document management |
-| /GestionEscuela | School settings |
-| /GestionPedidosAdmin | Uniform order fulfillment |
-| /LicenseAdmin | School subscription / license management (admin sees own school read-only; platform owner sees all tenants via owner override) |
-| /PagosAdmin | Payment concept and record management |
-| /PanelSoporte | Support triage dashboard (pending/urgent/SLA breached) |
-| /PermisosRoles | Roles and permissions configuration |
-| /Reportes | School reports |
-| /SoporteAdmin | Support ticket management console (school admin sees own school; platform owner sees all via owner override) |
-
-### TEACHER-only routes
-
-| Route | Description |
-|---|---|
-| /AvisosMaestro | Teacher notice creation |
-| /BitacorasMaestro | View all diary entries (teacher) |
-| /CrearBitacora | Create diary entry |
-| /GestionAlumno | Student detail (assigned classrooms) |
-| /GestionSalon | Classroom management |
-| /TareaMaestro | Homework management (teacher) |
-
-### ADMIN + TEACHER routes
-
-| Route | Description |
-|---|---|
-| /GestionAusencias | Absence management (review/approve) |
-| /ResumenAsistencia | Attendance summary |
-
-### TEACHER + PARENT routes
-
-| Route | Description |
-|---|---|
-| /Asistencia | Attendance control: TEACHER records daily attendance for assigned classrooms; PARENT views their children's attendance records |
-
-### PARENT-only routes
-
-| Route | Description |
-|---|---|
-| /Avisos | Notices for linked children |
-| /Bitacora | Diary entries for linked children |
-| /EventosParaPadres | School events listing |
-| /MisHijos | Linked children profiles |
-| /Tarea | Homework for linked children |
-
-### ADMIN + PARENT routes
-
-| Route | Description |
-|---|---|
-| /ContactosEmergencia | Emergency contacts |
-| /Pagos | Payment view (parent: own children; admin: all) |
-| /PedidosUniformes | Uniform order submission |
-| /SolicitarAusencia | Absence request submission |
-
-### ADMIN + TEACHER + PARENT routes
-
-| Route | Description |
-|---|---|
-| /Home | Dashboard (role-specific home component) |
-| /OperacionDiaria | Daily operations |
-| /CalendarioEscolar | School calendar |
-| /Soporte | Help desk: Lumi AI deflection (L0) + ticket creation and tracking (L1) |
+| Route | ADMIN | TEACHER | PARENT | Description |
+|---|---|---|---|---|
+| /AlertaEmergencia | ✓ | — | — | Emergency alert broadcast |
+| /Aprobaciones | ✓ | — | — | User approval queue |
+| /Asistencia | — | ✓ | ✓ | TEACHER records attendance for assigned classrooms; PARENT views their children's history |
+| /AuditoriaAdmin | ✓ | — | — | Audit log viewer |
+| /Avisos | — | — | ✓ | Notices for linked children |
+| /AvisosAdmin | ✓ | — | — | School-wide / classroom / student notices |
+| /AvisosMaestro | — | ✓ | — | Teacher notice to classroom parents |
+| /Ayuda | ✓ | ✓ | ✓ | In-app user manual: primeros pasos + role quick guides (static content, no tenant data) |
+| /Bitacora | — | — | ✓ | Diary entries for linked children |
+| /BitacorasMaestro | — | ✓ | — | Diary progress for assigned classrooms |
+| /CalendarioEscolar | ✓ | ✓ | ✓ | School calendar (admin edits) |
+| /ConfiguracionInicial | ✓ | — | — | Initial school setup checklist |
+| /ContactosEmergencia | ✓ | — | ✓ | Emergency contacts per child |
+| /CrearBitacora | — | ✓ | — | Create diary entry (4-step wizard) |
+| /EventosParaPadres | — | — | ✓ | School events: RSVP (accepting a paid event creates a ChargeItem) |
+| /GestionAlumno | — | ✓ | — | Student detail + linked guardians ("Vincular") |
+| /GestionAusencias | ✓ | ✓ | — | Absence review (approve/reject) |
+| /GestionDescuentos | ✓ | — | — | Discount management |
+| /GestionDocumentos | ✓ | — | — | Official documents |
+| /GestionEscuela | ✓ | — | — | Classrooms + students (license quota) |
+| /GestionPedidosAdmin | ✓ | — | — | Uniform order fulfillment |
+| /GestionSalon | — | ✓ | — | Classroom: teachers + enrolled students |
+| /HistorialCambios | ✓ | ✓ | ✓ | Plain-language changelog + version |
+| /Home | ✓ | ✓ | ✓ | Dashboard (role-specific home component) |
+| /LicenseAdmin | ✓ | — | — | License: school admin sees own school read-only; platform owner manages all tenants via owner override |
+| /MisHijos | — | — | ✓ | Linked children profiles |
+| /OperacionDiaria | ✓ | ✓ | ✓ | Daily operations timeline |
+| /Pagos | ✓ | — | ✓ | Payment view (parent: own children; admin: school) |
+| /PagosAdmin | ✓ | — | — | Payment concepts, charges and payments |
+| /PanelSoporte | ✓ | — | — | Support triage dashboard |
+| /PedidosUniformes | ✓ | — | ✓ | Uniform order submission |
+| /PermisosRoles | ✓ | — | — | Roles, per-user overrides, danger zone (export / deletion request) |
+| /Reportes | ✓ | — | — | School reports + export |
+| /ResumenAsistencia | ✓ | ✓ | — | Attendance summary |
+| /SeedTestData | ✓ | — | — | Developer test-data generator (reachable by URL only; not in nav) |
+| /SolicitarAusencia | ✓ | — | ✓ | Absence request submission |
+| /Soporte | ✓ | ✓ | ✓ | Help desk: Lumi + ticket creation and tracking |
+| /SoporteAdmin | ✓ | — | — | Support ticket console (school admin: own school; platform owner: all via owner override) |
+| /Tarea | — | — | ✓ | Homework for linked children |
+| /TareaMaestro | — | ✓ | — | Homework management (teacher) |
 
 ### Public / unauthenticated routes
 
+Not in `ROUTE_ACCESS` and not wrapped by `GuardedRoute`. None of them read an
+entity, so none can leak tenant data.
+
 | Route | Description |
 |---|---|
-| /login | Branded email/password sign-in form (added v1.7.0, replaces the Base44-hosted login redirect). Not in `ROUTE_ACCESS` and not wrapped by `GuardedRoute` — reachable only when `AuthenticatedApp` has no authenticated session and no remembered identity; already-authenticated users are redirected away to `/` (`src/App.jsx`). Renders a static form only; performs no entity reads, so it cannot leak cross-tenant data. |
+| /login | Branded email/password sign-in form. Reachable only when `AuthenticatedApp` has no session and no remembered identity; authenticated users are redirected to `/` (`src/App.jsx`). |
+| /aviso-de-privacidad | LIUMA Aviso de Privacidad (`PRIVACY_NOTICE_PATH`). **Public on purpose**: the onboarding consent checkbox links here and the reader has no `UserProfile` yet, so a guarded route would deny them the text they are asked to accept. Rendered by the top-level `<Routes>` in `src/App.jsx` *before* `AuthenticatedApp`. Currently a **BORRADOR pending legal review** (`PRIVACY_NOTICE_STATUS`). |
+| /terminos | LIUMA Términos del servicio (`SERVICE_TERMS_PATH`) — trial, plans, read-only on non-payment, data processing on the school's behalf. Same public mount and same BORRADOR status. |
+
+> **Pending from P3 (app shell / access):** P3 is expected to add ADMIN to
+> `/GestionSalon` and `/GestionAlumno` and to gate or remove `/SeedTestData`.
+> When that lands, the drift test above fails until these rows are updated —
+> that is intended. The Ayuda text (`src/lib/help/helpContent.js`) also tells
+> directors to ask the teacher to link parents because ADMIN cannot open
+> `/GestionAlumno` today; update that step at the same time.
 
 ---
 
 ## Entity authorization
 
 Source of truth: `src/lib/authorization/policy.js → POLICY`
+
+> **Caveat (2026-09-28 audit):** this table is the *client* policy. The
+> deployed Base44 RLS is currently narrower — most entities only let the row's
+> author or the platform `role: admin` read them — so several "Read" cells
+> below do not hold in production for school users yet. Fixing the tenant read
+> path (service-role read functions keyed on the caller's ACTIVE `UserProfile`)
+> is a separate package (P10); update this table when it lands.
 
 | Entity | ADMIN | TEACHER | PARENT | Row-level scope |
 |---|---|---|---|---|
@@ -262,7 +260,8 @@ These templates are pre-loaded in `PermisosRoles.jsx` and applied via the permis
 | C1 — Escalation to ADMIN via direct `UserProfile.update` (in fact reachable by *any* user via the self-branch, not only admins) | Critical | **Closed (v1.6.0) — deploy verified live 2026-07-13.** Field-level RLS locks `UserProfile.app_role` `write` to the service role; role mutations go through `governRoleChange`, and onboarding's initial role assignment through `provisionOnboardingProfile` (founder-only ADMIN). v1.5.0 first moved the UI path server-side. Re-confirmed via direct comparison of `base44/entities/UserProfile.jsonc` against the live Base44 schema (`list_entity_schemas`) — identical. See `docs/security-role-governance-remediation.md`. |
 | C2 — Requester can approve their own `PendingChange` | Critical | **Closed (v1.6.0) — deploy verified live 2026-07-13.** `governRoleChange` enforces approver ≠ requester server-side (v1.5.0), and field-level RLS locks `PendingChange` `status`/`approver_*`/`approved_at` `update` to the service role so an approval can't be forged. Re-confirmed via direct comparison of `base44/entities/PendingChange.jsonc` against the live Base44 schema — identical. See `docs/security-role-governance-remediation.md`. |
 | Missing service-role admin branch on `UserProfile`/`PendingChange`/`School`/`AuditLog` broke onboarding and role-approval app-wide (production outage) | Critical | **Fixed (v1.7.0, PR #149) — deploy verified live 2026-07-13.** Restored the `{"user_condition":{"role":"admin"}}` branch that `asServiceRole` calls (`provisionOnboardingProfile`, `governRoleChange`) need to pass row-level RLS; this branch is un-matchable by any real end-user (real users carry built-in `role:"user"`, never `role:"admin"`), so it does not reopen C1/C2 — the field-level locks above are untouched and independently verified live. Confirmed by comparing all four `base44/entities/*.jsonc` files against the live Base44 schema via the Base44 MCP `list_entity_schemas` tool — byte-for-byte match, no drift. |
-| `ConsentRecord` entity referenced in code but not created in Base44 | Low | Open — `privacyNotice.js` writes consent to `ConsentRecord` best-effort with `AuditLog` as fallback; consent is recorded even before the entity exists. Owner action: create `ConsentRecord` entity in Base44 Builder (schema in `src/lib/consent/privacyNotice.js`). |
+| `ConsentRecord` entity referenced in code but not created in Base44 | Medium | Open — the entity does not exist live, so `onboardingTenantCreation.js` silently skips it and the only consent trace is a best-effort `AuditLog` row (the 2026-09-28 audit found `AuditLog` empty in production). Creating the entity and writing it server-side belongs to the onboarding package (P6). |
+| Consent checkbox linked to a non-existent privacy notice (`/aviso-de-privacidad` on the base44.app host fell to `PageNotFound`) | Critical | **Mitigated 2026-09-29** — the notice now exists as a public in-app route and `PRIVACY_NOTICE_URL` points at it; version bumped to `2026-09-29-borrador`. Still open: the text is a **draft pending legal review** (see the review notes on the page and in `src/lib/legal/legalDocs.js`). |
 | Support routes / SupportTicket entity missing from authorization matrix | Low | Fixed (v1.2.0) — Soporte/SoporteAdmin/PanelSoporte/LicenseAdmin routes added; SupportTicket/SupportTicketMessage entities added; support_request Lumi capability added |
 | `@babel/core` ≤ 7.29.0 Arbitrary File Read (`GHSA-4x5r-pxfx-6jf8`) | Low | Fixed (v1.4.2) — build-toolchain dependency; not in deployed runtime. Resolved via `npm audit fix`. |
 | `dompurify` ≤ 3.4.10 Trusted Types / SAFE_FOR_TEMPLATES / ALLOWED_ATTR bypass (3 Moderate advisories) | Moderate | Fixed (v1.4.2) — transitive build dependency; resolved via `npm audit fix`. |

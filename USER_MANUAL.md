@@ -11,6 +11,60 @@ diaria: asistencia, tareas, bitácora, avisos, calendario, pagos, pedidos de
 uniformes y comunicación entre la escuela y las familias. Cada escuela ("tenant")
 ve únicamente sus propios datos.
 
+**Dentro de la app** este manual tiene una versión corta, buscable y filtrada
+por rol: la página **Ayuda** (`/Ayuda`, menú → Soporte → Ayuda), cuyo contenido
+vive en `src/lib/help/helpContent.js`. Si cambias un flujo, actualiza los dos.
+
+---
+
+## 0. Primeros pasos
+
+### Dirección: abrir la escuela
+
+1. **Registro.** Entra con tu correo, elige **«Soy Directivo»**, escribe el
+   nombre de la escuela (logo opcional) y, en el último paso, acepta el
+   [Aviso de Privacidad](/aviso-de-privacidad) y el compromiso de tratar los
+   datos sensibles de los alumnos sólo para su cuidado. La escuela queda creada
+   con una **prueba gratuita de 30 días** y tú como su administrador.
+2. **Configuración** (`/ConfiguracionInicial`): la lista de pasos de arranque
+   (datos de la escuela, documentos, calendario). Se marcan conforme avanzas.
+3. **Gestión de escuela** (`/GestionEscuela`): crea los salones y da de alta a
+   los alumnos, con tipo de sangre, alergias y notas médicas cuando las haya.
+4. **Invitar.** En tu **Inicio** aparece el **código de la escuela**. Compártelo
+   con maestros y familias: lo piden al registrarse.
+5. **Aprobar** (`/Aprobaciones`): cada persona que se registra con el código
+   queda *pendiente* y no ve nada de la escuela hasta que la apruebas.
+6. **Vincular familias con alumnos.** Un padre o madre aprobado sólo ve a los
+   alumnos con los que está vinculado. Hoy el vínculo lo hace el **maestro del
+   salón** desde la ficha del alumno (`/GestionAlumno` → **Vincular**); la
+   dirección no puede abrir esa pantalla todavía (ver §6).
+
+### Maestros
+
+1. Pide el código a la dirección, regístrate con **«Soy Maestro/a»** y escríbelo.
+2. Espera la aprobación. La dirección te asigna tus salones; sólo verás a sus
+   alumnos.
+3. Vincula a las familias de tus alumnos desde la ficha de cada uno
+   (**Gestión de salón → alumno → Vincular**).
+
+### Familias
+
+1. Pide el código a la escuela, regístrate con **«Soy Padre/Madre»** y
+   escríbelo.
+2. Acepta el Aviso de Privacidad y el **consentimiento expreso** para los datos
+   de salud de tus hijos.
+3. La escuela aprueba tu cuenta y te vincula con tus hijos; entonces aparecen en
+   **Mis hijos**. Si no los ves, pregunta en la escuela si ya te aprobaron y
+   vincularon.
+
+### Guías rápidas por rol
+
+| Rol | Lo del día a día |
+|---|---|
+| **Dirección** | *Operación diaria* para el resumen; *Avisos* y *Alerta de emergencia* para comunicar; *Pagos* para conceptos, cargos y pagos; *Ausencias* para aprobar solicitudes; *Reportes* para indicadores; *Licencias* para el estado de la suscripción; *Permisos y roles* para roles y «Descargar mis datos». |
+| **Maestros** | *Asistencia* (salón + fecha → presente/ausente/tarde/justificado); *Bitácoras* para ver quién tiene la del día y *Crear bitácora* para hacerla; *Tareas*; *Avisos* a las familias del salón. |
+| **Familias** | *Hoy* con todo lo del día; *Avisos*, *Tareas* y *Bitácora* de tus hijos; *Pagos*; *Solicitar ausencia*; *Contactos de emergencia*. |
+
 ---
 
 ## 1. Roles y acceso
@@ -63,19 +117,12 @@ contraseña.
 
 ---
 
-## 2c. Unirse a otra escuela / cambiar de escuela
+## 2c. Una cuenta, una escuela
 
-Si perteneces a más de una escuela (por ejemplo, un directivo que también
-apoya en otra institución), en la pantalla de Inicio verás un pequeño
-selector con el nombre de cada escuela — la escuela actual aparece resaltada
-y las demás son botones para cambiar a ellas de inmediato, sin cerrar
-sesión. Este selector solo aparece si tienes más de una escuela vinculada.
-
-El enlace **"Unirme a otra escuela"** está siempre visible junto al selector
-(o solo, si aún perteneces a una sola escuela) — es la forma de dar de alta
-tu primer perfil en una segunda institución con su propio código de
-invitación, disponible para los tres roles (Administrador, Maestro,
-Padre/Madre).
+Cada cuenta de LIUMA pertenece a **una sola escuela**. No hay selector de
+escuela ni enlace para unirse a una segunda: se retiraron el 2026-09-10 (ver
+CLAUDE.md, «Retirado: el selector de escuela»). Quien necesite usar LIUMA en
+otra escuela se registra ahí con otro correo.
 
 ---
 
@@ -87,6 +134,7 @@ Padre/Madre).
 | **Operación Diaria** | `/OperacionDiaria` | Línea de tiempo del día: asistencia, tareas, bitácora, avisos y eventos (filtrada por rol). | Filtrar por categoría/urgencia; abrir el origen. |
 | **Calendario Escolar** | `/CalendarioEscolar` | Calendario mensual con eventos de hoy y próximos. | Ver eventos; el **admin** crea/edita/elimina eventos. |
 | **Soporte** | `/Soporte` | Mesa de ayuda: preguntar a Lumi o abrir y seguir tickets. Al crear un ticket, la app adjunta automáticamente el diagnóstico técnico (pantalla, versión, navegador y eventos recientes) — sólo escribes tu problema. | "Preguntar a Lumi"; "Crear ticket"; ver/responder tus tickets. |
+| **Ayuda** | `/Ayuda` | Este manual en versión corta: primeros pasos y guía rápida de tu rol, con buscador. Al pie, el Aviso de Privacidad, los Términos, la versión y el correo de soporte. | Buscar; leer. |
 | **Historial de Cambios** | `/HistorialCambios` | Resumen en lenguaje sencillo de las novedades recientes de LIUMA, con la versión actual en el pie. | Sólo lectura. |
 
 ---
@@ -134,6 +182,11 @@ Padre/Madre).
 ---
 
 ## 6. Sección Administrador / Directivo
+
+> **Gestión de Salón** y **Gestión de Alumno** son hoy sólo de maestros
+> (`routeAccess.js`): la dirección ve salones y alumnos desde *Gestión de
+> escuela*, pero la asignación de maestros y el vínculo con las familias los
+> hace el maestro. Si eso cambia, actualiza también §0 y `helpContent.js`.
 
 | Página | Ruta | Qué hace | Acciones clave |
 |---|---|---|---|
@@ -197,14 +250,24 @@ bloquea (`student_scope_mismatch`).
 
 ## 8. Notificaciones, soporte y suscripción
 
-- **Notificaciones:** avisos y eventos se entregan en la app y por correo; las
-  preferencias de canal se administran desde la configuración de la escuela.
+- **Notificaciones:** avisos, bitácoras enviadas, ausencias y alertas se
+  entregan en la app y por correo. **No hay pantalla de preferencias de canal**:
+  los campos `notification_preferences` existen en los datos, pero nada en la
+  app permite editarlos. Quien no quiera recibir correos lo pide por Soporte.
 - **Soporte:** primero Lumi; si se requiere seguimiento, se abre un ticket
   (`SupportTicket`) con número, estado y SLA. Los admins lo gestionan en
   `/SoporteAdmin` y `/PanelSoporte`.
-- **Suscripción y prueba:** las escuelas inician con una prueba; en estado
-  `view_only`/`suspended` la app pasa a **sólo lectura** (banners y modales lo
-  indican). La licencia se administra en `/LicenseAdmin`.
+- **Suscripción y prueba:** cada escuela nueva empieza con una **prueba de 30
+  días**. Sin licencia pagada —prueba vencida, falta de pago o escuela sin
+  registro de suscripción— la escuela queda en **sólo lectura**: se puede
+  consultar y descargar todo, pero no registrar nada, hasta pagar (decisión del
+  dueño, 2026-09-29: fallar cerrado). La dirección ve avisos **antes** del
+  vencimiento y un banner de sólo lectura **después**, siempre con la forma de
+  pagar (Mercado Pago). El ciclo de vida lo corre Mission Control, no LIUMA
+  (estándar ACACIA, módulo 1). Plazos tras una renovación impaga: 8 días de
+  gracia → sólo lectura; 15 → suspendida; 45 → elegible para borrado con aviso.
+  La licencia se consulta en `/LicenseAdmin`. Detalle comercial en los
+  [Términos del servicio](/terminos).
 
 ---
 
@@ -243,9 +306,21 @@ con un latido cada 60 segundos.
   (`school_id`).
 - **Datos de alumnos:** padres ven sólo a sus hijos; maestros sólo a los alumnos
   de sus salones; admins a su escuela.
-- **Consentimiento (LFPDPPP):** el onboarding requiere aceptar el Aviso de
-  Privacidad y el consentimiento expreso para datos sensibles de menores; la
-  aceptación se registra (`ConsentRecord` / `AuditLog`).
+- **Aviso de Privacidad:** público dentro de la app en
+  [`/aviso-de-privacidad`](/aviso-de-privacidad) (sin sesión, porque quien lo
+  lee todavía no tiene perfil). La escuela es la **responsable** y ACACIA el
+  **encargado**; nombra a los proveedores (Base44, Resend, Anthropic para Lumi,
+  Mercado Pago sólo para el cobro de la licencia), la conservación y cómo
+  ejercer los derechos ARCO. **Es un BORRADOR pendiente de revisión legal** y la
+  página lo dice arriba; el texto vive en `src/lib/legal/legalDocs.js`.
+- **Consentimiento (LFPDPPP):** el onboarding pide aceptar el aviso y, para
+  familias, el consentimiento expreso para los datos sensibles de sus hijos; el
+  personal se compromete a tratarlos sólo para el cuidado del alumno. Cada
+  aceptación fija la versión del aviso (`PRIVACY_NOTICE_VERSION`, hoy
+  `2026-09-29-borrador`). **Hoy la única constancia es una fila de `AuditLog`
+  escrita en el mejor esfuerzo:** la entidad `ConsentRecord` que el código
+  intenta usar no existe en Base44, así que esa escritura se omite en silencio.
+  Crearla y escribirla del lado del servidor es trabajo pendiente del onboarding.
 
 ---
 

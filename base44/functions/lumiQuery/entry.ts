@@ -30,7 +30,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import {
   type Profile, type Scope,
   selectCurrentProfile, profileProblem, canRunIntent, QUERY_INTENTS, scopeRows,
-  mexicoToday, addDays, isDateOnly, spanishLongDate, isoWeek, menuDayKey,
+  mexicoToday, mexicoDayOf, addDays, isDateOnly, spanishLongDate, isoWeek, menuDayKey,
   label, formatMXN, fullName, matchStudents, errorMessage,
 } from './_lumiCore.ts';
 
@@ -44,17 +44,23 @@ function fail(status: number, code: string): Response {
 type Sr = any;
 type Row = Record<string, any>;
 
+// Student rows buildScope already loaded for a PARENT/TEACHER scope, so each
+// intent does not re-fetch them one by one (one scope object per request).
+const scopedStudents = new WeakMap<Scope, Row[]>();
+
 async function buildScope(sr: Sr, userId: string, profile: Profile): Promise<Scope> {
   const schoolId = String(profile.school_id);
   const role = profile.app_role as Scope['role'];
   let classroomIds: string[] = [];
   let studentIds: string[] = [];
+  let loaded: Row[] = [];
 
   if (role === 'PARENT') {
     const links: Row[] = await sr.entities.ParentStudent.filter({ parent_id: userId, school_id: schoolId, status: 'ACTIVE' });
     studentIds = [...new Set(links.map((l) => String(l.student_id || '')).filter(Boolean))];
     const students: Row[] = (await Promise.all(studentIds.map((id) => sr.entities.Student.get(id).catch(() => null))))
       .filter((s: Row | null) => s && String(s.school_id) === schoolId);
+    loaded = students;
     studentIds = students.map((s) => String(s.id));
     classroomIds = [...new Set(students.map((s) => String(s.classroom_id || '')).filter(Boolean))];
   } else if (role === 'TEACHER') {
@@ -62,9 +68,12 @@ async function buildScope(sr: Sr, userId: string, profile: Profile): Promise<Sco
     classroomIds = [...new Set(assignments.filter((a) => a.is_active !== false).map((a) => String(a.classroom_id || '')).filter(Boolean))];
     const perClass: Row[][] = await Promise.all(classroomIds.map((cid) =>
       sr.entities.Student.filter({ school_id: schoolId, classroom_id: cid })));
-    studentIds = perClass.flat().filter((s) => s.is_active !== false).map((s) => String(s.id));
+    loaded = perClass.flat().filter((s) => s.is_active !== false && String(s.school_id) === schoolId);
+    studentIds = loaded.map((s) => String(s.id));
   }
-  return { userId, schoolId, role, classroomIds, studentIds };
+  const scope: Scope = { userId, schoolId, role, classroomIds, studentIds };
+  scopedStudents.set(scope, loaded);
+  return scope;
 }
 
 async function schoolStudents(sr: Sr, scope: Scope): Promise<Row[]> {
@@ -72,8 +81,7 @@ async function schoolStudents(sr: Sr, scope: Scope): Promise<Row[]> {
     const all: Row[] = await sr.entities.Student.filter({ school_id: scope.schoolId }, 'first_name', 1000);
     return all.filter((s) => s.is_active !== false);
   }
-  const rows: Row[] = (await Promise.all(scope.studentIds.map((id) => sr.entities.Student.get(id).catch(() => null)))).filter(Boolean);
-  return rows.filter((s) => String(s.school_id) === scope.schoolId);
+  return (scopedStudents.get(scope) || []).filter((s) => String(s.school_id) === scope.schoolId);
 }
 
 async function classroomNames(sr: Sr, schoolId: string): Promise<Map<string, string>> {
@@ -257,7 +265,10 @@ Deno.serve(async (req) => {
         const rows: Row[] = scope.role === 'PARENT'
           ? (await Promise.all(scope.studentIds.map((id) =>
             sr.entities.ChargeItem.filter({ school_id: scope.schoolId, student_id: id })))).flat()
-          : await sr.entities.ChargeItem.filter({ school_id: scope.schoolId }, 'due_date', 1000);
+          // Query the two open statuses directly: a school's paid history must
+          // not crowd pending charges out of a row cap.
+          : (await Promise.all(['PENDING', 'OVERDUE'].map((status) =>
+            sr.entities.ChargeItem.filter({ school_id: scope.schoolId, status }, 'due_date', 1000)))).flat();
         const open = scopeRows(scope, 'ChargeItem', rows)
           .filter((c) => c.status === 'PENDING' || c.status === 'OVERDUE')
           .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
@@ -280,14 +291,23 @@ Deno.serve(async (req) => {
 
       case 'notices': {
         const rows: Row[] = await sr.entities.Notice.filter({ school_id: scope.schoolId }, '-created_date', 100);
-        const nowIso = new Date().toISOString();
+        const nowMs = Date.now();
+        // expires_at may be a bare day ("vigente hasta el 30" = all of the 30th)
+        // or a timestamp; either way compare in Mexico time, not as strings.
+        const stillValid = (n: Row) => {
+          if (!n.expires_at) return true;
+          const raw = String(n.expires_at);
+          if (isDateOnly(raw)) return raw >= today;
+          const t = Date.parse(/([zZ]|[+-]\d\d:?\d\d)$/.test(raw) ? raw : `${raw}Z`);
+          return !Number.isFinite(t) || t > nowMs;
+        };
         const notices = scopeRows(scope, 'Notice', rows)
-          .filter((n) => !n.expires_at || String(n.expires_at) > nowIso)
+          .filter(stillValid)
           .slice(0, 15)
           .map((n) => ({
             title: n.title, content: String(n.content || '').slice(0, 600),
             priority: label('notice_priority', n.priority), emergency: !!n.is_emergency,
-            author: n.author_name || '', sent: n.created_date ? spanishLongDate(mexicoToday(new Date(n.created_date))) : '',
+            author: n.author_name || '', sent: spanishLongDate(mexicoDayOf(n.created_date)),
           }));
         return Response.json({ ...base, notices });
       }
@@ -365,7 +385,7 @@ Deno.serve(async (req) => {
           status: label('uniform_status', o.status),
           items: Array.isArray(o.items) ? o.items.length : 0,
           estimated_delivery: o.estimated_delivery ? spanishLongDate(String(o.estimated_delivery)) : '',
-          ordered: o.created_date ? spanishLongDate(mexicoToday(new Date(o.created_date))) : '',
+          ordered: spanishLongDate(mexicoDayOf(o.created_date)),
         }));
         return Response.json({ ...base, orders });
       }

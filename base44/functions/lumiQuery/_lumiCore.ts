@@ -168,6 +168,16 @@ export function mexicoToday(now: Date = new Date()): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+// Base44 system timestamps (created_date, …) may come without a zone suffix;
+// they are UTC. Returns the Mexico calendar day of such a timestamp, or ''.
+export function mexicoDayOf(timestamp: unknown): string {
+  const raw = String(timestamp || '');
+  if (!raw) return '';
+  const iso = /([zZ]|[+-]\d\d:?\d\d)$/.test(raw) || DATE_ONLY.test(raw) ? raw : `${raw}Z`;
+  const d = new Date(DATE_ONLY.test(raw) ? `${raw}T12:00:00Z` : iso);
+  return Number.isNaN(d.getTime()) ? '' : mexicoToday(d);
+}
+
 export function isDateOnly(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   const m = DATE_ONLY.exec(value);
@@ -420,11 +430,16 @@ export function describeWrite(kind: string, studentName: string, data: Record<st
     return `Asistencia de ${studentName}: ${label('attendance_status', data.status)} el ${when}${reason}.`;
   }
   const bits: string[] = [];
-  for (const field of ['mood', 'general_mood', 'food', 'food_mood', 'behavior', 'learning', 'uniform_status']) {
-    if (data[field]) {
-      const group = field === 'uniform_status' ? 'uniform' : field;
-      bits.push(`${field.replace(/_/g, ' ')}: ${label(group, data[field])}`);
-    }
+  // Spanish names for the teacher-facing summary (the raw field names used to
+  // leak here as "general mood" / "food mood" / "uniform status").
+  const fieldNames: Array<[string, string, string]> = [
+    ['mood', 'mood', 'ánimo'], ['general_mood', 'general_mood', 'ánimo'],
+    ['food', 'food', 'comida'], ['food_mood', 'food_mood', 'comió'],
+    ['behavior', 'behavior', 'comportamiento'], ['learning', 'learning', 'aprendizaje'],
+    ['uniform_status', 'uniform', 'uniforme'],
+  ];
+  for (const [field, group, name] of fieldNames) {
+    if (data[field]) bits.push(`${name}: ${label(group, data[field])}`);
   }
   if (data.sleep_hours != null || data.sleep_minutes != null) {
     bits.push(`siesta: ${Number(data.sleep_hours || 0)} h ${Number(data.sleep_minutes || 0)} min`);

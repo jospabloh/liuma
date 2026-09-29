@@ -6,6 +6,7 @@ import {
   selectCurrentProfile, profileProblem, canRunIntent, canWriteKind, rowVisible, scopeRows,
   mexicoToday, addDays, spanishLongDate, isoWeek, menuDayKey, label, formatMXN,
   matchStudents, validateWrite, resolveWriteDate, confirmationCode, errorMessage,
+  describeWrite, mexicoDayOf,
 } from '../../base44/functions/lumiQuery/_lumiCore.ts';
 
 function read(path) {
@@ -185,4 +186,26 @@ test('denials explain themselves; they must not read like an empty result', () =
     assert.doesNotMatch(errorMessage(code), /no hay información/i);
     assert.notEqual(errorMessage(code), errorMessage('SOMETHING_UNKNOWN'));
   }
+});
+
+test('the write summary the teacher confirms is all Spanish, no field names', () => {
+  const text = describeWrite('diary', 'Sofía Pérez', {
+    date: '2026-03-02', notes_text: 'Pintó con acuarelas.', general_mood: 'feliz', food_mood: 'neutral',
+    uniform_status: 'limpio', behavior: 'necesita_apoyo', sent_to_parents: true,
+  });
+  assert.match(text, /lunes 2 de marzo/);
+  assert.match(text, /ánimo: feliz/);
+  assert.match(text, /comió: regular/);
+  assert.match(text, /uniforme: limpio/);
+  assert.match(text, /comportamiento: necesita apoyo/);
+  assert.doesNotMatch(text, /general mood|food mood|uniform status|_/);
+});
+
+test('zoneless Base44 timestamps are read as UTC before taking the Mexico day', () => {
+  // 03:00 UTC on the 30th is still the 29th in Mexico (UTC-6).
+  assert.equal(mexicoDayOf('2026-09-30T03:00:00.000000'), '2026-09-29');
+  assert.equal(mexicoDayOf('2026-09-30T03:00:00Z'), '2026-09-29');
+  assert.equal(mexicoDayOf('2026-09-30'), '2026-09-30');
+  assert.equal(mexicoDayOf(''), '');
+  assert.equal(mexicoDayOf('not a date'), '');
 });

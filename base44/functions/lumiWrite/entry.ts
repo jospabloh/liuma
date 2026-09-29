@@ -37,7 +37,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import {
   type Profile, type Scope,
   selectCurrentProfile, profileProblem, canWriteKind, WRITE_KINDS,
-  mexicoToday, validateWrite, confirmationCode, describeWrite, fullName, errorMessage,
+  mexicoToday, validateWrite, confirmationCode, describeWrite, fullName, errorMessage, label,
 } from './_lumiCore.ts';
 
 type Row = Record<string, any>;
@@ -118,6 +118,9 @@ Deno.serve(async (req) => {
         action: 'preview',
         summary: describeWrite(kind, name, data),
         replaces_existing: kind === 'attendance' && !!existing,
+        // What the teacher would be overwriting, so "¿Lo registro?" can say
+        // "hoy ya estaba como ausente".
+        previous_status: kind === 'attendance' && existing ? label('attendance_status', existing.status) : '',
         confirmation_code: code,
         next_step: 'Muestra el resumen y pregunta "¿Lo registro?". Sólo si la persona confirma, repite la llamada con action "commit", los mismos datos y este confirmation_code.',
       });

@@ -172,7 +172,15 @@ export default function CrearBitacora() {
       else toast.error('Lumi no pudo proponer un texto. Intenta de nuevo.');
     } catch (error) {
       console.error('Error generating text:', error);
-      toast.error(error?.data?.error || 'Error al generar texto');
+      // Sólo EMPTY_INPUT y DAILY_LIMIT traen mensaje en español desde
+      // aiAssist; los demás códigos (NO_PROFILE, NOT_FOUND…) traen texto
+      // técnico en inglés que no debe llegar a la maestra.
+      const code = error?.data?.code;
+      toast.error(
+        code === 'EMPTY_INPUT' || code === 'DAILY_LIMIT'
+          ? error.data.error
+          : 'Lumi no está disponible en este momento. Puedes escribir la bitácora sin ayuda.'
+      );
     }
     setIsGenerating(false);
   };

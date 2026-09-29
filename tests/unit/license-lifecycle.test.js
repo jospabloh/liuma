@@ -111,7 +111,10 @@ test('the pay button is the Mercado Pago link when configured, WhatsApp to ACACI
 test('the server write gate fails closed too — guardedEntityWrite and getMySubscription mirror the rule', () => {
   const gate = read('base44/functions/guardedEntityWrite/entry.ts');
   assert.doesNotMatch(gate, /if \(sub && READ_ONLY_STATUSES/, 'the old gate skipped schools with no subscription');
-  assert.match(gate, /if \(effectiveLicenseIsReadOnly\(sub, new Date\(\)\)\)/);
+  // The only carve-out is P7's ADMIN emergency Notice (child safety is not
+  // gated on billing); everything else goes through the fail-closed rule.
+  assert.match(gate, /if \(!isEmergencyAlert && effectiveLicenseIsReadOnly\(sub, new Date\(\)\)\)/);
+  assert.match(gate, /const isEmergencyAlert = entity === 'Notice' && operation === 'create'\s+&& profile\.app_role === 'ADMIN' && body\?\.data\?\.is_emergency === true;/);
   assert.match(gate, /if \(!sub\) return true;/);
   assert.match(gate, /status === 'trial'[\s\S]{0,160}Number\.isNaN\(end\) \|\| end <= now\.getTime\(\)/);
   assert.match(gate, /license_tier === 'founder'\) return false/);

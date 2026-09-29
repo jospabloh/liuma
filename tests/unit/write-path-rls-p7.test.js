@@ -92,6 +92,10 @@ test('no client code writes the locked entities directly', () => {
   const found = [];
   for (const file of walk(srcDir)) {
     if (file.includes(`${path.sep}testData${path.sep}`)) continue; // seeding tool, runs as the owner
+    // P6's testable mirror of provisionOnboardingProfile/entry.ts: it receives
+    // the SERVICE-ROLE entities as a parameter and is imported only by tests,
+    // never by the client bundle.
+    if (file.endsWith(`authorization${path.sep}onboardingProvision.js`)) continue;
     const rel = path.relative(new URL('.', ROOT).pathname, file);
     const text = fs.readFileSync(file, 'utf8');
     for (const m of text.matchAll(pattern)) {

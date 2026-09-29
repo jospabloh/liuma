@@ -48,7 +48,7 @@ export default function Reportes() {
     ...(filters.classroomId !== 'ALL' && { classroom_id: filters.classroomId }),
   });
 
-  const { data: attendances = [], isError: attendanceError } = useQuery({
+  const { data: attendances = [], isError: attendanceError, isLoading: attendanceLoading } = useQuery({
     queryKey: ['attendanceReport', userProfile?.school_id, filters.dateFrom, filters.dateTo, filters.classroomId],
     queryFn: () => fetchAllPages(base44.entities.Attendance, rangeQuery(userProfile.school_id), {
       fields: ['student_id', 'classroom_id', 'date', 'status'],
@@ -56,7 +56,7 @@ export default function Reportes() {
     enabled: !!userProfile && rangeValid && canReadEntity(role, 'Attendance'),
   });
 
-  const { data: diaries = [], isError: diariesError } = useQuery({
+  const { data: diaries = [], isError: diariesError, isLoading: diariesLoading } = useQuery({
     queryKey: ['diariesReport', userProfile?.school_id, filters.dateFrom, filters.dateTo, filters.classroomId],
     queryFn: () => fetchAllPages(base44.entities.DiaryEntry, rangeQuery(userProfile.school_id), {
       fields: ['student_id', 'classroom_id', 'date'],
@@ -99,6 +99,9 @@ export default function Reportes() {
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekNotices = notices.filter((n) => new Date(n.created_date) >= weekStart).filter((n) => filters.roleScope === 'ALL' || (n.scope || 'SCHOOL') === filters.roleScope);
 
+  // While a range loads, show a placeholder rather than a 0% that reads as
+  // "nobody came", and do not let it be exported.
+  const kpisLoading = attendanceLoading || diariesLoading;
   const attendanceRate = attendance.rate;
   const diaryProgress = diary.percent;
   const overdueCharges = pendingCharges.filter((c) => isBeforeToday(c.due_date));
@@ -151,8 +154,8 @@ export default function Reportes() {
             <option value="ALL">Alcance: todos</option><option value="SCHOOL">Escuela</option><option value="CLASSROOM">Salón</option><option value="STUDENT">Alumno</option>
           </select>
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" disabled={!canExport} onClick={() => canExport && exportReportCSV({ fileName: `reportes-${today}.csv`, rows: exportRows })}><Download className="w-4 h-4 mr-2" />CSV</Button>
-            <Button variant="outline" disabled={!canExport} onClick={handleExportPDF}><Download className="w-4 h-4 mr-2" />PDF</Button>
+            <Button variant="outline" disabled={!canExport || kpisLoading || attendanceError || diariesError} onClick={() => canExport && exportReportCSV({ fileName: `reportes-${today}.csv`, rows: exportRows })}><Download className="w-4 h-4 mr-2" />CSV</Button>
+            <Button variant="outline" disabled={!canExport || kpisLoading || attendanceError || diariesError} onClick={handleExportPDF}><Download className="w-4 h-4 mr-2" />PDF</Button>
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-3">Datos actualizados: {freshnessLabel}</p>
@@ -163,25 +166,25 @@ export default function Reportes() {
 
       <div className="space-y-4" ref={reportRef}>
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Users className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Asistencia</h3><p className="text-sm text-muted-foreground">{attendance.total} registros</p></div><div className="ml-auto text-2xl font-bold text-brand">{attendanceRate}%</div></div>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Users className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Asistencia</h3><p className="text-sm text-muted-foreground">{attendanceLoading ? 'Cargando…' : `${attendance.total} registros`}</p></div><div className="ml-auto text-2xl font-bold text-brand" aria-busy={attendanceLoading}>{attendanceLoading ? '—' : `${attendanceRate}%`}</div></div>
           <button className="text-sm text-brand flex items-center gap-1" onClick={() => togglePanel('attendance')}>Ver detalle {openPanel === 'attendance' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'attendance' && <div className="mt-3 text-sm text-muted-foreground">Presentes: {attendance.present} · Tardanzas: {attendance.late} · Ausentes: {attendance.absent} · Justificados: {attendance.excused}<p className="text-xs mt-1">Asistencia = presentes + tardanzas sobre registros del periodo.</p></div>}
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><ClipboardList className="w-5 h-5 text-emerald-600" /></div><div><h3 className="font-semibold text-card-foreground">Bitácoras</h3><p className="text-sm text-muted-foreground">{diary.covered} de {diary.expected} (alumno × día hábil)</p></div><div className="ml-auto text-2xl font-bold text-emerald-600">{diaryProgress}%</div></div>
-          <button className="text-sm text-emerald-700 flex items-center gap-1" onClick={() => togglePanel('diary')}>Ver detalle {openPanel === 'diary' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center"><ClipboardList className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /></div><div><h3 className="font-semibold text-card-foreground">Bitácoras</h3><p className="text-sm text-muted-foreground">{diariesLoading ? 'Cargando…' : `${diary.covered} de ${diary.expected} (alumno × día hábil)`}</p></div><div className="ml-auto text-2xl font-bold text-emerald-600 dark:text-emerald-400" aria-busy={diariesLoading}>{diariesLoading ? '—' : `${diaryProgress}%`}</div></div>
+          <button className="text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-1" onClick={() => togglePanel('diary')}>Ver detalle {openPanel === 'diary' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'diary' && classrooms.map((classroom) => <div key={classroom.id} className="flex justify-between text-sm mt-2"><span>{classroom.name}</span><span>{diaries.filter((d) => d.classroom_id === classroom.id).length}</span></div>)}
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600" /></div><div><h3 className="font-semibold text-card-foreground">Pagos pendientes</h3><p className="text-sm text-muted-foreground">{pendingCharges.length} cargos</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-card-foreground">${totalPending.toLocaleString()}</p><p className="text-xs text-red-600">{overdueCharges.length} vencidos</p></div></div>
-          <button className="text-sm text-rose-700 flex items-center gap-1" onClick={() => togglePanel('payments')}>Ver detalle {openPanel === 'payments' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600 dark:text-rose-400" /></div><div><h3 className="font-semibold text-card-foreground">Pagos pendientes</h3><p className="text-sm text-muted-foreground">{pendingCharges.length} cargos</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-card-foreground">${totalPending.toLocaleString()}</p><p className="text-xs text-red-600 dark:text-red-400">{overdueCharges.length} vencidos</p></div></div>
+          <button className="text-sm text-rose-700 dark:text-rose-400 flex items-center gap-1" onClick={() => togglePanel('payments')}>Ver detalle {openPanel === 'payments' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'payments' && <div className="mt-3 text-sm text-muted-foreground">Por vencer: {pendingCharges.length - overdueCharges.length} · Vencidos: {overdueCharges.length}</div>}
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Bell className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Avisos</h3><p className="text-sm text-muted-foreground">{weekNotices.length} enviados</p></div><div className="ml-auto bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">{urgentNotices} urgentes</div></div>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Bell className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Avisos</h3><p className="text-sm text-muted-foreground">{weekNotices.length} enviados</p></div><div className="ml-auto bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300 px-3 py-1 rounded-full text-sm font-medium">{urgentNotices} urgentes</div></div>
           <button className="text-sm text-brand flex items-center gap-1" onClick={() => togglePanel('notices')}>Ver detalle {openPanel === 'notices' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'notices' && weekNotices.slice(0, 5).map((n) => <div key={n.id} className="text-sm border-t border-border pt-2 mt-2">{n.title}</div>)}
         </motion.div>

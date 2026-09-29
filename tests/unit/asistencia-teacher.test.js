@@ -21,7 +21,10 @@ test('saving one mark locks only that row, not the whole class', () => {
   // The old `disabled={markAttendanceMutation.isPending}` froze all 25 rows
   // for every tap, so a teacher waited 25 round trips in sequence.
   assert.doesNotMatch(page, /disabled=\{markAttendanceMutation\.isPending/);
-  assert.match(page, /pendingStudentIds\.has\(student\.id\)/);
+  assert.match(page, /const rowPending = isRowPending\(student\.id\)/);
+  // Keyed by salón + fecha + alumno, so changing the date mid-save does not
+  // lock the same child on the new date.
+  assert.match(page, /pendingRowKey\(key\[1\], key\[2\], studentId\)/);
   assert.match(page, /onMutate:/);
   assert.match(page, /onError:/);
 });
@@ -37,4 +40,21 @@ test('status tints have dark-theme variants and statuses come from the shared en
   }
   assert.match(page, /from '@\/lib\/attendance\/status'/);
   assert.doesNotMatch(page, /new Date\(record\.date\)/);
+});
+
+test('a failed mark rolls back only its own row, not marks saved meanwhile', () => {
+  // Restoring a whole-list snapshot erased other rows' saved records from the
+  // cache, and the next tap on them created a duplicate Attendance record.
+  assert.doesNotMatch(page, /setQueryData\(key, context\.previous\)/);
+  assert.match(page, /context\?\.previousRecord/);
+});
+
+test('bulk "todos presentes" counts only rejected writes as failures and caches the new ids', () => {
+  assert.match(page, /r\.status === 'rejected'/);
+  assert.doesNotMatch(page, /results\.length - created\.length/);
+  assert.match(page, /for \(const record of created\) upsertCachedRecord/);
+});
+
+test('a single mark without a record id refetches instead of leaving an id-less row', () => {
+  assert.match(page, /if \(record\?\.id\) upsertCachedRecord\(key, student\.id, record\);\s*else queryClient\.invalidateQueries\(\{ queryKey: key \}\)/);
 });

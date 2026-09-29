@@ -40,15 +40,20 @@ const statusConfig = Object.fromEntries(
 );
 
 const attendanceQueryKey = (classroomId, date) => ['attendance', classroomId, date];
+// A save in flight is tracked per (salón, fecha, alumno): if the teacher
+// switches date while a row saves, the same child on the new date is not locked.
+const pendingRowKey = (classroomId, date, studentId) => `${classroomId}|${date}|${studentId}`;
 
-function TeacherAdminAttendanceView({ role, classrooms, classroomsError, selectedClassroom, setSelectedClassroom, selectedDate, setSelectedDate, students, loadingStudents, studentsError, attendanceRecords, pendingStudentIds, markAllPresentMutation, onMark, canWrite }) {
+function TeacherAdminAttendanceView({ role, classrooms, classroomsError, selectedClassroom, setSelectedClassroom, selectedDate, setSelectedDate, students, loadingStudents, studentsError, attendanceRecords, pendingRowKeys, markAllPresentMutation, onMark, canWrite }) {
   const getStudentStatus = (studentId) => {
     const record = attendanceRecords.find(r => r.student_id === studentId);
     return record?.status || null;
   };
 
   const blockReadOnly = () => toast.error('Tu licencia está en modo solo lectura. Reactívala para registrar asistencia.');
-  const anyRowPending = pendingStudentIds.size > 0;
+  const isRowPending = (studentId) => pendingRowKeys.has(pendingRowKey(selectedClassroom, selectedDate, studentId));
+  const pendingPrefix = pendingRowKey(selectedClassroom, selectedDate, '');
+  const anyRowPending = [...pendingRowKeys].some((k) => k.startsWith(pendingPrefix));
 
   const renderBody = () => {
     if (classroomsError) {
@@ -82,7 +87,7 @@ function TeacherAdminAttendanceView({ role, classrooms, classroomsError, selecte
           const config = currentStatus ? statusConfig[currentStatus] : null;
           // Only the row being saved is locked; the teacher can keep marking
           // the rest of the class while it saves.
-          const rowPending = pendingStudentIds.has(student.id);
+          const rowPending = isRowPending(student.id);
           const rowDisabled = rowPending || markAllPresentMutation.isPending || !canWrite;
 
           return (
@@ -335,10 +340,10 @@ function ParentAttendanceView({ user, userProfile }) {
 export default function Asistencia() {
   const [selectedClassroom, setSelectedClassroom] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => formatLocalDate(new Date()));
-  // Students whose mark is being saved right now. Per row, so one slow save
-  // does not freeze the whole class (it used to: every button in the list
-  // was disabled while ANY mark was in flight).
-  const [pendingStudentIds, setPendingStudentIds] = useState(() => new Set());
+  // Rows (salón|fecha|alumno) whose mark is being saved right now. Per row,
+  // so one slow save does not freeze the whole class (it used to: every
+  // button in the list was disabled while ANY mark was in flight).
+  const [pendingRowKeys, setPendingRowKeys] = useState(() => new Set());
   const queryClient = useQueryClient();
   const { canWrite } = useCanWrite();
 
@@ -386,10 +391,11 @@ export default function Asistencia() {
     enabled: !!selectedClassroom && !!selectedDate
   });
 
-  const setRowPending = (studentId, pending) => {
-    setPendingStudentIds((prev) => {
+  const setRowPending = (key, studentId, pending) => {
+    const rowKey = pendingRowKey(key[1], key[2], studentId);
+    setPendingRowKeys((prev) => {
       const next = new Set(prev);
-      if (pending) next.add(studentId); else next.delete(studentId);
+      if (pending) next.add(rowKey); else next.delete(rowKey);
       return next;
     });
   };
@@ -417,7 +423,7 @@ export default function Asistencia() {
         ? await guardedUpdate('Attendance', existingRecord.id, data)
         : await guardedCreate('Attendance', data);
 
-      if (status === ATTENDANCE_STATUS.ABSENT && !existingRecord?.parent_notified) {
+      if (status === ATTENDANCE_STATUS.ABSENT && record?.id && !existingRecord?.parent_notified) {
         try {
           // Destinatarios, asunto y cuerpo del correo ahora se arman y envían
           // server-side, a partir del registro de Attendance ya guardado —
@@ -437,7 +443,7 @@ export default function Asistencia() {
           user,
           userProfile,
           entity: AUDIT_ENTITIES.ATTENDANCE,
-          entityId: record.id,
+          entityId: record?.id || existingRecord?.id,
           action: existingRecord ? 'ATTENDANCE_UPDATED' : 'ATTENDANCE_CREATED',
           reason: reason || 'Attendance status update',
           context: { student_id: student.id, status, date }
@@ -452,23 +458,31 @@ export default function Asistencia() {
     },
     onMutate: async (variables) => {
       const { student, status, key } = variables;
-      setRowPending(student.id, true);
+      setRowPending(key, student.id, true);
       await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData(key) || [];
+      const previousRecord = (queryClient.getQueryData(key) || []).find((r) => r.student_id === student.id);
       // Optimistic: the row shows the new status immediately.
       upsertCachedRecord(key, student.id, { status });
-      return { previous };
+      return { previousRecord };
     },
-    onError: (error, { key }, context) => {
-      if (context?.previous) queryClient.setQueryData(key, context.previous);
+    onError: (error, { student, key }, context) => {
+      // Roll back THIS row only. Restoring a whole-list snapshot would also
+      // erase marks on other rows that saved while this one was in flight,
+      // and the next tap on those would create a duplicate record.
+      queryClient.setQueryData(key, (old = []) => (context?.previousRecord
+        ? old.map((r) => (r.student_id === student.id ? context.previousRecord : r))
+        : old.filter((r) => r.student_id !== student.id)));
       console.error('Error saving attendance:', error);
       toast.error('No se pudo guardar la asistencia. Intenta de nuevo.');
     },
     onSuccess: (record, { student, key }) => {
-      if (record) upsertCachedRecord(key, student.id, record);
+      // The saved record carries the id the next tap needs to update instead
+      // of creating a second record. Without it, refetch rather than guess.
+      if (record?.id) upsertCachedRecord(key, student.id, record);
+      else queryClient.invalidateQueries({ queryKey: key });
     },
-    onSettled: (_data, _error, { student }) => {
-      setRowPending(student.id, false);
+    onSettled: (_data, _error, { student, key }) => {
+      setRowPending(key, student.id, false);
     },
   });
 
@@ -478,8 +492,15 @@ export default function Asistencia() {
       const results = await Promise.allSettled(toCreate.map(student =>
         guardedCreate('Attendance', { school_id: userProfile.school_id, classroom_id: selectedClassroom, student_id: student.id, date: selectedDate, status: ATTENDANCE_STATUS.PRESENT, recorded_by: user.id, recorded_by_name: user.full_name })
       ));
-      const created = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
-      const failed = results.length - created.length;
+      // A fulfilled write is a saved mark even if its body could not be read;
+      // only a rejected one is a failure the teacher has to retry.
+      const failed = results.filter(r => r.status === 'rejected').length;
+      const created = results.filter(r => r.status === 'fulfilled' && r.value?.id).map(r => r.value);
+      // Put the new records in the cache before the refetch below: a row
+      // tapped while that refetch runs cancels it, and without these the
+      // cache would still lack their ids and the tap would create a duplicate.
+      const key = attendanceQueryKey(selectedClassroom, selectedDate);
+      for (const record of created) upsertCachedRecord(key, record.student_id, record);
       for (const record of created) {
         try {
           await logAuditEvent({
@@ -495,7 +516,7 @@ export default function Asistencia() {
           console.error('Error writing attendance audit event:', error);
         }
       }
-      return { created: created.length, failed };
+      return { created: results.length - failed, failed };
     },
     onSuccess: ({ created, failed }) => {
       if (failed > 0) {
@@ -533,7 +554,7 @@ export default function Asistencia() {
           loadingStudents={loadingStudents}
           studentsError={studentsError}
           attendanceRecords={attendanceRecords}
-          pendingStudentIds={pendingStudentIds}
+          pendingRowKeys={pendingRowKeys}
           markAllPresentMutation={markAllPresentMutation}
           onMark={(student, status) => markAttendanceMutation.mutate({ student, status, key: currentKey })}
           canWrite={canWrite}

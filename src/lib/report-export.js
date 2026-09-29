@@ -8,7 +8,7 @@ const EXPORT_ROLES = ['ADMIN', 'TEACHER'];
 
 // Excel on Windows (es-MX) opens a BOM-less CSV as ANSI and renders
 // "Bitácoras" as "BitÃ¡coras". The UTF-8 byte order mark makes it read UTF-8.
-export const UTF8_BOM = '﻿';
+export const UTF8_BOM = '\uFEFF';
 
 export function canExportReports(role) {
   return EXPORT_ROLES.includes(role);
@@ -67,12 +67,22 @@ export async function exportReportPDF({ element, fileName }) {
 
   // One tall image, shifted up by one printable page per PDF page, so each
   // page shows the next slice instead of repeating the first one.
+  // The image is not clipped to the printable box, so the strips that spill
+  // into the top/bottom margins are painted over: otherwise the last 10 mm of
+  // one page would repeat at the top of the next.
+  const maskMargins = () => {
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, pageWidth, margin, 'F');
+    pdf.rect(0, pageHeight - margin, pageWidth, margin, 'F');
+  };
   let offset = 0;
   pdf.addImage(imageData, 'PNG', margin, margin, imgWidth, imgHeight);
+  maskMargins();
   while (imgHeight - offset > printable) {
     offset += printable;
     pdf.addPage();
     pdf.addImage(imageData, 'PNG', margin, margin - offset, imgWidth, imgHeight);
+    maskMargins();
   }
 
   pdf.save(fileName);

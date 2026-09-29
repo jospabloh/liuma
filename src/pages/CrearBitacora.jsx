@@ -5,7 +5,7 @@ import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
-import { User, CheckCircle, AlertCircle, Sparkles, ArrowRight, ArrowLeft, Send, Loader2 } from 'lucide-react';
+import { User, CheckCircle, AlertCircle, Sparkles, ArrowRight, ArrowLeft, Send, Loader2, Undo2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,17 @@ import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
+import { formatLocalDate, parseLocalDate } from '@/lib/dates';
+
+// Etiquetas en español para los valores guardados (el resumen de revisión
+// mostraba "necesita_apoyo" / "casi_todo" tal cual).
+const FIELD_LABELS = {
+  behavior: { excelente: 'Excelente', bueno: 'Bueno', regular: 'Regular', necesita_apoyo: 'Necesita apoyo' },
+  learning: { excelente: 'Excelente', bueno: 'Bueno', regular: 'Regular', necesita_apoyo: 'Necesita apoyo' },
+  mood: { feliz: 'Feliz', tranquilo: 'Tranquilo', cansado: 'Cansado', inquieto: 'Inquieto', triste: 'Triste' },
+  food: { todo: 'Comió todo', casi_todo: 'Casi todo', poco: 'Poco', nada: 'No comió' },
+};
+const fieldLabel = (field, value) => FIELD_LABELS[field]?.[value] || value;
 
 export default function CrearBitacora() {
   const navigate = useNavigate();
@@ -33,11 +44,18 @@ export default function CrearBitacora() {
   const { canWrite } = useCanWrite();
   const urlParams = new URLSearchParams(window.location.search);
   const classroomId = urlParams.get('classroomId');
-  const today = format(new Date(), 'yyyy-MM-dd');
+  // Día local de la escuela (no toISOString: después de las 18:00 en México
+  // eso ya es mañana). La misma cadena se guarda y se muestra.
+  const today = formatLocalDate(new Date());
+  const todayDate = parseLocalDate(today);
   
   const [step, setStep] = useState(1); // 1: select student, 2: write, 3: review, 4: confirm
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  // Sugerencia de Lumi pendiente de aceptar, y el texto previo para deshacer.
+  // Lumi nunca sobrescribe lo que escribió la maestra sin que ella lo elija.
+  const [suggestion, setSuggestion] = useState('');
+  const [notesBeforeSuggestion, setNotesBeforeSuggestion] = useState(null);
   const [sendToParents, setSendToParents] = useState(true);
   const [formData, setFormData] = useState({
     notes_text: '',
@@ -124,25 +142,53 @@ export default function CrearBitacora() {
     }
   });
 
+  const hasDraftInput = Boolean(
+    formData.notes_text.trim() || formData.behavior || formData.mood || formData.food || formData.learning || formData.incidents.trim()
+  );
+
   const handleGenerateWithLumi = async () => {
-    if (!selectedStudent) return;
-    
+    if (!selectedStudent || !hasDraftInput) return;
+
     setIsGenerating(true);
     try {
-      // El prompt se arma server-side, a partir del studentId, en la Safe
-      // function `aiAssist` (task: 'diary_draft') — ver su comentario de
-      // cabecera. El cliente ya no llama a InvokeLLM directo.
+      // El prompt se arma server-side en la Safe function `aiAssist` (task:
+      // 'diary_draft') a partir de lo que la maestra ya escribió y eligió —
+      // la instrucción es redactar SIN inventar actividades. Ver su comentario
+      // de cabecera. El cliente ya no llama a InvokeLLM directo.
       const response = await base44.functions.invoke('aiAssist', {
         task: 'diary_draft',
         studentId: selectedStudent.id,
+        draft: formData.notes_text,
+        fields: {
+          behavior: formData.behavior,
+          mood: formData.mood,
+          food: formData.food,
+          learning: formData.learning,
+          incidents: formData.incidents,
+        },
       });
-
-      setFormData({ ...formData, notes_text: response?.text || '' });
+      const text = String(response?.text || '').trim();
+      if (text) setSuggestion(text);
+      else toast.error('Lumi no pudo proponer un texto. Intenta de nuevo.');
     } catch (error) {
       console.error('Error generating text:', error);
-      toast.error('Error al generar texto');
+      toast.error(error?.data?.error || 'Error al generar texto');
     }
     setIsGenerating(false);
+  };
+
+  const applySuggestion = (mode) => {
+    setNotesBeforeSuggestion(formData.notes_text);
+    const current = formData.notes_text.trim();
+    const next = mode === 'append' && current ? `${current}\n\n${suggestion}` : suggestion;
+    setFormData({ ...formData, notes_text: next });
+    setSuggestion('');
+  };
+
+  const undoSuggestion = () => {
+    if (notesBeforeSuggestion === null) return;
+    setFormData({ ...formData, notes_text: notesBeforeSuggestion });
+    setNotesBeforeSuggestion(null);
   };
 
   const handleSubmit = () => {
@@ -223,7 +269,7 @@ export default function CrearBitacora() {
                     <p className="font-medium text-card-foreground">
                       {student.first_name} {student.last_name}
                     </p>
-                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" /> Sin bitácora hoy
                     </p>
                   </div>
@@ -232,7 +278,7 @@ export default function CrearBitacora() {
 
               {studentsWithoutDiary.length === 0 && (
                 <div className="text-center py-8">
-                  <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                  <CheckCircle className="w-16 h-16 text-green-500 dark:text-green-400 mx-auto mb-4" />
                   <p className="text-lg font-medium text-foreground">¡Todas las bitácoras completas!</p>
                   <p className="text-muted-foreground">Todos los alumnos tienen su bitácora de hoy.</p>
                 </div>
@@ -256,7 +302,7 @@ export default function CrearBitacora() {
                 <p className="font-semibold text-foreground">
                   {selectedStudent?.first_name} {selectedStudent?.last_name}
                 </p>
-                <p className="text-sm text-muted-foreground">{format(new Date(), "d 'de' MMMM", { locale: es })}</p>
+                <p className="text-sm text-muted-foreground">{format(todayDate, "d 'de' MMMM", { locale: es })}</p>
               </div>
             </div>
 
@@ -268,7 +314,8 @@ export default function CrearBitacora() {
                   variant="outline"
                   size="sm"
                   onClick={handleGenerateWithLumi}
-                  disabled={isGenerating}
+                  disabled={isGenerating || !hasDraftInput}
+                  title={hasDraftInput ? undefined : 'Escribe unas notas o elige comportamiento, ánimo, comida o aprendizaje'}
                   className="gap-1"
                 >
                   {isGenerating ? (
@@ -285,6 +332,45 @@ export default function CrearBitacora() {
                 placeholder="Describe cómo estuvo el día del alumno..."
                 className="min-h-[120px]"
               />
+              {!hasDraftInput && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Lumi mejora la redacción de lo que tú escribes o eliges; no inventa actividades.
+                </p>
+              )}
+              {notesBeforeSuggestion !== null && !suggestion && (
+                <button
+                  type="button"
+                  onClick={undoSuggestion}
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
+                >
+                  <Undo2 className="w-3.5 h-3.5" /> Deshacer el cambio de Lumi
+                </button>
+              )}
+              {suggestion && (
+                <div
+                  className="mt-3 rounded-2xl border border-brand/30 bg-brand/10 p-4"
+                  role="region"
+                  aria-label="Sugerencia de Lumi"
+                >
+                  <p className="text-xs font-semibold text-brand mb-1 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" /> Sugerencia de Lumi — revísala antes de usarla
+                  </p>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{suggestion}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" size="sm" onClick={() => applySuggestion('replace')}>
+                      Usar esta versión
+                    </Button>
+                    {formData.notes_text.trim() && (
+                      <Button type="button" size="sm" variant="outline" onClick={() => applySuggestion('append')}>
+                        Agregar al final
+                      </Button>
+                    )}
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setSuggestion('')}>
+                      Descartar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -385,7 +471,7 @@ export default function CrearBitacora() {
               </Button>
               <Button
                 onClick={() => setStep(3)}
-                disabled={!formData.notes_text}
+                disabled={!formData.notes_text.trim() || !!suggestion}
                 className="flex-1"
               >
                 Revisar <ArrowRight className="w-4 h-4 ml-1" />
@@ -409,7 +495,7 @@ export default function CrearBitacora() {
                 <User className="w-10 h-10 text-brand bg-brand/10 rounded-full p-2" />
                 <div>
                   <p className="font-semibold text-card-foreground">{selectedStudent?.first_name} {selectedStudent?.last_name}</p>
-                  <p className="text-sm text-muted-foreground">{format(new Date(), "d 'de' MMMM, yyyy", { locale: es })}</p>
+                  <p className="text-sm text-muted-foreground">{format(todayDate, "d 'de' MMMM, yyyy", { locale: es })}</p>
                 </div>
               </div>
 
@@ -418,9 +504,9 @@ export default function CrearBitacora() {
               </div>
 
               {formData.teacher_message && (
-                <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-4 border border-pink-200">
-                  <p className="text-xs font-semibold text-pink-800 mb-1">💌 Mensajito especial</p>
-                  <p className="text-sm text-purple-700">{formData.teacher_message}</p>
+                <div className="bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-950/40 dark:to-purple-950/40 rounded-xl p-4 border border-pink-200 dark:border-pink-900">
+                  <p className="text-xs font-semibold text-pink-800 dark:text-pink-300 mb-1">💌 Mensajito especial</p>
+                  <p className="text-sm text-purple-700 dark:text-purple-300">{formData.teacher_message}</p>
                 </div>
               )}
 
@@ -429,34 +515,34 @@ export default function CrearBitacora() {
                   {formData.behavior && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Comportamiento:</span>
-                      <span className="font-medium text-card-foreground">{formData.behavior}</span>
+                      <span className="font-medium text-card-foreground">{fieldLabel('behavior', formData.behavior)}</span>
                     </div>
                   )}
                   {formData.mood && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Ánimo:</span>
-                      <span className="font-medium text-card-foreground">{formData.mood}</span>
+                      <span className="font-medium text-card-foreground">{fieldLabel('mood', formData.mood)}</span>
                     </div>
                   )}
                   {formData.food && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Comida:</span>
-                      <span className="font-medium text-card-foreground">{formData.food}</span>
+                      <span className="font-medium text-card-foreground">{fieldLabel('food', formData.food)}</span>
                     </div>
                   )}
                   {formData.learning && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Aprendizaje:</span>
-                      <span className="font-medium text-card-foreground">{formData.learning}</span>
+                      <span className="font-medium text-card-foreground">{fieldLabel('learning', formData.learning)}</span>
                     </div>
                   )}
                 </div>
               )}
 
               {formData.incidents && (
-                <div className="bg-amber-50 rounded-xl p-3">
-                  <p className="text-xs font-medium text-amber-800">Incidentes:</p>
-                  <p className="text-sm text-amber-700">{formData.incidents}</p>
+                <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-3">
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Incidentes:</p>
+                  <p className="text-sm text-amber-700 dark:text-amber-200">{formData.incidents}</p>
                 </div>
               )}
             </div>

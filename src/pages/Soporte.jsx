@@ -73,7 +73,7 @@ export default function Soporte() {
           <Sparkles className="w-5 h-5 text-brand mt-0.5 shrink-0" />
           <div className="text-sm text-foreground space-y-1">
             <p className="font-semibold text-foreground">¿Cómo funciona?</p>
-            <p>1. Pregúntale a <strong>Lumi</strong>: resuelve muchas dudas al instante con el manual de la app.</p>
+            <p>1. Pregúntale a <strong>Lumi</strong>: te explica cómo usar cada pantalla de LIUMA y consulta al instante los datos de tu perfil (tareas, avisos, asistencia, pagos).</p>
             <p>2. Si Lumi no puede ayudarte, crea un <strong>ticket</strong>: se asigna un número y se envía a la dirección de tu escuela o al equipo LIUMA según el caso.</p>
             <p>3. Da seguimiento aquí mismo hasta que se resuelva.</p>
           </div>

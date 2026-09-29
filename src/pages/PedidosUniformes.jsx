@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ShoppingBag, Plus, Trash2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
+import { familyCreate } from '@/lib/authorization/familyWrite';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -62,7 +63,9 @@ export default function PedidosUniformes() {
   });
 
   const createOrderMutation = useMutation({
-    mutationFn: (data) => base44.entities.UniformOrder.create(data),
+    // guardedFamilyWrite comprueba el vínculo con el alumno y fija escuela,
+    // padre y estado del lado del servidor.
+    mutationFn: (data) => familyCreate('UniformOrder', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['uniformOrders'] });
       toast.success('Pedido enviado exitosamente');

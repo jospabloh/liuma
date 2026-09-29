@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Calendar, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
+import { familyCreate } from '@/lib/authorization/familyWrite';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +43,9 @@ export default function SolicitarAusencia() {
   });
 
   const createNotificationMutation = useMutation({
-    mutationFn: (data) => base44.entities.AbsenceNotification.create(data),
+    // guardedFamilyWrite comprueba el vínculo con el alumno y fija escuela,
+    // padre y estado del lado del servidor.
+    mutationFn: (data) => familyCreate('AbsenceNotification', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['absenceNotifications'] });
       toast.success('Solicitud enviada');

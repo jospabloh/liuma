@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
+import { familyCreate, familyDelete } from '@/lib/authorization/familyWrite';
 import {
   Dialog,
   DialogContent,
@@ -34,7 +35,10 @@ export default function ContactosEmergencia() {
     notes: '',
   });
 
-  const { user, userProfile } = useCurrentProfile();
+  const { userProfile } = useCurrentProfile();
+  // Solo la dirección autoriza quién puede recoger a un alumno; el servidor
+  // (guardedFamilyWrite) ignora el campo si lo manda alguien más.
+  const canAuthorizePickup = userProfile?.app_role === 'ADMIN';
 
   const { data: student } = useQuery({
     queryKey: ['student', studentId],
@@ -52,7 +56,7 @@ export default function ContactosEmergencia() {
   });
 
   const createContactMutation = useMutation({
-    mutationFn: (data) => base44.entities.EmergencyContact.create(data),
+    mutationFn: (data) => familyCreate('EmergencyContact', data),
     onSuccess: () => {
       queryClient.invalidateQueries(['emergencyContacts']);
       toast.success('Contacto agregado');
@@ -71,19 +75,23 @@ export default function ContactosEmergencia() {
   });
 
   const deleteContactMutation = useMutation({
-    mutationFn: (contactId) => base44.entities.EmergencyContact.delete(contactId),
+    mutationFn: (contactId) => familyDelete('EmergencyContact', contactId),
     onSuccess: () => {
       queryClient.invalidateQueries(['emergencyContacts']);
       toast.success('Contacto eliminado');
+    },
+    onError: () => {
+      toast.error('No se pudo eliminar el contacto');
     },
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // La escuela la deduce el servidor a partir del alumno.
     createContactMutation.mutate({
       ...formData,
+      is_authorized_pickup: canAuthorizePickup ? formData.is_authorized_pickup : false,
       student_id: studentId,
-      school_id: userProfile.school_id,
     });
   };
 
@@ -201,17 +209,27 @@ export default function ContactosEmergencia() {
                 className="mt-1"
               />
             </div>
-            <div className="flex items-center gap-3 bg-muted rounded-xl p-4">
-              <Switch
-                checked={formData.is_authorized_pickup}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_authorized_pickup: checked })}
-                id="authorized-pickup"
-              />
-              <Label htmlFor="authorized-pickup" className="cursor-pointer">
-                <span className="font-medium">Autorizado para recoger</span>
-                <p className="text-sm text-muted-foreground">Esta persona puede recoger al alumno de la escuela</p>
-              </Label>
-            </div>
+            {canAuthorizePickup ? (
+              <div className="flex items-center gap-3 bg-muted rounded-xl p-4">
+                <Switch
+                  checked={formData.is_authorized_pickup}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_authorized_pickup: checked })}
+                  id="authorized-pickup"
+                />
+                <Label htmlFor="authorized-pickup" className="cursor-pointer">
+                  <span className="font-medium">Autorizado para recoger</span>
+                  <p className="text-sm text-muted-foreground">Esta persona puede recoger al alumno de la escuela</p>
+                </Label>
+              </div>
+            ) : (
+              <div className="flex items-start gap-3 bg-muted rounded-xl p-4">
+                <Shield className="w-4 h-4 mt-0.5 text-muted-foreground" aria-hidden="true" />
+                <p className="text-sm text-muted-foreground">
+                  Quién puede recoger al alumno lo autoriza la dirección de la escuela. Si esta persona
+                  debe poder recogerlo, avísale a la escuela después de agregarla.
+                </p>
+              </div>
+            )}
             <div>
               <Label>Notas (opcional)</Label>
               <Input

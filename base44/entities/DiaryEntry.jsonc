@@ -187,16 +187,9 @@
   ],
   "rls": {
     "create": {
-      "$or": [
-        {
-          "data.teacher_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "$or": [
@@ -214,16 +207,9 @@
       ]
     },
     "update": {
-      "$or": [
-        {
-          "data.teacher_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
       "user_condition": {

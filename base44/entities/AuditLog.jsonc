@@ -32,7 +32,12 @@
         "SUPPORT_TICKET_MESSAGE",
         "SUPPORT_TICKET_STATUS_CHANGE",
         "THEME_CREATED_OR_UPDATED",
-        "NOTIFICATION_DELIVERY_FAILED"
+        "NOTIFICATION_DELIVERY_FAILED",
+        "ATTENDANCE_CREATED",
+        "ATTENDANCE_UPDATED",
+        "RECORD_CREATED",
+        "RECORD_UPDATED",
+        "RECORD_DELETED"
       ],
       "type": "string"
     },
@@ -65,16 +70,9 @@
   ],
   "rls": {
     "create": {
-      "$or": [
-        {
-          "data.user_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "user_condition": {

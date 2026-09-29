@@ -44,6 +44,20 @@ async function allocateTicketNumber(schoolId) {
 }
 
 /**
+ * Append a message to a ticket thread through the postTicketMessage function.
+ * SupportTicketMessage create is service-role only since P7 (2026-09-29): the
+ * server re-reads the ticket, checks the caller is its requester, the
+ * platform owner or an ACTIVE ADMIN of its school, and DERIVES author_role —
+ * the client no longer gets to say who it is.
+ *
+ * @param {{ ticketId: string, body: string, kind?: 'reply'|'note'|'ai_summary' }} args
+ */
+async function postTicketMessage({ ticketId, body, kind = 'reply' }) {
+  const result = await base44.functions.invoke('postTicketMessage', { ticketId, body, kind });
+  return result?.message;
+}
+
+/**
  * Find the recipient profile(s) for an escalated ticket.
  *  - SCHOOL_ADMIN tier → active ADMIN profiles in the requester's school.
  *  - PLATFORM tier     → the super-admin owner profile(s).
@@ -172,26 +186,13 @@ export async function createSupportTicket({
   const ticket = await base44.entities.SupportTicket.create(ticketPayload);
 
   // Seed the thread: the requester's description (and the AI attempt, if any).
-  // `requester_user_id` is denormalized onto every message so Base44 RLS can
-  // scope reads to the ticket's own requester (it can't join to the parent).
-  await base44.entities.SupportTicketMessage.create({
-    ticket_id: ticket.id,
-    school_id: schoolId,
-    requester_user_id: user.id,
-    author_user_id: user.id,
-    author_role: SUPPORT_AUTHOR_ROLE.REQUESTER,
-    body: description,
-  });
+  // The function denormalizes `requester_user_id` onto every message so Base44
+  // RLS can scope reads to the ticket's own requester (it can't join to the
+  // parent).
+  await postTicketMessage({ ticketId: ticket.id, body: description, kind: 'reply' });
 
   if (aiAttempted && aiResolutionSummary) {
-    await base44.entities.SupportTicketMessage.create({
-      ticket_id: ticket.id,
-      school_id: schoolId,
-      requester_user_id: user.id,
-      author_user_id: null,
-      author_role: SUPPORT_AUTHOR_ROLE.AI,
-      body: aiResolutionSummary,
-    });
+    await postTicketMessage({ ticketId: ticket.id, body: aiResolutionSummary, kind: 'ai_summary' });
   }
 
   const recipients = await resolveAssigneeRecipients({ tier: routing.tier, schoolId });
@@ -222,22 +223,23 @@ export async function createSupportTicket({
   return ticket;
 }
 
-/** Append a reply to a ticket thread and notify the other party. */
+/**
+ * Append a reply to a ticket thread and notify the other party.
+ *
+ * `authorRole` is only the caller's expectation (and the fallback if the
+ * server response carries no message): the role actually stored is the one
+ * postTicketMessage derives, and that is what decides whether this was a
+ * staff reply.
+ */
 export async function addSupportMessage({ user, userProfile, ticket, body, authorRole }) {
   if (!user || !userProfile || !ticket || !body) {
     throw new Error('addSupportMessage requires user, userProfile, ticket and body');
   }
 
-  const message = await base44.entities.SupportTicketMessage.create({
-    ticket_id: ticket.id,
-    school_id: ticket.school_id,
-    requester_user_id: ticket.requester_user_id,
-    author_user_id: user.id,
-    author_role: authorRole,
-    body,
-  });
+  const message = await postTicketMessage({ ticketId: ticket.id, body, kind: 'reply' });
+  const storedRole = message?.author_role || authorRole;
 
-  const isStaffReply = authorRole !== SUPPORT_AUTHOR_ROLE.REQUESTER;
+  const isStaffReply = storedRole !== SUPPORT_AUTHOR_ROLE.REQUESTER;
 
   // First staff reply stops the SLA clock.
   if (isStaffReply && !ticket.first_response_at) {
@@ -274,8 +276,8 @@ export async function addSupportMessage({ user, userProfile, ticket, body, autho
     entity: AUDIT_ENTITIES.SUPPORT_TICKET,
     entityId: ticket.id,
     action: 'SUPPORT_TICKET_MESSAGE',
-    reason: `Reply by ${authorRole} on ${ticket.ticket_number}`,
-    context: { ticket_number: ticket.ticket_number, author_role: authorRole },
+    reason: `Reply by ${storedRole} on ${ticket.ticket_number}`,
+    context: { ticket_number: ticket.ticket_number, author_role: storedRole },
   });
 
   return message;
@@ -294,14 +296,7 @@ export async function transitionTicketStatus({ user, userProfile, ticket, toStat
   await base44.entities.SupportTicket.update(ticket.id, patch);
 
   if (note) {
-    await base44.entities.SupportTicketMessage.create({
-      ticket_id: ticket.id,
-      school_id: ticket.school_id,
-      requester_user_id: ticket.requester_user_id,
-      author_user_id: user.id,
-      author_role: SUPPORT_AUTHOR_ROLE.SYSTEM,
-      body: note,
-    });
+    await postTicketMessage({ ticketId: ticket.id, body: note, kind: 'note' });
   }
 
   if (toStatus === SUPPORT_STATUS.RESOLVED && ticket.requester_user_id) {
@@ -371,14 +366,7 @@ export async function escalateTicketToSupport({ user, userProfile, ticket, trigg
     (trigger === 'sla_lapse'
       ? 'Escalado automáticamente a soporte: el director no respondió dentro del SLA.'
       : 'Escalado a soporte por la dirección de la escuela.');
-  await base44.entities.SupportTicketMessage.create({
-    ticket_id: ticket.id,
-    school_id: ticket.school_id,
-    requester_user_id: ticket.requester_user_id,
-    author_user_id: user?.id || null,
-    author_role: SUPPORT_AUTHOR_ROLE.SYSTEM,
-    body: systemNote,
-  });
+  await postTicketMessage({ ticketId: ticket.id, body: systemNote, kind: 'note' });
 
   // Notify soporte: the fixed Tier-2 inbox always, plus any owner profiles.
   const recipients = await resolveAssigneeRecipients({ tier: SUPPORT_TIER.PLATFORM, schoolId: ticket.school_id });

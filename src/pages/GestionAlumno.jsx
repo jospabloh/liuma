@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { recordAuditRow } from '@/lib/audit';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -82,14 +83,12 @@ export default function GestionAlumno() {
   const linkParentMutation = useMutation({
     mutationFn: async (data) => {
       const link = await base44.entities.ParentStudent.create(data);
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await recordAuditRow({
+        schoolId: userProfile.school_id,
         action: 'PARENT_LINKED',
-        target_type: 'ParentStudent',
-        target_id: link.id,
-        details: { student_id: studentId, parent_id: data.parent_id }
+        entity: 'ParentStudent',
+        entityId: link.id,
+        context: { student_id: studentId, parent_id: data.parent_id },
       });
       return link;
     },
@@ -107,13 +106,11 @@ export default function GestionAlumno() {
   const unlinkParentMutation = useMutation({
     mutationFn: async (linkId) => {
       await base44.entities.ParentStudent.update(linkId, { status: 'REVOKED' });
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await recordAuditRow({
+        schoolId: userProfile.school_id,
         action: 'PARENT_UNLINKED',
-        target_type: 'ParentStudent',
-        target_id: linkId,
+        entity: 'ParentStudent',
+        entityId: linkId,
       });
     },
     onSuccess: () => {

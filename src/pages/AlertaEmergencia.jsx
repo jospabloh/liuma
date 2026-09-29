@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { recordAuditRow } from '@/lib/audit';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -79,13 +80,11 @@ export default function AlertaEmergencia() {
         priority: 'URGENT',
       });
 
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await recordAuditRow({
+        schoolId: userProfile.school_id,
         action: 'EMERGENCY_ALERT',
-        target_type: 'Notice',
-        details: { message: alertMessage }
+        entity: 'Notice',
+        context: { message: alertMessage },
       });
 
       return true;

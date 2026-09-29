@@ -26,42 +26,22 @@
 // and READ_ONLY_STATUSES in sync with those two client copies by hand — Deno
 // functions can't import across directories (same constraint documented on
 // governRoleChange/entry.ts), so there's no shared module to import instead.
+//
+// P7 (2026-09-29): Notice/Homework/Attendance/DiaryEntry create/update are now
+// service-role only in their entity RLS, so this function is the ONLY write
+// path for them — its checks are no longer advisory. The pure rules
+// (POLICY_WRITE, attribution, server-only fields, who may modify an existing
+// record) live in ./_policy.ts so node --test can exercise them.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import {
+  ATTRIBUTION_FIELDS,
+  POLICY_WRITE,
+  decideModifyExisting,
+  referencesToCheck,
+  stripServerOnlyFields,
+} from './_policy.ts';
 
-const POLICY_WRITE: Record<string, string[]> = {
-  Notice: ['ADMIN', 'TEACHER'],
-  Attendance: ['ADMIN', 'TEACHER'],
-  Homework: ['ADMIN', 'TEACHER'],
-  DiaryEntry: ['ADMIN', 'TEACHER'],
-  ChargeItem: ['ADMIN'],
-  PaymentConcept: ['ADMIN'],
-  PaymentRecord: ['ADMIN'],
-};
 const ENTITIES = Object.keys(POLICY_WRITE);
-
-// Each of these entities' OWN deployed RLS (bypassed here by the service-role
-// write below) normally pins this field to `{{user.id}}` on create/update —
-// Attendance.recorded_by, DiaryEntry/Homework.teacher_id, Notice.author_id.
-// Every real call site in src/ already sends the caller's own id/name here
-// (grepped, none do otherwise), so overriding rather than trusting the
-// client's value costs no legitimate use and closes an attribution-spoofing
-// hole a caller could otherwise use to make a write look like it came from a
-// different teacher (Base44 security scan, 2026-09-28).
-const ATTRIBUTION_FIELDS: Record<string, { id: string; name?: string }> = {
-  Attendance: { id: 'recorded_by', name: 'recorded_by_name' },
-  PaymentRecord: { id: 'recorded_by' },
-  DiaryEntry: { id: 'teacher_id', name: 'teacher_name' },
-  Homework: { id: 'teacher_id', name: 'teacher_name' },
-  Notice: { id: 'author_id', name: 'author_name' },
-};
-// Belt-and-suspenders alongside each field's own rls.write:false (Base44
-// security scan, 2026-09-28): service-role writes here bypass RLS entirely,
-// so a field an entity's own RLS marks server-only still needs stripping
-// from a client-submitted patch by hand, or a caller could set it directly
-// through this function even though direct RLS would refuse the same write.
-const SERVER_ONLY_UPDATE_FIELDS: Record<string, string[]> = {
-  DiaryEntry: ['parents_notified_at', 'notified_parent_emails'],
-};
 const READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];
 const OPERATIONS = ['create', 'update', 'delete'];
 
@@ -128,6 +108,29 @@ async function buildEventChargeData(
   };
 }
 
+// Returns the first client-supplied reference (see REFERENCE_ENTITIES) whose
+// record is missing or lives in another school, or null if all check out.
+// deno-lint-ignore no-explicit-any
+async function firstForeignReference(sr: any, data: Record<string, unknown>, schoolId: string): Promise<string | null> {
+  for (const [field, entityName, id] of referencesToCheck(data)) {
+    const ref: { school_id?: string } | null = await sr.entities[entityName].get(id).catch(() => null);
+    if (!ref || String(ref.school_id || '') !== schoolId) return field;
+  }
+  return null;
+}
+
+// Audit rows are written here, server-side, because AuditLog create is
+// service-role only (P7). Best-effort: the write it describes already
+// happened, and failing the request now would invite a duplicate retry.
+// deno-lint-ignore no-explicit-any
+async function writeAudit(sr: any, row: Record<string, unknown>): Promise<void> {
+  try {
+    await sr.entities.AuditLog.create({ ...row, timestamp: new Date().toISOString() });
+  } catch (e) {
+    console.error('guardedEntityWrite audit write failed', (e as Error).message);
+  }
+}
+
 function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
@@ -171,6 +174,8 @@ Deno.serve(async (req) => {
     // access below — the create handler uses this, server-derived, instead
     // of body.data, so a parent can't submit their own amount/status.
     let eventChargeData: Record<string, unknown> | null = null;
+    // How an update/delete was authorized — recorded in the audit row.
+    let modifyReason = 'platform_owner';
     if (!isPlatformOwner) {
       const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
       profile = profiles.find((p) => p.status === 'ACTIVE') || null;
@@ -215,13 +220,40 @@ Deno.serve(async (req) => {
       if (sub && READ_ONLY_STATUSES.includes(String(sub.subscription_status))) {
         return bad(403, 'WRITE_BLOCKED', 'This school\'s subscription is read-only');
       }
+
+      // Record-level rule for update/delete (P7, 2026-09-29): the role policy
+      // above only says "a TEACHER may write Notices", not "this teacher may
+      // rewrite THAT teacher's diary entry". See decideModifyExisting.
+      if (operation !== 'create') {
+        let assignedClassroomIds: string[] = [];
+        const existingClassroom = String((existing as { classroom_id?: string }).classroom_id || '');
+        if (entity === 'Attendance' && operation === 'update' && profile.app_role !== 'ADMIN' && existingClassroom) {
+          const assignments: Array<{ classroom_id?: string; is_active?: boolean }> = await sr.entities.TeacherClassroom.filter({
+            school_id: schoolId,
+            teacher_id: user.id,
+            classroom_id: existingClassroom,
+          });
+          assignedClassroomIds = assignments.filter((a) => a.is_active !== false).map((a) => String(a.classroom_id || ''));
+        }
+        const decision = decideModifyExisting({
+          entity,
+          operation,
+          appRole: String(profile.app_role || ''),
+          userId: String(user.id),
+          existing: existing as Record<string, unknown>,
+          assignedClassroomIds,
+        });
+        if (!decision.ok) return bad(403, decision.code, decision.message);
+        modifyReason = decision.reason;
+      }
     }
 
     if (operation === 'create') {
       // eventChargeData, when set, is entirely server-derived (see
       // buildEventChargeData) and replaces body.data outright — the parent's
-      // submitted amount/status/etc. never reach the write.
-      const data: Record<string, unknown> = eventChargeData ?? { ...(body.data || {}) };
+      // submitted amount/status/etc. never reach the write. Server-only
+      // notification fields are stripped on create too, not just on update.
+      const data: Record<string, unknown> = eventChargeData ?? stripServerOnlyFields(entity, body.data || {});
 
       const attribution = ATTRIBUTION_FIELDS[entity];
       if (attribution) {
@@ -244,10 +276,14 @@ Deno.serve(async (req) => {
           return bad(400, 'STUDENT_NOT_IN_SCHOOL', 'student_id does not belong to this school');
         }
       }
+      const foreignRef = await firstForeignReference(sr, data, schoolId);
+      if (foreignRef) return bad(400, 'REFERENCE_NOT_IN_SCHOOL', `${foreignRef} does not belong to this school`);
 
       const created = await sr.entities[entity].create(data);
       return Response.json({ ok: true, record: created });
     }
+
+    const recordId = String((existing as { id: string }).id);
 
     if (operation === 'update') {
       // A client-submitted school_id on update could otherwise reassign the
@@ -258,7 +294,7 @@ Deno.serve(async (req) => {
       // and no real call site ever sends one) and the entity's attribution
       // field(s): who authored a record doesn't change on edit, and no real
       // call site ever sends one on update (only on create).
-      const patch = { ...(body.data || {}) };
+      const patch = stripServerOnlyFields(entity, body.data || {});
       delete (patch as { school_id?: unknown }).school_id;
       delete (patch as { student_id?: unknown }).student_id;
       const attribution = ATTRIBUTION_FIELDS[entity];
@@ -266,15 +302,38 @@ Deno.serve(async (req) => {
         delete (patch as Record<string, unknown>)[attribution.id];
         if (attribution.name) delete (patch as Record<string, unknown>)[attribution.name];
       }
-      for (const field of SERVER_ONLY_UPDATE_FIELDS[entity] || []) {
-        delete (patch as Record<string, unknown>)[field];
-      }
-      const updated = await sr.entities[entity].update(String((existing as { id: string }).id), patch);
+      const foreignRef = await firstForeignReference(sr, patch, schoolId);
+      if (foreignRef) return bad(400, 'REFERENCE_NOT_IN_SCHOOL', `${foreignRef} does not belong to this school`);
+
+      const updated = await sr.entities[entity].update(recordId, patch);
+      await writeAudit(sr, {
+        school_id: schoolId,
+        user_id: user.id,
+        user_email: user.email,
+        action: 'RECORD_UPDATED',
+        target_type: entity,
+        target_id: recordId,
+        details: { fields: Object.keys(patch), authorized_as: modifyReason },
+      });
       return Response.json({ ok: true, record: updated });
     }
 
     // operation === 'delete'
-    await sr.entities[entity].delete(String((existing as { id: string }).id));
+    await sr.entities[entity].delete(recordId);
+    const attribution = ATTRIBUTION_FIELDS[entity];
+    await writeAudit(sr, {
+      school_id: schoolId,
+      user_id: user.id,
+      user_email: user.email,
+      action: 'RECORD_DELETED',
+      target_type: entity,
+      target_id: recordId,
+      details: {
+        authorized_as: modifyReason,
+        original_author: attribution ? String((existing as Record<string, unknown>)[attribution.id] || '') : null,
+        student_id: String((existing as { student_id?: string }).student_id || '') || null,
+      },
+    });
     return Response.json({ ok: true });
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });

@@ -15,11 +15,13 @@ function read(path) {
 // rather than exercising it at runtime.
 
 test('guardedEntityWrite overrides attribution fields instead of trusting the client, on both create and update', () => {
-  const source = read('base44/functions/guardedEntityWrite/entry.ts');
-  assert.match(source, /const ATTRIBUTION_FIELDS: Record<string, \{ id: string; name\?: string \}> = \{/);
+  // Since P7 (2026-09-29) the table lives in the function's pure ./_policy.ts.
+  const policy = read('base44/functions/guardedEntityWrite/_policy.ts');
+  assert.match(policy, /export const ATTRIBUTION_FIELDS: Record<string, \{ id: string; name\?: string \}> = \{/);
   for (const entityName of ['Attendance', 'PaymentRecord', 'DiaryEntry', 'Homework', 'Notice']) {
-    assert.match(source, new RegExp(`${entityName}: \\{ id: '`), `expected an ATTRIBUTION_FIELDS entry for ${entityName}`);
+    assert.match(policy, new RegExp(`${entityName}: \\{ id: '`), `expected an ATTRIBUTION_FIELDS entry for ${entityName}`);
   }
+  const source = read('base44/functions/guardedEntityWrite/entry.ts');
   // create: the field is SET from user.id/user.full_name, never read from body.data.
   assert.match(source, /data\[attribution\.id\] = user\.id;/);
   assert.match(source, /data\[attribution\.name\] = String\(user\.full_name \|\| ''\);/);
@@ -36,7 +38,8 @@ test('guardedEntityWrite derives the PARENT/EVENTO ChargeItem carve-out\'s finan
   assert.match(source, /status: 'PENDING',/);
   // The create handler uses buildEventChargeData's result outright instead of
   // spreading body.data when the carve-out granted access.
-  assert.match(source, /const data: Record<string, unknown> = eventChargeData \?\? \{ \.\.\.\(body\.data \|\| \{\}\) \};/);
+  // (Since P7 the non-carve-out branch also strips server-only fields.)
+  assert.match(source, /const data: Record<string, unknown> = eventChargeData \?\? stripServerOnlyFields\(entity, body\.data \|\| \{\}\);/);
 });
 
 test('sendNotificationEmail locks new_user_pending to the caller\'s own identity and is idempotent PER RECIPIENT', () => {
@@ -81,9 +84,11 @@ test('the new idempotency-tracking fields are server-only (rls.write:false) and 
   // alone isn't enough — it must also strip these fields from a client
   // patch by hand (same defense-in-depth reasoning as the attribution
   // fields and school_id above them in the same function).
+  // Since P7 the list lives in ./_policy.ts and is applied on create too.
+  const policy = read('base44/functions/guardedEntityWrite/_policy.ts');
+  assert.match(policy, /DiaryEntry: \['parents_notified_at', 'notified_parent_emails'\],/);
   const guardedEntityWrite = read('base44/functions/guardedEntityWrite/entry.ts');
-  assert.match(guardedEntityWrite, /DiaryEntry: \['parents_notified_at', 'notified_parent_emails'\],/);
-  assert.match(guardedEntityWrite, /for \(const field of SERVER_ONLY_UPDATE_FIELDS\[entity\] \|\| \[\]\) \{/);
+  assert.match(guardedEntityWrite, /const patch = stripServerOnlyFields\(entity, body\.data \|\| \{\}\);/);
 });
 
 // 2026-09-28, second scan (post-redeploy): a re-scan against the fixes

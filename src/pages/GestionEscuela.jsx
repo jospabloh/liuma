@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { recordAuditRow } from '@/lib/audit';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -74,13 +75,11 @@ export default function GestionEscuela() {
   const createClassroomMutation = useMutation({
     mutationFn: async (data) => {
       const classroom = await base44.entities.Classroom.create(data);
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await recordAuditRow({
+        schoolId: userProfile.school_id,
         action: 'CLASSROOM_CREATED',
-        target_type: 'Classroom',
-        target_id: classroom.id,
+        entity: 'Classroom',
+        entityId: classroom.id,
       });
       return classroom;
     },
@@ -98,13 +97,11 @@ export default function GestionEscuela() {
   const createStudentMutation = useMutation({
     mutationFn: async (data) => {
       const student = await base44.entities.Student.create(data);
-      await base44.entities.AuditLog.create({
-        school_id: userProfile.school_id,
-        user_id: user.id,
-        user_email: user.email,
+      await recordAuditRow({
+        schoolId: userProfile.school_id,
         action: 'STUDENT_CREATED',
-        target_type: 'Student',
-        target_id: student.id,
+        entity: 'Student',
+        entityId: student.id,
       });
       return student;
     },

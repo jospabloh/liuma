@@ -40,8 +40,9 @@ export default function GestionSalon() {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
 
   const { user, userProfile } = useCurrentProfile();
-  // Assigning teachers to a classroom is the director's job; the backend
-  // rejects it from a TEACHER anyway, so don't offer a button that always fails.
+  // Assigning or removing a classroom's teachers is a director's decision; the
+  // backend rejects it from a TEACHER anyway. A TEACHER opening this page (it is
+  // also their classroom view) sees who is assigned, but not the controls.
   const canManageTeachers = userProfile?.app_role === 'ADMIN';
 
   const { data: classroom, isLoading } = useQuery({
@@ -84,11 +85,6 @@ export default function GestionSalon() {
   // Teacher names come from the server-side member directory (UserProfile has
   // no name, and a client User.list() only returns the caller's own row).
   const { getName: getUserName } = useSchoolMembers(userProfile?.school_id);
-
-  // Assigning or removing a classroom's teachers is a director's decision.
-  // A TEACHER opening this page (it is also their classroom view) sees who is
-  // assigned, but not the controls to change it.
-  const canManageTeachers = userProfile?.app_role === 'ADMIN';
 
   const assignedTeacherIds = teacherAssignments.map(t => t.teacher_id);
   const availableTeachers = teacherProfiles.filter(p => !assignedTeacherIds.includes(p.user_id));

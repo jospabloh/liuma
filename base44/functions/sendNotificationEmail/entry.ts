@@ -33,16 +33,28 @@
 //      several admins would otherwise only notify the first one.
 //   3. The caller's `app_role` must be allowed to trigger this eventType
 //      (CALLER_ROLES below).
-//   4. The recipient email must resolve to either the fixed Tier-2 support
-//      inbox (only for `support_ticket_escalated`) or a real User who has a
+//   4. The recipient email must resolve to a real User who has a
 //      UserProfile in `schoolId`, whose `app_role` is allowed to RECEIVE this
 //      eventType (RECIPIENT_ROLES below). Any other address is rejected — the
 //      whole point is that a client can't turn this into a relay to an
 //      address of its choosing.
+//
+// `support_ticket_escalated` is NOT sent from here any more (2026-09-29,
+// sales-readiness audit F30): this path let any ACTIVE user email the
+// support inbox or their school's admins any number of times with free-text
+// fields of their own. It now goes through sendBulkNotification, keyed on a
+// stored SupportTicket id, once per (ticket, tier, recipient) and rate
+// limited per requester. A call for it here is refused with MOVED so an old
+// client can't keep using the unbounded path.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 
-const SUPPORT_EMAIL = 'soporte@acaciaco.com.mx';
+// Events that fan out server-side in sendBulkNotification and must not be
+// sent one address at a time from here. emergency_alert / reminders stay
+// accepted for now: they are ADMIN-only and recipient-checked, and refusing
+// them before the new site is deployed would take the emergency alert down
+// in the gap between `npm run deploy` and `npm run deploy:site`.
+const BULK_ONLY_EVENTS = ['support_ticket_escalated'];
 const MAX_CONTEXT_STRING_LEN = 4000;
 
 // Mirrors onboardingTenantCreation.js's own roleNames map — the label shown
@@ -63,7 +75,6 @@ const CALLER_ROLES: Record<string, string[] | null> = {
   payment_due: ['ADMIN'],
   event_confirmation_reminder: ['ADMIN'],
   emergency_alert: ['ADMIN'],
-  support_ticket_escalated: null,
   support_ticket_reply: ['ADMIN'],
   support_ticket_resolved: ['ADMIN'],
 };
@@ -75,7 +86,6 @@ const RECIPIENT_ROLES: Record<string, string[] | null> = {
   payment_due: ['PARENT'],
   event_confirmation_reminder: ['PARENT'],
   emergency_alert: null,
-  support_ticket_escalated: ['ADMIN'],
   support_ticket_reply: null,
   support_ticket_resolved: null,
 };
@@ -113,8 +123,11 @@ Deno.serve(async (req) => {
     const eventType = String(body?.eventType || '');
     const schoolId = String(body?.schoolId || '');
     const email = String(body?.email || '').trim().toLowerCase();
+    if (BULK_ONLY_EVENTS.includes(eventType)) {
+      return bad(410, 'MOVED', 'This notification is sent by sendBulkNotification');
+    }
     const template = NOTIFICATION_TEMPLATES[eventType];
-    if (!template) return bad(400, 'UNKNOWN_EVENT', 'Unknown eventType');
+    if (!template || !(eventType in CALLER_ROLES)) return bad(400, 'UNKNOWN_EVENT', 'Unknown eventType');
     if (!schoolId) return bad(400, 'MISSING_SCHOOL', 'schoolId is required');
     if (!email) return bad(400, 'MISSING_EMAIL', 'email is required');
 
@@ -171,11 +184,7 @@ Deno.serve(async (req) => {
 
     // Recipient authorization — never trust the caller's claim about who this
     // email is "for"; re-derive it from the address itself.
-    if (email === SUPPORT_EMAIL) {
-      if (eventType !== 'support_ticket_escalated') {
-        return bad(403, 'BAD_RECIPIENT', 'This event may not email the support inbox');
-      }
-    } else {
+    {
       // Stored emails may carry the casing the user typed at signup; try the
       // address as sent first, then lowercased.
       const rawEmail = String(body?.email || '').trim();
@@ -185,16 +194,9 @@ Deno.serve(async (req) => {
       if (!recipientUser) return bad(403, 'BAD_RECIPIENT', 'Recipient is not a known user');
       const recipientProfiles = await sr.entities.UserProfile.filter({ user_id: recipientUser.id, school_id: schoolId });
       const allowedRecipientRoles = RECIPIENT_ROLES[eventType];
-      let recipientProfile = allowedRecipientRoles
+      const recipientProfile = allowedRecipientRoles
         ? recipientProfiles.find((p: { app_role?: string }) => allowedRecipientRoles.includes(String(p.app_role)))
         : recipientProfiles[0];
-      // Tier-2 escalations go to the platform owners (tickets.js's
-      // resolveAssigneeRecipients: UserProfile.is_super_admin), who normally
-      // have no profile in the ticket's school.
-      if (!recipientProfile && eventType === 'support_ticket_escalated') {
-        const ownerProfiles = await sr.entities.UserProfile.filter({ user_id: recipientUser.id, is_super_admin: true });
-        recipientProfile = ownerProfiles?.[0] || (recipientUser.role === 'admin' ? recipientUser : null);
-      }
       if (!recipientProfile) return bad(403, 'BAD_RECIPIENT', 'Recipient has no qualifying profile in this school');
     }
 

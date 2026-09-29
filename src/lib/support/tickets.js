@@ -6,7 +6,6 @@ import {
   SUPPORT_AUTHOR_ROLE,
   SUPPORT_CHANNEL,
   SUPPORT_TIER,
-  SUPPORT_EMAIL,
   TERMINAL_STATUSES,
   DEFAULT_CATEGORY,
   DEFAULT_PRIORITY,
@@ -58,65 +57,25 @@ async function postTicketMessage({ ticketId, body, kind = 'reply' }) {
 }
 
 /**
- * Find the recipient profile(s) for an escalated ticket.
- *  - SCHOOL_ADMIN tier → active ADMIN profiles in the requester's school.
- *  - PLATFORM tier     → the super-admin owner profile(s).
+ * Notify whoever owns an escalated ticket: the school's ACTIVE ADMINs for the
+ * SCHOOL_ADMIN tier, or the platform owners plus the fixed Tier-2 inbox
+ * (soporte@…, SUPPORT_EMAIL) for the PLATFORM tier.
+ *
+ * All of it happens server-side in sendBulkNotification, keyed on the stored
+ * ticket id: the recipients, their addresses and the email text are read from
+ * the ticket and its thread, never sent from here. That closes three things
+ * the old client fan-out had wrong (sales-readiness audit F09/F30): the
+ * admins' emails came from a User.list() that returns nobody but yourself; any
+ * user could email soporte any number of times with free text of their own;
+ * and the same ticket could be re-announced on every call. The server sends
+ * once per (ticket, tier, recipient) and rate-limits requesters.
+ *
+ * Never throws: a notification failure must not block ticket creation.
  */
-async function resolveAssigneeRecipients({ tier, schoolId }) {
+async function notifyAssignees({ ticket }) {
   try {
-    if (tier === SUPPORT_TIER.PLATFORM) {
-      const owners = await base44.entities.UserProfile.filter({ is_super_admin: true });
-      return owners || [];
-    }
-    const admins = await base44.entities.UserProfile.filter({
-      school_id: schoolId,
-      app_role: 'ADMIN',
-      status: 'ACTIVE',
-    });
-    return admins || [];
+    await notificationService.sendBulk({ eventType: 'support_ticket_escalated', ticketId: ticket.id });
   } catch (error) {
-    return [];
-  }
-}
-
-async function notifyAssignees({ recipients, schoolId, actorUserId, ticket, description, tier }) {
-  const templateContext = {
-    ticketNumber: ticket.ticket_number,
-    subjectText: ticket.subject,
-    requesterName: ticket.requester_name || 'Usuario',
-    categoryLabel: ticket.category,
-    priorityLabel: ticket.priority,
-    slaDateLabel: ticket.sla_due_at ? new Date(ticket.sla_due_at).toLocaleString('es-MX') : 'N/D',
-    description,
-  };
-
-  try {
-    if (recipients.length) {
-      await notificationService.sendByEvent({
-        eventType: 'support_ticket_escalated',
-        schoolId,
-        actorUserId,
-        recipients,
-        channels: ['in_app', 'email'],
-        priority: ticket.priority,
-        templateContext,
-      });
-    }
-
-    // Tier-2 (platform) escalations always email the fixed support inbox, so
-    // "soporte" is notified even when no owner profile exists in the directory
-    // (the is_super_admin lookup can legitimately return nobody).
-    if (tier === SUPPORT_TIER.PLATFORM) {
-      await notificationService.sendEventEmailTo({
-        eventType: 'support_ticket_escalated',
-        email: SUPPORT_EMAIL,
-        schoolId,
-        actorUserId,
-        templateContext,
-      });
-    }
-  } catch (error) {
-    // Notification failures are logged inside the service; never block ticket creation.
     console.error('Error notifying support assignees:', error);
   }
 }
@@ -195,8 +154,7 @@ export async function createSupportTicket({
     await postTicketMessage({ ticketId: ticket.id, body: aiResolutionSummary, kind: 'ai_summary' });
   }
 
-  const recipients = await resolveAssigneeRecipients({ tier: routing.tier, schoolId });
-  await notifyAssignees({ recipients, schoolId, actorUserId: user.id, ticket, description, tier: routing.tier });
+  await notifyAssignees({ ticket });
 
   await logAuditEvent({
     user,
@@ -368,16 +326,10 @@ export async function escalateTicketToSupport({ user, userProfile, ticket, trigg
       : 'Escalado a soporte por la dirección de la escuela.');
   await postTicketMessage({ ticketId: ticket.id, body: systemNote, kind: 'note' });
 
-  // Notify soporte: the fixed Tier-2 inbox always, plus any owner profiles.
-  const recipients = await resolveAssigneeRecipients({ tier: SUPPORT_TIER.PLATFORM, schoolId: ticket.school_id });
-  await notifyAssignees({
-    recipients,
-    schoolId: ticket.school_id,
-    actorUserId: user?.id || null,
-    ticket: updated,
-    description: systemNote,
-    tier: SUPPORT_TIER.PLATFORM,
-  });
+  // Notify soporte (tier: SUPPORT_TIER.PLATFORM now that the patch above is
+  // stored): the fixed Tier-2 inbox always, plus any owner profiles. The
+  // server reads the tier and the hand-off note from the stored ticket.
+  await notifyAssignees({ ticket: updated });
 
   if (user && userProfile) {
     await logAuditEvent({

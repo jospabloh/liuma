@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
+import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import { toast } from "sonner";
 import {
   Dialog,
@@ -72,10 +73,10 @@ export default function GestionAlumno() {
     enabled: !!userProfile,
   });
 
-  const { data: allUsers = [] } = useQuery({
-    queryKey: ['allUsers'],
-    queryFn: () => base44.entities.User.list(),
-  });
+  // Parent names/emails come from the server-side member directory
+  // (UserProfile has neither, and a client User.list() only returns the
+  // caller's own row — every parent used to read "Sin nombre").
+  const { getName: getUserName, getEmail: getUserEmail } = useSchoolMembers(userProfile?.school_id);
 
   const linkedParentIds = parentLinks.map(l => l.parent_id);
   const availableParents = parentProfiles.filter(p => !linkedParentIds.includes(p.user_id));
@@ -128,16 +129,6 @@ export default function GestionAlumno() {
       status: 'ACTIVE',
       is_primary: parentLinks.filter(l => l.status === 'ACTIVE').length === 0,
     });
-  };
-
-  const getUserName = (userId) => {
-    const u = allUsers.find(u => u.id === userId);
-    return u?.full_name || 'Sin nombre';
-  };
-
-  const getUserEmail = (userId) => {
-    const u = allUsers.find(u => u.id === userId);
-    return u?.email || '';
   };
 
   const relationshipLabels = {

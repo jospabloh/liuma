@@ -1,7 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { schoolRead } from '@/lib/data/schoolRead';
+import { schoolRead, SCHOOL_READ_ALL } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -13,7 +12,7 @@ import { createPageUrl } from '@/utils';
 import { Button } from '@/components/ui/button';
 import { canReadEntity } from '@/lib/authorization/policy';
 import { canExportReports, exportReportCSV, exportReportPDF } from '@/lib/report-export';
-import { attendanceSummary, diaryCoverage, fetchAllPages } from '@/lib/reports/kpis';
+import { attendanceSummary, diaryCoverage } from '@/lib/reports/kpis';
 import { formatLocalDate, isBeforeToday, parseLocalDate } from '@/lib/dates';
 import { toast } from 'sonner';
 
@@ -39,9 +38,12 @@ export default function Reportes() {
   });
 
   // Date range and salón are applied by the server (same shape as
-  // ResumenAsistencia), and every cursor page is read: the page used to pull
-  // the school's whole history and filter it here, which the SDK silently cut
-  // at 5,000 records — a month of a 300-student school.
+  // ResumenAsistencia), and every page is read: the page used to pull the
+  // school's whole history and filter it here, which the SDK silently cut at
+  // 5,000 records — a month of a 300-student school. Through schoolRead
+  // (P10): the entity RLS only shows a director the rows they wrote
+  // themselves. SCHOOL_READ_ALL throws "acota las fechas" rather than
+  // report a cut total.
   const rangeValid = !!filters.dateFrom && !!filters.dateTo && filters.dateFrom <= filters.dateTo;
   const rangeQuery = (schoolId) => ({
     school_id: schoolId,
@@ -51,17 +53,13 @@ export default function Reportes() {
 
   const { data: attendances = [], isError: attendanceError, isLoading: attendanceLoading } = useQuery({
     queryKey: ['attendanceReport', userProfile?.school_id, filters.dateFrom, filters.dateTo, filters.classroomId],
-    queryFn: () => fetchAllPages(base44.entities.Attendance, rangeQuery(userProfile.school_id), {
-      fields: ['student_id', 'classroom_id', 'date', 'status'],
-    }),
+    queryFn: () => schoolRead('Attendance', rangeQuery(userProfile.school_id), 'date', SCHOOL_READ_ALL),
     enabled: !!userProfile && rangeValid && canReadEntity(role, 'Attendance'),
   });
 
   const { data: diaries = [], isError: diariesError, isLoading: diariesLoading } = useQuery({
     queryKey: ['diariesReport', userProfile?.school_id, filters.dateFrom, filters.dateTo, filters.classroomId],
-    queryFn: () => fetchAllPages(base44.entities.DiaryEntry, rangeQuery(userProfile.school_id), {
-      fields: ['student_id', 'classroom_id', 'date'],
-    }),
+    queryFn: () => schoolRead('DiaryEntry', rangeQuery(userProfile.school_id), 'date', SCHOOL_READ_ALL),
     enabled: !!userProfile && rangeValid && canReadEntity(role, 'DiaryEntry'),
   });
 

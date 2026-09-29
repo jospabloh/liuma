@@ -1057,7 +1057,9 @@ propia al final).
    SchoolSubscription, ConsentRecord (P6); UserProfile, User, Notice, Homework,
    Attendance, DiaryEntry, EmergencyContact, AbsenceNotification, EventResponse,
    UniformOrder, SupportTicketMessage, AuditLog (P7); SupportTicket (P8).
-3. **Inmediatamente** `npm run deploy` (18 funciones) y `npm run deploy:site`.
+3. **Inmediatamente** `npm run deploy` (20 funciones: + `schoolRead` y
+   `markWelcomeShown` de P10) y `npm run deploy:site`. **`schoolRead` no puede
+   salir antes que el `UserProfile` del paso 2** — ver «Despliegue» en P10.
    P7 pedía funciones+sitio antes o junto con entidades (si las entidades
    cierran primero, las escrituras directas del cliente viejo fallan en el
    hueco); P6 y P8 pedían entidades primero (campos nuevos que las funciones
@@ -1130,10 +1132,59 @@ un padre no ve al compañero del mismo salón, un vínculo a un alumno de otra
 escuela no da nada, un maestro no ve salones inactivos, el hilo de un ticket
 propio incluye la respuesta del personal y el ajeno no.
 
-**Despliegue:** `npm run deploy` (función nueva `schoolRead` + `lumiQuery`/
-`lumiWrite` con `_scope.ts`) **antes o junto con** `npm run deploy:site`: el
-sitio nuevo sin la función deja todas las pantallas en error. No toca
-entidades.
+**Despliegue — el orden importa, y no es el obvio:**
+
+1. **`npm run deploy:entities` con `UserProfile` ANTES de `npm run deploy`.**
+   `schoolRead` lee la escuela entera con service role guiándose sólo por el
+   `UserProfile` del que llama (`school_id`, `app_role`, `status`). Con el
+   esquema desplegado de hoy esos campos los puede escribir el propio usuario
+   en su fila: si `schoolRead` sale primero, `UserProfile.update(propio,
+   {school_id: otra, app_role: 'ADMIN', status: 'ACTIVE', onboarding_completed:
+   true})` le da la otra escuela entera — datos médicos, contactos, cobros,
+   auditoría. Antes de P10 esa edición no exponía nada (la RLS estricta no le
+   daba filas ajenas). Desde la revisión de P10 el repo ya no depende sólo de
+   los candados por campo: `UserProfile.rls.update` es **sólo service role** y
+   el único cambio que el cliente hacía (`welcome_message_shown`, Home.jsx) va
+   por la función `markWelcomeShown`.
+2. **Sonda en vivo antes de dar por bueno el paso 1**, con un usuario de
+   prueba que NO sea dueño de plataforma: `UserProfile.update(suPropioId,
+   {school_id: 'x'})`, `{status: 'ACTIVE'}` y `{welcome_message_shown: true}`
+   tienen que ser rechazados (o no cambiar nada). Si no, `schoolRead` no sale.
+3. `npm run deploy` (`schoolRead`, `markWelcomeShown`, `guardedEntityWrite`,
+   `lumiQuery`/`lumiWrite` con `_scope.ts`) **antes o junto con** `npm run
+   deploy:site`: el sitio nuevo sin las funciones deja las pantallas en error
+   (y el aviso de bienvenida sin poder cerrarse).
+
+**Revisión adversarial de P10 (2026-09-29), lo que cambió:**
+
+- `SupportTicket` y `NoticeDelivery` aceptan del cliente cualquier `school_id`
+  (su RLS de `create` sólo fija solicitante/destinatario). La regla `members`
+  de `_scope.ts` exige que ese usuario tenga un `UserProfile` **ACTIVE** en la
+  escuela; si no, la fila no llega al personal. Se revisa fila a fila (no como
+  un `$in` gigante en la URL), así que esas lecturas van en modo escaneo.
+  Consecuencia aceptada: los avisos/tickets de alguien que dejó la escuela
+  dejan de verse en las listas del personal.
+- TEACHER ve `Attendance`/`DiaryEntry` sólo si el salón **y el alumno** son
+  suyos, y `Student` sólo los ACTIVOS de sus salones (`studentIds`, lo mismo
+  que usa Lumi). `guardedEntityWrite` rechaza en `create` de un no-ADMIN un
+  salón que no tiene asignado o un alumno que no está en ese salón
+  (`decideCreateTargets` en `_policy.ts`), y lo mismo para avisos CLASSROOM/
+  STUDENT.
+- Para no-ADMIN la salida es **lista blanca** (`SYSTEM_FIELDS` + `fields` −
+  `hide`); un ADMIN de escuela ya no ve `ip_address` en la auditoría; un lote
+  lleva como mucho `MAX_SCANS_PER_BATCH` (3) lecturas en modo escaneo (una
+  prueba revisa cada `schoolReadMany` de `src/`); un 500 ya no devuelve el
+  mensaje crudo.
+- Reportes leía `Attendance`/`DiaryEntry` directo (pasando
+  `base44.entities.X` a `fetchAllPages`) y el escaneo no lo veía: un director
+  veía asistencia y bitácoras en ~0. Ahora van por `schoolRead` con
+  `SCHOOL_READ_ALL` (todo o error «acota las fechas», nunca una cifra
+  cortada), y el escaneo marca cualquier `entities.X` que no sea escritura.
+  `read()` ya no pide un `skip` que el servidor rechaza.
+- **No se cambió, a propósito:** un padre deja de ver sus propias ausencias,
+  pedidos y respuestas a eventos cuando se desactiva el vínculo con el hijo.
+  Añadir la rama `parent_id: self` las devolvería, pero también devuelve datos
+  del niño a un adulto cuyo vínculo se revocó: **decisión del dueño**.
 
 **No verificado:** nada contra Base44 en vivo — ni que la API acepte
 `limit+1`/`skip` como el SDK documenta, ni tiempos con una escuela real (cada

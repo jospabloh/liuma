@@ -106,3 +106,56 @@ export function decideModifyExisting(input: {
   }
   return { ok: false, code: 'NOT_AUTHOR', message: 'Only the author or a school ADMIN may edit this record' };
 }
+
+// Records a TEACHER files against a classroom. schoolRead shows them to that
+// classroom's teachers and to the named child's parents (P10), so the
+// classroom and child a non-ADMIN names on create must be their own.
+export const CLASSROOM_BOUND_ENTITIES = ['Attendance', 'DiaryEntry', 'Homework'];
+
+/**
+ * May this non-ADMIN caller CREATE a record aimed at these targets? Runs after
+ * the role policy/override check and the same-school reference checks.
+ *
+ *  - Attendance / DiaryEntry / Homework: classroom_id must be one of the
+ *    caller's ACTIVE TeacherClassroom rows, and a named student must
+ *    currently be in that classroom.
+ *  - Notice: a CLASSROOM notice must target one of the caller's classrooms;
+ *    a STUDENT notice a student of one of them (and, if it also names a
+ *    classroom, that student's). A SCHOOL notice is unchanged.
+ *
+ * `studentClassroomId` is the named student's CURRENT classroom (null when no
+ * student is named or found). ADMIN is never restricted here.
+ */
+export function decideCreateTargets(input: {
+  entity: string;
+  appRole: string;
+  data: Record<string, unknown>;
+  assignedClassroomIds: string[];
+  studentClassroomId: string | null;
+}): ModifyDecision {
+  const { entity, appRole, data } = input;
+  if (appRole === 'ADMIN') return { ok: true, reason: 'admin' };
+  const assigned = input.assignedClassroomIds || [];
+  const classroomId = typeof data?.classroom_id === 'string' ? data.classroom_id : '';
+  const studentId = typeof data?.student_id === 'string' ? data.student_id : '';
+  const notAssigned: ModifyDecision = { ok: false, code: 'CLASSROOM_NOT_ASSIGNED', message: 'That classroom is not assigned to you' };
+  const wrongClassroom: ModifyDecision = { ok: false, code: 'STUDENT_NOT_IN_CLASSROOM', message: 'That student is not in that classroom' };
+
+  if (CLASSROOM_BOUND_ENTITIES.includes(entity)) {
+    if (!classroomId || !assigned.includes(classroomId)) return notAssigned;
+    if (studentId && input.studentClassroomId !== classroomId) return wrongClassroom;
+    return { ok: true, reason: 'assigned_teacher' };
+  }
+  if (entity === 'Notice') {
+    const scope = typeof data?.scope === 'string' && data.scope ? data.scope : 'SCHOOL';
+    if (scope === 'CLASSROOM') {
+      return classroomId && assigned.includes(classroomId) ? { ok: true, reason: 'assigned_teacher' } : notAssigned;
+    }
+    if (scope === 'STUDENT') {
+      if (!studentId || !input.studentClassroomId || !assigned.includes(input.studentClassroomId)) return notAssigned;
+      if (classroomId && classroomId !== input.studentClassroomId) return wrongClassroom;
+      return { ok: true, reason: 'assigned_teacher' };
+    }
+  }
+  return { ok: true, reason: 'untargeted' };
+}

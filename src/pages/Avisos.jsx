@@ -13,8 +13,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
-import { canReadEntity, filterByRowLevel } from '@/lib/authorization/policy';
-import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
+import { canReadEntity } from '@/lib/authorization/policy';
 import {
   Dialog,
   DialogContent,
@@ -38,27 +37,16 @@ export default function Avisos() {
   
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: linkedStudents = { students: [], studentIds: [] } } = useQuery({
-    queryKey: ['linkedStudents', user?.id],
-    queryFn: () => getLinkedStudents(user),
-    enabled: !!user,
-  });
-
-  const studentIds = linkedStudents.studentIds;
-  const students = linkedStudents.students;
-
-  const classroomIds = [...new Set(students.map(s => s.classroom_id).filter(Boolean))];
-
   const { data: notices = [], isLoading } = useQuery({
-    queryKey: ['notices', userProfile?.school_id, classroomIds, studentIds],
+    queryKey: ['notices', userProfile?.school_id],
     queryFn: async () => {
       if (!canReadEntity(userProfile?.app_role, 'Notice')) return [];
-      // schoolRead applies the notice audience server-side (school-wide, the
-      // children's classrooms, the children themselves). The old client filter
-      // ANDed student_id and classroom_id, which dropped every school-wide
-      // notice for a parent.
-      const allNotices = await schoolRead('Notice', { school_id: userProfile.school_id }, '-created_date', 50);
-      return filterByRowLevel({ role: userProfile?.app_role, entity: 'Notice', rows: allNotices, classroomIds, studentIds });
+      // schoolRead applies the notice audience server-side (school-wide —
+      // including a legacy notice stored without `scope` —, the children's
+      // classrooms, the children themselves). No client re-filter on top: a
+      // stricter copy here is how a school-wide notice showed on the parent's
+      // home and not on this page.
+      return schoolRead('Notice', { school_id: userProfile.school_id }, '-created_date', 50);
     },
     enabled: !!userProfile,
   });

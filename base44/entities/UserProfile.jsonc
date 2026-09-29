@@ -126,17 +126,15 @@
         }
       ]
     },
+    // Service role only (P10 review, 2026-09-29): schoolRead scopes a whole
+    // school by this row's school_id/app_role/status, and whether the live
+    // engine enforces the per-field locks above on a user's OWN row was never
+    // verified. The one self-edit the app makes (welcome_message_shown) goes
+    // through base44/functions/markWelcomeShown.
     "update": {
-      "$or": [
-        {
-          "data.user_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
       "user_condition": {

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { schoolRead } from '@/lib/data/schoolRead';
+import { schoolRead, schoolReadMany } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -67,10 +67,13 @@ export default function AvisosMaestro() {
     mutationFn: async (data) => {
       const notice = await guardedCreate('Notice', data);
 
-      const activeLinks = await schoolRead('ParentStudent', { status: 'ACTIVE' });
-      const classroomStudentIds = new Set(
-        (await schoolRead('Student', { classroom_id: data.classroom_id, is_active: true })).map((student) => student.id)
-      );
+      // One request: the links (already limited to this teacher's students)
+      // and the classroom's active students.
+      const { links: activeLinks, students: classroomStudents } = await schoolReadMany({
+        links: ['ParentStudent', { status: 'ACTIVE' }],
+        students: ['Student', { classroom_id: data.classroom_id, is_active: true }],
+      });
+      const classroomStudentIds = new Set(classroomStudents.map((student) => student.id));
       const recipients = activeLinks.filter((link) => classroomStudentIds.has(link.student_id));
 
       const escalationDueAt = data.priority === 'URGENT'

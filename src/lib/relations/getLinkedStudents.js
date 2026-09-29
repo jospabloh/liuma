@@ -8,17 +8,19 @@ import { partitionLinkedStudents } from '@/lib/relations/partitionLinkedStudents
 // every child back as "orphaned".
 export async function getLinkedStudents(user) {
   if (!user?.id) {
-    return { students: [], studentIds: [], orphanedLinkIds: [] };
+    return { students: [], studentIds: [], orphanedLinkIds: [], classrooms: [] };
   }
 
-  const { linkStudentIds, students } = await schoolReadContext();
+  const { linkStudentIds, students, classrooms } = await schoolReadContext();
   // Parent→student linkage is the ParentStudent table, resolved on the server
   // for the caller only (there is no client-side `user.data.linked_student_ids`:
   // auth.me() returns the user flat, so it was always undefined).
   if (linkStudentIds.length === 0) {
-    return { students: [], studentIds: [], orphanedLinkIds: [] };
+    return { students: [], studentIds: [], orphanedLinkIds: [], classrooms: [] };
   }
-  return partitionLinkedStudents(linkStudentIds, students);
+  // The children's classrooms come in the same response, so a page that
+  // shows the classroom name needs no second request.
+  return { ...partitionLinkedStudents(linkStudentIds, students), classrooms };
 }
 
 export async function getLinkedStudentIds(user) {

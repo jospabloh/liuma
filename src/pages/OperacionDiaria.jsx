@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { schoolReadContext, schoolReadMany } from '@/lib/data/schoolRead';
+import { functionErrorCode } from '@/lib/functionResponse';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import EmptyState from '@/components/ui/EmptyState';
@@ -30,13 +31,16 @@ const linkByCategory = {
   EVENT: 'CalendarioEscolar',
 };
 
+// Codes schoolRead answers with when the caller's own profile cannot be used.
+const PROFILE_REFUSALS = ['NO_PROFILE', 'INACTIVE_PROFILE', 'NO_SCHOOL', 'INVALID_ROLE'];
+
 export default function OperacionDiaria() {
   const navigate = useNavigate();
   const [category, setCategory] = useState('ALL');
   const [urgency, setUrgency] = useState('ALL');
   const today = format(new Date(), 'yyyy-MM-dd');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['dailyTimeline', today],
     queryFn: async () => {
       // One request for the caller's scope (school, role, classrooms,
@@ -44,11 +48,16 @@ export default function OperacionDiaria() {
       // the five lists (P10: they used to be seven client reads, each empty
       // for a real school user under the strict RLS). The rows come back
       // already scoped to what this role may see.
+      // Only a profile the server refused (none, pending, no school) is
+      // "Perfil no disponible". Anything else — a 5xx, the site deployed
+      // before the function — is an error with a retry, not cached as an
+      // empty success that looks like a profile problem.
       let context;
       try {
         context = await schoolReadContext();
-      } catch {
-        return { role: null, items: [] };
+      } catch (error) {
+        if (PROFILE_REFUSALS.includes(functionErrorCode(error))) return { role: null, items: [] };
+        throw error;
       }
       const role = context.role;
       const school_id = context.schoolId;
@@ -92,6 +101,16 @@ export default function OperacionDiaria() {
   }, [data, category, urgency]);
 
   if (isLoading) return <LoadingScreen message="Cargando operación diaria..." />;
+  if (isError) {
+    return (
+      <EmptyState
+        icon={AlertCircle}
+        title="No se pudo cargar la operación diaria"
+        description="Revisa tu conexión e inténtalo de nuevo."
+        action={<Button onClick={() => refetch()}>Reintentar</Button>}
+      />
+    );
+  }
   if (!data?.role) return <EmptyState icon={AlertCircle} title="Perfil no disponible" />;
 
   return (

@@ -16,6 +16,18 @@
 export const SCHOOL_READ_PAGE = 1000;
 /** What a read without an explicit limit fetches at most (Base44's own default page). */
 export const SCHOOL_READ_DEFAULT_TOTAL = 5000;
+/** The server refuses a skip past this (MAX_SKIP in _scope.ts). */
+export const SCHOOL_READ_MAX_SKIP = 20000;
+/** The most rows one read() can page through: the last page starts at MAX_SKIP. */
+export const SCHOOL_READ_MAX_TOTAL = SCHOOL_READ_MAX_SKIP + SCHOOL_READ_PAGE;
+/**
+ * Pass as `limit` to read EVERY matching row: read() then throws
+ * TOO_MANY_ROWS_MESSAGE instead of returning a silently cut list when the
+ * server has more than SCHOOL_READ_MAX_TOTAL. For reports, where a truncated
+ * count reads as a real (wrong) number.
+ */
+export const SCHOOL_READ_ALL = Infinity;
+export const TOO_MANY_ROWS_MESSAGE = 'Demasiados registros para este rango; acota las fechas.';
 
 /**
  * @param {(payload: object) => Promise<any>} call  resolves to the function's JSON body
@@ -25,10 +37,14 @@ export function makeSchoolReader(call) {
    * Same shape as an entity SDK `filter(filter, sort, limit)` call:
    * resolves to an array of rows. A `school_id` in the filter is optional and
    * must be the caller's own school (the server injects it either way).
-   * Without a limit it pages until it has every row, up to 5000.
+   * Without a limit it pages until it has every row, up to 5000. A limit is
+   * capped at SCHOOL_READ_MAX_TOTAL (the server refuses a skip past
+   * MAX_SKIP); `SCHOOL_READ_ALL` reads everything or throws.
    */
   async function read(entity, filter = {}, sort, limit) {
-    const wanted = Number.isInteger(limit) && limit > 0 ? limit : SCHOOL_READ_DEFAULT_TOTAL;
+    const all = limit === SCHOOL_READ_ALL;
+    const requested = all || (Number.isInteger(limit) && limit > 0) ? limit : SCHOOL_READ_DEFAULT_TOTAL;
+    const wanted = Math.min(requested, SCHOOL_READ_MAX_TOTAL);
     const rows = [];
     let skip = 0;
     for (;;) {
@@ -36,7 +52,14 @@ export function makeSchoolReader(call) {
       const body = await call({ entity, filter, sort, limit: pageSize, skip });
       const page = Array.isArray(body?.rows) ? body.rows : [];
       rows.push(...page);
-      if (!body?.has_more || page.length === 0 || rows.length >= wanted) break;
+      if (!body?.has_more || page.length === 0) break;
+      // Next page would start past what the server accepts, or we have what
+      // was asked for: stop — and if the caller asked for everything, say so
+      // instead of returning a partial list.
+      if (rows.length >= wanted || skip + page.length > SCHOOL_READ_MAX_SKIP) {
+        if (all) throw new Error(TOO_MANY_ROWS_MESSAGE);
+        break;
+      }
       skip += page.length;
     }
     return rows;

@@ -49,6 +49,9 @@ export type Scope = {
   studentIds: string[];
   // Only loaded when a rule needs it (SupportTicketMessage for a requester).
   ticketIds?: string[];
+  // user_ids with an ACTIVE UserProfile in this school. Only loaded when a
+  // rule has a `members` check (rows a client can create with any school_id).
+  memberUserIds?: string[];
 };
 
 // deno-lint-ignore no-explicit-any
@@ -92,17 +95,29 @@ export function profileProblem(profile: Profile | null): string | null {
 //               as the first value, i.e. the schema default).
 //   hide      → fields removed from every row for that role (and therefore
 //               not filterable or sortable by it — no oracle).
+//   members   → fields that must name a user with an ACTIVE UserProfile in
+//               the caller's school. For entities whose create RLS lets any
+//               signed-in user file a row with a school_id of their choosing
+//               (SupportTicket, NoticeDelivery): without it, an outsider's
+//               forged row would show up in another school's lists. Checked
+//               row by row (never pushed as a giant $in), so such a rule is
+//               read in scan mode.
 // A role missing from `roles` cannot read that entity at all.
+// Output is an ALLOWLIST for non-ADMIN roles: only SYSTEM_FIELDS + `fields`,
+// minus `hide`, ever leave (projectRow) — a legacy or undeclared property on
+// an old row does not reach a teacher or a parent.
 
 type SetKey = 'classroomIds' | 'studentIds' | 'self' | 'selfProfile' | 'ticketIds';
 type Cond = { set: SetKey } | { in: Array<string | boolean>; orMissing?: boolean };
 type Branch = Record<string, Cond>;
-type RoleRule = { rows: 'school' | Branch[]; hide?: string[] };
+type RoleRule = { rows: 'school' | Branch[]; hide?: string[]; members?: string[] };
 type EntityRule = { fields: string[]; roles: Partial<Record<Role, RoleRule>> };
 
 const set = (key: SetKey): Cond => ({ set: key });
 const oneOf = (...values: Array<string | boolean>): Cond => ({ in: values });
 const SCHOOL: RoleRule = { rows: 'school' };
+// The whole school, minus rows whose `field` does not name a school member.
+const SCHOOL_MEMBERS = (...fields: string[]): RoleRule => ({ rows: 'school', members: fields });
 
 // Any record's creator email (`created_by`) is a server field Base44 adds. It
 // is another adult's address, so it never leaves for a non-ADMIN.
@@ -129,7 +144,10 @@ export const READ_RULES: Record<string, EntityRule> = {
     // because those are the only rows each role can see at all.
     roles: {
       ADMIN: SCHOOL,
-      TEACHER: { rows: [{ classroom_id: set('classroomIds') }] },
+      // The ACTIVE students of the teacher's classrooms — exactly
+      // scope.studentIds, the same set Lumi and the other TEACHER rules use.
+      // A withdrawn student's medical notes do not stay on the teacher's list.
+      TEACHER: { rows: [{ id: set('studentIds') }] },
       PARENT: { rows: [{ id: set('studentIds') }] },
     },
   },
@@ -191,9 +209,12 @@ export const READ_RULES: Record<string, EntityRule> = {
   },
   NoticeDelivery: {
     fields: ['school_id', 'notice_id', 'recipient_user_id', 'recipient_role', 'student_id', 'classroom_id', 'status', 'sent_at', 'read_at', 'escalation_due_at', 'escalation_status'],
+    // NoticeDelivery.create/update RLS only pins recipient_user_id to the
+    // caller: anyone can file one with any school_id/student_id. Staff see a
+    // row only when its recipient is a member of their school.
     roles: {
-      ADMIN: SCHOOL,
-      TEACHER: { rows: [{ student_id: set('studentIds') }] },
+      ADMIN: SCHOOL_MEMBERS('recipient_user_id'),
+      TEACHER: { rows: [{ student_id: set('studentIds') }], members: ['recipient_user_id'] },
       PARENT: { rows: [{ recipient_user_id: set('self') }] },
     },
   },
@@ -216,7 +237,9 @@ export const READ_RULES: Record<string, EntityRule> = {
     fields: ['school_id', 'classroom_id', 'student_id', 'date', 'status', 'reason', 'recorded_by', 'recorded_by_name', 'parent_notified', 'notified_at'],
     roles: {
       ADMIN: SCHOOL,
-      TEACHER: { rows: [{ classroom_id: set('classroomIds') }] },
+      // Classroom AND student: a row tagged with the teacher's classroom but
+      // naming a child who is not (or no longer) in it stays with the ADMIN.
+      TEACHER: { rows: [{ classroom_id: set('classroomIds'), student_id: set('studentIds') }] },
       PARENT: { rows: [{ student_id: set('studentIds') }] },
     },
   },
@@ -226,7 +249,7 @@ export const READ_RULES: Record<string, EntityRule> = {
       ADMIN: SCHOOL,
       // notified_parent_emails is the parents' addresses (notifyParents'
       // bookkeeping): the director's business, nobody else's.
-      TEACHER: { rows: [{ classroom_id: set('classroomIds') }], hide: ['notified_parent_emails'] },
+      TEACHER: { rows: [{ classroom_id: set('classroomIds'), student_id: set('studentIds') }], hide: ['notified_parent_emails'] },
       PARENT: { rows: [{ student_id: set('studentIds') }], hide: ['notified_parent_emails'] },
     },
   },
@@ -285,7 +308,9 @@ export const READ_RULES: Record<string, EntityRule> = {
   },
   AuditLog: {
     fields: ['action', 'details', 'ip_address', 'school_id', 'target_id', 'target_type', 'user_email', 'user_id'],
-    roles: { ADMIN: SCHOOL },
+    // The IP of whoever acted (the platform owner included) is not the
+    // school's to read.
+    roles: { ADMIN: { rows: 'school', hide: ['ip_address'] } },
   },
   PermissionOverride: {
     fields: ['school_id', 'user_profile_id', 'resource', 'action', 'effect', 'reason'],
@@ -303,8 +328,11 @@ export const READ_RULES: Record<string, EntityRule> = {
   },
   SupportTicket: {
     fields: ['ticket_number', 'school_id', 'requester_user_id', 'requester_profile_id', 'requester_role', 'requester_name', 'subject', 'category', 'priority', 'status', 'tier', 'assignee_role', 'channel_origin', 'ai_attempted', 'ai_resolution_summary', 'sla_due_at', 'first_response_at', 'resolved_at', 'escalated_at', 'client_context', 'ai_brief', 'escalation_notified_recipients'],
+    // SupportTicket.create RLS only pins requester_user_id to the caller, so
+    // school_id is the requester's claim: a ticket reaches a school's queue
+    // only when its requester is a member of that school.
     roles: {
-      ADMIN: SCHOOL,
+      ADMIN: SCHOOL_MEMBERS('requester_user_id'),
       TEACHER: { rows: [{ requester_user_id: set('self') }], hide: ['escalation_notified_recipients', 'ai_brief'] },
       PARENT: { rows: [{ requester_user_id: set('self') }], hide: ['escalation_notified_recipients', 'ai_brief'] },
     },
@@ -387,15 +415,31 @@ export function rowVisible(scope: Scope, entity: string, row: Row): boolean {
   if (!scope?.schoolId || String(row.school_id || '') !== scope.schoolId) return false;
   const rule = roleRule(scope, entity);
   if (!rule) return false;
+  // Unloaded member set = nobody is a member: fail closed.
+  const members = scope.memberUserIds || [];
+  if ((rule.members || []).some((field) => !members.includes(String(row[field] ?? '')))) return false;
   if (rule.rows === 'school') return true;
   return rule.rows.some((branch) =>
     Object.entries(branch).every(([field, cond]) => condMatches(scope, cond, row[field])));
 }
 
-/** Copy of the row without the fields this role may not see. */
+/**
+ * Copy of the row with only what this role may see. ADMIN: every stored
+ * field minus the rule's `hide`. Everyone else: an allowlist — SYSTEM_FIELDS
+ * plus the rule's `fields`, minus hidden ones — so a Base44 system field
+ * (created_by_id…) or a legacy property on an old row never leaves.
+ */
 export function projectRow(scope: Scope, entity: string, row: Row): Row {
-  const out: Row = { ...row };
-  for (const field of hiddenFields(scope.role, entity)) delete out[field];
+  const hidden = new Set(hiddenFields(scope.role, entity));
+  if (scope.role === 'ADMIN') {
+    const out: Row = { ...row };
+    for (const field of hidden) delete out[field];
+    return out;
+  }
+  const out: Row = {};
+  for (const field of allowedFields(scope.role, entity)) {
+    if (!hidden.has(field) && Object.prototype.hasOwnProperty.call(row, field)) out[field] = row[field];
+  }
   return out;
 }
 
@@ -412,6 +456,10 @@ export const DEFAULT_LIMIT = 200;
 export const MAX_SKIP = 20000;
 export const MAX_IN_VALUES = 500;
 export const MAX_BATCH = 12;
+// Scan-mode reads (see needsScan) walk up to SCAN_CAP raw rows each; one batch
+// may carry at most this many, so a single call cannot fan out into dozens of
+// 1000-row service-role queries.
+export const MAX_SCANS_PER_BATCH = 3;
 // Rules with several branches (Notice, Event for non-ADMIN) are read by
 // scanning the school's rows in order and keeping the visible ones; this caps
 // how many raw rows one request may walk.
@@ -551,22 +599,35 @@ function intersect(current: unknown, allowedValues: Array<string | boolean>): un
   return ops;
 }
 
+/**
+ * Whether this role's reads of this entity walk the school's rows and filter
+ * them (several branches, a constant with orMissing, or a `members` check)
+ * instead of pushing the whole rule into the query.
+ */
+export function needsScan(role: string, entity: string): boolean {
+  const rule = roleRuleOf(role, entity);
+  if (!rule) return false;
+  if (rule.members && rule.members.length) return true;
+  if (rule.rows === 'school') return false;
+  if (rule.rows.length !== 1) return true;
+  return Object.values(rule.rows[0]).some((cond) => !('set' in cond) && !!cond.orMissing);
+}
+
 /** The database query for a validated request, school clause injected. */
 export function planQuery(scope: Scope, entity: string, filter: Filter): Plan {
   const rule = roleRule(scope, entity);
   if (!rule || !scope.schoolId) return { mode: 'empty' };
   const base: Filter = { ...filter, school_id: scope.schoolId };
+  if (needsScan(scope.role, entity)) return { mode: 'scan', query: base };
   if (rule.rows === 'school') return { mode: 'push', query: base };
-  if (rule.rows.length !== 1) return { mode: 'scan', query: base };
 
   // One branch: push every condition of it into the query itself, so limit
   // and skip count only rows the caller can see.
   const query: Filter = { ...base };
+  // (A constant with orMissing can't be pushed safely — a missing field is
+  // not a value to $in — so needsScan already sent that rule to scan mode.)
   for (const [field, cond] of Object.entries(rule.rows[0])) {
     const values = condValues(scope, cond);
-    // A constant with orMissing can't be pushed safely (a missing field is
-    // not a value to $in); leave it to rowVisible after the fetch.
-    if (!('set' in cond) && cond.orMissing) return { mode: 'scan', query: base };
     const narrowed = intersect(query[field], values);
     if (narrowed === undefined) return { mode: 'empty' };
     query[field] = narrowed;
@@ -621,7 +682,14 @@ export async function executeRead(db: Db, scope: Scope, read: ValidRead): Promis
 /** Load a scope set some rule needs but buildScope skips by default. */
 export async function ensureScopeSets(db: Db, scope: Scope, entity: string): Promise<void> {
   const rule = roleRule(scope, entity);
-  if (!rule || rule.rows === 'school') return;
+  if (!rule) return;
+  if (rule.members && rule.members.length && !scope.memberUserIds) {
+    const profiles: Row[] = (await handle(db, 'UserProfile').filter(
+      { school_id: scope.schoolId, status: 'ACTIVE' }, '-created_date', 5000)) || [];
+    scope.memberUserIds = uniq(profiles.filter((p) => String(p.school_id) === scope.schoolId && p.status === 'ACTIVE')
+      .map((p) => p.user_id));
+  }
+  if (rule.rows === 'school') return;
   const needsTickets = rule.rows.some((b) => Object.values(b).some((c) => 'set' in c && c.set === 'ticketIds'));
   if (needsTickets && !scope.ticketIds) {
     const own: Row[] = (await handle(db, 'SupportTicket').filter(
@@ -663,7 +731,8 @@ export async function buildScope(
   if (role === 'PARENT') {
     const links: Row[] = (await handle(db, 'ParentStudent').filter(
       { parent_id: userId, school_id: schoolId, status: 'ACTIVE' }, '-created_date', 1000)) || [];
-    linkStudentIds = uniq(links.filter((l) => String(l.school_id) === schoolId && String(l.parent_id) === userId)
+    linkStudentIds = uniq(links.filter((l) => String(l.school_id) === schoolId && String(l.parent_id) === userId
+      && l.status === 'ACTIVE')
       .map((l) => l.student_id));
     if (linkStudentIds.length) {
       const rows: Row[] = (await handle(db, 'Student').filter(
@@ -704,7 +773,9 @@ export function describeScope(bundle: ScopeBundle): Row {
     profile_id: scope.profileId || null,
     classroom_ids: scope.classroomIds,
     student_ids: scope.studentIds,
-    link_student_ids: bundle.linkStudentIds,
+    // Only links that resolved to a Student of this school: a stray link's id
+    // (a student of another school) never leaves.
+    link_student_ids: bundle.linkStudentIds.filter((id) => scope.studentIds.includes(id)),
     students: scopeRows(scope, 'Student', bundle.students),
     classrooms: scopeRows(scope, 'Classroom', bundle.classrooms),
   };

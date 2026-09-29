@@ -29,14 +29,16 @@
 //           link_student_ids, students, classrooms }
 //   { entity, filter?, sort?, limit? (≤1000), skip? }
 //       → { ok, rows, has_more, truncated? }
-//   { queries: [{ key, entity, filter?, sort?, limit?, skip? }, …] }  (≤12)
+//   { queries: [{ key, entity, filter?, sort?, limit?, skip? }, …] }  (≤12,
+//     of which ≤MAX_SCANS_PER_BATCH scan-mode reads — see needsScan)
 //       → { ok, results: { [key]: rows }, has_more: { [key]: bool } }
 //     One call, one scope derivation, several reads — how the home screens
 //     avoid a round-trip per list.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import {
   type Profile, type ReadRequest, type Refusal, type ReadResult,
-  selectCurrentProfile, profileProblem, buildScope, describeScope, readFor, MAX_BATCH,
+  selectCurrentProfile, profileProblem, buildScope, describeScope, readFor, needsScan,
+  MAX_BATCH, MAX_SCANS_PER_BATCH,
 } from './_scope.ts';
 
 function fail(status: number, code: string, extra: Record<string, unknown> = {}): Response {
@@ -71,6 +73,9 @@ Deno.serve(async (req) => {
 
     if (Array.isArray(body?.queries)) {
       if (body.queries.length === 0 || body.queries.length > MAX_BATCH) return fail(400, 'INVALID_BATCH');
+      // deno-lint-ignore no-explicit-any
+      const scans = body.queries.filter((q: any) => needsScan(scope.role, String(q?.entity ?? ''))).length;
+      if (scans > MAX_SCANS_PER_BATCH) return fail(400, 'TOO_MANY_SCANS');
       const results: Record<string, unknown> = {};
       const hasMore: Record<string, boolean> = {};
       for (const q of body.queries) {
@@ -88,6 +93,9 @@ Deno.serve(async (req) => {
     if (isRefusal(out)) return fail(out.status, out.code, out.field ? { field: out.field } : {});
     return Response.json(out);
   } catch (e) {
-    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+    // The detail goes to the function log, not to the caller: a raw SDK error
+    // can name entities, queries or ids.
+    console.error('schoolRead failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
 });

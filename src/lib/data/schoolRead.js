@@ -12,6 +12,8 @@ import { base44 } from '@/api/base44Client';
 import { invokeFunction } from '@/lib/functionResponse';
 import { makeSchoolReader } from './schoolReadCore';
 
+export { SCHOOL_READ_ALL } from './schoolReadCore';
+
 const reader = makeSchoolReader((payload) => invokeFunction(base44, 'schoolRead', payload));
 
 export const schoolRead = reader.read;

@@ -57,6 +57,21 @@ inquilino (P10)".
   requesters see staff replies on their tickets; parents' notice list no longer
   drops school-wide notices; teacher/parent homes load their scope in one
   request instead of three chained reads.
+- **P10 review follow-ups.** `UserProfile.rls.update` is service-role only
+  (schoolRead scopes a whole school by that row; per-field locks on a user's
+  own row were never verified live) — the welcome flag goes through the new
+  `markWelcomeShown` function. SupportTicket/NoticeDelivery rows a client can
+  file with any `school_id` reach staff only when the requester/recipient is
+  an ACTIVE member of that school. A teacher sees attendance/diary rows only
+  for students actually in their classrooms, and withdrawn students leave
+  their list; `guardedEntityWrite` now refuses a non-ADMIN create aimed at a
+  classroom they are not assigned to or a child not in it (Attendance,
+  DiaryEntry, Homework, CLASSROOM/STUDENT notices). Non-ADMIN output is an
+  allowlist; a school ADMIN no longer reads audit-log IP addresses; a batch
+  carries at most 3 scan-mode reads and a 500 no longer echoes the raw error.
+  Reportes' attendance and diary figures read through `schoolRead` (they were
+  still direct, so a director saw ~0); the direct-read scan now also catches a
+  handler passed as a value.
 
 ### Added
 

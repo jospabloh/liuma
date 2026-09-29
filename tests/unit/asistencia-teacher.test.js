@@ -4,11 +4,13 @@ import fs from 'node:fs';
 
 const page = fs.readFileSync(new URL('../../src/pages/Asistencia.jsx', import.meta.url), 'utf8');
 
-test("teacher classroom lookup filters on `id` — Base44 silently ignores `_id`", () => {
+test("teacher classrooms come from the server's own scope, never an `_id` filter", () => {
   // With `_id` the query returned no classroom, so every teacher saw an empty
-  // salón selector and could not take attendance at all.
+  // salón selector and could not take attendance at all. Since the P10
+  // review the classrooms come with schoolReadContext (the server resolves
+  // active TeacherClassroom → Classroom by `id`), in one request.
   assert.doesNotMatch(page, /[{\s]_id: \{ \$in/);
-  assert.match(page, /schoolRead\('Classroom', \{ id: \{ \$in: classroomIds \}/);
+  assert.match(page, /const context = await schoolReadContext\(\);\s*return context\.classrooms\.filter/);
 });
 
 test('each empty case says what is actually wrong', () => {

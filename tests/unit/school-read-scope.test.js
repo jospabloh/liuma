@@ -4,7 +4,7 @@ import fs from 'node:fs';
 // The function's own rules, loaded as-is (Node 22 strips the TS types).
 import {
   READ_RULES, buildScope, readFor, validateRead, describeScope, rowVisible, projectRow,
-  selectCurrentProfile, profileProblem, MAX_LIMIT, MAX_SKIP,
+  selectCurrentProfile, profileProblem, needsScan, MAX_LIMIT, MAX_SKIP, MAX_SCANS_PER_BATCH,
 } from '../../base44/functions/schoolRead/_scope.ts';
 import { selectCurrentUserProfile } from '../../src/lib/tenantSelection.js';
 import { makeFakeDb } from '../fixtures/fake-entity-db.js';
@@ -66,9 +66,11 @@ test('every allowlisted entity and field exists in the entity schema', () => {
 
 // --- A two-school world -----------------------------------------------------
 
-function world() {
-  const t = (id, created) => ({ id, created_date: created || `2026-09-${String(10 + (id.length % 9)).padStart(2, '0')}T12:00:00Z` });
-  return makeFakeDb({
+const t = (id, created) => ({ id, created_date: created || `2026-09-${String(10 + (id.length % 9)).padStart(2, '0')}T12:00:00Z` });
+
+// `extra` rows are appended to the base tables (new tables are added).
+function world(extra = {}) {
+  const tables = {
     UserProfile: [
       { ...t('pAdminA'), user_id: 'adminA', school_id: 'A', app_role: 'ADMIN', status: 'ACTIVE', onboarding_completed: true, phone: '449-000-0001' },
       { ...t('pTeacherA'), user_id: 'teacherA', school_id: 'A', app_role: 'TEACHER', status: 'ACTIVE', onboarding_completed: true, phone: '449-000-0002' },
@@ -154,7 +156,9 @@ function world() {
     AuditLog: [{ ...t('al1'), school_id: 'A', action: 'X' }],
     PendingChange: [{ ...t('pc1'), school_id: 'A', type: 'ROLE_CHANGE' }],
     Discount: [{ ...t('dc1'), school_id: 'A', name: 'Hermanos' }],
-  });
+  };
+  for (const [name, rows] of Object.entries(extra)) tables[name] = [...(tables[name] || []), ...rows];
+  return makeFakeDb(tables);
 }
 
 async function scopeFor(db, userId, options) {
@@ -401,4 +405,98 @@ test('rowVisible rejects anything without the caller\'s school', () => {
   assert.equal(rowVisible(admin, 'Student', { id: 'no-school' }), false);
   assert.equal(rowVisible({ ...admin, schoolId: '' }, 'Student', { school_id: '' }), false);
   assert.equal(rowVisible(admin, 'Nope', { school_id: 'A' }), false);
+});
+
+// --- Review follow-ups (2026-09-29) -------------------------------------------
+
+test('a row an outsider filed with another school\'s school_id never reaches that school\'s staff', async () => {
+  // SupportTicket/NoticeDelivery create RLS pins only the requester/recipient
+  // to the caller, so school_id is theirs to choose. adminB is a member of B only.
+  const db = world({
+    SupportTicket: [{ ...t('tkForged'), school_id: 'A', requester_user_id: 'adminB', subject: 'Falso' }],
+    NoticeDelivery: [
+      { ...t('nd1'), school_id: 'A', notice_id: 'nSchool', recipient_user_id: 'parentA1', student_id: 'sA1', status: 'SENT' },
+      { ...t('ndForged'), school_id: 'A', notice_id: 'nSchool', recipient_user_id: 'adminB', student_id: 'sA1', status: 'SENT' },
+      { ...t('ndPending'), school_id: 'A', notice_id: 'nSchool', recipient_user_id: 'pendingA', student_id: 'sA1', status: 'SENT' },
+    ],
+  });
+  assert.deepEqual(ids(await rowsOf(db, 'adminA', { entity: 'SupportTicket' })), ['tk1', 'tk2']);
+  assert.deepEqual(ids(await rowsOf(db, 'adminA', { entity: 'NoticeDelivery' })), ['nd1']);
+  assert.deepEqual(ids(await rowsOf(db, 'teacherA', { entity: 'NoticeDelivery' })), ['nd1']);
+  // Nor does the forger, reading from their own school B.
+  assert.deepEqual(ids(await rowsOf(db, 'adminB', { entity: 'NoticeDelivery' })), []);
+  // A member check that never loaded fails closed.
+  const bare = { userId: 'adminA', schoolId: 'A', role: 'ADMIN', classroomIds: [], studentIds: [] };
+  assert.equal(rowVisible(bare, 'SupportTicket', { school_id: 'A', requester_user_id: 'parentA1' }), false);
+});
+
+test('a TEACHER sees a diary/attendance row only when its student is in their classroom', async () => {
+  // Filed under the teacher's classroom cA1, but naming sA3 (of cA2).
+  const db = world({
+    DiaryEntry: [{ ...t('dMisfiled'), school_id: 'A', classroom_id: 'cA1', student_id: 'sA3', date: '2026-09-29', parent_notes: 'privado' }],
+    Attendance: [{ ...t('aMisfiled'), school_id: 'A', classroom_id: 'cA1', student_id: 'sA3', date: '2026-09-29', status: 'ABSENT' }],
+  });
+  assert.deepEqual(ids(await rowsOf(db, 'teacherA', { entity: 'DiaryEntry' })), ['d1', 'd2']);
+  assert.deepEqual(ids(await rowsOf(db, 'teacherA', { entity: 'Attendance' })), ['a1']);
+});
+
+test('a TEACHER does not keep a withdrawn student (or their medical notes) on the list', async () => {
+  const db = world({ Student: [{ ...t('sA4'), school_id: 'A', classroom_id: 'cA1', first_name: 'Eva', medical_notes: 'x', is_active: false }] });
+  assert.deepEqual(ids(await rowsOf(db, 'teacherA', { entity: 'Student' })), ['sA1', 'sA2']);
+  assert.deepEqual(await rowsOf(db, 'teacherA', { entity: 'Student', filter: { id: 'sA4' } }), []);
+});
+
+test('a PARENT link that is not ACTIVE grants nothing, even if the store ignored the status filter', async () => {
+  const db = world();
+  const original = db.entities.ParentStudent.filter;
+  // Simulate an engine that drops the status clause.
+  db.entities.ParentStudent.filter = (query, ...rest) => {
+    const { status: _ignored, ...loose } = query || {};
+    return original(loose, ...rest);
+  };
+  const { scope } = await scopeFor(db, 'parentA2');
+  assert.deepEqual(scope.studentIds, ['sA3']);
+});
+
+test('context never returns the id of a stray link\'s student', async () => {
+  const db = world();
+  assert.deepEqual(describeScope(await scopeFor(db, 'stray')).link_student_ids, []);
+});
+
+test('non-ADMIN output is an allowlist: undeclared properties never leave', async () => {
+  const db = world({
+    EmergencyContact: [{ ...t('ecX'), school_id: 'A', student_id: 'sA1', name: 'X', created_by_id: 'u-secret', legacy_ssn: '123' }],
+  });
+  const row = (await rowsOf(db, 'parentA1', { entity: 'EmergencyContact', filter: { id: 'ecX' } }))[0];
+  assert.equal(row.name, 'X');
+  assert.equal(row.id, 'ecX');
+  assert.ok(row.created_date);
+  assert.equal('created_by_id' in row, false);
+  assert.equal('legacy_ssn' in row, false);
+  // The director still gets the stored row.
+  const adminRow = (await rowsOf(db, 'adminA', { entity: 'EmergencyContact', filter: { id: 'ecX' } }))[0];
+  assert.equal(adminRow.created_by_id, 'u-secret');
+});
+
+test('a school ADMIN does not read the IP address in the audit log', async () => {
+  const db = world({ AuditLog: [{ ...t('alIp'), school_id: 'A', action: 'Y', ip_address: '10.0.0.1', user_email: 'owner@example.com' }] });
+  const rows = await rowsOf(db, 'adminA', { entity: 'AuditLog', filter: { id: 'alIp' } });
+  assert.equal('ip_address' in rows[0], false);
+  assert.equal((await refusal(db, 'adminA', { entity: 'AuditLog', filter: { ip_address: '10.0.0.1' } })).code, 'FIELD_NOT_ALLOWED');
+});
+
+test('scan-mode rules are the ones the batch cap counts', () => {
+  assert.equal(needsScan('PARENT', 'Notice'), true);
+  assert.equal(needsScan('TEACHER', 'Event'), true);
+  assert.equal(needsScan('PARENT', 'OfficialDocument'), true);
+  assert.equal(needsScan('ADMIN', 'SupportTicket'), true);
+  assert.equal(needsScan('ADMIN', 'Student'), false);
+  assert.equal(needsScan('PARENT', 'Attendance'), false);
+  assert.equal(needsScan('TEACHER', 'UserProfile'), false);
+  assert.ok(MAX_SCANS_PER_BATCH >= 2, 'OperacionDiaria/TeacherHome batch two scan reads');
+  const entry = read('base44/functions/schoolRead/entry.ts');
+  assert.match(entry, /needsScan\(scope\.role/);
+  assert.match(entry, /TOO_MANY_SCANS/);
+  // A 500 never echoes the raw error.
+  assert.doesNotMatch(entry, /error: \(e as Error\)\.message/);
 });

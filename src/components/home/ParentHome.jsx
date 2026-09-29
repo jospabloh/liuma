@@ -38,18 +38,19 @@ export default function ParentHome({ user, userProfile, subscription }) {
   });
 
 
-  const { data: unreadUrgentDeliveries = [] } = useQuery({
+  // The caller's unread deliveries, joined to the urgent notices at render
+  // time: joining inside the queryFn read `notices` from a stale closure (it
+  // usually ran before the notices had loaded) and cached an empty badge.
+  const { data: unreadDeliveries = [] } = useQuery({
     queryKey: ['unreadUrgentDeliveries', user.id, userProfile.school_id],
-    queryFn: async () => {
-      const rows = await schoolRead('NoticeDelivery', {
-        school_id: userProfile.school_id,
-        recipient_user_id: user.id,
-        status: 'SENT',
-      }, '-created_date', 50);
-      const urgentNotices = new Set(notices.filter((n) => n.priority === 'URGENT').map((n) => n.id));
-      return rows.filter((row) => urgentNotices.has(row.notice_id));
-    },
+    queryFn: () => schoolRead('NoticeDelivery', {
+      school_id: userProfile.school_id,
+      recipient_user_id: user.id,
+      status: 'SENT',
+    }, '-created_date', 50),
   });
+  const urgentNoticeIds = new Set(notices.filter((n) => n.priority === 'URGENT').map((n) => n.id));
+  const unreadUrgentDeliveries = unreadDeliveries.filter((row) => urgentNoticeIds.has(row.notice_id));
 
   // Get upcoming events
   const { data: events = [] } = useQuery({

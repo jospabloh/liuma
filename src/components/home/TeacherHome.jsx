@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { schoolRead, schoolReadContext, schoolReadMany } from '@/lib/data/schoolRead';
+import { schoolReadContext, schoolReadMany } from '@/lib/data/schoolRead';
 import { motion } from 'framer-motion';
 import { ClipboardList, BookOpen, Bell, CheckCircle, AlertCircle, Users, Calendar, ListChecks, LifeBuoy } from 'lucide-react';
 import BigTile from '@/components/ui/BigTile';
@@ -12,22 +12,9 @@ import { createPageUrl } from '@/utils';
 import { Card } from "@/components/ui/card";
 import { formatLocalDate, parseLocalDate } from '@/lib/dates';
 
-function UpcomingEventsSection({ schoolId, classroomIds }) {
-  const { data: events = [] } = useQuery({
-    queryKey: ['upcomingEvents', schoolId, classroomIds],
-    queryFn: async () => {
-      // Today onward, filtered server-side (YYYY-MM-DD compares as text).
-      const upcoming = await schoolRead('Event', {
-        school_id: schoolId,
-        date: { $gte: formatLocalDate() },
-      }, 'date', 10);
-      return upcoming.filter(e => 
-        e.scope === 'SCHOOL' || classroomIds.includes(e.classroom_id)
-      ).slice(0, 3);
-    },
-    enabled: !!schoolId
-  });
-
+// `events`: upcoming events the server already limited to the school-wide
+// ones and this teacher's classrooms (read with the rest of the home lists).
+function UpcomingEventsSection({ events }) {
   if (events.length === 0) return null;
 
   return (
@@ -72,7 +59,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   // (P10 — this used to be a TeacherClassroom read, a Classroom read and a
   // Student read, and the student list was fetched a second time for the
   // urgent-notice badge).
-  const { data: teacherScope = { classrooms: [], classroomIds: [], students: [] } } = useQuery({
+  const { data: teacherScope = { classrooms: [], classroomIds: [], students: [] }, isSuccess: scopeLoaded } = useQuery({
     queryKey: ['teacherScope', user.id],
     queryFn: async () => {
       const context = await schoolReadContext();
@@ -89,36 +76,35 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   const classrooms = teacherScope.classrooms;
   const students = teacherScope.students;
 
-  // Today's diary entries. The server returns only this teacher's classrooms.
-  const { data: todayDiaries = [] } = useQuery({
-    queryKey: ['todayDiaries', today, classroomIds],
+  // Everything else on the home screen in ONE request (one scope derivation
+  // on the server instead of one per list): today's diary entries, upcoming
+  // events, and the unread urgent notices among this teacher's families. The
+  // server already limits every list to this teacher's classrooms/students.
+  // Key starts with 'todayDiaries' so CrearBitacora's invalidation reaches it.
+  const { data: homeLists = { diaries: [], events: [], unreadUrgent: [] } } = useQuery({
+    queryKey: ['todayDiaries', 'teacherHome', today, user.id, userProfile.school_id],
     queryFn: async () => {
-      const diaries = await schoolRead('DiaryEntry', {
-        date: today,
-        school_id: userProfile.school_id
+      const school_id = userProfile.school_id;
+      const { diaries, events, deliveries, urgent } = await schoolReadMany({
+        diaries: ['DiaryEntry', { school_id, date: today }],
+        // Today onward (YYYY-MM-DD compares as text).
+        events: ['Event', { school_id, date: { $gte: formatLocalDate() } }, 'date', 3],
+        deliveries: ['NoticeDelivery', { school_id, status: 'SENT' }, '-created_date', 100],
+        urgent: ['Notice', { school_id, priority: 'URGENT' }, '-created_date', 50],
       });
-      return diaries.filter(d => classroomIds.includes(d.classroom_id));
-    },
-    enabled: classroomIds.length > 0,
-  });
-
-
-  // Unread urgent notices among this teacher's families: deliveries the
-  // server already limits to the teacher's own students, joined to the
-  // school's urgent notices — both in one request.
-  const { data: unreadUrgentNotices = [] } = useQuery({
-    queryKey: ['teacherUnreadUrgentNotices', user.id, userProfile.school_id],
-    queryFn: async () => {
-      const { deliveries, urgent } = await schoolReadMany({
-        deliveries: ['NoticeDelivery', { school_id: userProfile.school_id, status: 'SENT' }, '-created_date', 100],
-        urgent: ['Notice', { school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50],
-      });
-      const classStudentIds = new Set(students.map((student) => student.id));
       const urgentIds = new Set(urgent.map((notice) => notice.id));
-      return deliveries.filter((row) => classStudentIds.has(row.student_id) && urgentIds.has(row.notice_id));
+      return {
+        diaries,
+        events,
+        unreadUrgent: deliveries.filter((row) => urgentIds.has(row.notice_id)),
+      };
     },
-    enabled: classroomIds.length > 0,
+    enabled: scopeLoaded,
   });
+
+  const classStudentIds = new Set(students.map((student) => student.id));
+  const todayDiaries = homeLists.diaries.filter((d) => classroomIds.includes(d.classroom_id));
+  const unreadUrgentNotices = homeLists.unreadUrgent.filter((row) => classStudentIds.has(row.student_id));
 
   const studentsWithDiary = new Set(todayDiaries.map(d => d.student_id));
   const studentsMissingDiary = students.filter(s => !studentsWithDiary.has(s.id));
@@ -232,7 +218,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
         </div>
 
         {/* Upcoming Events Section */}
-        <UpcomingEventsSection schoolId={userProfile.school_id} classroomIds={classroomIds} />
+        <UpcomingEventsSection events={homeLists.events} />
 
         {/* Classrooms Overview */}
         {classrooms.length > 0 && (

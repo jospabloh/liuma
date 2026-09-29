@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { invokeFunction } from '@/lib/functionResponse';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import PendingApproval from '@/components/ui/PendingApproval';
@@ -49,9 +50,9 @@ export default function Home() {
 
   const markWelcomeShownMutation = useMutation({
     mutationFn: async () => {
-      await base44.entities.UserProfile.update(userProfile.id, {
-        welcome_message_shown: true
-      });
+      // UserProfile.update is service-role only (P10 review): the server
+      // checks the profile is the caller's and writes only this flag.
+      await invokeFunction(base44, 'markWelcomeShown', { profileId: userProfile.id });
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['userProfiles']);

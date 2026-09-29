@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { schoolRead } from '@/lib/data/schoolRead';
+import { schoolRead, schoolReadContext } from '@/lib/data/schoolRead';
 import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -357,13 +357,11 @@ export default function Asistencia() {
     queryFn: async () => {
       if (role === 'ADMIN') return await schoolRead('Classroom', { school_id: userProfile.school_id, is_active: true });
       if (role === 'TEACHER') {
-        const assignments = await schoolRead('TeacherClassroom', { teacher_id: user.id, is_active: true });
-        const classroomIds = assignments.map(a => a.classroom_id);
-        if (classroomIds.length === 0) return [];
-        // The built-in record id is `id`. Base44 silently ignores `_id`, so the
-        // old `_id: { $in }` filter returned no classroom and the teacher saw
-        // an empty salón selector ("No hay alumnos en este salón").
-        return await schoolRead('Classroom', { id: { $in: classroomIds }, is_active: true });
+        // The teacher's classrooms come with the server's own scope (active
+        // TeacherClassroom rows → Classroom rows), in one request instead of
+        // a TeacherClassroom read followed by a Classroom read.
+        const context = await schoolReadContext();
+        return context.classrooms.filter((c) => c.is_active !== false);
       }
       return [];
     },

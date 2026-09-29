@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { READ_RULES } from '../../base44/functions/schoolRead/_scope.ts';
-import { makeSchoolReader, SCHOOL_READ_PAGE } from '../../src/lib/data/schoolReadCore.js';
+import {
+  makeSchoolReader, SCHOOL_READ_PAGE, SCHOOL_READ_ALL, SCHOOL_READ_MAX_SKIP, SCHOOL_READ_MAX_TOTAL, TOO_MANY_ROWS_MESSAGE,
+} from '../../src/lib/data/schoolReadCore.js';
+import { MAX_SKIP, MAX_LIMIT, MAX_SCANS_PER_BATCH, needsScan } from '../../base44/functions/schoolRead/_scope.ts';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -30,7 +33,9 @@ const DIRECT_READ_EXCEPTIONS = {
   'src/lib/support/tickets.js': {
     UserProfile: /user_id: ticket\.requester_user_id/,
     SupportTicket: /\.list\('-created_date'\)/,
-    SupportTicketMessage: /isOwner|ticket_id: ticketId/,
+    // Anchored to the owner branch itself: the same arguments in a
+    // non-owner read must not pass.
+    SupportTicketMessage: /isOwner\s*\?\s*await base44\.entities\.SupportTicketMessage\.filter\(/,
   },
   // A PENDING joiner has no active profile to scope by (known gap, P6/P8:
   // resolve the admin recipients server-side).
@@ -41,6 +46,10 @@ const DIRECT_READ_EXCEPTIONS = {
   // Platform-owner seed tool (SeedTestData has no school role).
   'src/lib/testData/seedTestData.js': { Classroom: /sdk\.entities/ },
 };
+
+// `x.entities.Name` not followed by a write call. Group 1: entity; group 2:
+// the member used, if any.
+const DIRECT_READ = /\.entities\.([A-Z][A-Za-z]+)\b(?!\.(?:create|update|delete|bulkCreate)\s*\()(\.\w+)?/g;
 
 function walk(dir) {
   const out = [];
@@ -58,20 +67,52 @@ test('src/ never reads a school-scoped entity directly', () => {
   for (const file of walk('src')) {
     const lines = read(file).split('\n');
     lines.forEach((line, i) => {
-      // `x.entities.Name.filter(` / `.list(` / `.get(`
-      for (const m of line.matchAll(/\.entities\.([A-Z][A-Za-z]+)\.(list|filter|get)\s*\(/g)) {
+      // Any `x.entities.Name` that is not a write: `.filter(` / `.list(` /
+      // `.get(`, but also the handler passed as a value
+      // (`fetchAllPages(base44.entities.Attendance, …)`, `const h =
+      // base44.entities.X`) — which is how Reportes' direct reads slipped
+      // past the first version of this scan.
+      for (const m of line.matchAll(DIRECT_READ)) {
         const entity = m[1];
         if (!scoped.has(entity)) continue;
         const allowed = DIRECT_READ_EXCEPTIONS[file]?.[entity];
-        // The call's own arguments may wrap onto the next lines.
-        if (allowed && allowed.test(lines.slice(i, i + 4).join(' '))) continue;
-        offenders.push(`${file}:${i + 1} ${entity}.${m[2]}`);
+        // The call's own arguments may wrap onto the next lines; the line
+        // before is included so an exception can anchor to its branch.
+        if (allowed && allowed.test(lines.slice(Math.max(0, i - 1), i + 4).join(' '))) continue;
+        offenders.push(`${file}:${i + 1} ${entity}${m[2] || ' (handler as a value)'}`);
       }
       // Dynamic `x.entities[name].filter(` hides the entity from this scan.
       if (/\.entities\[[^\]]+\]\.(list|filter|get)\s*\(/.test(line)) offenders.push(`${file}:${i + 1} dynamic entities[...] read`);
     });
   }
   assert.deepEqual(offenders, [], `read these through schoolRead (src/lib/data/schoolRead.js):\n${offenders.join('\n')}`);
+});
+
+test('the scan catches a handler passed as a value, and lets writes through', () => {
+  const hits = (text) => [...text.matchAll(DIRECT_READ)].map((m) => m[1]);
+  assert.deepEqual(hits('fetchAllPages(base44.entities.Attendance, q)'), ['Attendance']);
+  assert.deepEqual(hits('const h = base44.entities.DiaryEntry; h.filter({})'), ['DiaryEntry']);
+  assert.deepEqual(hits('base44.entities.Student.filter({})'), ['Student']);
+  assert.deepEqual(hits('base44.entities.NoticeDelivery.create({})'), []);
+  assert.deepEqual(hits('base44.entities.Notice.update(id, {})'), []);
+  // The old Reportes line would fail the scan.
+  assert.equal(DIRECT_READ_EXCEPTIONS['src/pages/Reportes.jsx'], undefined);
+});
+
+test('no batch in src/ carries more scan-mode reads than the server accepts', () => {
+  let batches = 0;
+  for (const file of walk('src')) {
+    const source = read(file);
+    for (const m of source.matchAll(/schoolReadMany\(\{([\s\S]*?)\}\);/g)) {
+      batches += 1;
+      const entities = [...m[1].matchAll(/\[\s*'([A-Z][A-Za-z]+)'/g)].map((e) => e[1]);
+      for (const role of ['ADMIN', 'TEACHER', 'PARENT']) {
+        const scans = entities.filter((entity) => needsScan(role, entity)).length;
+        assert.ok(scans <= MAX_SCANS_PER_BATCH, `${file}: ${scans} scan reads for ${role} (${entities.join(', ')})`);
+      }
+    }
+  }
+  assert.ok(batches >= 3, 'expected to find the home/operation batches');
 });
 
 test('every exception above still exists (no stale allowances)', () => {
@@ -142,6 +183,26 @@ test('read() stops at 5000 rows when no limit is given', async () => {
   const { call } = fakeCall(9000);
   const { read: schoolRead } = makeSchoolReader(call);
   assert.equal((await schoolRead('Student')).length, 5000);
+});
+
+test('read() never asks for a skip the server refuses', async () => {
+  assert.equal(SCHOOL_READ_MAX_SKIP, MAX_SKIP);
+  assert.equal(SCHOOL_READ_PAGE, MAX_LIMIT);
+  const { call, calls } = fakeCall(30000);
+  const { read: schoolRead } = makeSchoolReader(call);
+  const rows = await schoolRead('Attendance', {}, 'date', 25000);
+  assert.equal(rows.length, SCHOOL_READ_MAX_TOTAL);
+  assert.ok(calls.every((c) => c.skip <= MAX_SKIP));
+});
+
+test('read(…, SCHOOL_READ_ALL) returns everything, or throws instead of a cut list', async () => {
+  const small = fakeCall(2500);
+  assert.equal((await makeSchoolReader(small.call).read('Attendance', {}, 'date', SCHOOL_READ_ALL)).length, 2500);
+  const exact = fakeCall(SCHOOL_READ_MAX_TOTAL);
+  assert.equal((await makeSchoolReader(exact.call).read('Attendance', {}, 'date', SCHOOL_READ_ALL)).length, SCHOOL_READ_MAX_TOTAL);
+  const big = fakeCall(SCHOOL_READ_MAX_TOTAL + 1);
+  await assert.rejects(makeSchoolReader(big.call).read('Attendance', {}, 'date', SCHOOL_READ_ALL), { message: TOO_MANY_ROWS_MESSAGE });
+  assert.ok(big.calls.every((c) => c.skip <= MAX_SKIP));
 });
 
 test('readMany() sends one request and maps results back by key', async () => {

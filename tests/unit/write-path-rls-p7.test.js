@@ -29,7 +29,10 @@ const SERVICE_ROLE_WRITES = {
   UniformOrder: ['create', 'update'],
   SupportTicketMessage: ['create'], // postTicketMessage
   AuditLog: ['create'], // recordAuditEvent + server functions
-  UserProfile: ['create'], // provisionOnboardingProfile
+  // provisionOnboardingProfile; update since the P10 review (schoolRead scopes a
+  // school by this row, so it must not rest on per-field locks) — the welcome
+  // flag goes through markWelcomeShown.
+  UserProfile: ['create', 'update'],
 };
 
 for (const [entity, ops] of Object.entries(SERVICE_ROLE_WRITES)) {
@@ -47,7 +50,8 @@ test('UserProfile fields that decide access are locked to the service role', () 
   for (const field of ['user_id', 'school_id', 'status', 'onboarding_completed', 'app_role', 'is_super_admin']) {
     assert.deepEqual(schema.properties[field]?.rls?.write, PLATFORM_ONLY, `UserProfile.${field}`);
   }
-  // What the user legitimately edits on their own profile stays open.
+  // No per-field lock on what a user legitimately edits (through a function:
+  // the entity-level update is service-role only since the P10 review).
   for (const field of ['phone', 'photo_url', 'welcome_message_shown']) {
     assert.equal(schema.properties[field]?.rls, undefined, `UserProfile.${field} should stay self-writable`);
   }
@@ -100,9 +104,6 @@ test('no client code writes the locked entities directly', () => {
     const text = fs.readFileSync(file, 'utf8');
     for (const m of text.matchAll(pattern)) {
       const hit = `${rel}: ${m[1]}.${m[2]}`;
-      // UserProfile.update stays allowed for the user's own unlocked fields
-      // (welcome_message_shown in Home.jsx) — but never for status.
-      if (m[1] === 'UserProfile' && m[2] === 'update' && !/status/.test(text.slice(m.index, m.index + 200))) continue;
       if (!KNOWN_EXCEPTIONS.includes(hit)) found.push(hit);
     }
   }

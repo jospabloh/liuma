@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { schoolRead } from '@/lib/data/schoolRead';
+import { schoolRead, SCHOOL_READ_ALL } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -48,7 +48,7 @@ export default function ResumenAsistencia() {
     }
   };
 
-  const { data: attendanceRecords = [], isLoading: loadingAttendance } = useQuery({
+  const { data: attendanceRecords = [], isLoading: loadingAttendance, isError: attendanceError } = useQuery({
     queryKey: ['attendanceSummary', userProfile?.school_id, selectedPeriod, selectedClassroom],
     queryFn: async () => {
       const { start, end } = getDateRange();
@@ -59,7 +59,9 @@ export default function ResumenAsistencia() {
       if (selectedClassroom !== 'all') {
         filter.classroom_id = selectedClassroom;
       }
-      return await schoolRead('Attendance', filter);
+      // Every row of the period, or an error — never a silently cut month
+      // (the default cap is 5000; a 300-student school logs ~6,600 a month).
+      return await schoolRead('Attendance', filter, 'date', SCHOOL_READ_ALL);
     },
     enabled: !!userProfile?.school_id
   });
@@ -106,6 +108,11 @@ export default function ResumenAsistencia() {
       />
 
       <div className="max-w-5xl mx-auto space-y-6">
+        {attendanceError && (
+          <p className="text-sm text-red-600 dark:text-red-400">
+            No se pudo cargar la asistencia del período; las cifras de abajo están incompletas.
+          </p>
+        )}
         <Card className="p-6">
           <div className="grid md:grid-cols-2 gap-4">
             <div>

@@ -950,3 +950,45 @@ escribía en `Role`/`PermissionTemplate`/`AccessBinding`, que no existen.
 ConsentRecord) → dar de alta `SchoolSubscription` a las escuelas existentes
 (sin eso pasan a solo lectura en cuanto llegue `guardedEntityWrite`) →
 `deploy` → `deploy:site`.
+
+### Revisión adversarial del mismo paquete (2026-09-29)
+
+Cuatro cosas que la suite original dejaba pasar, ya corregidas:
+
+- **`base44.functions.invoke()` devuelve la respuesta de axios, no el cuerpo.**
+  El cliente de funciones del SDK se construye con `interceptResponses: false`
+  (a diferencia de `entities.*`), así que el JSON de la función está en
+  `.data` — el propio ejemplo del SDK lee `result.data.total`. Leer
+  `result.subscription` directo daba `undefined` → «sin licencia» → **toda
+  escuela en solo lectura** en cuanto se desplegara. `unwrapFunctionResponse`
+  (`src/lib/functionResponse.js`) acepta las dos formas; lo usan
+  `useSubscription`, el onboarding y la exportación de `PermisosRoles` (la
+  mitad «puedes exportar» de solo lectura). El doble de pruebas
+  (`tests/fixtures/onboarding-backend.js`) ahora responde con la forma real.
+  **Abierto, fuera de este paquete:** `guardedWrite.js` (`result?.record`, así
+  que `CrearBitacora` nunca tiene `entry.id` para `notifyParents`),
+  `aiAssist` en `CrearBitacora`/`aiIntake.js` y cualquier otro `invoke` que lea
+  el cuerpo directo tienen el mismo defecto.
+- **La liga de invitación perdía el código al iniciar sesión.** `App.jsx`
+  manda al usuario sin sesión a `/login` con `<Navigate replace>` y `Login`
+  vuelve con `location.href = '/'`: el `?codigo=` desaparecía justo para quien
+  lo necesitaba. `main.jsx` lo guarda al primer render
+  (`rememberInviteCode`, `localStorage` `liuma.inviteCode`) y el onboarding lo
+  borra al terminar.
+- **El id de 24 hex (respaldo) nunca coincidía:** el campo pone todo en
+  mayúsculas y los ids de Base44 son hex en minúsculas. El servidor lo baja.
+- **La paleta de la escuela no se veía para nadie:** `TenantThemeRuntime` leía
+  `School` (sólo plataforma). Ahora sale de `useSubscription().school`.
+  `AdminHome` todavía lee `School` para el nombre del encabezado (P5).
+
+Además: el aviso de privacidad listaba menos datos de los que las entidades
+guardan (domicilio/ocupación de padres, contactos de emergencia de terceros,
+bitácora de alimentación/sueño/higiene, motivos de ausencia, medidas de
+uniforme, IP) y decía que la IA la usa «el personal», cuando Lumi responde
+también a familias con datos del alumno. Corregido; el proveedor del modelo
+queda marcado para revisión legal (LIUMA no lo elige en código).
+
+**El candado de solo lectura en el servidor cubre sólo las 7 entidades de
+`guardedEntityWrite`.** Lo demás (`Student`, `Classroom`, `Event`,
+`OfficialDocument`…) se escribe directo por RLS y sólo lo frena la UI
+(`useCanWrite`). Eso es del paquete del camino de escritura (P7).

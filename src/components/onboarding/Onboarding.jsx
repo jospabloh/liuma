@@ -24,7 +24,7 @@ import {
   validateOnboardingPayload,
   ONBOARDING_ERROR_MESSAGES,
 } from '@/lib/onboardingTenantCreation';
-import { formatJoinCode, readJoinCodeFromSearch } from '@/lib/onboarding/joinCode';
+import { forgetInviteCode, formatJoinCode, readJoinCodeFromSearch, readRememberedInviteCode } from '@/lib/onboarding/joinCode';
 
 // Labels for the four palette slots. The keys are the stored theme_settings
 // keys (English, consumed by tenantTheme.js); only the labels are shown.
@@ -53,8 +53,11 @@ function buildCorrelationId() {
 export default function Onboarding({ user, onComplete, onCancel }) {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  // An invitation link (/?codigo=ABCD-EFGH, see JoinCodeCard) pre-fills the code.
-  const [invitedCode] = useState(() => (typeof window !== 'undefined' ? readJoinCodeFromSearch(window.location.search) : ''));
+  // An invitation link (/?codigo=ABCD-EFGH, see JoinCodeCard) pre-fills the
+  // code — from the URL, or from storage when the sign-in redirect dropped it.
+  const [invitedCode] = useState(() => (typeof window !== 'undefined'
+    ? readJoinCodeFromSearch(window.location.search) || readRememberedInviteCode()
+    : ''));
   const [formData, setFormData] = useState({
     role: '',
     schoolCode: invitedCode,
@@ -119,6 +122,7 @@ export default function Onboarding({ user, onComplete, onCancel }) {
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
         },
       });
+      forgetInviteCode();
       setIsLoading(false);
       onComplete();
       return;
@@ -136,7 +140,10 @@ export default function Onboarding({ user, onComplete, onCancel }) {
       });
       // Errors that belong to an earlier step send the user back to it.
       if (mappedError.field === 'schoolCode' || mappedError.field === 'newSchoolName') setStep(2);
-      setFormError({ field: mappedError.field || 'submit', message: mappedError.message });
+      // Only fields that render an inline error; anything else (role,
+      // user.id, a server refusal) goes in the form-level alert.
+      const shownField = ['schoolCode', 'newSchoolName', 'consent'].includes(mappedError.field) ? mappedError.field : 'submit';
+      setFormError({ field: shownField, message: mappedError.message });
     }
     setIsLoading(false);
   };

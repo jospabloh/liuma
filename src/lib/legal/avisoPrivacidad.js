@@ -10,7 +10,15 @@
 //   - el plazo de conservación tras la baja (90 días) es una propuesta;
 //   - la base de las remisiones internacionales (Base44, Resend, Anthropic,
 //     alojados fuera de México) y la autoridad garante vigente;
-//   - si la escuela necesita su propio aviso además de éste.
+//   - si la escuela necesita su propio aviso además de éste;
+//   - qué proveedor de modelo de lenguaje usa Base44 por debajo de InvokeLLM y
+//     del agente Lumi (el dueño lo nombró como Anthropic; LIUMA no elige el
+//     modelo en código, así que el aviso lo dice sin afirmarlo de más).
+//
+// La lista de datos se sacó de base44/entities/*.jsonc (Student,
+// ParentProfile, EmergencyContact, DiaryEntry, AbsenceNotification,
+// UniformOrder, AuditLog, AppSession…) el 2026-09-29. Si se agrega una
+// entidad o un campo personal, revisa la sección 2.
 //
 // La página que lo muestra (src/components/legal/LegalDocumentPage.jsx) pone
 // un aviso de BORRADOR arriba mientras PRIVACY_NOTICE_IS_DRAFT sea true.
@@ -35,10 +43,11 @@ export const AVISO_PRIVACIDAD = {
     {
       title: '2. Qué datos se tratan',
       bullets: [
-        'De madres, padres, tutores y personal: nombre, correo electrónico, teléfono, rol en la escuela y los mensajes o avisos que envían o reciben.',
-        'De alumnos (menores de edad): nombre, fecha de nacimiento, grupo, fotografía cuando la escuela la registra, asistencia, tareas, bitácora de desarrollo y conducta, cargos y pagos escolares, y contactos de emergencia.',
-        'Datos personales SENSIBLES de alumnos: tipo de sangre, alergias, condiciones y notas médicas.',
-        'Datos técnicos: registros de acceso, fecha y hora, dispositivo y navegador, necesarios para la seguridad de la cuenta.',
+        'De madres, padres, tutores y personal: nombre, correo electrónico, teléfono, rol en la escuela y los mensajes, avisos y solicitudes (por ejemplo, avisos de ausencia o pedidos de uniforme) que envían o reciben. De madres, padres y tutores, además, cuando la escuela o la familia los registra: domicilio, ocupación, lugar y teléfono de trabajo.',
+        'De alumnos (menores de edad): nombre, fecha de nacimiento, grupo, fotografía cuando la escuela la registra, asistencia y motivos de ausencia, tareas, bitácora diaria (alimentación, sueño, estado de ánimo, higiene, conducta, aprendizaje e incidentes), tallas y medidas para uniformes, y cargos y pagos escolares.',
+        'Datos personales SENSIBLES de alumnos: tipo de sangre, alergias, condiciones y notas médicas. Un motivo de ausencia o una nota de la bitácora también puede revelar información de salud.',
+        'De terceros que la familia designa: nombre, parentesco y teléfono de los contactos de emergencia, y si están autorizados para recoger al alumno.',
+        'Datos técnicos: registros de acceso y de uso de la aplicación, fecha y hora, dirección IP, dispositivo y navegador, necesarios para la seguridad de la cuenta.',
       ],
     },
     {
@@ -58,7 +67,7 @@ export const AVISO_PRIVACIDAD = {
         'Atención de emergencias y cuidado de la salud del alumno en la escuela.',
         'Cobranza escolar: cargos, descuentos y pagos entre la familia y la escuela.',
         'Operación de la cuenta: acceso, seguridad, soporte técnico y respaldo.',
-        'Funciones de asistencia con inteligencia artificial (por ejemplo, redactar una bitácora o clasificar un ticket de soporte), cuando el personal decide usarlas.',
+        'Funciones de asistencia con inteligencia artificial, cuando alguien decide usarlas: redactar una bitácora, ordenar una solicitud de soporte, o consultar a Lumi, el asistente de LIUMA, que responde a madres, padres, personal y dirección con la información de la escuela a la que cada quien tiene acceso.',
       ],
       after: [
         'LIUMA no usa tus datos para publicidad, no los vende y no los usa para finalidades secundarias.',
@@ -72,7 +81,7 @@ export const AVISO_PRIVACIDAD = {
       bullets: [
         'Base44 — infraestructura, base de datos y alojamiento de la aplicación.',
         'Resend — envío de correos electrónicos (avisos, notificaciones y confirmaciones).',
-        'Anthropic — procesamiento de lenguaje para las funciones de asistencia con inteligencia artificial; sólo recibe el texto que se le envía en cada solicitud.',
+        'Proveedores de modelos de lenguaje (como Anthropic), a través de Base44 — procesamiento de las funciones de inteligencia artificial. Reciben el texto de cada solicitud y, en el caso de Lumi, los datos que el asistente consulta para responder, que pueden incluir datos del alumno. [REVISIÓN LEGAL: confirmar proveedor(es) y sus términos de no uso para entrenamiento.]',
         'Mercado Pago — cobro de la licencia de la escuela; sólo recibe datos de facturación de la escuela, no de alumnos.',
       ],
       after: [

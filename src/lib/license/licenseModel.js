@@ -169,9 +169,9 @@ export function calculateExpiry(currentExpiresAt, monthsToExtend = 1, now = new 
  *   - no row                         → read-only ('missing')
  *   - status in READ_ONLY_STATUSES   → read-only (Mission Control put it there)
  *   - trial past trial_end_date      → read-only ('trial_expired'). Mission
- *     Control's lifecycle cron deliberately skips non-paid plans
- *     (portfolioLifecycle.js#filterPaidLicenses), so NOTHING else ever ends a
- *     trial — the app has to.
+ *     Control's lifecycle cron only counts days past license_expires_at
+ *     (portfolioLifecycle.js#computePortfolioLifecycleStage), and a trial row
+ *     has none — so NOTHING else ever ends a trial; the app has to.
  *   - trial with no trial_end_date   → read-only ('trial_without_end'): a
  *     malformed row must not become an unlimited trial.
  *   - active past license_expires_at → still writable ('active_overdue').

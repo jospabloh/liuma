@@ -184,9 +184,12 @@ export async function resolveSchoolByCode(sr, rawCode) {
     const rows = await sr.entities.School.filter({ join_code: code });
     if (rows?.[0]) return rows[0];
   }
-  // Codes handed out before join_code existed were the raw School id.
+  // Codes handed out before join_code existed were the raw School id. The
+  // onboarding input upper-cases whatever is typed (join codes are upper
+  // case), and Base44 ids are lower-case hex — so lower-case it back, or the
+  // legacy fallback never matches anything typed into the form.
   if (isLegacySchoolId(rawCode)) {
-    return sr.entities.School.get(String(rawCode).trim()).catch(() => null);
+    return sr.entities.School.get(String(rawCode).trim().toLowerCase()).catch(() => null);
   }
   return null;
 }

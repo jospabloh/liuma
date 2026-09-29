@@ -85,11 +85,20 @@ export function createOnboardingBackend(seed = {}, actingUser, { now = new Date(
       async invoke(name, body) {
         invokeCalls.push({ name, body });
         if (name !== 'provisionOnboardingProfile') throw new Error(`unexpected function ${name}`);
+        // Same shapes as the real SDK: its functions client does NOT unwrap
+        // responses (interceptResponses: false), so success resolves to the
+        // axios response ({ data, status, headers }) and a non-2xx rejects
+        // with an AxiosError whose body is `response.data`.
         try {
-          return await runOnboardingProvision({ user: actingUser, body, sr, now, userAgent: 'node-test' });
+          const data = await runOnboardingProvision({ user: actingUser, body, sr, now, userAgent: 'node-test' });
+          return { data, status: 200, headers: {} };
         } catch (e) {
-          // Shape of the SDK's error for a non-2xx function response.
-          throw Object.assign(new Error(e.message), { status: e.status || 500, data: { ok: false, code: e.code, error: e.message } });
+          const status = e.status || 500;
+          throw Object.assign(new Error(`Request failed with status code ${status}`), {
+            code: 'ERR_BAD_REQUEST',
+            status,
+            response: { status, data: { ok: false, code: e.code, error: e.message }, headers: {} },
+          });
         }
       },
     },

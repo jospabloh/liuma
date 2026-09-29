@@ -98,8 +98,9 @@ async function resolveSchoolByCode(sr: any, rawCode: unknown): Promise<School | 
     const rows = await sr.entities.School.filter({ join_code: code });
     if (rows?.[0]) return rows[0];
   }
-  // Codes handed out before join_code existed were the raw School id.
-  const legacy = String(rawCode || '').trim();
+  // Codes handed out before join_code existed were the raw School id. The
+  // form upper-cases the input and Base44 ids are lower-case hex.
+  const legacy = String(rawCode || '').trim().toLowerCase();
   if (LEGACY_SCHOOL_ID.test(legacy)) {
     return await sr.entities.School.get(legacy).catch(() => null);
   }

@@ -33,14 +33,18 @@ export function licenseNoticeCopy(notice, { isAdmin = false } = {}) {
       const when = notice.daysLeft <= 0 ? 'hoy' : `en ${days(notice.daysLeft)}`;
       return {
         title: `Tu licencia vence ${when}`,
-        body: 'Renueva a tiempo para que tu escuela siga operando sin interrupciones.',
+        body: isAdmin
+          ? 'Renueva a tiempo para que tu escuela siga operando sin interrupciones.'
+          : `Si no se renueva, la escuela pasará a modo solo lectura. ${askDirector}`,
         showPay: isAdmin,
       };
     }
     case 'active_overdue':
       return {
         title: 'Tu licencia está vencida',
-        body: 'Tienes unos días de gracia; después la escuela pasará a modo solo lectura. Si ya pagaste, ACACIA lo confirmará en breve.',
+        body: isAdmin
+          ? 'Tienes unos días de gracia; después la escuela pasará a modo solo lectura. Si ya pagaste, ACACIA lo confirmará en breve.'
+          : `En unos días la escuela pasará a modo solo lectura. ${askDirector}`,
         showPay: isAdmin,
       };
     case 'read_only':

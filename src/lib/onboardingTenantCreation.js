@@ -1,5 +1,6 @@
 import { DEFAULT_THEME } from './tenantTheme.js';
 import { isLegacySchoolId, isValidJoinCode } from './onboarding/joinCode.js';
+import { unwrapFunctionResponse } from './functionResponse.js';
 
 export const ONBOARDING_ERROR_CODES = {
   VALIDATION: 'validation_error',
@@ -226,7 +227,8 @@ export async function completeOnboardingTenantCreation({
     request.joinCode = normalizeText(formData.schoolCode);
   }
 
-  const result = await base44.functions.invoke('provisionOnboardingProfile', request);
+  // invoke resolves to the axios response; the function's body is `.data`.
+  const result = unwrapFunctionResponse(await base44.functions.invoke('provisionOnboardingProfile', request));
   const schoolId = result?.schoolId || null;
   const profileId = result?.profileId || null;
   const status = result?.status || (formData.role === 'ADMIN' ? 'ACTIVE' : 'PENDING');

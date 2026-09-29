@@ -68,7 +68,8 @@ const READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];
 // read-only. Before this the gate was `if (sub && ...)`, so a school with no
 // SchoolSubscription row — every school in production — could write forever,
 // and a trial past its 30 days never locked (Mission Control's lifecycle cron
-// skips non-paid plans, so nothing else ends a trial). MIRRORS
+// only counts days past license_expires_at, which a trial row does not have,
+// so nothing else ends a trial). MIRRORS
 // src/lib/license/licenseModel.js#resolveEffectiveLicense and
 // getMySubscription/entry.ts; tests/unit/license-lifecycle.test.js checks the
 // copies.

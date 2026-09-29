@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { selectCurrentUserProfile } from '@/lib/tenantSelection';
 import { isPlatformOwner } from '@/lib/support/owner';
 import { normalizeSubscription } from '@/lib/license/licenseModel';
+import { unwrapFunctionResponse } from '@/lib/functionResponse';
 
 /**
  * useSubscription — the current user's school license, normalized for the UI
@@ -40,7 +41,8 @@ export function useSubscription() {
   const canQuery = !!userProfile?.school_id && userProfile?.status === 'ACTIVE';
   const { data: result, isLoading: subLoading, isError, refetch } = useQuery({
     queryKey: [MY_SUBSCRIPTION_QUERY_KEY, user?.id, userProfile?.school_id],
-    queryFn: () => base44.functions.invoke('getMySubscription', {}),
+    // invoke resolves to the axios response; the body is `.data`.
+    queryFn: async () => unwrapFunctionResponse(await base44.functions.invoke('getMySubscription', {})),
     enabled: canQuery,
     staleTime: 2 * 60 * 1000,
     retry: 1,

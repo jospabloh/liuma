@@ -85,6 +85,53 @@ export function readJoinCodeFromSearch(search) {
   }
 }
 
+// The invitation link has to survive the sign-in. A new user opening
+// /?codigo=… has no session yet, so App.jsx sends them to /login with
+// <Navigate replace> (dropping the query string) and Login then does
+// `location.href = '/'` — by the time Onboarding mounts, the code is gone.
+// main.jsx therefore remembers it on the very first load; Onboarding reads the
+// URL first and this second, and forgets it once onboarding succeeds. It is
+// only a pre-fill: the server still resolves the code, and joining only
+// creates a PENDING request.
+export const INVITE_CODE_STORAGE_KEY = 'liuma.inviteCode';
+
+function browserStorage() {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Store the invitation code from `search` (if any). Never throws. */
+export function rememberInviteCode(search, storage = browserStorage()) {
+  const code = readJoinCodeFromSearch(search);
+  if (!code || !storage) return '';
+  try {
+    storage.setItem(INVITE_CODE_STORAGE_KEY, code);
+  } catch {
+    // Private mode / blocked storage: the link just won't pre-fill.
+  }
+  return code;
+}
+
+export function readRememberedInviteCode(storage = browserStorage()) {
+  try {
+    const value = storage?.getItem(INVITE_CODE_STORAGE_KEY);
+    return value ? formatJoinCode(value) : '';
+  } catch {
+    return '';
+  }
+}
+
+export function forgetInviteCode(storage = browserStorage()) {
+  try {
+    storage?.removeItem(INVITE_CODE_STORAGE_KEY);
+  } catch {
+    // nothing to do
+  }
+}
+
 export function buildJoinShareMessage({ schoolName, code, link }) {
   const name = String(schoolName || 'nuestra escuela').trim();
   return [

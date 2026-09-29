@@ -53,6 +53,9 @@ const ADMIN_DESTINATIONS = [
   { page: 'AuditoriaAdmin', label: 'Auditoría', icon: 'ScrollText', group: 'Configuración' },
   { page: 'SoporteAdmin', label: 'Consola de soporte', icon: 'Headset', group: 'Soporte' },
   { page: 'PanelSoporte', label: 'Panel de soporte', icon: 'LifeBuoy', group: 'Soporte' },
+  // The director's own line to ACACIA (billing, bugs, requests) — distinct from
+  // the two entries above, which are the inbox of the school's tickets.
+  { page: 'Soporte', label: 'Ayuda de LIUMA', icon: 'HelpCircle', group: 'Soporte' },
   { page: 'HistorialCambios', label: 'Historial de cambios', icon: 'History', group: 'Soporte' },
 ];
 
@@ -70,6 +73,9 @@ const TEACHER_DESTINATIONS = [
 const PARENT_DESTINATIONS = [
   { page: 'OperacionDiaria', label: 'Hoy', icon: 'CalendarCheck', group: 'Día a día' },
   { page: 'MisHijos', label: 'Mis hijos', icon: 'Users', group: 'Día a día' },
+  // Asistencia has a parent view (their children's records) and the route has
+  // always allowed PARENT, but nothing led there.
+  { page: 'Asistencia', label: 'Asistencia', icon: 'ClipboardCheck', group: 'Día a día' },
   { page: 'Tarea', label: 'Tareas', icon: 'BookOpen', group: 'Día a día' },
   { page: 'Bitacora', label: 'Bitácora', icon: 'NotebookPen', group: 'Día a día' },
   { page: 'Avisos', label: 'Avisos', icon: 'Bell', group: 'Comunicación' },

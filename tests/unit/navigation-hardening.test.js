@@ -26,7 +26,9 @@ test('App scrolls to top on route change', () => {
 test('auth_required renders the in-app /login route instead of bouncing to the Base44 hosted login', () => {
   const app = read('src/App.jsx');
   assert.match(app, /authError\.type === 'auth_required'/);
-  assert.match(app, /<Navigate to="\/login"/);
+  // Redirects to /login keeping the query string, so a password-reset link
+  // (?reset_token=…) opened on any path still reaches the reset form.
+  assert.match(app, /<Navigate to=\{\{ pathname: '\/login', search \}\}/);
   assert.doesNotMatch(app, /auth_required'\) \{\s*\n\s*\/\/ Redirect to login automatically\s*\n\s*navigateToLogin\(\);/);
 });
 

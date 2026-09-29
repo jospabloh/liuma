@@ -148,7 +148,7 @@ export default function GestionAlumno() {
       <PageHeader
         title="Gestión de alumno"
         showBack
-        backTo={createPageUrl('GestionEscuela')}
+        backTo={createPageUrl(userProfile?.app_role === 'ADMIN' ? 'GestionEscuela' : 'Home')}
       />
 
       {student && (

@@ -5,15 +5,37 @@ import RouteAccessDenied from '@/components/RouteAccessDenied';
 import { DEFAULT_DENIED_REDIRECT, getRouteAccessDecision } from '@/lib/authorization/routeAccess';
 import { AUDIT_ACTIONS, logAccessDeniedEvent, logAuditEvent } from '@/lib/audit';
 import { getOwnerScopedAccess } from '@/lib/authorization/policy';
+import { selectCurrentUserProfile } from '@/lib/tenantSelection';
+
+// Neutral placeholder while we still don't know who the user is. Deciding
+// before both queries answer used to flash "Acceso denegado · Perfil no
+// provisionado" on every deep link (a notification e-mail, a refresh).
+function GuardSkeleton() {
+  return (
+    <div className="min-h-[30vh] w-full px-4 py-6 sm:py-10" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Cargando…</span>
+      <div className="mx-auto max-w-sm space-y-4 animate-pulse">
+        <div className="h-6 w-2/3 rounded-md bg-muted" />
+        <div className="h-4 w-full rounded-md bg-muted" />
+        <div className="h-4 w-5/6 rounded-md bg-muted" />
+      </div>
+    </div>
+  );
+}
 
 export default function GuardedRoute({ routeName, children }) {
   const { data: user, isFetched: userFetched } = useQuery({ queryKey: ['currentUser'], queryFn: () => base44.auth.me() });
-  const { data: profiles = [] } = useQuery({
+  const { data: profiles = [], isFetched: profilesFetched, isError: profilesFailed } = useQuery({
     queryKey: ['profileRouteGuard', user?.id],
     queryFn: () => base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date'),
     enabled: !!user?.id,
+    // A failure here renders its own card below; a toast on top would repeat it.
+    meta: { silentError: true },
   });
-  const profile = profiles[0] || null;
+  // The same rule as Home/NavContext/useSubscription — not the first row of the
+  // query, which could pick a different school/role than the rest of the app.
+  const profile = selectCurrentUserProfile(profiles);
+  const decided = userFetched && (!user?.id || profilesFetched);
 
   // Owner override is derived from the server-persisted super-admin UserProfile, not from
   // any client-embedded owner identity. Owner email/id are never shipped in the bundle.
@@ -24,10 +46,18 @@ export default function GuardedRoute({ routeName, children }) {
     ownerProfiles: profiles,
   });
 
-  const routeDecision = getRouteAccessDecision({ role: profile?.app_role, routeName, ownerAccess });
+  const routeDecision = getRouteAccessDecision({
+    role: profile?.app_role,
+    routeName,
+    ownerAccess,
+    // A profile with no status is PENDING by schema default.
+    profileStatus: profile ? (profile.status || 'PENDING') : undefined,
+    isPlatformOwner: user?.role === 'admin',
+  });
 
   React.useEffect(() => {
-    if (!userFetched || routeDecision.allowed || !routeName) return;
+    // A failed profile load is not a denial: don't write it to the audit log.
+    if (!decided || profilesFailed || routeDecision.allowed || !routeName) return;
     logAccessDeniedEvent({
       user,
       userProfile: profile,
@@ -38,11 +68,12 @@ export default function GuardedRoute({ routeName, children }) {
         policy_decision: 'deny',
         precedence: routeDecision.precedence,
         role: profile?.app_role || null,
+        profile_status: profile?.status || null,
         owner_denied: routeDecision.owner_denied || false,
         owner_reason: routeDecision.owner_reason || null,
       },
     });
-  }, [userFetched, routeDecision.allowed, routeDecision.reason_code, routeDecision.reason, routeDecision.precedence, routeDecision.owner_denied, routeDecision.owner_reason, user, profile, routeName]);
+  }, [decided, profilesFailed, routeDecision.allowed, routeDecision.reason_code, routeDecision.reason, routeDecision.precedence, routeDecision.owner_denied, routeDecision.owner_reason, user, profile, routeName]);
 
   React.useEffect(() => {
     if (routeDecision.precedence !== 'owner_override' || !user || !profile) return;
@@ -64,13 +95,20 @@ export default function GuardedRoute({ routeName, children }) {
     });
   }, [routeDecision.precedence, routeDecision.identity_source, user, profile, routeName]);
 
+  if (!decided) return <GuardSkeleton />;
+
   if (!routeDecision.allowed) {
-    const profileMissing = userFetched && Boolean(user) && profiles.length === 0;
+    // The profile query failing (offline, a 5xx) leaves `profiles` empty, which
+    // used to read as "your account isn't in a school yet — go create one".
+    const profileMissing = Boolean(user) && profiles.length === 0;
+    const reasonCode = profilesFailed
+      ? 'profile_load_failed'
+      : (profileMissing ? 'missing_user_profile' : routeDecision.reason_code);
     return (
       <RouteAccessDenied
         redirectTo={DEFAULT_DENIED_REDIRECT}
-        message={profileMissing ? 'Perfil no provisionado en este tenant.' : 'No tienes permisos para ver esta sección.'}
-        reasonCode={routeDecision.reason_code}
+        reasonCode={reasonCode}
+        profileStatus={profile?.status}
       />
     );
   }

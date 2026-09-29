@@ -40,6 +40,9 @@ export default function GestionSalon() {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
 
   const { user, userProfile } = useCurrentProfile();
+  // Assigning teachers to a classroom is the director's job; the backend
+  // rejects it from a TEACHER anyway, so don't offer a button that always fails.
+  const canManageTeachers = userProfile?.app_role === 'ADMIN';
 
   const { data: classroom, isLoading } = useQuery({
     queryKey: ['classroom', classroomId],
@@ -128,7 +131,7 @@ export default function GestionSalon() {
         title={classroom?.name || 'Salón'}
         subtitle={`${students.length} alumnos`}
         showBack
-        backTo={createPageUrl('GestionEscuela')}
+        backTo={createPageUrl(canManageTeachers ? 'GestionEscuela' : 'Home')}
       />
 
       <ReadOnlyBanner />

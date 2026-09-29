@@ -4,6 +4,7 @@ import { Search, LifeBuoy } from 'lucide-react';
 import { NavIcon } from './navIcons.jsx';
 import { useNav } from './NavContext.jsx';
 import { getGroupedDestinations, isActivePath, pageUrl } from './navRegistry';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 /**
  * Persistent desktop navigation rail (md and up). Mobile keeps the four-item
@@ -129,13 +130,14 @@ export default function SideNav() {
         ))}
       </div>
 
-      {/* Identity footer — who you are + a one-click route to support. */}
+      {/* Identity footer — who you are, a one-click route to support, and the
+          way out (a shared school computer must be able to sign off). */}
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">
             {initialsOf(displayName)}
           </span>
-          <div className="min-w-0 leading-tight">
+          <div className="min-w-0 flex-1 leading-tight">
             <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
             <p className="truncate text-[11px] text-muted-foreground">{ROLE_LABELS[role] || 'Familia'}</p>
           </div>
@@ -147,6 +149,7 @@ export default function SideNav() {
           >
             <LifeBuoy className="h-[18px] w-[18px]" />
           </Link>
+          <SignOutButton variant="icon" />
         </div>
       </div>
     </nav>

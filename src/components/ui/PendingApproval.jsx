@@ -1,14 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Clock, LogOut } from 'lucide-react';
-import { Button } from "@/components/ui/button";
-import { base44 } from '@/api/base44Client';
+import { Clock } from 'lucide-react';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 export default function PendingApproval() {
-  const handleLogout = () => {
-    base44.auth.logout();
-  };
-  
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 p-6">
       <motion.div
@@ -31,14 +26,8 @@ export default function PendingApproval() {
             Este proceso normalmente toma de 1 a 2 días hábiles.
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={handleLogout}
-          className="gap-2"
-        >
-          <LogOut className="w-4 h-4" />
-          Cerrar sesión
-        </Button>
+        {/* Via AuthContext.logout so the remembered identity is cleared too. */}
+        <SignOutButton />
       </motion.div>
     </div>
   );

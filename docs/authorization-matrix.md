@@ -29,6 +29,8 @@ Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
 | /PermisosRoles | Roles and permissions configuration |
 | /Reportes | School reports |
 | /SoporteAdmin | Support ticket management console (school admin sees own school; platform owner sees all via owner override) |
+| /GestionAusencias | Absence management (review/approve) — school-wide, so ADMIN only since 2026-09-29 (TEACHER had a grant with no entry point) |
+| /ResumenAsistencia | Attendance summary — school-wide, ADMIN only since 2026-09-29 |
 
 ### TEACHER-only routes
 
@@ -37,16 +39,14 @@ Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
 | /AvisosMaestro | Teacher notice creation |
 | /BitacorasMaestro | View all diary entries (teacher) |
 | /CrearBitacora | Create diary entry |
-| /GestionAlumno | Student detail (assigned classrooms) |
-| /GestionSalon | Classroom management |
 | /TareaMaestro | Homework management (teacher) |
 
 ### ADMIN + TEACHER routes
 
 | Route | Description |
 |---|---|
-| /GestionAusencias | Absence management (review/approve) |
-| /ResumenAsistencia | Attendance summary |
+| /GestionAlumno | Student detail. ADMIN reaches it from Gestión de escuela (added 2026-09-29 — it used to dead-end on "Acceso denegado") |
+| /GestionSalon | Classroom detail. Assigning/removing teachers is shown to ADMIN only |
 
 ### TEACHER + PARENT routes
 
@@ -63,15 +63,15 @@ Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
 | /EventosParaPadres | School events listing |
 | /MisHijos | Linked children profiles |
 | /Tarea | Homework for linked children |
-
-### ADMIN + PARENT routes
-
-| Route | Description |
-|---|---|
-| /ContactosEmergencia | Emergency contacts |
-| /Pagos | Payment view (parent: own children; admin: all) |
+| /ContactosEmergencia | Emergency contacts (drill-down from Mis hijos) |
+| /Pagos | Payment view for the parent's own children |
 | /PedidosUniformes | Uniform order submission |
 | /SolicitarAusencia | Absence request submission |
+
+These four were ADMIN + PARENT until 2026-09-29. ADMIN had no menu entry for
+any of them and the pages scope by the caller's ParentStudent links, so an
+admin saw empty screens; the admin equivalents are PagosAdmin,
+GestionPedidosAdmin and GestionAusencias.
 
 ### ADMIN + TEACHER + PARENT routes
 
@@ -81,6 +81,23 @@ Source of truth: `src/lib/authorization/routeAccess.js → ROUTE_ACCESS`
 | /OperacionDiaria | Daily operations |
 | /CalendarioEscolar | School calendar |
 | /Soporte | Help desk: Lumi AI deflection (L0) + ticket creation and tracking (L1) |
+
+### Platform-owner-only routes
+
+| Route | Description |
+|---|---|
+| /SeedTestData | Sample-data generator. Only the Base44 platform owner (`user.role === 'admin'`, `PLATFORM_OWNER_ROUTES`) — no school role and not the school super-admin override. With Test Data mode off it writes real, undeletable rows. |
+
+### Guard rules that apply to every route
+
+- **Reachability.** Every grant must be in the role's nav (`navRegistry.js`) or
+  in `ROUTE_DRILLDOWNS`; `tests/unit/route-access.test.js` fails otherwise.
+- **Profile status.** A profile that is not `ACTIVE` (PENDING / SUSPENDED) is
+  denied everywhere except `/Home` (`INACTIVE_PROFILE_ROUTES`), which shows the
+  status screen and the sign-out button.
+- **Which profile.** `GuardedRoute` picks the profile with
+  `selectCurrentUserProfile` — the same rule as the rest of the app — and shows
+  a skeleton until the user and profile queries have answered.
 
 ### Public / unauthenticated routes
 

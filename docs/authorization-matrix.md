@@ -1,6 +1,6 @@
 # Authorization Matrix
 
-**Last updated: 2026-09-29 · Version 1.7.17** (route matrix and consent rows; entity section unchanged since 2026-07-13)
+**Last updated: 2026-09-29 · Version 1.8.0** (route matrix and consent rows; entity section unchanged since 2026-07-13)
 
 This matrix is the authoritative reference for LIUMA role-based access control. It reflects the code in `src/lib/authorization/routeAccess.js` and `src/lib/authorization/policy.js`. Any change to access control must be reflected here.
 

@@ -5,6 +5,59 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.8.0] - 2026-09-29
+
+Sales-readiness pass: twelve fix packages (P0–P9, P11, P12) built in parallel,
+each adversarially reviewed, integrated on one branch. Detail per package in
+CLAUDE.md → "Pase de preparación para venta (2026-09-29)".
+
+### Fixed (live production bugs)
+
+- **`base44.functions.invoke` returns the axios response, not the body**
+  (`interceptResponses: false` in the SDK). Every call site that read
+  `result.record` / `response.text` / `result.users` / `error.data.code` got
+  `undefined`: `guardedCreate` returned nothing and `CrearBitacora` crashed on
+  `entry.id` before `notifyParents`; the member directory, Lumi's diary draft,
+  the support intake and specific error messages were all silently broken.
+  One helper now — `src/lib/functionResponse.js#invokeFunction` — used by every
+  call in `src/`, tested (`tests/unit/function-response.test.js`).
+- Onboarding could not create or join a school for anyone but the platform
+  owner (client wrote platform-only entities). Now one service-role function,
+  `provisionOnboardingProfile`, with short join codes (P6).
+- Date-only fields rendered one day early in Mexico; attendance KPI always 0%;
+  payment/emergency/escalation fan-outs read a `User.list()` that only returns
+  the caller, so nobody was emailed (P0, P4, P8, P9).
+
+### Security
+
+- Write paths: `UserProfile` create and Notice/Homework/Attendance/DiaryEntry
+  create/update are service-role only; `guardedEntityWrite` gains record-level
+  rules and audit rows; new `guardedFamilyWrite`, `postTicketMessage`,
+  `recordAuditEvent`; `notifyTicketCreated` pinned to `SupportTicket` (P7).
+- License fails closed: no `SchoolSubscription` or expired trial → read-only on
+  the server too (ADMIN emergency alert exempt) (P6).
+- Lumi: no entity tools; reads through `lumiQuery` (profile-derived scope),
+  writes through `lumiWrite` (preview + confirmation code); per-user daily AI
+  caps (P2). `listSchoolMembers`, `approveProfile`, `sendBulkNotification`
+  replace client directory reads and fan-outs (P8).
+- CI runs `deno lint` + `deno check` over `base44/functions/` (P12).
+
+### Added
+
+- License notices before/after expiry with pay CTA; `JoinCodeCard`; public
+  `/aviso-de-privacidad` and `/terminos` (**BORRADOR**, legal review pending);
+  `/Ayuda` manual; login recovery/sign-up; route error boundaries; PWA
+  manifest (P3, P6, P11). Lumi chat rewrite, lazy-loaded (P1).
+
+### Changed
+
+- Route access trimmed/extended (ADMIN on GestionSalon/GestionAlumno;
+  SeedTestData platform-only); dark-mode status tints; sentence case; bundle
+  split into vendor chunks, jsPDF/LumiChat lazy; 10 unused dependencies
+  removed (P3, P5, P9, P12).
+
+---
+
 ## [1.7.17] - 2026-09-28
 
 ### Security

@@ -944,8 +944,9 @@ escribía en `Role`/`PermissionTemplate`/`AccessBinding`, que no existen.
   campos) se quitó.
 - **Aviso de Privacidad y Términos: BORRADOR** redactado por Claude,
   publicado en `/aviso-de-privacidad` y `/terminos` (con y sin sesión) con la
-  marca visible. Falta revisión legal y los datos entre corchetes. Al
-  sustituirlo: `PRIVACY_NOTICE_IS_DRAFT = false` y sube las versiones (en
+  marca visible. Falta revisión legal. El texto vive en **un solo archivo**,
+  `src/lib/legal/legalDocs.js` (el de P11; el de P6 se retiró al integrar).
+  Al sustituirlo: `PRIVACY_NOTICE_STATUS = 'vigente'` y sube las versiones (en
   `privacyNotice.js` **y** en `provisionOnboardingProfile`).
 
 **Orden de despliegue:** `deploy:entities` (School, SchoolSubscription,
@@ -967,10 +968,8 @@ Cuatro cosas que la suite original dejaba pasar, ya corregidas:
   `useSubscription`, el onboarding y la exportación de `PermisosRoles` (la
   mitad «puedes exportar» de solo lectura). El doble de pruebas
   (`tests/fixtures/onboarding-backend.js`) ahora responde con la forma real.
-  **Abierto, fuera de este paquete:** `guardedWrite.js` (`result?.record`, así
-  que `CrearBitacora` nunca tiene `entry.id` para `notifyParents`),
-  `aiAssist` en `CrearBitacora`/`aiIntake.js` y cualquier otro `invoke` que lea
-  el cuerpo directo tienen el mismo defecto.
+  **Cerrado al integrar:** todas las llamadas de `src/` pasan ahora por
+  `invokeFunction` — ver «Pase de preparación para venta» abajo.
 - **La liga de invitación perdía el código al iniciar sesión.** `App.jsx`
   manda al usuario sin sesión a `/login` con `<Navigate replace>` y `Login`
   vuelve con `location.href = '/'`: el `?codigo=` desaparecía justo para quien
@@ -980,8 +979,8 @@ Cuatro cosas que la suite original dejaba pasar, ya corregidas:
 - **El id de 24 hex (respaldo) nunca coincidía:** el campo pone todo en
   mayúsculas y los ids de Base44 son hex en minúsculas. El servidor lo baja.
 - **La paleta de la escuela no se veía para nadie:** `TenantThemeRuntime` leía
-  `School` (sólo plataforma). Ahora sale de `useSubscription().school`.
-  `AdminHome` todavía lee `School` para el nombre del encabezado (P5).
+  `School` (sólo plataforma). Ahora sale de `useSubscription().school`, igual
+  que el nombre en `AdminHome`, `AlertaEmergencia` y (ya sin lectura) `PagosAdmin`.
 
 Además: el aviso de privacidad listaba menos datos de los que las entidades
 guardan (domicilio/ocupación de padres, contactos de emergencia de terceros,
@@ -994,3 +993,92 @@ queda marcado para revisión legal (LIUMA no lo elige en código).
 `guardedEntityWrite`.** Lo demás (`Student`, `Classroom`, `Event`,
 `OfficialDocument`…) se escribe directo por RLS y sólo lo frena la UI
 (`useCanWrite`). Eso es del paquete del camino de escritura (P7).
+
+## Pase de preparación para venta (2026-09-29) — v1.8.0
+
+Doce paquetes construidos en paralelo desde `fix/P0-shared-date-helper`, cada
+uno con revisión adversarial, integrados en `integration/sales-readiness`:
+P0 fechas · P1 chat de Lumi · P2 agente Lumi · P3 armazón/rutas · P4
+asistencia/reportes · P5 inicio del director/pagos · P6 onboarding/licencia ·
+P7 caminos de escritura · P8 notificaciones/directorio · P9 oscuro/fechas ·
+P11 legal/ayuda/manual · P12 CI/bundle. (P10, lecturas por inquilino, no está.)
+
+**Lo que hay que saber antes de tocar cualquiera de estas piezas:**
+
+- **`functions.invoke` no devuelve el cuerpo.** El SDK arma el cliente de
+  funciones con `interceptResponses: false`: resuelve a la respuesta de axios y
+  rechaza con un `AxiosError` crudo (`error.response.data`, sin `error.data`).
+  Todo `src/` llama `invokeFunction(base44, nombre, payload)` de
+  `src/lib/functionResponse.js`, que devuelve el cuerpo y normaliza el error
+  (`error.data`/`error.status`, como un `Base44Error`). Cuatro paquetes habían
+  hecho su propio desenvoltorio; quedó uno. `tests/unit/function-response.test.js`
+  falla si alguien vuelve a llamar `functions.invoke` directo. Del lado Deno,
+  `lumiWrite` lleva su propio `unwrap` (Deno no importa de `src/`).
+- **Fechas sin hora:** `src/lib/dates.js` (`parseLocalDate`, `isBeforeToday`,
+  `formatLocalDate`…). `new Date('2026-09-29')` es medianoche UTC = día anterior
+  en México. `tests/unit/date-only-sweep.test.js` y
+  `dark-status-surfaces.test.js` ya no tienen lista de pendientes: un archivo
+  nuevo cumple la convención o la prueba falla.
+- **Escrituras:** `UserProfile` (create) y Notice/Homework/Attendance/DiaryEntry
+  (create/update) son sólo service role; su único camino es `guardedEntityWrite`
+  (reglas en `_policy.ts`). Registros de familia → `guardedFamilyWrite`;
+  mensajes de ticket → `postTicketMessage`; `AuditLog` → `recordAuditEvent`.
+  Envíos masivos (alerta, recordatorio de pago/evento, escalamiento) →
+  `sendBulkNotification`; directorio de nombres/correos → `listSchoolMembers`.
+  Nunca `User.list()` desde el cliente: sólo devuelve al propio usuario.
+- **Licencia (decisión del dueño):** sin licencia o prueba vencida → **solo
+  lectura**, en la UI y en `guardedEntityWrite` (`effectiveLicenseIsReadOnly`),
+  con avisos antes (7 días, urgente a 3) y después, y botón de pago para el
+  ADMIN (`VITE_LIUMA_PAYMENT_URL` o WhatsApp). Única excepción: la alerta de
+  emergencia de un ADMIN. La gracia de una licencia pagada vencida es de
+  Mission Control (8 días → `view_only`).
+- **Lecturas de inquilino (decisión pendiente, P10):** la dirección de que las
+  lecturas de la escuela vayan por funciones con service role está decidida
+  pero no construida. Hoy sólo lo hacen `getMySubscription`, `lumiQuery` y
+  `listSchoolMembers`; el resto de pantallas de ADMIN (School, Classroom,
+  Student, TeacherClassroom, ParentStudent, EmergencyContact…) siguen leyendo
+  por RLS y **para un director real muchas vuelven vacías**. Mostrar «—» en vez
+  de 0 (P5) evita mentir, no arregla el dato.
+- **Legal y Ayuda:** `/aviso-de-privacidad` y `/terminos` son rutas públicas
+  montadas en `App` antes de `AuthenticatedApp`; el texto es **BORRADOR** (lo
+  dice la página, con sus puntos pendientes de revisión legal) y vive sólo en
+  `src/lib/legal/legalDocs.js`. Nombra sólo proveedores que el código usa
+  (Resend no: todo correo sale por Base44). `docs/authorization-matrix.md`
+  está atado a `ROUTE_ACCESS` por prueba: cambia los dos juntos.
+- **CI:** `ci-deno.yml` corre `deno lint` y `deno check` sobre
+  `base44/functions/`; `deno.lock` no se versiona. `npm run lint` ya no usa
+  `--quiet` (las advertencias se ven, 0 errores es el listón).
+
+**Orden de despliegue (reconcilia P6, P7, P8 y P2):**
+
+1. **Alta de `SchoolSubscription`** para cada escuela real existente (MUNDO
+   GURI, Colegio Montessori LIUMA; producción tenía 0). El dueño decide estado
+   y plan. Sin esto, en cuanto llegue el nuevo `guardedEntityWrite` esas
+   escuelas quedan en solo lectura. Es escritura de datos: no la hace una
+   sesión sin permiso explícito.
+2. **`npm run deploy:entities`** (escribe `LIUMA`), todas juntas: School,
+   SchoolSubscription, ConsentRecord (P6); UserProfile, User, Notice, Homework,
+   Attendance, DiaryEntry, EmergencyContact, AbsenceNotification, EventResponse,
+   UniformOrder, SupportTicketMessage, AuditLog (P7); SupportTicket (P8).
+3. **Inmediatamente** `npm run deploy` (18 funciones) y `npm run deploy:site`.
+   P7 pedía funciones+sitio antes o junto con entidades (si las entidades
+   cierran primero, las escrituras directas del cliente viejo fallan en el
+   hueco); P6 y P8 pedían entidades primero (campos nuevos que las funciones
+   escriben). No hay orden que evite todo hueco: entidades → funciones → sitio
+   **en la misma ventana, minutos**, y el paso 1 antes que nada.
+4. **`npx base44 agents push`** (lumi.jsonc) **después** de las funciones
+   (`lumiQuery`/`lumiWrite` tienen que existir).
+5. Verificar por contenido: `list_entity_schemas` de las 16 entidades (User
+   sin `required`), un ADMIN real ve su código de escuela y **no** está en
+   solo lectura (prueba que el desenvoltorio funciona en vivo),
+   `/aviso-de-privacidad` sin sesión muestra BORRADOR, `/manifest.json`
+   devuelve JSON.
+
+**No verificado:** nada de esto corrió contra Base44 en vivo — ni funciones
+(sólo `deno check`/`deno lint`), ni RLS desplegada, ni una sesión real de
+ADMIN/TEACHER/PARENT, ni si el token del usuario llega a las herramientas de
+Lumi y de ahí a `guardedEntityWrite`. Tampoco si Base44 aplica `rls.write`
+por campo a un usuario sobre su propia fila, ni si una creación con service
+role llena `created_by_id`. Las pantallas autenticadas no se vieron en
+navegador. Los textos legales no los ha revisado un abogado.
+

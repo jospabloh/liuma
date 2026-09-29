@@ -10,6 +10,20 @@ import { APP_VERSION, RELEASE_DATE } from '@/lib/appConfig';
 // ChangeLog pages.
 const CHANGES = [
   {
+    date: '2026-09-29',
+    title: 'Versión 1.8: registro, licencia, Lumi y mucho más confiable',
+    items: [
+      'Nuevo: crear tu escuela o unirte a una ahora funciona de principio a fin. Cada escuela tiene un código corto (por ejemplo ABCD-EFGH) que la dirección puede copiar o compartir por WhatsApp desde su inicio.',
+      'Nuevo: avisos antes de que venza tu prueba o tu licencia, y un botón para pagar. Si la licencia vence, la escuela queda en modo de solo lectura: puedes consultar todo y descargar tus datos, y nada se borra.',
+      'Nuevo: Aviso de Privacidad y Términos del servicio dentro de la app, y una sección de Ayuda con los primeros pasos para cada rol. Los textos legales todavía son un borrador en revisión y así lo indican.',
+      'Lumi responde mejor: sólo con información a la que tienes acceso, en español, y pide confirmación antes de registrar algo. El chat muestra cuando está pensando y te deja reintentar si algo falla.',
+      'Corregido: guardar una bitácora con aviso a los padres, marcar asistencia, la alerta de emergencia, los recordatorios de pago y la lista de miembros de la escuela fallaban o no avisaban a nadie. Ahora funcionan y te dicen a cuántas personas llegó el mensaje.',
+      'Corregido: las fechas (tareas, pagos, eventos, ausencias) ya no aparecen un día antes, y los reportes de asistencia muestran el porcentaje real.',
+      'Mejor modo oscuro en avisos, pagos y estados; mensajes de error en español que dicen qué pasó; y si se corta la conexión, la app te lo dice en lugar de quedarse en blanco.',
+      'Más seguridad: los cambios importantes (perfiles, avisos, asistencia, contactos de emergencia, tickets) ahora se validan en el servidor.',
+    ],
+  },
+  {
     date: '2026-08-18',
     title: 'Seguridad y cuenta',
     items: [

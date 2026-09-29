@@ -1,11 +1,14 @@
+// Onboarding end to end, against a fake backend whose CLIENT side has the
+// deployed RLS (School / SchoolSubscription / ConsentRecord / other people's
+// profiles are all 403 from the browser) and whose SERVER side runs the real
+// provisioning algorithm. The previous suite gave the client full write access
+// to those entities, so it stayed green while no school could sign up in
+// production (audit F03).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BASELINE_PERMISSION_TEMPLATES,
   ONBOARDING_ERROR_CODES,
-  REQUIRED_TENANT_ROLES,
   buildSchoolPayload,
-  buildUserProfilePayload,
   captureOnboardingFailure,
   completeOnboardingTenantCreation,
   extractBackendErrorDetails,
@@ -13,221 +16,224 @@ import {
   validateOnboardingPayload,
 } from '../../src/lib/onboardingTenantCreation.js';
 import { DEFAULT_THEME } from '../../src/lib/tenantTheme.js';
-import { resolveOnboardingProvision, buildOnboardingUpsert } from '../../src/lib/authorization/onboardingProvision.js';
+import { isValidJoinCode, formatJoinCode } from '../../src/lib/onboarding/joinCode.js';
+import { PRIVACY_NOTICE_VERSION, TERMS_VERSION } from '../../src/lib/consent/privacyNotice.js';
+import { TRIAL_DURATION_DAYS } from '../../src/lib/license/licenseModel.js';
+import { createOnboardingBackend, FULL_CONSENT } from '../fixtures/onboarding-backend.js';
 
-const user = { id: 'user-1', email: 'owner@example.com', full_name: 'Owner User' };
-const themePreview = { palette: { primary: '#111111', secondary: '#222222', accent: '#333333', neutral: '#444444' } };
+const founder = { id: 'user-founder', email: 'directora@example.com', full_name: 'Directora' };
+const parent = { id: 'user-parent', email: 'mama@example.com', full_name: 'Mamá' };
+const themePreview = { palette: { primary: '#111111', secondary: '#222222', accent: '#333333', neutral: '#444444' }, source: 'logo' };
+const noop = { sendByEvent: async () => {} };
 
-function createEntity(seed = []) {
-  const rows = [...seed];
-  return {
-    rows,
-    createCalls: [],
-    updateCalls: [],
-    async filter(query, order) {
-      const result = rows.filter((row) => Object.entries(query).every(([key, value]) => row[key] === value));
-      if (order === '-created_date') return [...result].sort((a, b) => String(b.created_date || '').localeCompare(String(a.created_date || '')));
-      return result;
-    },
-    async create(payload) {
-      this.createCalls.push(payload);
-      const row = { id: `${this.createCalls.length}`, ...payload };
-      rows.push(row);
-      return row;
-    },
-    async update(id, payload) {
-      this.updateCalls.push({ id, payload });
-      const index = rows.findIndex((row) => row.id === id);
-      if (index >= 0) rows[index] = { ...rows[index], ...payload };
-      return rows[index] || { id, ...payload };
-    },
-    async list() {
-      return rows;
-    },
-  };
+function onboard(client, user, formData, extra = {}) {
+  return completeOnboardingTenantCreation({
+    base44: client,
+    notificationService: noop,
+    logAuditEvent: async () => {},
+    user,
+    formData,
+    logoFile: null,
+    themePreview,
+    consent: FULL_CONSENT,
+    ...extra,
+  });
 }
 
-function createBase44(seed = {}, actingUser = user) {
-  const entities = {
-    School: createEntity(seed.schools),
-    SchoolSubscription: createEntity(seed.subscriptions),
-    UserProfile: createEntity(seed.profiles),
-    User: createEntity(seed.users),
-    Role: createEntity(seed.roles),
-    PermissionTemplate: createEntity(seed.permissionTemplates),
-    AccessBinding: createEntity(seed.accessBindings),
-  };
-  // Stub for base44.functions.invoke — mimics the provisionOnboardingProfile
-  // backend function against the mock entities, so onboarding tests exercise the
-  // same provisioning rules the service-role function enforces.
-  const functions = {
-    async invoke(name, payload) {
-      if (name !== 'provisionOnboardingProfile') throw new Error(`unexpected function ${name}`);
-      const { schoolId, role, phone } = payload;
-      const school = (await entities.School.filter({ id: schoolId }))[0] || null;
-      const schoolAdmins = await entities.UserProfile.filter({ school_id: schoolId, app_role: 'ADMIN' });
-      const decision = resolveOnboardingProvision({ user: actingUser, school, role, schoolAdmins });
-      if (!decision.ok) {
-        const error = new Error(decision.message);
-        error.code = decision.code;
-        error.status = decision.code === 'ADMIN_NOT_ALLOWED' ? 403 : 400;
-        error.data = { code: decision.code, error: decision.message };
-        throw error;
-      }
-      const existing = (await entities.UserProfile.filter({ user_id: actingUser.id, school_id: schoolId }, '-created_date', 1))[0] || null;
-      const upsert = buildOnboardingUpsert({
-        user: actingUser,
-        schoolId,
-        phone,
-        appRole: decision.appRole,
-        status: decision.status,
-        existingProfile: existing,
-      });
-      if (upsert.action === 'update') {
-        await entities.UserProfile.update(upsert.id, upsert.payload);
-        return { ok: true, profileId: upsert.id, status: existing.status || decision.status };
-      }
-      const created = await entities.UserProfile.create(upsert.payload);
-      return { ok: true, profileId: created.id, status: decision.status };
+test('validates required fields and flags a malformed school code before any backend call', () => {
+  assert.deepEqual(
+    validateOnboardingPayload({ formData: { role: 'ADMIN', newSchoolName: '   ' }, user: founder }),
+    { valid: false, code: ONBOARDING_ERROR_CODES.VALIDATION, field: 'newSchoolName' },
+  );
+  assert.deepEqual(
+    validateOnboardingPayload({ formData: { role: 'TEACHER', schoolCode: '' }, user: parent }),
+    { valid: false, code: ONBOARDING_ERROR_CODES.VALIDATION, field: 'schoolCode' },
+  );
+  // "12345" is neither a join code nor a legacy id — say so next to the field.
+  assert.deepEqual(
+    validateOnboardingPayload({ formData: { role: 'PARENT', schoolCode: '12345' }, user: parent }),
+    { valid: false, code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE, field: 'schoolCode' },
+  );
+  assert.equal(validateOnboardingPayload({ formData: { role: 'PARENT', schoolCode: 'abcd-efgh' }, user: parent }).valid, true);
+  assert.equal(validateOnboardingPayload({ formData: { role: 'PARENT', schoolCode: '696e9b34b4402eca67ec8612' }, user: parent }).valid, true);
+});
+
+test('a founder signs up through the server path alone: school, trial, consent and ACTIVE ADMIN profile', async () => {
+  const { client, sr, invokeCalls } = createOnboardingBackend({}, founder);
+
+  const result = await onboard(client, founder, { role: 'ADMIN', newSchoolName: '  Colegio   Nuevo ', phone: ' 449 000 0000 ' });
+
+  // The only thing the browser did was call the function.
+  assert.deepEqual(invokeCalls.map((c) => c.name), ['provisionOnboardingProfile']);
+
+  const [school] = sr.entities.School.rows;
+  assert.equal(result.schoolId, school.id);
+  assert.equal(result.status, 'ACTIVE');
+  assert.equal(school.name, 'Colegio Nuevo');
+  // Founder identity is stamped from the authenticated user, not the form.
+  assert.equal(school.created_by_user_id, founder.id);
+  assert.ok(isValidJoinCode(school.join_code), `join_code ${school.join_code} must be a short code`);
+  assert.equal(school.is_demo, false);
+  assert.deepEqual(school.theme_settings.palette, themePreview.palette);
+
+  const [sub] = sr.entities.SchoolSubscription.rows;
+  assert.equal(sub.school_id, school.id);
+  assert.equal(sub.subscription_status, 'trial');
+  const days = (Date.parse(sub.trial_end_date) - Date.parse(sub.trial_start_date)) / 86_400_000;
+  assert.equal(days, TRIAL_DURATION_DAYS);
+  // Server clock, not the browser's.
+  assert.equal(sub.trial_start_date, '2026-09-29T15:00:00.000Z');
+
+  const [consent] = sr.entities.ConsentRecord.rows;
+  assert.equal(consent.user_id, founder.id);
+  assert.equal(consent.school_id, school.id);
+  assert.equal(consent.notice_version, PRIVACY_NOTICE_VERSION);
+  assert.equal(consent.terms_version, TERMS_VERSION);
+  assert.equal(consent.accepted_sensitive_minor_data, true);
+
+  const [profile] = sr.entities.UserProfile.rows;
+  assert.deepEqual(
+    { user_id: profile.user_id, school_id: profile.school_id, app_role: profile.app_role, status: profile.status, phone: profile.phone },
+    { user_id: founder.id, school_id: school.id, app_role: 'ADMIN', status: 'ACTIVE', phone: '449 000 0000' },
+  );
+  assert.equal('is_super_admin' in profile, false);
+});
+
+test('the client cannot smuggle founder identity, a join code or the demo flag into the new school', async () => {
+  const { client, sr } = createOnboardingBackend({}, founder);
+  await client.functions.invoke('provisionOnboardingProfile', {
+    role: 'ADMIN',
+    consent: { general: true, sensitive: true, noticeVersion: PRIVACY_NOTICE_VERSION },
+    newSchool: {
+      name: 'Colegio',
+      created_by_user_id: 'someone-else',
+      join_code: 'AAAAAAAA',
+      is_demo: true,
+      theme_settings: { palette: { primary: 'javascript:alert(1)' } },
+      logo_url: 'http://insecure.example/logo.png',
     },
+  });
+  const [school] = sr.entities.School.rows;
+  assert.equal(school.created_by_user_id, founder.id);
+  assert.notEqual(school.join_code, 'AAAAAAAA');
+  assert.equal(school.is_demo, false);
+  assert.equal(school.theme_settings, undefined, 'an invalid palette is dropped, not stored');
+  assert.equal(school.logo_url, undefined, 'only https logo URLs are stored');
+});
+
+test('buildSchoolPayload sends only name, theme and logo — never identity or demo flags', () => {
+  assert.deepEqual(
+    buildSchoolPayload({ formData: { newSchoolName: ' Colegio Demo ', isDemo: true }, logoUrl: null, themePreview: null }),
+    { name: 'Colegio Demo', theme_settings: DEFAULT_THEME },
+  );
+});
+
+test('a parent joins with the short code (any case, with or without the dash) and lands PENDING', async () => {
+  const school = { id: 'school-1', name: 'Colegio Montessori', created_by_user_id: 'x', join_code: 'ABCDEFGH' };
+  const { client, sr } = createOnboardingBackend({ schools: [school] }, parent);
+
+  const result = await onboard(client, parent, { role: 'PARENT', schoolCode: 'abcd-efgh' });
+
+  assert.equal(result.schoolId, 'school-1');
+  assert.equal(result.status, 'PENDING');
+  const [profile] = sr.entities.UserProfile.rows;
+  assert.equal(profile.app_role, 'PARENT');
+  assert.equal(profile.status, 'PENDING');
+  assert.equal(sr.entities.ConsentRecord.rows[0].app_role, 'PARENT');
+  // Joining never creates a school or a subscription.
+  assert.equal(sr.entities.School.createCalls.length, 0);
+  assert.equal(sr.entities.SchoolSubscription.createCalls.length, 0);
+});
+
+test('a code handed out before join_code existed (the raw school id) still works', async () => {
+  const school = { id: '696e9b34b4402eca67ec8612', name: 'MUNDO GURI' };
+  const { client, sr } = createOnboardingBackend({ schools: [school] }, parent);
+  const result = await onboard(client, parent, { role: 'TEACHER', schoolCode: '696e9b34b4402eca67ec8612' });
+  assert.equal(result.schoolId, school.id);
+  assert.equal(sr.entities.UserProfile.rows[0].status, 'PENDING');
+});
+
+test('an unknown code is reported against the code field, and nothing is written', async () => {
+  const { client, sr } = createOnboardingBackend({ schools: [{ id: 's', join_code: 'ABCDEFGH' }] }, parent);
+  const error = await onboard(client, parent, { role: 'PARENT', schoolCode: 'ZZZZ-ZZZZ' }).catch((e) => e);
+  assert.deepEqual(mapOnboardingError(error), {
+    code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE,
+    message: 'Código de escuela inválido. Verifica con tu administrador.',
+    field: 'schoolCode',
+  });
+  assert.equal(sr.entities.UserProfile.rows.length, 0);
+  assert.equal(sr.entities.ConsentRecord.rows.length, 0);
+});
+
+test('without complete consent there is no onboarding — and no consent means no profile', async () => {
+  const { client, sr } = createOnboardingBackend({}, founder);
+  const error = await onboard(client, founder, { role: 'ADMIN', newSchoolName: 'Colegio' }, {
+    consent: { acceptances: { general: true, sensitive: false }, noticeVersion: PRIVACY_NOTICE_VERSION },
+  }).catch((e) => e);
+  assert.equal(mapOnboardingError(error).code, ONBOARDING_ERROR_CODES.CONSENT_REQUIRED);
+  assert.equal(mapOnboardingError(error).field, 'consent');
+  assert.equal(sr.entities.School.rows.length, 0);
+  assert.equal(sr.entities.UserProfile.rows.length, 0);
+});
+
+test('a browser showing an older notice is asked to reload instead of recording the wrong version', async () => {
+  const { client, sr } = createOnboardingBackend({}, founder);
+  const error = await onboard(client, founder, { role: 'ADMIN', newSchoolName: 'Colegio' }, {
+    consent: { acceptances: { general: true, sensitive: true }, noticeVersion: '2026-06-18' },
+  }).catch((e) => e);
+  assert.equal(mapOnboardingError(error).code, ONBOARDING_ERROR_CODES.CONSENT_STALE);
+  assert.equal(sr.entities.ConsentRecord.rows.length, 0);
+});
+
+test('if the ConsentRecord cannot be persisted, onboarding fails before the profile (the commit point)', async () => {
+  const { client, sr } = createOnboardingBackend({}, founder);
+  sr.entities.ConsentRecord.failCreate = new Error('entity unavailable');
+  await assert.rejects(onboard(client, founder, { role: 'ADMIN', newSchoolName: 'Colegio' }));
+  assert.equal(sr.entities.UserProfile.rows.length, 0, 'no profile without proof of consent');
+});
+
+test('retrying an interrupted signup reuses the school and its trial instead of duplicating them', async () => {
+  const { client, sr } = createOnboardingBackend({}, founder);
+  sr.entities.ConsentRecord.failCreate = new Error('transient');
+  await onboard(client, founder, { role: 'ADMIN', newSchoolName: 'Colegio Retry' }).catch(() => {});
+  assert.equal(sr.entities.School.rows.length, 1);
+  assert.equal(sr.entities.SchoolSubscription.rows.length, 1);
+
+  sr.entities.ConsentRecord.failCreate = null;
+  const result = await onboard(client, founder, { role: 'ADMIN', newSchoolName: 'Colegio Retry' });
+  assert.equal(sr.entities.School.rows.length, 1);
+  assert.equal(sr.entities.SchoolSubscription.rows.length, 1);
+  assert.equal(result.schoolId, sr.entities.School.rows[0].id);
+  assert.equal(result.status, 'ACTIVE');
+});
+
+test('one account, one school: a user with a profile elsewhere cannot onboard again', async () => {
+  const seed = {
+    schools: [{ id: 'a', join_code: 'ABCDEFGH' }, { id: 'b', join_code: 'HGFEDCBA' }],
+    profiles: [{ id: 'p1', user_id: parent.id, school_id: 'a', app_role: 'PARENT', status: 'ACTIVE' }],
   };
-  return {
-    integrations: { Core: { UploadFile: async () => ({ file_url: 'https://cdn.test/logo.png' }) } },
-    entities,
-    functions,
-  };
-}
-
-test('validates required tenant creation fields before backend calls', () => {
-  assert.deepEqual(
-    validateOnboardingPayload({ formData: { role: 'ADMIN', newSchoolName: '   ' }, user }),
-    { valid: false, code: ONBOARDING_ERROR_CODES.VALIDATION, field: 'newSchoolName' }
-  );
-  assert.deepEqual(
-    validateOnboardingPayload({ formData: { role: 'TEACHER', schoolCode: '' }, user }),
-    { valid: false, code: ONBOARDING_ERROR_CODES.VALIDATION, field: 'schoolCode' }
-  );
+  const { client, sr } = createOnboardingBackend(seed, parent);
+  const joinOther = await onboard(client, parent, { role: 'PARENT', schoolCode: 'HGFE-DCBA' }).catch((e) => e);
+  assert.equal(mapOnboardingError(joinOther).code, ONBOARDING_ERROR_CODES.ALREADY_ONBOARDED);
+  const found = await onboard(client, parent, { role: 'ADMIN', newSchoolName: 'Otra' }).catch((e) => e);
+  assert.equal(mapOnboardingError(found).code, ONBOARDING_ERROR_CODES.ALREADY_ONBOARDED);
+  assert.equal(sr.entities.School.rows.length, 2);
 });
 
-test('lets any admin create a tenant and never assigns the privileged super-admin flag from the client', async () => {
-  const base44 = createBase44();
-
-  const result = await completeOnboardingTenantCreation({
-    base44,
-    notificationService: { sendByEvent: async () => {} },
-    logAuditEvent: async () => {},
-    user: { ...user, email: 'director@example.com' },
-    formData: { role: 'ADMIN', newSchoolName: 'Colegio Nuevo', phone: '', isDemo: false },
-    logoFile: null,
-    themePreview,
-  });
-
-  assert.ok(result.profileId);
-  assert.equal(base44.entities.School.createCalls.length, 1);
-  assert.equal(base44.entities.UserProfile.createCalls.length, 1);
-  assert.equal('is_super_admin' in base44.entities.UserProfile.createCalls[0], false);
+test('a failing pending-user notice never turns a completed signup into an error', async () => {
+  const school = { id: 'school-1', name: 'Colegio', join_code: 'ABCDEFGH' };
+  const { client } = createOnboardingBackend({ schools: [school] }, parent);
+  // client.entities.UserProfile / User are RLS-denied for a PENDING joiner.
+  const result = await onboard(client, parent, { role: 'PARENT', schoolCode: 'ABCDEFGH' });
+  assert.equal(result.status, 'PENDING');
 });
 
-test('builds test-data tenant and profile payloads with required defaults and foreign keys', () => {
-  const formData = { role: 'ADMIN', newSchoolName: ' Colegio Demo ', phone: ' 555 ', isDemo: true };
-
-  assert.deepEqual(buildSchoolPayload({ formData, user, logoUrl: null, themePreview }), {
-    name: 'Colegio Demo',
-    created_by_user_id: 'user-1',
-    is_demo: true,
-    data_mode: 'test-data',
-    theme_settings: themePreview,
-  });
-
-  assert.deepEqual(buildUserProfilePayload({ formData, user, schoolId: 'school-1' }), {
-    user_id: 'user-1',
-    school_id: 'school-1',
-    app_role: 'ADMIN',
-    status: 'ACTIVE',
-    phone: '555',
-    onboarding_completed: true,
-  });
+test('the join code shown to admins formats as ABCD-EFGH', () => {
+  assert.equal(formatJoinCode('abcdefgh'), 'ABCD-EFGH');
 });
 
-test('provisions tenant, trial subscription, admin profile, and audit hook for admin creation', async () => {
-  const base44 = createBase44();
-  const auditCalls = [];
-
-  const result = await completeOnboardingTenantCreation({
-    base44,
-    notificationService: { sendByEvent: async () => {} },
-    logAuditEvent: async (payload) => auditCalls.push(payload),
-    user,
-    formData: { role: 'ADMIN', newSchoolName: 'Colegio Nuevo', phone: '', isDemo: false },
-    logoFile: null,
-    themePreview,
-  });
-
-  assert.equal(result.schoolId, '1');
-  assert.equal(result.profileId, '1');
-  assert.equal(base44.entities.School.createCalls.length, 1);
-  assert.equal(base44.entities.SchoolSubscription.createCalls[0].school_id, '1');
-  assert.equal(base44.entities.UserProfile.createCalls[0].school_id, '1');
-  assert.equal(base44.entities.UserProfile.createCalls[0].status, 'ACTIVE');
-  assert.equal(auditCalls[0].entityId, '1');
-});
-
-test('automatically bootstraps required roles, permission templates, owner binding, and theme fallback for new admin tenant', async () => {
-  const base44 = createBase44();
-
-  await completeOnboardingTenantCreation({
-    base44,
-    notificationService: { sendByEvent: async () => {} },
-    logAuditEvent: async () => {},
-    user,
-    formData: { role: 'ADMIN', newSchoolName: 'Colegio Bootstrap', phone: '', isDemo: false },
-    logoFile: null,
-    themePreview: null,
-  });
-
-  assert.deepEqual(base44.entities.School.createCalls[0].theme_settings, DEFAULT_THEME);
-  assert.deepEqual(
-    base44.entities.Role.createCalls.map((row) => ({ role_key: row.role_key, school_id: row.school_id, is_required: row.is_required })),
-    REQUIRED_TENANT_ROLES.map((role) => ({ role_key: role.role_key, school_id: '1', is_required: true }))
-  );
-  assert.deepEqual(
-    base44.entities.PermissionTemplate.createCalls.map((row) => ({ role_key: row.role_key, school_id: row.school_id, is_baseline: row.is_baseline })),
-    BASELINE_PERMISSION_TEMPLATES.map((template) => ({ role_key: template.role_key, school_id: '1', is_baseline: true }))
-  );
-  assert.deepEqual(base44.entities.AccessBinding.createCalls[0], {
-    school_id: '1',
-    user_profile_id: '1',
-    binding_key: 'tenant_owner_admin',
-    role_key: 'ADMIN',
-    status: 'ACTIVE',
-  });
-});
-
-test('retries tenant provisioning idempotently after school creation succeeds but hooks are incomplete', async () => {
-  const base44 = createBase44({ schools: [{ id: 'school-existing', name: 'Colegio Retry', created_by_user_id: 'user-1' }] });
-
-  const result = await completeOnboardingTenantCreation({
-    base44,
-    notificationService: { sendByEvent: async () => {} },
-    logAuditEvent: async () => {},
-    user,
-    formData: { role: 'ADMIN', newSchoolName: 'Colegio Retry', phone: '', isDemo: false },
-    logoFile: null,
-    themePreview,
-  });
-
-  assert.equal(result.schoolId, 'school-existing');
-  assert.equal(base44.entities.School.createCalls.length, 0);
-  assert.equal(base44.entities.SchoolSubscription.createCalls.length, 1);
-  assert.equal(base44.entities.UserProfile.createCalls[0].school_id, 'school-existing');
-});
-
-test('captures unknown backend details and maps duplicate failures explicitly for users', () => {
-  const error = {
-    status: 409,
-    data: { code: 'duplicate_key', message: 'School already exists' },
-  };
-
+test('captures backend details and maps a duplicate failure explicitly', () => {
+  const error = { status: 409, data: { code: 'duplicate_key', message: 'School already exists' } };
   assert.deepEqual(extractBackendErrorDetails(error), {
     status: 409,
     responseBody: { code: 'duplicate_key', message: 'School already exists' },
@@ -240,85 +246,21 @@ test('captures unknown backend details and maps duplicate failures explicitly fo
     code: ONBOARDING_ERROR_CODES.DUPLICATE_TENANT,
     message: 'Ya existe una escuela con esos datos. Revisa el nombre o contacta a soporte.',
   });
-  assert.deepEqual(captureOnboardingFailure({ error, requestPayload: { role: 'ADMIN' }, phase: 'school_create' }), {
-    phase: 'school_create',
-    requestPayload: { role: 'ADMIN' },
-    status: 409,
-    responseBody: { code: 'duplicate_key', message: 'School already exists' },
-    backendCode: 'duplicate_key',
-    errorCode: 'duplicate_key',
-    backendMessage: 'School already exists',
-    correlationId: null,
-  });
+  assert.equal(captureOnboardingFailure({ error, requestPayload: { role: 'ADMIN' }, phase: 'x' }).errorCode, 'duplicate_key');
 });
 
-test('captures tenant creation correlation IDs and error codes for operational logs', () => {
+test('a 409 from the server is not blindly "duplicate school" — known codes win over the status', () => {
+  assert.equal(mapOnboardingError({ status: 409, data: { code: 'ALREADY_ONBOARDED' } }).code, ONBOARDING_ERROR_CODES.ALREADY_ONBOARDED);
+  assert.equal(mapOnboardingError({ status: 409, data: { code: 'CONSENT_VERSION_MISMATCH' } }).code, ONBOARDING_ERROR_CODES.CONSENT_STALE);
+  assert.equal(mapOnboardingError({ status: 403, data: { code: 'ADMIN_NOT_ALLOWED' } }).code, ONBOARDING_ERROR_CODES.FORBIDDEN);
+});
+
+test('captures correlation ids and validation failures for operational logs', () => {
   const error = {
-    response: {
-      status: 500,
-      data: { error_code: 'tenant_write_failed', message: 'Write failed' },
-      headers: { 'x-correlation-id': 'corr-123' },
-    },
+    response: { status: 500, data: { error_code: 'tenant_write_failed', message: 'Write failed' }, headers: { 'x-correlation-id': 'corr-123' } },
   };
-
-  const failure = captureOnboardingFailure({
-    error,
-    requestPayload: { role: 'ADMIN' },
-    phase: 'onboarding_tenant_creation',
-    correlationId: 'client-corr-1',
-  });
-
+  const failure = captureOnboardingFailure({ error, requestPayload: {}, phase: 'onboarding_tenant_creation', correlationId: 'c' });
   assert.equal(failure.correlationId, 'corr-123');
   assert.equal(failure.errorCode, 'tenant_write_failed');
-  assert.equal(failure.backendCode, 'tenant_write_failed');
-});
-
-test('maps failed tenant creation to a deterministic duplicate message without creating dependent rows', async () => {
-  const duplicateError = {
-    status: 409,
-    data: { code: 'duplicate_school', message: 'School already exists' },
-  };
-  const base44 = createBase44();
-  base44.entities.School.create = async () => { throw duplicateError; };
-
-  await assert.rejects(
-    completeOnboardingTenantCreation({
-      base44,
-      notificationService: { sendByEvent: async () => {} },
-      logAuditEvent: async () => {},
-      user,
-      formData: { role: 'ADMIN', newSchoolName: 'Colegio Duplicado', phone: '', isDemo: false },
-      logoFile: null,
-      themePreview,
-    }),
-    duplicateError
-  );
-
-  assert.deepEqual(mapOnboardingError(duplicateError), {
-    code: ONBOARDING_ERROR_CODES.DUPLICATE_TENANT,
-    message: 'Ya existe una escuela con esos datos. Revisa el nombre o contacta a soporte.',
-  });
-  assert.equal(base44.entities.SchoolSubscription.createCalls.length, 0);
-  assert.equal(base44.entities.UserProfile.createCalls.length, 0);
-  assert.equal(base44.entities.Role.createCalls.length, 0);
-});
-
-test('maps validation and invalid-school backend failures to deterministic user-facing messages', () => {
-  const validationError = {
-    status: 400,
-    data: { code: 'validation_failed', message: 'required field missing' },
-  };
-  const invalidSchoolCodeError = {
-    status: 404,
-    data: { code: 'invalid_school_code', message: 'invalid school code' },
-  };
-
-  assert.deepEqual(mapOnboardingError(validationError), {
-    code: ONBOARDING_ERROR_CODES.VALIDATION,
-    message: 'Faltan datos requeridos para completar el registro.',
-  });
-  assert.deepEqual(mapOnboardingError(invalidSchoolCodeError), {
-    code: ONBOARDING_ERROR_CODES.INVALID_SCHOOL_CODE,
-    message: 'Código de escuela inválido. Verifica con tu administrador.',
-  });
+  assert.equal(mapOnboardingError({ status: 400, data: { code: 'validation_failed', message: 'required field missing' } }).code, ONBOARDING_ERROR_CODES.VALIDATION);
 });

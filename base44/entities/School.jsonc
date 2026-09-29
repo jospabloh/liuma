@@ -25,6 +25,32 @@
     "settings": {
       "type": "object",
       "description": "School configuration settings"
+    },
+    "created_by_user_id": {
+      "type": "string",
+      "description": "Usuario que fundó la escuela en el onboarding. Lo escribe SÓLO provisionOnboardingProfile (service role) con el id del usuario autenticado — nunca un valor del cliente —, y es lo que le permite a ese usuario quedar como ADMIN fundador. rls.write:false: si un cliente pudiera escribirlo, podría declararse fundador de una escuela ajena.",
+      "rls": {
+        "write": false
+      }
+    },
+    "join_code": {
+      "type": "string",
+      "description": "Código corto para unirse (8 caracteres, alfabeto sin ambiguos; se muestra ABCD-EFGH). Lo genera y lo resuelve sólo el servidor (provisionOnboardingProfile / getMySubscription). rls.write:false: un código elegido por el cliente podría colisionar con el de otra escuela o ser adivinable.",
+      "rls": {
+        "write": false
+      }
+    },
+    "theme_settings": {
+      "type": "object",
+      "description": "Paleta de la escuela elegida en el onboarding: { palette: { primary, secondary, accent, neutral } (hex #rrggbb), source }. El servidor la sanea antes de guardarla."
+    },
+    "is_demo": {
+      "type": "boolean",
+      "default": false,
+      "description": "Escuela de demostración / datos de prueba. Sólo la plataforma lo marca; el onboarding siempre crea escuelas reales. rls.write:false.",
+      "rls": {
+        "write": false
+      }
     }
   },
   "required": [

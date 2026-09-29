@@ -32,6 +32,7 @@ import {
 import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
+import { unwrapFunctionResponse } from '@/lib/functionResponse';
 
 const PENDING_CHANGE_ENTITY = 'PendingChange';
 // The "plantillas de rol" grid and the tenant "Danger Zone" spec table that
@@ -464,7 +465,10 @@ export default function PermisosRoles() {
   const handleExportSchoolData = async () => {
     setIsExporting(true);
     try {
-      const payload = await base44.functions.invoke('exportSchoolData', {});
+      // invoke resolves to the axios response; the export is its `.data`.
+      // Export has to work in read-only mode — it is the half of "solo
+      // lectura" that promises nothing is held hostage.
+      const payload = unwrapFunctionResponse(await base44.functions.invoke('exportSchoolData', {}));
       if (!payload?.ok) throw new Error(payload?.error || 'export failed');
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

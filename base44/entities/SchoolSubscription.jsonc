@@ -44,10 +44,11 @@
       "enum": [
         "start",
         "growth",
-        "plus"
+        "plus",
+        "founder"
       ],
       "default": "start",
-      "description": "Tipo de licencia: start ($999), growth ($1,999), plus ($2,999) MXN/mes"
+      "description": "Tipo de licencia: start ($999), growth ($1,999), plus ($2,999) MXN/mes; founder = plan oculto vitalicio que asigna Mission Control (nunca vence por fecha)."
     },
     "licensed_student_limit": {
       "type": "number",
@@ -153,25 +154,9 @@
       }
     },
     "read": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "$and": [
-            {
-              "user_condition": {
-                "data.app_role": "ADMIN"
-              }
-            },
-            {
-              "data.school_id": "{{user.data.school_id}}"
-            }
-          ]
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "update": {
       "user_condition": {

@@ -910,3 +910,87 @@ acepta, quitar nuestras llamadas satisface el scan pero no cierra la puerta.
 Después de `npm run deploy` + `npm run deploy:site`, vuelve a correr el scan.
 Prueba a mano: marcar una ausencia, crear una bitácora con envío a padres,
 «Generar con Lumi», el intake de soporte y una alerta de emergencia.
+
+## Onboarding, licencia y consentimiento por el servidor (P6, 2026-09-29)
+
+El onboarding no podía funcionar para nadie más que el dueño de la plataforma:
+el navegador creaba `School`/`SchoolSubscription` (sólo plataforma por RLS),
+buscaba el código de escuela con un `School.filter` que la RLS vaciaba, el
+chequeo de fundador leía un campo que el esquema descartaba, y el "bootstrap"
+escribía en `Role`/`PermissionTemplate`/`AccessBinding`, que no existen.
+
+- **Un solo camino:** `provisionOnboardingProfile` (service role) crea la
+  escuela del fundador (`created_by_user_id` y `join_code` los pone el
+  servidor), su prueba de 30 días con el reloj del servidor, el
+  `ConsentRecord` y, al final, el `UserProfile` — el punto de confirmación.
+  Todo lo anterior es idempotente al reintentar. El algoritmo vive probado en
+  `src/lib/authorization/onboardingProvision.js#runOnboardingProvision`; el
+  `entry.ts` es su copia a mano. Cámbialos juntos.
+- **Código para unirse:** 8 caracteres sin ambiguos (`ABCD-EFGH`,
+  `src/lib/onboarding/joinCode.js`), resuelto sólo en el servidor. El id de
+  24 hex que se repartía antes sigue aceptándose como respaldo (unirse deja el
+  perfil PENDING). `JoinCodeCard` lo muestra con Copiar / liga / WhatsApp; la
+  liga `/?codigo=` rellena el onboarding.
+- **Licencia, fallando cerrado:** sin `SchoolSubscription`, o prueba vencida
+  → **solo lectura** (`resolveEffectiveLicense` en `licenseModel.js`, copiado
+  en `getMySubscription` y `guardedEntityWrite`). Una licencia pagada vencida
+  sigue escribiendo: la gracia de 8 días es de Mission Control. El plan
+  `founder` de MC existe en el enum y nunca vence por fecha. Los avisos salen
+  7 días antes (urgentes a 3) y después, con botón de pago
+  (`VITE_LIUMA_PAYMENT_URL` o WhatsApp) sólo para el ADMIN.
+- **Lecturas de la escuela:** `getMySubscription` re-deriva la escuela del
+  `UserProfile` ACTIVE del que llama e ignora el cuerpo. La rama de lectura
+  `data.app_role` de `SchoolSubscription` (muerta: ningún `User` tiene esos
+  campos) se quitó.
+- **Aviso de Privacidad y Términos: BORRADOR** redactado por Claude,
+  publicado en `/aviso-de-privacidad` y `/terminos` (con y sin sesión) con la
+  marca visible. Falta revisión legal y los datos entre corchetes. Al
+  sustituirlo: `PRIVACY_NOTICE_IS_DRAFT = false` y sube las versiones (en
+  `privacyNotice.js` **y** en `provisionOnboardingProfile`).
+
+**Orden de despliegue:** `deploy:entities` (School, SchoolSubscription,
+ConsentRecord) → dar de alta `SchoolSubscription` a las escuelas existentes
+(sin eso pasan a solo lectura en cuanto llegue `guardedEntityWrite`) →
+`deploy` → `deploy:site`.
+
+### Revisión adversarial del mismo paquete (2026-09-29)
+
+Cuatro cosas que la suite original dejaba pasar, ya corregidas:
+
+- **`base44.functions.invoke()` devuelve la respuesta de axios, no el cuerpo.**
+  El cliente de funciones del SDK se construye con `interceptResponses: false`
+  (a diferencia de `entities.*`), así que el JSON de la función está en
+  `.data` — el propio ejemplo del SDK lee `result.data.total`. Leer
+  `result.subscription` directo daba `undefined` → «sin licencia» → **toda
+  escuela en solo lectura** en cuanto se desplegara. `unwrapFunctionResponse`
+  (`src/lib/functionResponse.js`) acepta las dos formas; lo usan
+  `useSubscription`, el onboarding y la exportación de `PermisosRoles` (la
+  mitad «puedes exportar» de solo lectura). El doble de pruebas
+  (`tests/fixtures/onboarding-backend.js`) ahora responde con la forma real.
+  **Abierto, fuera de este paquete:** `guardedWrite.js` (`result?.record`, así
+  que `CrearBitacora` nunca tiene `entry.id` para `notifyParents`),
+  `aiAssist` en `CrearBitacora`/`aiIntake.js` y cualquier otro `invoke` que lea
+  el cuerpo directo tienen el mismo defecto.
+- **La liga de invitación perdía el código al iniciar sesión.** `App.jsx`
+  manda al usuario sin sesión a `/login` con `<Navigate replace>` y `Login`
+  vuelve con `location.href = '/'`: el `?codigo=` desaparecía justo para quien
+  lo necesitaba. `main.jsx` lo guarda al primer render
+  (`rememberInviteCode`, `localStorage` `liuma.inviteCode`) y el onboarding lo
+  borra al terminar.
+- **El id de 24 hex (respaldo) nunca coincidía:** el campo pone todo en
+  mayúsculas y los ids de Base44 son hex en minúsculas. El servidor lo baja.
+- **La paleta de la escuela no se veía para nadie:** `TenantThemeRuntime` leía
+  `School` (sólo plataforma). Ahora sale de `useSubscription().school`.
+  `AdminHome` todavía lee `School` para el nombre del encabezado (P5).
+
+Además: el aviso de privacidad listaba menos datos de los que las entidades
+guardan (domicilio/ocupación de padres, contactos de emergencia de terceros,
+bitácora de alimentación/sueño/higiene, motivos de ausencia, medidas de
+uniforme, IP) y decía que la IA la usa «el personal», cuando Lumi responde
+también a familias con datos del alumno. Corregido; el proveedor del modelo
+queda marcado para revisión legal (LIUMA no lo elige en código).
+
+**El candado de solo lectura en el servidor cubre sólo las 7 entidades de
+`guardedEntityWrite`.** Lo demás (`Student`, `Classroom`, `Event`,
+`OfficialDocument`…) se escribe directo por RLS y sólo lo frena la UI
+(`useCanWrite`). Eso es del paquete del camino de escritura (P7).

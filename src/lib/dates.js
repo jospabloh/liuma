@@ -40,6 +40,8 @@ export function parseLocalDate(value) {
     const mo = Number(m[2]);
     const d = Number(m[3]);
     const date = new Date(y, mo - 1, d);
+    // new Date(y, …) maps years 0–99 to 1900–1999; pin the real year.
+    if (y < 100) date.setFullYear(y, mo - 1, d);
     // new Date() silently rolls '2026-02-30' into March; reject instead.
     if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) {
       return null;

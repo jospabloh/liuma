@@ -35,6 +35,8 @@ test('parseLocalDate handles year and month boundaries without shifting', () => 
   assert.equal(formatLocalDate(parseLocalDate('2026-01-01')), '2026-01-01');
   assert.equal(formatLocalDate(parseLocalDate('2025-12-31')), '2025-12-31');
   assert.equal(formatLocalDate(parseLocalDate('2028-02-29')), '2028-02-29');
+  // Two-digit years must not be remapped to 19xx by the Date constructor.
+  assert.equal(formatLocalDate(parseLocalDate('0050-03-01')), '0050-03-01');
 });
 
 test('parseLocalDate rejects impossible or empty dates instead of rendering a wrong one', () => {

@@ -4,9 +4,8 @@ import { escapeHtml } from '@/lib/htmlEscape';
 // base44/functions/sendNotificationEmail/_templates.ts, which is now the
 // only place that actually RENDERS and SENDS these (see that function's
 // header comment — Base44 security scan, "Evitar el uso no autorizado de
-// créditos"). `inAppTitle`/`inAppContent` stay client-only, unaffected —
-// sendInApp writes a Notice row via RLS, no credit-consuming integration
-// involved. Keep the subject/emailBody halves of the two files in sync by
+// créditos"). `inAppTitle`/`inAppContent` are not sent anywhere since P10b
+// removed the in-app channel (see notificationService). Keep the subject/emailBody halves of the two files in sync by
 // hand; each carries a comment pointing at the other.
 //
 // The four events that fan out to many recipients (emergency_alert,

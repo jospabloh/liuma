@@ -34,6 +34,7 @@ import {
 import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
+import { guardedCreate } from '@/lib/authorization/guardedWrite';
 
 const PENDING_CHANGE_ENTITY = 'PendingChange';
 // The "plantillas de rol" grid and the tenant "Danger Zone" spec table that
@@ -420,12 +421,9 @@ export default function PermisosRoles() {
     const isHighRiskRollback = rollbackOverride.action === 'manage_permissions';
     try {
       if (isHighRiskRollback) {
-        await base44.entities[PENDING_CHANGE_ENTITY].create({
+        // type, status and requester are stamped by guardedEntityWrite (P10b).
+        await guardedCreate(PENDING_CHANGE_ENTITY, {
           school_id: userProfile.school_id,
-          type: 'PERMISSION_ROLLBACK',
-          status: PENDING_CHANGE_STATUSES.PENDING_SECOND_ADMIN_APPROVAL,
-          requester_profile_id: userProfile.id,
-          requester_user_id: user.id,
           target_profile_id: rollbackOverride.user_profile_id,
           payload: { override_id: rollbackOverride.id, module: rollbackOverride.resource, action: rollbackOverride.action, effect: rollbackOverride.effect, risk_level: 'HIGH' },
         });

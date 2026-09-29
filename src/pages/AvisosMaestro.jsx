@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { schoolRead, schoolReadMany } from '@/lib/data/schoolRead';
+import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -17,7 +16,7 @@ import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
-import { guardedCreate } from '@/lib/authorization/guardedWrite';
+import { guardedCreate, publishNoticeDeliveries } from '@/lib/authorization/guardedWrite';
 import {
   Dialog,
   DialogContent,
@@ -67,32 +66,9 @@ export default function AvisosMaestro() {
     mutationFn: async (data) => {
       const notice = await guardedCreate('Notice', data);
 
-      // One request: the links (already limited to this teacher's students)
-      // and the classroom's active students.
-      const { links: activeLinks, students: classroomStudents } = await schoolReadMany({
-        links: ['ParentStudent', { status: 'ACTIVE' }],
-        students: ['Student', { classroom_id: data.classroom_id, is_active: true }],
-      });
-      const classroomStudentIds = new Set(classroomStudents.map((student) => student.id));
-      const recipients = activeLinks.filter((link) => classroomStudentIds.has(link.student_id));
-
-      const escalationDueAt = data.priority === 'URGENT'
-        ? new Date(Date.now() + (24 * 60 * 60 * 1000)).toISOString()
-        : null;
-
-      await Promise.all(
-        recipients.map((recipient) => base44.entities.NoticeDelivery.create({
-          school_id: userProfile.school_id,
-          notice_id: notice.id,
-          recipient_user_id: recipient.parent_id,
-          recipient_role: 'PARENT',
-          student_id: recipient.student_id,
-          classroom_id: data.classroom_id,
-          status: 'SENT',
-          sent_at: notice.sent_at || new Date().toISOString(),
-          escalation_due_at: escalationDueAt,
-        }))
-      );
+      // The server delivers the notice to the ACTIVE parents of the students
+      // it targets, from the stored notice (P10b) — a teacher only their own.
+      const recipients = await publishNoticeDeliveries(notice.id);
       
       await logAuditEvent({
         user,
@@ -101,7 +77,7 @@ export default function AvisosMaestro() {
         entityId: notice.id,
         action: 'NOTICE_SENT',
         reason: 'Notice publishing flow',
-        context: { scope: data.scope, priority: data.priority, recipients: recipients.length }
+        context: { scope: data.scope, priority: data.priority, recipients }
       });
       
       return notice;

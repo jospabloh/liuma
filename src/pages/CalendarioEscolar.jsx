@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { sendDueEventReminders } from '@/lib/events/reminders';
 import { useRunOnce } from '@/hooks/useRunOnce';
+import { humanizeError } from '@/lib/errorMessages';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Calendar, Plus, Trash2, MapPin, Clock } from 'lucide-react';
@@ -17,6 +17,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameM
 import { es } from 'date-fns/locale';
 import { parseLocalDate, isOnOrAfterToday } from '@/lib/dates';
 import { toast } from 'sonner';
+import { guardedDelete } from '@/lib/authorization/guardedWrite';
 
 export default function CalendarioEscolar() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -48,11 +49,12 @@ export default function CalendarioEscolar() {
   });
 
   const deleteEventMutation = useMutation({
-    mutationFn: (eventId) => base44.entities.Event.delete(eventId),
+    mutationFn: (eventId) => guardedDelete('Event', eventId),
     onSuccess: () => {
       queryClient.invalidateQueries(['events']);
       toast.success('Evento eliminado');
-    }
+    },
+    onError: (error) => toast.error(humanizeError(error)),
   });
 
   // No cron in this app, so confirmation reminders run opportunistically when an

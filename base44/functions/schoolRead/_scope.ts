@@ -96,10 +96,11 @@ export function profileProblem(profile: Profile | null): string | null {
 //   hide      → fields removed from every row for that role (and therefore
 //               not filterable or sortable by it — no oracle).
 //   members   → fields that must name a user with an ACTIVE UserProfile in
-//               the caller's school. For entities whose create RLS lets any
+//               the caller's school. For entities whose create RLS let any
 //               signed-in user file a row with a school_id of their choosing
-//               (SupportTicket, NoticeDelivery): without it, an outsider's
-//               forged row would show up in another school's lists. Checked
+//               before P10b (SupportTicket, NoticeDelivery): without it, an
+//               outsider's forged row would show up in another school's
+//               lists. Checked
 //               row by row (never pushed as a giant $in), so such a rule is
 //               read in scan mode.
 // A role missing from `roles` cannot read that entity at all.
@@ -209,8 +210,9 @@ export const READ_RULES: Record<string, EntityRule> = {
   },
   NoticeDelivery: {
     fields: ['school_id', 'notice_id', 'recipient_user_id', 'recipient_role', 'student_id', 'classroom_id', 'status', 'sent_at', 'read_at', 'escalation_due_at', 'escalation_status'],
-    // NoticeDelivery.create/update RLS only pins recipient_user_id to the
-    // caller: anyone can file one with any school_id/student_id. Staff see a
+    // Until P10b the NoticeDelivery.create/update RLS only pinned
+    // recipient_user_id to the caller, so rows filed before it may carry any
+    // school_id/student_id (now guardedEntityWrite derives them). Staff see a
     // row only when its recipient is a member of their school.
     roles: {
       ADMIN: SCHOOL_MEMBERS('recipient_user_id'),
@@ -328,9 +330,10 @@ export const READ_RULES: Record<string, EntityRule> = {
   },
   SupportTicket: {
     fields: ['ticket_number', 'school_id', 'requester_user_id', 'requester_profile_id', 'requester_role', 'requester_name', 'subject', 'category', 'priority', 'status', 'tier', 'assignee_role', 'channel_origin', 'ai_attempted', 'ai_resolution_summary', 'sla_due_at', 'first_response_at', 'resolved_at', 'escalated_at', 'client_context', 'ai_brief', 'escalation_notified_recipients'],
-    // SupportTicket.create RLS only pins requester_user_id to the caller, so
-    // school_id is the requester's claim: a ticket reaches a school's queue
-    // only when its requester is a member of that school.
+    // Until P10b SupportTicket.create RLS only pinned requester_user_id to the
+    // caller, so an older ticket's school_id is the requester's claim (now
+    // guardedEntityWrite derives it): a ticket reaches a school's queue only
+    // when its requester is a member of that school.
     roles: {
       ADMIN: SCHOOL_MEMBERS('requester_user_id'),
       TEACHER: { rows: [{ requester_user_id: set('self') }], hide: ['escalation_notified_recipients', 'ai_brief'] },

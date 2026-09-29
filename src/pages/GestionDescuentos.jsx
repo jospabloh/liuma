@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -19,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
 
 export default function GestionDescuentos() {
   const { canWrite } = useCanWrite();
@@ -46,7 +46,7 @@ export default function GestionDescuentos() {
   });
 
   const createDiscountMutation = useMutation({
-    mutationFn: (data) => base44.entities.Discount.create({
+    mutationFn: (data) => guardedCreate('Discount', {
       ...data,
       school_id: userProfile.school_id,
     }),
@@ -58,7 +58,7 @@ export default function GestionDescuentos() {
   });
 
   const updateDiscountMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Discount.update(id, data),
+    mutationFn: ({ id, data }) => guardedUpdate('Discount', id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['discounts'] });
       toast.success('Descuento actualizado');
@@ -67,7 +67,7 @@ export default function GestionDescuentos() {
   });
 
   const deleteDiscountMutation = useMutation({
-    mutationFn: (id) => base44.entities.Discount.delete(id),
+    mutationFn: (id) => guardedDelete('Discount', id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['discounts'] });
       toast.success('Descuento eliminado');

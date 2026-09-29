@@ -32,6 +32,16 @@
 // path for them — its checks are no longer advisory. The pure rules
 // (POLICY_WRITE, attribution, server-only fields, who may modify an existing
 // record) live in ./_policy.ts so node --test can exercise them.
+//
+// P10b (2026-09-29): it is also the write path for every other school entity
+// whose deployed RLS is platform-owner only (SCHOOL_WRITES in ./_policy.ts —
+// Classroom, Student, TeacherClassroom, ParentStudent, Event, Discount,
+// OfficialDocument, SchoolSetupGuide, PermissionOverride, PendingChange, the
+// school's review of AbsenceNotification/UniformOrder, NoticeDelivery and
+// SupportTicket). Those go to runSchoolWrite (./_schoolWrite.ts, tested
+// against an in-memory database). For both paths the school and role come
+// from the caller's CURRENT UserProfile (resolveCallerProfile, the same rule
+// schoolRead uses) — never from the request body.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import {
   ATTRIBUTION_FIELDS,
@@ -39,41 +49,23 @@ import {
   POLICY_WRITE,
   decideCreateTargets,
   decideModifyExisting,
-  referencesToCheck,
+  effectiveLicenseIsReadOnly,
+  retargetsRecord,
+  schoolWriteRule,
   stripServerOnlyFields,
 } from './_policy.ts';
+import {
+  assignedClassroomIdsFor,
+  firstForeignReference,
+  resolveCallerProfile,
+  runSchoolWrite,
+  writeAudit,
+} from './_schoolWrite.ts';
 
 const ENTITIES = Object.keys(POLICY_WRITE);
-const READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];
-
-// Owner decision (2026-09-29): a missing or expired license FAILS CLOSED to
-// read-only. Before this the gate was `if (sub && ...)`, so a school with no
-// SchoolSubscription row — every school in production — could write forever,
-// and a trial past its 30 days never locked (Mission Control's lifecycle cron
-// only counts days past license_expires_at, which a trial row does not have,
-// so nothing else ends a trial). MIRRORS
-// src/lib/license/licenseModel.js#resolveEffectiveLicense and
-// getMySubscription/entry.ts; tests/unit/license-lifecycle.test.js checks the
-// copies.
-function effectiveLicenseIsReadOnly(
-  sub: { subscription_status?: string; license_tier?: string; trial_end_date?: string } | null,
-  now: Date,
-): boolean {
-  if (!sub) return true;
-  const status = String(sub.subscription_status || 'trial');
-  if (READ_ONLY_STATUSES.includes(status)) return true;
-  if (sub.license_tier === 'founder') return false;
-  if (status === 'trial') {
-    const end = Date.parse(String(sub.trial_end_date || ''));
-    return Number.isNaN(end) || end <= now.getTime();
-  }
-  // Paid + past license_expires_at stays writable: Mission Control owns that
-  // grace period and writes view_only when it ends.
-  return false;
-}
+// effectiveLicenseIsReadOnly (fail closed: no row or an expired trial is
+// read-only) lives in ./_policy.ts since P10b, shared with runSchoolWrite.
 const OPERATIONS = ['create', 'update', 'delete'];
-
-type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string };
 type Override = { user_profile_id?: string; resource?: string; action?: string; effect?: string };
 
 // ChargeItem has one narrow carve-out beyond the table above, and it already
@@ -136,28 +128,9 @@ async function buildEventChargeData(
   };
 }
 
-// Returns the first client-supplied reference (see REFERENCE_ENTITIES) whose
-// record is missing or lives in another school, or null if all check out.
-// deno-lint-ignore no-explicit-any
-async function firstForeignReference(sr: any, data: Record<string, unknown>, schoolId: string): Promise<string | null> {
-  for (const [field, entityName, id] of referencesToCheck(data)) {
-    const ref: { school_id?: string } | null = await sr.entities[entityName].get(id).catch(() => null);
-    if (!ref || String(ref.school_id || '') !== schoolId) return field;
-  }
-  return null;
-}
-
-// Audit rows are written here, server-side, because AuditLog create is
-// service-role only (P7). Best-effort: the write it describes already
-// happened, and failing the request now would invite a duplicate retry.
-// deno-lint-ignore no-explicit-any
-async function writeAudit(sr: any, row: Record<string, unknown>): Promise<void> {
-  try {
-    await sr.entities.AuditLog.create({ ...row, timestamp: new Date().toISOString() });
-  } catch (e) {
-    console.error('guardedEntityWrite audit write failed', (e as Error).message);
-  }
-}
+// firstForeignReference (every client-supplied reference must be a record of
+// the same school) and writeAudit (server-side AuditLog rows, best-effort)
+// live in ./_schoolWrite.ts, shared by both write paths.
 
 function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
@@ -172,43 +145,58 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const entity = String(body?.entity || '');
     const operation = String(body?.operation || '');
+
+    // P10b: the school entities whose RLS is platform-owner only.
+    if (schoolWriteRule(entity)) {
+      const result = await runSchoolWrite({ sr: base44.asServiceRole, user, body: body || {} });
+      return Response.json(result.body, { status: result.status });
+    }
+
     if (!ENTITIES.includes(entity)) return bad(400, 'UNKNOWN_ENTITY', 'Unsupported entity');
     if (!OPERATIONS.includes(operation)) return bad(400, 'BAD_OPERATION', 'operation must be create/update/delete');
 
     const sr = base44.asServiceRole;
+    const isPlatformOwner = user.role === 'admin';
 
-    // Determine the target school. For create, from the submitted data — the
-    // caller's own profile in that school is what gets checked next, so a
-    // client can't just claim a school it has no profile in. For update/
-    // delete, from the EXISTING record, never from client input (a client
-    // could otherwise submit a foreign school_id to sidestep its own school's
-    // block).
+    // WHO: the caller's current profile (P10b — the rule schoolRead uses).
+    // Before P10b create took the school from body.data and only checked the
+    // caller had SOME active profile there; now the body can only confirm it.
+    let profile: { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string } | null = null;
+    if (!isPlatformOwner) {
+      const caller = await resolveCallerProfile(sr, user);
+      if (caller.problem) return bad(403, caller.problem, 'No active profile');
+      profile = { ...caller.profile, id: String(caller.profile?.id || '') };
+    }
+
+    // WHERE. For create, the caller's own school (a school_id in the body must
+    // be that one). For update/delete, from the EXISTING record, never from
+    // client input (a client could otherwise submit a foreign school_id to
+    // sidestep its own school's block) — and it must be the caller's school.
     let schoolId: string;
     let existing: Record<string, unknown> | null = null;
     if (operation === 'create') {
-      schoolId = String(body?.data?.school_id || '');
+      const claimed = String(body?.data?.school_id || '');
+      schoolId = profile ? String(profile.school_id || '') : claimed;
       if (!schoolId) return bad(400, 'MISSING_SCHOOL', 'data.school_id is required');
+      if (claimed && claimed !== schoolId) return bad(403, 'SCHOOL_MISMATCH', 'school_id is not your school');
     } else {
       const id = String(body?.id || '');
       if (!id) return bad(400, 'MISSING_ID', 'id is required');
       existing = await sr.entities[entity].get(id).catch(() => null);
       if (!existing) return bad(404, 'NOT_FOUND', 'Record not found');
       schoolId = String((existing as { school_id?: string }).school_id || '');
+      if (profile && String(profile.school_id || '') !== schoolId) {
+        return bad(403, 'SCHOOL_MISMATCH', 'This record belongs to another school');
+      }
     }
 
-    const isPlatformOwner = user.role === 'admin';
-    let profile: Profile | null = null;
     // Populated only when the ChargeItem/PARENT/EVENTO carve-out grants
     // access below — the create handler uses this, server-derived, instead
     // of body.data, so a parent can't submit their own amount/status.
     let eventChargeData: Record<string, unknown> | null = null;
     // How an update/delete was authorized — recorded in the audit row.
     let modifyReason = 'platform_owner';
-    if (!isPlatformOwner) {
-      const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
-      profile = profiles.find((p) => p.status === 'ACTIVE') || null;
-      if (!profile) return bad(403, 'NO_PROFILE', 'No active profile in this school');
-
+    if (profile) {
       // Base role policy + PermissionOverride, mirroring getEffectivePolicyDecision:
       // an explicit deny override wins outright; an allow override grants access
       // even if the role default doesn't; otherwise fall back to the role default.
@@ -292,6 +280,7 @@ Deno.serve(async (req) => {
       // submitted amount/status/etc. never reach the write. Server-only
       // notification fields are stripped on create too, not just on update.
       const data: Record<string, unknown> = eventChargeData ?? stripServerOnlyFields(entity, body.data || {});
+      data.school_id = schoolId;
 
       const attribution = ATTRIBUTION_FIELDS[entity];
       if (attribution) {
@@ -323,17 +312,11 @@ Deno.serve(async (req) => {
       // teachers and a child's to their parents, so a non-ADMIN may only file
       // them against their OWN classrooms and the children actually in them.
       if (profile && profile.app_role !== 'ADMIN' && (CLASSROOM_BOUND_ENTITIES.includes(entity) || entity === 'Notice')) {
-        const assignments: Array<{ school_id?: string; teacher_id?: string; classroom_id?: string; is_active?: boolean }> =
-          await sr.entities.TeacherClassroom.filter({ school_id: schoolId, teacher_id: user.id });
-        const assignedClassroomIds = assignments
-          .filter((a) => String(a.school_id || '') === schoolId && String(a.teacher_id || '') === String(user.id) && a.is_active !== false)
-          .map((a) => String(a.classroom_id || ''))
-          .filter(Boolean);
         const target = decideCreateTargets({
           entity,
           appRole: String(profile.app_role || ''),
           data,
-          assignedClassroomIds,
+          assignedClassroomIds: await assignedClassroomIdsFor(sr, schoolId, String(user.id)),
           studentClassroomId,
         });
         if (!target.ok) return bad(403, target.code, target.message);
@@ -364,6 +347,33 @@ Deno.serve(async (req) => {
       }
       const foreignRef = await firstForeignReference(sr, patch, schoolId);
       if (foreignRef) return bad(400, 'REFERENCE_NOT_IN_SCHOOL', `${foreignRef} does not belong to this school`);
+
+      // P10b review: the create-time target rule held on update too. Without
+      // it an author could move a diary entry or homework to a classroom they
+      // don't teach (schoolRead then shows it to that classroom's teachers),
+      // or a CLASSROOM notice to another classroom / the whole school and
+      // then publish it. Only an update that CHANGES the target is checked,
+      // over the stored record merged with the patch, so an ordinary edit of
+      // an old record keeps working.
+      if (profile && profile.app_role !== 'ADMIN' && (CLASSROOM_BOUND_ENTITIES.includes(entity) || entity === 'Notice')
+        && retargetsRecord(existing as Record<string, unknown>, patch)) {
+        const merged = { ...(existing as Record<string, unknown>), ...patch };
+        const storedStudentId = String((existing as { student_id?: string }).student_id || '');
+        let studentClassroomId: string | null = null;
+        if (storedStudentId) {
+          const student: { school_id?: string; classroom_id?: string } | null =
+            await sr.entities.Student.get(storedStudentId).catch(() => null);
+          studentClassroomId = student && String(student.school_id || '') === schoolId ? String(student.classroom_id || '') || null : null;
+        }
+        const target = decideCreateTargets({
+          entity,
+          appRole: String(profile.app_role || ''),
+          data: merged,
+          assignedClassroomIds: await assignedClassroomIdsFor(sr, schoolId, String(user.id)),
+          studentClassroomId,
+        });
+        if (!target.ok) return bad(403, target.code, target.message);
+      }
 
       const updated = await sr.entities[entity].update(recordId, patch);
       await writeAudit(sr, {

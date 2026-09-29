@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
@@ -27,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { guardedUpdate } from '@/lib/authorization/guardedWrite';
 
 export default function Avisos() {
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -65,7 +65,9 @@ export default function Avisos() {
         row.status !== 'ACKNOWLEDGED' && row.escalation_due_at && new Date(row.escalation_due_at) < new Date() && row.escalation_status !== 'ESCALATED'
       );
 
-      await Promise.all(escalated.map((row) => base44.entities.NoticeDelivery.update(row.id, { escalation_status: 'ESCALATED' })));
+      // Best-effort bookkeeping on the recipient's own copies (guardedEntityWrite
+      // lets only the recipient touch them): a failure must not hide the list.
+      await Promise.allSettled(escalated.map((row) => guardedUpdate('NoticeDelivery', row.id, { escalation_status: 'ESCALATED' })));
       return rows.map((row) => ({
         ...row,
         escalation_status: row.escalation_status || (row.escalation_due_at && new Date(row.escalation_due_at) < new Date() && row.status !== 'ACKNOWLEDGED' ? 'ESCALATED' : null),
@@ -75,10 +77,8 @@ export default function Avisos() {
   });
 
   const markAsReadMutation = useMutation({
-    mutationFn: async (delivery) => base44.entities.NoticeDelivery.update(delivery.id, {
-      status: 'READ',
-      read_at: delivery.read_at || new Date().toISOString(),
-    }),
+    // read_at is stamped by the server the first time (P10b).
+    mutationFn: async (delivery) => guardedUpdate('NoticeDelivery', delivery.id, { status: 'READ' }),
     onSuccess: () => queryClient.invalidateQueries(['noticeDeliveries']),
   });
   const noticesById = useMemo(() => new Map(notices.map((notice) => [notice.id, notice])), [notices]);

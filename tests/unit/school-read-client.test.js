@@ -112,7 +112,9 @@ test('no batch in src/ carries more scan-mode reads than the server accepts', ()
       }
     }
   }
-  assert.ok(batches >= 3, 'expected to find the home/operation batches');
+  // P10b dropped AvisosMaestro's batch (the server now picks a notice's
+  // recipients), leaving the home and daily-operation ones.
+  assert.ok(batches >= 2, 'expected to find the home/operation batches');
 });
 
 test('every exception above still exists (no stale allowances)', () => {

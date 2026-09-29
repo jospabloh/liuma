@@ -110,14 +110,19 @@ test('the pay button is the Mercado Pago link when configured, WhatsApp to ACACI
 
 test('the server write gate fails closed too — guardedEntityWrite and getMySubscription mirror the rule', () => {
   const gate = read('base44/functions/guardedEntityWrite/entry.ts');
-  assert.doesNotMatch(gate, /if \(sub && READ_ONLY_STATUSES/, 'the old gate skipped schools with no subscription');
+  // Since P10b the rule itself lives in the function's ./_policy.ts, shared
+  // by both write paths (entry.ts and _schoolWrite.ts); entry.ts applies it.
+  const rule = read('base44/functions/guardedEntityWrite/_policy.ts');
+  assert.match(gate, /effectiveLicenseIsReadOnly,/);
+  assert.match(read('base44/functions/guardedEntityWrite/_schoolWrite.ts'), /return effectiveLicenseIsReadOnly\(\(subs \|\| \[\]\)\[0\] \|\| null, now\);/);
+  assert.doesNotMatch(gate + rule, /if \(sub && READ_ONLY_STATUSES/, 'the old gate skipped schools with no subscription');
   // The only carve-out is P7's ADMIN emergency Notice (child safety is not
   // gated on billing); everything else goes through the fail-closed rule.
   assert.match(gate, /if \(!isEmergencyAlert && effectiveLicenseIsReadOnly\(sub, new Date\(\)\)\)/);
   assert.match(gate, /const isEmergencyAlert = entity === 'Notice' && operation === 'create'\s+&& profile\.app_role === 'ADMIN' && body\?\.data\?\.is_emergency === true;/);
-  assert.match(gate, /if \(!sub\) return true;/);
-  assert.match(gate, /status === 'trial'[\s\S]{0,160}Number\.isNaN\(end\) \|\| end <= now\.getTime\(\)/);
-  assert.match(gate, /license_tier === 'founder'\) return false/);
+  assert.match(rule, /if \(!sub\) return true;/);
+  assert.match(rule, /status === 'trial'[\s\S]{0,160}Number\.isNaN\(end\) \|\| end <= now\.getTime\(\)/);
+  assert.match(rule, /license_tier === 'founder'\) return false/);
 
   const read_ = read('base44/functions/getMySubscription/entry.ts');
   assert.match(read_, /if \(!sub\) return \{ status: 'missing', isReadOnly: true, reason: 'missing' \};/);

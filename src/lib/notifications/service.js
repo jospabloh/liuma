@@ -69,26 +69,10 @@ const deliverWithRetry = async ({ schoolId, userId, recipientId, email, eventTyp
 };
 
 export const notificationService = {
-  async sendInApp({ schoolId, recipientId, title, content, priority = 'NORMAL', eventType, actorUserId }) {
-    return deliverWithRetry({
-      schoolId,
-      userId: actorUserId,
-      recipientId,
-      eventType,
-      channel: 'in_app',
-      execute: async () => {
-        await base44.entities.Notice.create({
-          school_id: schoolId,
-          scope: 'USER',
-          user_id: recipientId,
-          title,
-          content,
-          priority,
-          sent_at: new Date().toISOString(),
-        });
-      },
-    });
-  },
+  // No in-app channel (P10b). sendInApp wrote a Notice with scope 'USER',
+  // which the Notice schema does not have, directly to an entity whose create
+  // is service-role only: it failed for every user, every time, and no screen
+  // ever read such a row. `channels: ['in_app']` is accepted and ignored.
 
   /**
    * Sends a templated email via the sendNotificationEmail Safe function — the
@@ -181,7 +165,6 @@ export const notificationService = {
     recipients,
     templateContext,
     channels = ['email'],
-    priority = 'NORMAL',
   }) {
     const template = NOTIFICATION_TEMPLATES[eventType];
     if (!template) throw new Error(`Missing notification template for event: ${eventType}`);
@@ -198,18 +181,6 @@ export const notificationService = {
           email: recipient.email,
           eventType,
           templateContext,
-          actorUserId,
-        }));
-      }
-
-      if (channels.includes('in_app') && recipient.user_id && isChannelEnabled({ schoolPrefs, userPrefs, channel: 'in_app', role: recipient.app_role })) {
-        attempts.push(this.sendInApp({
-          schoolId,
-          recipientId: recipient.user_id,
-          title: template.inAppTitle(templateContext),
-          content: template.inAppContent(templateContext),
-          priority,
-          eventType,
           actorUserId,
         }));
       }

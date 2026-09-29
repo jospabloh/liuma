@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Switch } from "@/components/ui/switch";
+import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
+import { humanizeError } from '@/lib/errorMessages';
 
 export default function EventFormDialog({ isOpen, onClose, event, schoolId, classrooms }) {
   const queryClient = useQueryClient();
@@ -67,17 +68,22 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
 
   const saveEventMutation = useMutation({
     mutationFn: async (data) => {
+      // Event writes are platform-owner only under RLS: guardedEntityWrite
+      // checks the caller is an ADMIN of this school (P10b).
       if (event) {
-        return await base44.entities.Event.update(event.id, data);
+        return await guardedUpdate('Event', event.id, data);
       } else {
-        return await base44.entities.Event.create({ ...data, school_id: schoolId });
+        return await guardedCreate('Event', { ...data, school_id: schoolId });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['events']);
       toast.success(event ? 'Evento actualizado' : 'Evento creado');
       onClose();
-    }
+    },
+    onError: (error) => {
+      toast.error(humanizeError(error));
+    },
   });
 
   const handleSubmit = (e) => {

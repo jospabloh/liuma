@@ -72,6 +72,35 @@ inquilino (P10)".
   Reportes' attendance and diary figures read through `schoolRead` (they were
   still direct, so a director saw ~0); the direct-read scan now also catches a
   handler passed as a value.
+- **Tenant write path (P10b).** The client still wrote directly to entities
+  whose deployed RLS is platform-owner only, so a real director could not
+  create a classroom, student, event, discount, document, setup step,
+  teacher/parent link, permission override or rollback request, review an
+  absence or uniform order, work a support ticket, or deliver a notice. All of
+  them now go through `guardedEntityWrite` (no new function): school and role
+  from the caller's current `UserProfile` (a body `school_id` of another
+  school is 403), per-entity × operation role table, typed field allowlist,
+  server-stamped attribution, every referenced id (student, classroom, notice,
+  profile, teacher, parent) checked against the same school, the fail-closed
+  license gate, audit rows. Students/classrooms/links are retired, never
+  deleted; teacher and parent links are ADMIN-only (the link UI is hidden for
+  teachers). `NoticeDelivery` create/update and `SupportTicket` create became
+  service-role only: the server picks a notice's recipients and a ticket's
+  school/requester/tier/SLA — neither is client-chosen any more. The broken
+  in-app `Notice` (scope `USER`, not in the schema) was removed. Tested
+  against an in-memory two-school database (`tests/unit/write-path-p10b`),
+  plus a scan that fails on any direct client write to an owner-only entity.
+- **P10b review.** A teacher's notice now fans out only to the classrooms
+  they actively teach, checked on the stored notice at publish time;
+  school-wide notices are ADMIN-only. An update that moves a
+  classroom-bound record or a notice to another classroom/scope re-runs the
+  create-time target check. The fan-out skips parents whose profile is no
+  longer ACTIVE; re-activating a teacher assignment or parent link re-checks
+  membership. A read-only license no longer blocks revoking a parent link or
+  removing a teacher. `PendingChange.payload` is rebuilt from the stored
+  override, and `governRoleChange` only decides `ROLE_CHANGE` requests. URLs
+  are parsed (file names with spaces pass). SoporteAdmin hides status
+  actions on tickets it can't move; P10b errors show Spanish reasons.
 
 ### Added
 

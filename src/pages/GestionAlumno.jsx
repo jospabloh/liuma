@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
+import { humanizeError } from '@/lib/errorMessages';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -30,6 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
+import { canGuardedWrite } from '@/lib/authorization/guardedWritePolicy';
 
 export default function GestionAlumno() {
   const queryClient = useQueryClient();
@@ -80,19 +82,28 @@ export default function GestionAlumno() {
   // caller's own row — every parent used to read "Sin nombre").
   const { getName: getUserName, getEmail: getUserEmail } = useSchoolMembers(userProfile?.school_id);
 
+  // Linking a parent grants them the child's whole record (schoolRead derives
+  // a parent's children from these links), so only a school ADMIN hands it
+  // out — guardedEntityWrite refuses anyone else (P10b). A teacher still sees
+  // who is linked.
+  const canManageLinks = canGuardedWrite(userProfile?.app_role, 'ParentStudent', 'create');
+
   const linkedParentIds = parentLinks.map(l => l.parent_id);
   const availableParents = parentProfiles.filter(p => !linkedParentIds.includes(p.user_id));
 
   const linkParentMutation = useMutation({
     mutationFn: async (data) => {
-      const link = await base44.entities.ParentStudent.create(data);
+      const link = await guardedCreate('ParentStudent', data);
+      // Best-effort: the link is already written (and the server audited it
+      // as RECORD_CREATED) — a failed extra audit row must not report an
+      // error that invites a duplicate retry.
       await recordAuditRow({
         schoolId: userProfile.school_id,
         action: 'PARENT_LINKED',
         entity: 'ParentStudent',
         entityId: link.id,
         context: { student_id: studentId, parent_id: data.parent_id },
-      });
+      }).catch((e) => console.error('audit PARENT_LINKED failed', e));
       return link;
     },
     onSuccess: () => {
@@ -101,24 +112,27 @@ export default function GestionAlumno() {
       setShowLinkForm(false);
       setSelectedParentId('');
     },
-    onError: () => {
-      toast.error('Error al vincular');
+    onError: (error) => {
+      toast.error(`Error al vincular. ${humanizeError(error)}`);
     }
   });
 
   const unlinkParentMutation = useMutation({
     mutationFn: async (linkId) => {
-      await base44.entities.ParentStudent.update(linkId, { status: 'REVOKED' });
+      await guardedUpdate('ParentStudent', linkId, { status: 'REVOKED' });
       await recordAuditRow({
         schoolId: userProfile.school_id,
         action: 'PARENT_UNLINKED',
         entity: 'ParentStudent',
         entityId: linkId,
-      });
+      }).catch((e) => console.error('audit PARENT_UNLINKED failed', e));
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['studentParentLinks']);
       toast.success('Vinculación removida');
+    },
+    onError: (error) => {
+      toast.error(`No se pudo quitar la vinculación. ${humanizeError(error)}`);
     },
   });
 
@@ -190,13 +204,15 @@ export default function GestionAlumno() {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">Padres vinculados</h3>
-              <Button
-                onClick={() => setShowLinkForm(true)}
-                size="sm"
-                className="gap-1"
-              >
-                <UserPlus className="w-4 h-4" /> Vincular
-              </Button>
+              {canManageLinks && (
+                <Button
+                  onClick={() => setShowLinkForm(true)}
+                  size="sm"
+                  className="gap-1"
+                >
+                  <UserPlus className="w-4 h-4" /> Vincular
+                </Button>
+              )}
             </div>
 
             {parentLinks.filter(l => l.status === 'ACTIVE').length === 0 ? (
@@ -221,15 +237,17 @@ export default function GestionAlumno() {
                         {relationshipLabels[link.relationship] || link.relationship}
                       </Badge>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => unlinkParentMutation.mutate(link.id)}
-                      disabled={unlinkParentMutation.isPending}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Unlink className="w-4 h-4" />
-                    </Button>
+                    {canManageLinks && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => unlinkParentMutation.mutate(link.id)}
+                        disabled={unlinkParentMutation.isPending}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Unlink className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -239,7 +257,7 @@ export default function GestionAlumno() {
       )}
 
       {/* Link Parent Modal */}
-      <Dialog open={showLinkForm} onOpenChange={setShowLinkForm}>
+      <Dialog open={canManageLinks && showLinkForm} onOpenChange={setShowLinkForm}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Vincular padre/madre</DialogTitle>

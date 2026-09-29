@@ -1,6 +1,6 @@
-import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { DENIAL_REASON_CODES } from '@/lib/authorization/policy';
+import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
 
 const ENTITY = 'PermissionOverride';
 
@@ -31,16 +31,20 @@ export async function listPermissionOverrides({ schoolId }) {
   return schoolRead(ENTITY, { school_id: schoolId });
 }
 
+// Writes go through guardedEntityWrite (P10b): PermissionOverride is
+// platform-owner only under RLS, so a director could list overrides (P10) but
+// not create one. The server checks the caller is an ADMIN of the target
+// profile's school and that resource/action/effect are ones it enforces.
 export async function createPermissionOverride(input) {
   assertOverrideSafety(input);
-  return base44.entities[ENTITY].create(buildOverridePayload(input));
+  return guardedCreate(ENTITY, buildOverridePayload(input));
 }
 
 export async function updatePermissionOverride(id, input) {
   assertOverrideSafety(input);
-  return base44.entities[ENTITY].update(id, buildOverridePayload(input));
+  return guardedUpdate(ENTITY, id, buildOverridePayload(input));
 }
 
 export async function deletePermissionOverride(id) {
-  return base44.entities[ENTITY].delete(id);
+  return guardedDelete(ENTITY, id);
 }

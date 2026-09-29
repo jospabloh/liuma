@@ -33,6 +33,8 @@ import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useStudentQuota } from '@/hooks/useStudentQuota';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { ENTERPRISE_CONTACT_THRESHOLD } from '@/lib/license/licenseModel';
+import { useSchoolStudents, invalidateSchoolStudents } from '@/hooks/useSchoolStudents';
+import { countLabel } from '@/lib/spanishText';
 
 const CONTACT_FORM_URL = 'https://forms.gle/jLQ4EtWmQhkSsahy9';
 
@@ -63,13 +65,13 @@ export default function GestionEscuela() {
     enabled: !!userProfile,
   });
 
-  const { data: students = [], isLoading: loadingStudents } = useQuery({
-    queryKey: ['allStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({ 
-      school_id: userProfile.school_id 
-    }),
-    enabled: !!userProfile,
-  });
+  // All students, inactive included (the list below filters is_active itself).
+  // `activeOnly: false` is part of the query key, so this list never shares a
+  // cache slot with the active-only lists on Home, Avisos or Pagos.
+  const { data: students = [], isLoading: loadingStudents } = useSchoolStudents(
+    userProfile?.school_id,
+    { activeOnly: false },
+  );
 
   const createClassroomMutation = useMutation({
     mutationFn: async (data) => {
@@ -85,7 +87,7 @@ export default function GestionEscuela() {
       return classroom;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['allClassrooms']);
+      queryClient.invalidateQueries({ queryKey: ['allClassrooms'] });
       toast.success('Salón creado correctamente');
       setShowClassroomForm(false);
       setClassroomForm({ name: '', grade: '' });
@@ -109,7 +111,8 @@ export default function GestionEscuela() {
       return student;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['allStudents']);
+      invalidateSchoolStudents(queryClient);
+      queryClient.invalidateQueries({ queryKey: ['activeStudentCount'] });
       toast.success('Alumno agregado correctamente');
       setShowStudentForm(false);
       setStudentForm({ first_name: '', last_name: '', classroom_id: '', birth_date: '' });
@@ -219,7 +222,7 @@ export default function GestionEscuela() {
                     <div>
                       <h3 className="font-medium text-card-foreground">{classroom.name}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {getStudentCount(classroom.id)} alumnos
+                        {countLabel(getStudentCount(classroom.id), 'alumno')}
                       </p>
                     </div>
                   </div>
@@ -233,9 +236,9 @@ export default function GestionEscuela() {
         <TabsContent value="students">
           {/* Over-plan warning while within the grace buffer (still allowed). */}
           {studentQuota.overLimit && !studentQuota.exceeded && (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-center justify-between gap-3">
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200 flex items-center justify-between gap-3">
               <span>Estás por encima de tu plan ({studentQuota.used}/{studentQuota.limit} alumnos). Mejora tu licencia para más capacidad.</span>
-              <Button size="sm" variant="outline" className="border-amber-300 text-amber-800 shrink-0" onClick={() => setShowUpgrade(true)}>Mejorar</Button>
+              <Button size="sm" variant="outline" className="border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-200 shrink-0" onClick={() => setShowUpgrade(true)}>Mejorar</Button>
             </div>
           )}
           {/* Enterprise nudge for very large unlimited (Plus) schools. */}
@@ -248,7 +251,7 @@ export default function GestionEscuela() {
           )}
           <div className="flex items-center justify-between mb-4 gap-3">
             {studentQuota.gatingActive && studentQuota.limit != null ? (
-              <p className={`text-xs font-medium ${studentQuota.exceeded ? 'text-red-600' : studentQuota.overLimit ? 'text-amber-600' : 'text-muted-foreground'}`}>
+              <p className={`text-xs font-medium ${studentQuota.exceeded ? 'text-red-600 dark:text-red-400' : studentQuota.overLimit ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
                 {studentQuota.used} / {studentQuota.limit} alumnos licenciados{studentQuota.exceeded ? ' · límite alcanzado' : ''}
               </p>
             ) : <span />}

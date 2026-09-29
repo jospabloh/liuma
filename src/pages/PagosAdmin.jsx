@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
@@ -7,7 +7,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { CreditCard, Plus, DollarSign, Receipt, Loader2, CheckCircle, AlertTriangle, Clock, User, Calendar } from 'lucide-react';
-import { format, isPast, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,13 @@ import { notificationService } from '@/lib/notifications/service';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
+import { formatLocalDate, isBeforeToday, parseLocalDate, startOfLocalDay } from '@/lib/dates';
+import {
+  isPaymentReminderDue,
+  partitionCharges,
+  selectChargesToMarkOverdue,
+} from '@/lib/payments/overdue';
+import { useSchoolStudents } from '@/hooks/useSchoolStudents';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -60,14 +67,7 @@ export default function PagosAdmin() {
     enabled: !!userProfile,
   });
 
-  const { data: students = [] } = useQuery({
-    queryKey: ['allStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({ 
-      school_id: userProfile.school_id,
-      is_active: true 
-    }),
-    enabled: !!userProfile,
-  });
+  const { data: students = [] } = useSchoolStudents(userProfile?.school_id);
   const { data: school } = useQuery({
     queryKey: ['school', userProfile?.school_id],
     queryFn: async () => {
@@ -84,18 +84,19 @@ export default function PagosAdmin() {
         school_id: userProfile.school_id 
       }, '-due_date');
       
-      // Actualizar automáticamente estados de cargos vencidos
-      for (const charge of allCharges) {
-        if (charge.status === 'PENDING' && isPast(new Date(charge.due_date))) {
-          try {
-            await guardedUpdate('ChargeItem', charge.id, { status: 'OVERDUE' });
-            charge.status = 'OVERDUE';
-          } catch (error) {
-            console.error('Error updating charge status:', error);
-          }
-        }
-      }
-      
+      // Persist OVERDUE for charges whose due date has passed. Best-effort: the
+      // tabs and counts come from partitionCharges(), which already treats a
+      // PENDING charge past its due date as overdue, so a failed write (e.g. a
+      // read-only license) never makes a late charge look current.
+      const toMark = selectChargesToMarkOverdue(allCharges);
+      const results = await Promise.allSettled(
+        toMark.map((charge) => guardedUpdate('ChargeItem', charge.id, { status: 'OVERDUE' })),
+      );
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') toMark[index].status = 'OVERDUE';
+        else console.error('Error updating charge status:', result.reason);
+      });
+
       return allCharges;
     },
     enabled: !!userProfile,
@@ -104,11 +105,12 @@ export default function PagosAdmin() {
   const createConceptMutation = useMutation({
     mutationFn: (data) => guardedCreate('PaymentConcept', data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['paymentConcepts']);
+      queryClient.invalidateQueries({ queryKey: ['paymentConcepts'] });
       toast.success('Concepto creado');
       setShowConceptForm(false);
       setConceptForm({ name: '', default_amount: '' });
     },
+    onError: () => toast.error('No se pudo crear el concepto. Intenta de nuevo.'),
   });
 
   const createChargeMutation = useMutation({
@@ -126,11 +128,13 @@ export default function PagosAdmin() {
       return charge;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['allCharges']);
+      queryClient.invalidateQueries({ queryKey: ['allCharges'] });
+      queryClient.invalidateQueries({ queryKey: ['overdueCharges'] });
       toast.success('Cargo creado');
       setShowChargeForm(false);
       setChargeForm({ student_id: '', concept_id: '', amount: '', due_date: '' });
     },
+    onError: () => toast.error('No se pudo crear el cargo. Intenta de nuevo.'),
   });
 
   const recordPaymentMutation = useMutation({
@@ -149,12 +153,14 @@ export default function PagosAdmin() {
       return payment;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['allCharges']);
+      queryClient.invalidateQueries({ queryKey: ['allCharges'] });
+      queryClient.invalidateQueries({ queryKey: ['overdueCharges'] });
       toast.success('Pago registrado');
       setShowPaymentForm(false);
       setSelectedCharge(null);
       setPaymentForm({ amount: '', payment_method: 'cash', reference: '' });
     },
+    onError: () => toast.error('No se pudo registrar el pago. Revisa el cargo e intenta de nuevo.'),
   });
 
   const handleCreateConcept = (e) => {
@@ -186,14 +192,16 @@ export default function PagosAdmin() {
     const originalAmount = parseFloat(chargeForm.amount);
     let discountAmount = 0;
     let applicableDiscount = null;
-    const now = new Date();
-    
+    const today = startOfLocalDay(new Date());
+
     // Buscar descuento aplicable al concepto
     for (const discount of discounts) {
       if (discount.applicable_to_concepts?.includes(concept?.concept_type)) {
-        // Validar fechas de vigencia
-          if (discount.valid_from && new Date(discount.valid_from) > now) continue;
-        if (discount.valid_until && new Date(discount.valid_until) < now) continue;
+        // Validar fechas de vigencia (fechas de calendario: un descuento
+        // "hasta el 30" vale durante todo el 30).
+        const validFrom = parseLocalDate(discount.valid_from);
+        if (validFrom && validFrom > today) continue;
+        if (discount.valid_until && isBeforeToday(discount.valid_until)) continue;
         
         // Calcular descuento
         if (discount.discount_type === 'PERCENTAGE') {
@@ -227,7 +235,7 @@ export default function PagosAdmin() {
       charge_id: selectedCharge.id,
       student_id: selectedCharge.student_id,
       amount: parseFloat(paymentForm.amount),
-      payment_date: format(new Date(), 'yyyy-MM-dd'),
+      payment_date: formatLocalDate(new Date()),
       payment_method: paymentForm.payment_method,
       reference: paymentForm.reference,
       recorded_by: user.id,
@@ -245,64 +253,83 @@ export default function PagosAdmin() {
     return student ? `${student.first_name} ${student.last_name}` : '';
   };
 
-  const pendingCharges = charges.filter(c => c.status === 'PENDING');
-  const overdueCharges = charges.filter(c => c.status === 'OVERDUE');
-  const paidCharges = charges.filter(c => c.status === 'PAID');
-  
-  // Enviar recordatorio automático para pagos próximos a vencer (7 días antes)
+  // Same "vencido" rule as the admin home (src/lib/payments/overdue.js), so
+  // both screens always show the same number.
+  const { pending: pendingCharges, overdue: overdueCharges, paid: paidCharges } = useMemo(
+    () => partitionCharges(charges),
+    [charges],
+  );
+
+  // Charges already handled in this session. The effect below re-runs whenever
+  // the query data changes; without this a charge could be reminded twice
+  // before its reminder_sent write lands. A failed attempt is NOT retried in
+  // the same session: if the emails went out but the reminder_sent write
+  // failed, retrying on every re-render would mail the parents again each time.
+  const remindersHandled = useRef(new Set());
+
+  // Enviar recordatorio automático para pagos próximos a vencer (dentro de los
+  // 7 días previos; ver isPaymentReminderDue).
+  // TODO(P8): swap this browser fan-out for the server-side
+  // sendBulkNotification function once it merges; that also removes the
+  // client-side User.list() below.
   React.useEffect(() => {
+    // Read-only license: reminder_sent cannot be written, so every load would
+    // re-send the same reminder.
+    if (!canWrite || !userProfile?.school_id || !user) return;
+    const due = pendingCharges.filter(
+      (charge) => isPaymentReminderDue(charge) && !remindersHandled.current.has(charge.id),
+    );
+    if (due.length === 0 || students.length === 0) return;
+    due.forEach((charge) => remindersHandled.current.add(charge.id));
+
     const sendReminders = async () => {
-      for (const charge of pendingCharges) {
-        const daysUntilDue = differenceInDays(new Date(charge.due_date), new Date());
-        
-        if (daysUntilDue === 7 && !charge.reminder_sent) {
-          try {
-            const student = students.find(s => s.id === charge.student_id);
-            if (!student) continue;
-            
-            const parentLinks = await base44.entities.ParentStudent.filter({
-              student_id: student.id,
-              status: 'ACTIVE'
-            });
-            
-            const allUsers = await base44.entities.User.list();
-            
-            for (const link of parentLinks) {
-              const parent = allUsers.find(u => u.id === link.parent_id);
-              if (parent) {
-                await notificationService.sendByEvent({
-                  eventType: 'payment_due',
-                  schoolId: userProfile.school_id,
-                  actorUserId: user.id,
-                  recipients: [{
-                    user_id: parent.id,
-                    app_role: 'PARENT',
-                    email: parent.email,
-                    school_notification_preferences: school?.notification_preferences || {},
-                  }],
-                  templateContext: {
-                    studentName: `${student.first_name} ${student.last_name}`,
-                    conceptName: charge.concept_name,
-                    amountLabel: `$${charge.amount?.toLocaleString()}`,
-                    dueDateLabel: format(new Date(charge.due_date), "d 'de' MMMM, yyyy", { locale: es }),
-                  },
-                  channels: ['email', 'in_app'],
-                });
-              }
+      let allUsers = null;
+      for (const charge of due) {
+        try {
+          const student = students.find(s => s.id === charge.student_id);
+          if (!student) continue;
+
+          const parentLinks = await base44.entities.ParentStudent.filter({
+            school_id: userProfile.school_id,
+            student_id: student.id,
+            status: 'ACTIVE'
+          });
+
+          if (!allUsers) allUsers = await base44.entities.User.list();
+
+          for (const link of parentLinks) {
+            const parent = allUsers.find(u => u.id === link.parent_id);
+            if (parent) {
+              await notificationService.sendByEvent({
+                eventType: 'payment_due',
+                schoolId: userProfile.school_id,
+                actorUserId: user.id,
+                recipients: [{
+                  user_id: parent.id,
+                  app_role: 'PARENT',
+                  email: parent.email,
+                  school_notification_preferences: school?.notification_preferences || {},
+                }],
+                templateContext: {
+                  studentName: `${student.first_name} ${student.last_name}`,
+                  conceptName: charge.concept_name,
+                  amountLabel: `$${charge.amount?.toLocaleString()}`,
+                  dueDateLabel: format(parseLocalDate(charge.due_date), "d 'de' MMMM, yyyy", { locale: es }),
+                },
+                channels: ['email', 'in_app'],
+              });
             }
-            
-            await guardedUpdate('ChargeItem', charge.id, { reminder_sent: true });
-          } catch (error) {
-            console.error('Error sending payment reminder:', error);
           }
+
+          await guardedUpdate('ChargeItem', charge.id, { reminder_sent: true });
+        } catch (error) {
+          console.error('Error sending payment reminder:', error);
         }
       }
     };
-    
-    if (pendingCharges.length > 0 && students.length > 0) {
-      sendReminders();
-    }
-  }, [pendingCharges, students, school, userProfile, user]);
+
+    sendReminders();
+  }, [pendingCharges, students, school, userProfile, user, canWrite]);
 
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
@@ -317,7 +344,7 @@ export default function PagosAdmin() {
       />
       <ReadOnlyBanner />
       {concepts.length === 0 && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           Primero crea al menos un concepto de pago; después podrás generar cargos para los alumnos.
         </div>
       )}
@@ -608,7 +635,7 @@ function ChargeCard({ charge, studentName, onRecordPayment, isOverdue, isPaid })
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={`bg-card text-card-foreground rounded-2xl p-4 border shadow-sm ${
-        isPaid ? 'border-green-200' : isOverdue ? 'border-red-200' : 'border-border'
+        isPaid ? 'border-green-200 dark:border-green-900' : isOverdue ? 'border-red-200 dark:border-red-900' : 'border-border'
       }`}
     >
       <div className="flex items-start justify-between">
@@ -620,15 +647,15 @@ function ChargeCard({ charge, studentName, onRecordPayment, isOverdue, isPaid })
           <p className="text-sm text-muted-foreground mt-1">{charge.concept_name}</p>
           <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
             <Calendar className="w-3 h-3" />
-            Vence: {format(new Date(charge.due_date), "d MMM, yyyy", { locale: es })}
+            Vence: {charge.due_date ? format(parseLocalDate(charge.due_date), "d MMM, yyyy", { locale: es }) : 'Sin fecha'}
           </div>
         </div>
         <div className="text-right">
           <p className="font-bold text-lg">${charge.amount?.toLocaleString()}</p>
           <Badge className={
-            isPaid ? 'bg-green-100 text-green-800' :
-            isOverdue ? 'bg-red-100 text-red-800' :
-            'bg-amber-100 text-amber-800'
+            isPaid ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' :
+            isOverdue ? 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300' :
+            'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
           }>
             {isPaid ? 'Pagado' : isOverdue ? 'Vencido' : 'Pendiente'}
           </Badge>

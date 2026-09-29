@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { useSchoolStudents } from '@/hooks/useSchoolStudents';
 
 export default function GestionPedidosAdmin() {
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -30,11 +31,9 @@ export default function GestionPedidosAdmin() {
     enabled: !!userProfile?.school_id,
   });
 
-  const { data: students } = useQuery({
-    queryKey: ['allStudents', userProfile?.school_id],
-    queryFn: () => base44.entities.Student.filter({ school_id: userProfile.school_id }),
-    enabled: !!userProfile?.school_id,
-  });
+  // All students, inactive included: an order can outlive the student's
+  // enrolment and must still show whose it is.
+  const { data: students } = useSchoolStudents(userProfile?.school_id, { activeOnly: false });
 
   const updateOrderMutation = useMutation({
     mutationFn: ({ orderId, data }) => base44.entities.UniformOrder.update(orderId, data),
@@ -43,6 +42,7 @@ export default function GestionPedidosAdmin() {
       toast.success('Pedido actualizado');
       setSelectedOrder(null);
     },
+    onError: () => toast.error('No se pudo actualizar el pedido. Intenta de nuevo.'),
   });
 
   const handleUpdateOrder = () => {
@@ -62,11 +62,11 @@ export default function GestionPedidosAdmin() {
   };
 
   const statusLabels = {
-    PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800' },
-    PROCESSING: { label: 'En Proceso', color: 'bg-blue-100 text-blue-800' },
-    READY: { label: 'Listo', color: 'bg-green-100 text-green-800' },
+    PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300' },
+    PROCESSING: { label: 'En proceso', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300' },
+    READY: { label: 'Listo', color: 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' },
     DELIVERED: { label: 'Entregado', color: 'bg-muted text-muted-foreground' },
-    CANCELLED: { label: 'Cancelado', color: 'bg-red-100 text-red-800' },
+    CANCELLED: { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300' },
   };
 
   if (profileLoading || isLoading) {
@@ -162,7 +162,7 @@ export default function GestionPedidosAdmin() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="PENDING">Pendiente</SelectItem>
-                      <SelectItem value="PROCESSING">En Proceso</SelectItem>
+                      <SelectItem value="PROCESSING">En proceso</SelectItem>
                       <SelectItem value="READY">Listo</SelectItem>
                       <SelectItem value="DELIVERED">Entregado</SelectItem>
                       <SelectItem value="CANCELLED">Cancelado</SelectItem>

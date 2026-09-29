@@ -113,6 +113,7 @@ test('every value PermisosRoles can render has a Spanish label', () => {
   for (const s of ['PENDING_ADMIN_APPROVAL', 'PENDING_SECOND_ADMIN_APPROVAL', 'APPROVED', 'REJECTED']) assert.ok(CHANGE_STATUS_LABELS[s]);
   for (const p of ['explicit_allow', 'explicit_deny', 'default_deny', 'override_allow', 'override_deny', 'owner_override']) assert.ok(PRECEDENCE_LABELS[p]);
   // The override form's resources are exactly the entities guardedEntityWrite gates.
-  const guarded = read('base44/functions/guardedEntityWrite/entry.ts');
+  // POLICY_WRITE moved to the sibling _policy.ts in P7 (write-path hardening).
+  const guarded = read('base44/functions/guardedEntityWrite/_policy.ts');
   for (const r of OVERRIDE_RESOURCES) assert.match(guarded, new RegExp(`\\n  ${r}: \\[`), `${r} is not in guardedEntityWrite's POLICY_WRITE`);
 });

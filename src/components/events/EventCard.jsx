@@ -4,10 +4,13 @@ import { Clock, MapPin } from 'lucide-react';
 import { format, isToday, isTomorrow, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
+import { parseLocalDate, startOfLocalDay } from '@/lib/dates';
 
 export default function EventCard({ event, onClick }) {
-  const eventDate = new Date(event.date);
-  const daysUntil = differenceInDays(eventDate, new Date());
+  const eventDate = parseLocalDate(event.date);
+  if (!eventDate) return null;
+  // Whole calendar days between today and the event, not 24h blocks from now.
+  const daysUntil = differenceInDays(eventDate, startOfLocalDay());
   
   const getDateLabel = () => {
     if (isToday(eventDate)) return 'Hoy';
@@ -36,7 +39,7 @@ export default function EventCard({ event, onClick }) {
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             {(isToday(eventDate) || isTomorrow(eventDate)) && (
-              <Badge className="bg-amber-100 text-amber-800 text-xs">
+              <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-xs">
                 {getDateLabel()}
               </Badge>
             )}

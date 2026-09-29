@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
+import { formatLocalDate, isBeforeToday } from '@/lib/dates';
 
 export default function ParentHome({ user, userProfile, subscription }) {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -54,10 +55,12 @@ export default function ParentHome({ user, userProfile, subscription }) {
   const { data: events = [] } = useQuery({
     queryKey: ['upcomingEvents', userProfile.school_id],
     queryFn: async () => {
-      const allEvents = await base44.entities.Event.filter({ 
-        school_id: userProfile.school_id 
+      // Ask the server for today-onward (YYYY-MM-DD compares as text), or the
+      // first 5 events ever would crowd out the upcoming ones.
+      return base44.entities.Event.filter({
+        school_id: userProfile.school_id,
+        date: { $gte: formatLocalDate() },
       }, 'date', 5);
-      return allEvents.filter(e => new Date(e.date) >= new Date());
     },
   });
 
@@ -75,8 +78,8 @@ export default function ParentHome({ user, userProfile, subscription }) {
     enabled: studentIds.length > 0,
   });
 
-  const overdueCharges = pendingCharges.filter(c => 
-    new Date(c.due_date) < new Date() && c.status !== 'PAID'
+  const overdueCharges = pendingCharges.filter(c =>
+    isBeforeToday(c.due_date) && c.status !== 'PAID'
   );
 
   return (
@@ -163,7 +166,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
             />
             <BigTile
               icon={CalendarX}
-              title="Solicitar Ausencia"
+              title="Solicitar ausencia"
               subtitle="Avisar cuando tu hijo faltará"
               href={createPageUrl('SolicitarAusencia')}
               delay={0.15}

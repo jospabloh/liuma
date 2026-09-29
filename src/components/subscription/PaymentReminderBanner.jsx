@@ -23,30 +23,30 @@ export default function PaymentReminderBanner({ subscription }) {
   const getBannerConfig = () => {
     if (isTrialEnding && daysLeft === 0) {
       return {
-        bg: 'bg-red-50',
-        border: 'border-red-200',
-        text: 'text-red-800',
-        icon: 'text-red-600',
+        bg: 'bg-red-50 dark:bg-red-950/40',
+        border: 'border-red-200 dark:border-red-900',
+        text: 'text-red-800 dark:text-red-300',
+        icon: 'text-red-600 dark:text-red-400',
         message: '¡Tu período de prueba termina HOY!',
         description: 'Contáctanos para continuar usando LIUMA sin interrupciones.'
       };
     }
     if (isTrialEnding && daysLeft <= 3) {
       return {
-        bg: 'bg-amber-50',
-        border: 'border-amber-200',
-        text: 'text-amber-800',
-        icon: 'text-amber-600',
+        bg: 'bg-amber-50 dark:bg-amber-950/40',
+        border: 'border-amber-200 dark:border-amber-900',
+        text: 'text-amber-800 dark:text-amber-300',
+        icon: 'text-amber-600 dark:text-amber-400',
         message: `Tu período de prueba termina en ${daysLeft} día${daysLeft > 1 ? 's' : ''}`,
         description: 'Asegura el acceso continuo a LIUMA.'
       };
     }
     if (subscription.subscription_status === 'view_only') {
       return {
-        bg: 'bg-amber-50',
-        border: 'border-amber-200',
-        text: 'text-amber-800',
-        icon: 'text-amber-600',
+        bg: 'bg-amber-50 dark:bg-amber-950/40',
+        border: 'border-amber-200 dark:border-amber-900',
+        text: 'text-amber-800 dark:text-amber-300',
+        icon: 'text-amber-600 dark:text-amber-400',
         message: 'Cuenta en modo solo lectura',
         description: 'Tu licencia no está activa. Puedes consultar la información, pero no realizar cambios. Contáctanos para reactivarla.'
       };

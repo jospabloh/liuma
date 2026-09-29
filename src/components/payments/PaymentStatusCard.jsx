@@ -5,21 +5,21 @@ import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 const statusConfig = {
   'Al día': {
     icon: CheckCircle,
-    color: 'bg-green-50 border-green-200',
-    iconColor: 'text-green-600',
-    textColor: 'text-green-700',
+    color: 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900',
+    iconColor: 'text-green-600 dark:text-green-400',
+    textColor: 'text-green-700 dark:text-green-300',
   },
   'Próximo a vencer': {
     icon: Clock,
-    color: 'bg-amber-50 border-amber-200',
-    iconColor: 'text-amber-600',
-    textColor: 'text-amber-700',
+    color: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    textColor: 'text-amber-700 dark:text-amber-300',
   },
   'Vencido': {
     icon: AlertTriangle,
-    color: 'bg-red-50 border-red-200',
-    iconColor: 'text-red-600',
-    textColor: 'text-red-700',
+    color: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900',
+    iconColor: 'text-red-600 dark:text-red-400',
+    textColor: 'text-red-700 dark:text-red-300',
   },
 };
 

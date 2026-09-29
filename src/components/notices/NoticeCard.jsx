@@ -6,8 +6,8 @@ import { es } from 'date-fns/locale';
 import { PriorityBadge } from '@/components/ui/StatusBadge';
 
 const priorityStyles = {
-  URGENT: 'border-l-4 border-l-red-500 bg-red-50',
-  IMPORTANT: 'border-l-4 border-l-amber-500 bg-amber-50',
+  URGENT: 'border-l-4 border-l-red-500 bg-red-50 dark:bg-red-950/40',
+  IMPORTANT: 'border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/40',
   NORMAL: 'border-l-4 border-l-blue-500 bg-card',
 };
 
@@ -25,7 +25,7 @@ export default function NoticeCard({ notice, onClick }) {
           <div className="flex items-center gap-2 mb-2">
             <PriorityBadge priority={notice.priority} />
             {notice.is_emergency && (
-              <span className="text-xs font-bold text-red-600 uppercase animate-pulse">
+              <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase animate-pulse">
                 ⚠️ Emergencia
               </span>
             )}

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, ArrowRight, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseLocalDate } from '@/lib/dates';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
@@ -100,7 +101,7 @@ export default function OperacionDiaria() {
         ...roleFiltered.diary.map((row) => ({ id: `diary-${row.id}`, category: 'DIARY', title: row.student_name || 'Bitácora diaria', detail: row.notes || row.summary || 'Registro diario', urgency: 'NORMAL', ts: row.updated_date || row.created_date })),
         ...roleFiltered.notices.map((row) => ({ id: `notice-${row.id}`, category: 'NOTICE', title: row.title || 'Aviso', detail: row.content || row.message || 'Sin contenido', urgency: row.priority === 'URGENT' || row.is_emergency ? 'URGENT' : 'NORMAL', ts: row.created_date })),
         ...roleFiltered.events.map((row) => ({ id: `event-${row.id}`, category: 'EVENT', title: row.title || 'Evento', detail: row.time || 'Todo el día', urgency: row.is_mandatory ? 'URGENT' : 'NORMAL', ts: row.date })),
-      ].sort((a, b) => new Date(b.ts || today) - new Date(a.ts || today));
+      ].sort((a, b) => parseLocalDate(b.ts || today) - parseLocalDate(a.ts || today));
 
       return { role, items };
     },

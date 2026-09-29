@@ -8,6 +8,7 @@ import LoadingScreen from '@/components/ui/LoadingScreen';
 import HomeworkCard from '@/components/homework/HomeworkCard';
 import { BookOpen, Calendar } from 'lucide-react';
 import { format, addDays, endOfWeek } from 'date-fns';
+import { parseLocalDate, startOfLocalDay } from '@/lib/dates';
 import { es } from 'date-fns/locale';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -49,15 +50,15 @@ export default function Tarea() {
     enabled: activeClassroomIds.length > 0,
   });
 
-  const today = new Date();
+  const today = startOfLocalDay();
   const todayStr = format(today, 'yyyy-MM-dd');
   const tomorrowStr = format(addDays(today, 1), 'yyyy-MM-dd');
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
 
   const todayHomework = homework.filter(h => h.due_date === todayStr);
   const weekHomework = homework.filter(h => {
-    const dueDate = new Date(h.due_date);
-    return dueDate >= today && dueDate <= weekEnd;
+    const dueDate = parseLocalDate(h.due_date);
+    return !!dueDate && dueDate >= today && dueDate <= weekEnd;
   });
 
   if (isLoading) return <LoadingScreen message="Cargando tareas..." />;
@@ -171,7 +172,7 @@ export default function Tarea() {
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
                 <span>
-                  Entregar: {format(new Date(selectedHomework.due_date), "EEEE d 'de' MMMM", { locale: es })}
+                  Entregar: {parseLocalDate(selectedHomework.due_date) ? format(parseLocalDate(selectedHomework.due_date), "EEEE d 'de' MMMM", { locale: es }) : 'sin fecha'}
                 </span>
               </div>
 

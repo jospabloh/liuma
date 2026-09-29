@@ -11,6 +11,7 @@ import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
+import { loadClassroomsByIds, loadActiveStudentsByClassroomIds } from '@/lib/data-loaders/batchedEntityLoaders';
 
 export default function BitacorasMaestro() {
   const navigate = useNavigate();
@@ -31,32 +32,13 @@ export default function BitacorasMaestro() {
 
   const { data: classrooms = [] } = useQuery({
     queryKey: ['classrooms', classroomIds],
-    queryFn: async () => {
-      if (classroomIds.length === 0) return [];
-      const results = [];
-      for (const id of classroomIds) {
-        const classroomList = await base44.entities.Classroom.filter({ id });
-        if (classroomList.length > 0) results.push(classroomList[0]);
-      }
-      return results;
-    },
+    queryFn: async () => (await loadClassroomsByIds(classroomIds)).items,
     enabled: classroomIds.length > 0,
   });
 
   const { data: students = [], isLoading } = useQuery({
     queryKey: ['students', classroomIds],
-    queryFn: async () => {
-      if (classroomIds.length === 0) return [];
-      const allStudents = [];
-      for (const id of classroomIds) {
-        const classStudents = await base44.entities.Student.filter({ 
-          classroom_id: id,
-          is_active: true 
-        });
-        allStudents.push(...classStudents);
-      }
-      return allStudents;
-    },
+    queryFn: () => loadActiveStudentsByClassroomIds(classroomIds),
     enabled: classroomIds.length > 0,
   });
 
@@ -110,7 +92,7 @@ export default function BitacorasMaestro() {
                   <p className="text-sm text-muted-foreground">{total} alumnos</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge className={isComplete ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
+                  <Badge className={isComplete ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}>
                     {isComplete ? (
                       <><CheckCircle className="w-3 h-3 mr-1" /> Completo</>
                     ) : (
@@ -140,7 +122,7 @@ export default function BitacorasMaestro() {
                     <div
                       key={student.id}
                       className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
-                        hasDiary ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+                        hasDiary ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
                       }`}
                     >
                       {hasDiary ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}

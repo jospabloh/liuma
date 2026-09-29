@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate } from '@/lib/dates';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -24,20 +25,22 @@ const PLAN_OPTIONS = PLAN_TIERS.map((tier) => PLAN_CATALOG[tier]);
 const CONTACT_FORM_URL = 'https://forms.gle/jLQ4EtWmQhkSsahy9';
 
 const STATUS_CONFIG = {
-  trial:     { label: 'Prueba',      color: 'text-blue-600 bg-blue-50',     icon: Clock },
-  active:    { label: 'Activo',      color: 'text-emerald-600 bg-emerald-50', icon: CheckCircle },
-  view_only: { label: 'Solo lectura', color: 'text-amber-600 bg-amber-50',   icon: AlertCircle },
+  trial:     { label: 'Prueba',      color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40',     icon: Clock },
+  active:    { label: 'Activo',      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40', icon: CheckCircle },
+  view_only: { label: 'Solo lectura', color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',   icon: AlertCircle },
   inactive:  { label: 'Inactivo',    color: 'text-muted-foreground bg-muted',  icon: AlertCircle },
   canceled:  { label: 'Cancelado',   color: 'text-muted-foreground bg-muted',  icon: AlertCircle },
-  suspended: { label: 'Suspendido',  color: 'text-red-600 bg-red-50',       icon: AlertCircle },
+  suspended: { label: 'Suspendido',  color: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40',       icon: AlertCircle },
 };
 
 // Statuses surfaced as headline counters in the owner panel.
 const SUMMARY_STATUSES = ['trial', 'active', 'view_only', 'suspended'];
 
 function fmt(iso) {
-  if (!iso) return '—';
-  return format(new Date(iso), "d 'de' MMM, yyyy", { locale: es });
+  // Accepts both instants and date-only values; the latter must keep their day.
+  const date = parseLocalDate(iso);
+  if (!date) return '—';
+  return format(date, "d 'de' MMM, yyyy", { locale: es });
 }
 
 // ── School-admin read-only view ("Mi Licencia") ──────────────────────────────
@@ -281,9 +284,9 @@ export default function LicenseAdmin() {
       <PageHeader title="Licencias LIUMA" subtitle="Panel interno ACACIA" />
 
       <div className="space-y-4 max-w-2xl mx-auto">
-        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
-          <Shield className="w-4 h-4 text-amber-600 flex-shrink-0" />
-          <p className="text-xs font-semibold text-amber-700">
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl">
+          <Shield className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
             Panel interno — ACACIA Consultoría · Solo el propietario de la plataforma
           </p>
         </div>
@@ -338,7 +341,7 @@ export default function LicenseAdmin() {
                     <p className="font-semibold text-sm text-card-foreground">{school.name}</p>
                     <div className="flex items-center gap-2">
                       {sub?.auto_renewal && (
-                        <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-emerald-600 bg-emerald-50">
+                        <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40">
                           <RefreshCw className="w-2.5 h-2.5" /> MP
                         </span>
                       )}
@@ -367,7 +370,7 @@ export default function LicenseAdmin() {
                     )}
                   </div>
                   {!sub && (
-                    <p className="text-[11px] text-amber-600 mt-1 italic">Sin suscripción — se creará al confirmar.</p>
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 italic">Sin suscripción — se creará al confirmar.</p>
                   )}
                 </button>
               );
@@ -396,12 +399,12 @@ export default function LicenseAdmin() {
 
             <div className="p-5 space-y-6">
               {/* SECTION 1: Confirmar pago */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-4">
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-2xl p-4 space-y-4">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                  <h4 className="text-sm font-bold text-emerald-800">Confirmación de pago</h4>
+                  <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Confirmación de pago</h4>
                 </div>
-                <p className="text-[11px] text-emerald-700 -mt-2">
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-300 -mt-2">
                   Confirma el pago recibido en Mercado Pago. LIUMA actualizará la licencia.
                 </p>
 
@@ -596,17 +599,17 @@ function ToggleField({ active, onToggle, onLabel, offLabel, hint }) {
     <button
       onClick={onToggle}
       className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left ${
-        active ? 'bg-emerald-100 border-emerald-300' : 'bg-card border-border'
+        active ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-800' : 'bg-card border-border'
       }`}
     >
       <div>
-        <p className={`text-sm font-semibold ${active ? 'text-emerald-700' : 'text-muted-foreground'}`}>
+        <p className={`text-sm font-semibold ${active ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'}`}>
           {active ? onLabel : offLabel}
         </p>
         {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
       </div>
       {active
-        ? <ToggleRight className="w-6 h-6 text-emerald-600 flex-shrink-0" />
+        ? <ToggleRight className="w-6 h-6 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
         : <ToggleLeft className="w-6 h-6 text-muted-foreground flex-shrink-0" />}
     </button>
   );

@@ -118,10 +118,11 @@ test('the school palette is read through getMySubscription, not the platform-onl
 });
 
 test('the privacy notice lists what the entities actually hold, and Lumi as an AI use by families too', async () => {
-  const { AVISO_PRIVACIDAD } = await import('../../src/lib/legal/avisoPrivacidad.js');
-  const text = JSON.stringify(AVISO_PRIVACIDAD);
-  for (const needle of ['domicilio', 'ocupación', 'contactos de emergencia', 'dirección IP', 'Lumi', 'bitácora diaria', 'motivos de ausencia', 'medidas para uniformes']) {
+  // Single legal source since integration: P11's legalDocs.js.
+  const { PRIVACY_NOTICE } = await import('../../src/lib/legal/legalDocs.js');
+  const text = JSON.stringify(PRIVACY_NOTICE);
+  for (const needle of ['domicilio', 'ocupación', 'Contactos de emergencia', 'dirección IP', 'Lumi', 'bitácora diaria', 'su motivo', 'medidas']) {
     assert.ok(text.includes(needle), `aviso mentions ${needle}`);
   }
-  assert.doesNotMatch(text, /cuando el personal decide usarlas/, 'families use Lumi too');
+  assert.doesNotMatch(text, /cuando el personal decide usarlas|por el personal/, 'families use Lumi too');
 });

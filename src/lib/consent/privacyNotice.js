@@ -10,25 +10,48 @@
  * Privacidad changes, so each consent record pins the version the user accepted.
  */
 
-// BORRADOR PENDIENTE DE REVISIÓN LEGAL (2026-09-29). El texto del aviso y de
-// los términos (src/lib/legal/*.js) lo redactó Claude a partir de la LFPDPPP y
-// no lo ha revisado un abogado. Se publica dentro de la app marcado como
-// borrador — visible en la página y aquí — porque lo contrario era peor: el
-// consentimiento apuntaba a una URL que no existía. Cuando el texto final
-// llegue: reemplaza el contenido, pon PRIVACY_NOTICE_IS_DRAFT en false y SUBE
-// las versiones (cada ConsentRecord fija la versión que el usuario aceptó).
+// BORRADOR PENDIENTE DE REVISIÓN LEGAL (2026-09-29).
 //
-// MIRROR: base44/functions/provisionOnboardingProfile/entry.ts rechaza un
-// consentimiento con otra versión (un cliente en caché con el aviso viejo), y
-// tests/unit/legal-consent.test.js falla si las dos copias se separan.
+// The notice and terms these versions pin are drafts written by Claude from
+// the app's real data model (src/lib/legal/legalDocs.js — the ONE source of
+// both texts), published in-app so the consent checkbox finally points at a
+// page that exists (before this, PRIVACY_NOTICE_URL was a 404). They have NOT
+// been reviewed by a lawyer. When the reviewed text replaces them:
+//   1. edit src/lib/legal/legalDocs.js,
+//   2. bump PRIVACY_NOTICE_VERSION / SERVICE_TERMS_VERSION to the review date,
+//   3. set PRIVACY_NOTICE_STATUS to 'vigente' — that removes the BORRADOR
+//      banner on the page (the "-borrador" suffix in the version string is
+//      what onboarding shows next to the checkbox, so drop it too).
+// Every ConsentRecord pins the version string, so a consent given against the
+// draft stays distinguishable from one given against the reviewed text.
+//
+// MIRROR: base44/functions/provisionOnboardingProfile/entry.ts rejects a
+// consent for any other version (a cached client with the old notice), and
+// tests/unit/legal-consent.test.js fails if the two copies drift.
 export const PRIVACY_NOTICE_VERSION = '2026-09-29-borrador';
-export const TERMS_VERSION = '2026-09-29-borrador';
-export const PRIVACY_NOTICE_IS_DRAFT = true;
 
-// In-app routes (registered in src/App.jsx, reachable with or without a
-// session — a notice you can only read after accepting it is no notice).
-export const PRIVACY_NOTICE_URL = '/aviso-de-privacidad';
-export const TERMS_URL = '/terminos';
+/** 'borrador' until a lawyer signs off; then 'vigente'. */
+export const PRIVACY_NOTICE_STATUS = 'borrador';
+
+/** True while the published legal text is still an unreviewed draft. */
+export function legalTextIsDraft(status = PRIVACY_NOTICE_STATUS) {
+  return status !== 'vigente';
+}
+export const PRIVACY_NOTICE_IS_DRAFT = legalTextIsDraft();
+
+// Public in-app routes (src/App.jsx renders them before any auth or profile
+// gate, because the people who must read them — someone mid-onboarding, a
+// parent deciding whether to sign up — have no profile yet). Relative on
+// purpose: they work on the base44.app host and on any custom domain.
+export const PRIVACY_NOTICE_PATH = '/aviso-de-privacidad';
+export const PRIVACY_NOTICE_URL = PRIVACY_NOTICE_PATH;
+
+// Terms of service / trial terms — same draft status, same public-route rule.
+export const SERVICE_TERMS_VERSION = '2026-09-29-borrador';
+export const SERVICE_TERMS_PATH = '/terminos';
+// Aliases used by onboarding (P6).
+export const TERMS_VERSION = SERVICE_TERMS_VERSION;
+export const TERMS_URL = SERVICE_TERMS_PATH;
 
 export const CONSENT_SCOPES = {
   GENERAL: 'general_privacy_notice', // acceptance of the Aviso de Privacidad

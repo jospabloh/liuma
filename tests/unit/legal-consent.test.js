@@ -11,8 +11,9 @@ import {
   TERMS_URL,
   TERMS_VERSION,
 } from '../../src/lib/consent/privacyNotice.js';
-import { AVISO_PRIVACIDAD } from '../../src/lib/legal/avisoPrivacidad.js';
-import { TERMINOS_SERVICIO } from '../../src/lib/legal/terminosServicio.js';
+// One source for both texts since integration (P6 and P11 each wrote one):
+// src/lib/legal/legalDocs.js, P11's reviewed version.
+import { PRIVACY_NOTICE as AVISO_PRIVACIDAD, SERVICE_TERMS as TERMINOS_SERVICIO } from '../../src/lib/legal/legalDocs.js';
 import { PLAN_CATALOG, PLAN_TIERS, TRIAL_DURATION_DAYS } from '../../src/lib/license/licenseModel.js';
 
 const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
@@ -22,11 +23,15 @@ test('the consent links point at in-app routes that App.jsx actually registers, 
   // It used to be an absolute URL to a page that did not exist.
   assert.equal(PRIVACY_NOTICE_URL, '/aviso-de-privacidad');
   assert.equal(TERMS_URL, '/terminos');
+  assert.equal(AVISO_PRIVACIDAD.path, PRIVACY_NOTICE_URL);
+  assert.equal(TERMINOS_SERVICIO.path, TERMS_URL);
+  // Mounted once, in App's top-level <Routes>, BEFORE AuthenticatedApp — so
+  // they answer signed in, signed out and for a remembered user alike.
   const app = read('src/App.jsx');
-  assert.match(app, /path=\{PRIVACY_NOTICE_URL\}/);
-  assert.match(app, /path=\{TERMS_URL\}/);
-  // {legalRoutes} appears in the remembered-user, signed-out and signed-in branches.
-  assert.equal(app.match(/\{legalRoutes\}/g)?.length, 3);
+  assert.match(app, /const PUBLIC_LEGAL_DOCS = \[PRIVACY_NOTICE, SERVICE_TERMS\];/);
+  const legalAt = app.indexOf('PUBLIC_LEGAL_DOCS.map(');
+  const catchAllAt = app.indexOf('<Route path="*" element={<AuthenticatedApp />} />');
+  assert.ok(legalAt > 0 && catchAllAt > legalAt, 'legal routes come before the authenticated catch-all');
   const onboarding = read('src/components/onboarding/Onboarding.jsx');
   assert.match(onboarding, /href=\{PRIVACY_NOTICE_URL\}/);
   assert.match(onboarding, /href=\{TERMS_URL\}/);
@@ -36,19 +41,21 @@ test('while the text is a draft, it says so on the page and in the code', () => 
   assert.equal(PRIVACY_NOTICE_IS_DRAFT, true);
   assert.match(PRIVACY_NOTICE_VERSION, /borrador/);
   assert.match(TERMS_VERSION, /borrador/);
-  for (const file of ['src/lib/legal/avisoPrivacidad.js', 'src/lib/legal/terminosServicio.js']) {
-    assert.match(read(file), /BORRADOR PENDIENTE DE REVISIÓN LEGAL/);
-  }
+  assert.match(read('src/lib/legal/legalDocs.js'), /BORRADOR PENDIENTE DE REVISIÓN LEGAL/);
+  assert.equal(AVISO_PRIVACIDAD.isDraft, true);
+  assert.equal(TERMINOS_SERVICIO.isDraft, true);
   const page = read('src/components/legal/LegalDocumentPage.jsx');
-  assert.match(page, /PRIVACY_NOTICE_IS_DRAFT && \(/);
-  assert.match(page, /Borrador pendiente de revisión legal/);
+  assert.match(page, /doc\.isDraft && \(/);
+  assert.match(page, /BORRADOR pendiente de revisión legal/);
 });
 
 test('the aviso covers what the LFPDPPP requires for minors\' sensitive data', () => {
   const t = text(AVISO_PRIVACIDAD);
-  assert.match(t, /RESPONSABLE/, 'the school is the responsable');
-  assert.match(t, /ENCARGADA/, 'ACACIA is the encargado');
-  for (const needle of ['alergias', 'tipo de sangre', 'EXPRESO', 'Base44', 'Resend', 'Anthropic', 'ARCO', 'conservan', 'soporte@acaciaco.com.mx', 'revocar']) {
+  assert.match(t, /es la responsable/, 'the school is the responsable');
+  assert.match(t, /actúa como encargado/, 'ACACIA is the encargado');
+  // Resend is deliberately NOT listed: LIUMA never calls it (P11 review; see
+  // tests/unit/help-and-legal.test.js for the "name only what the code uses" rule).
+  for (const needle of ['alergias', 'tipo de sangre', 'consentimiento expreso', 'Base44', 'Anthropic', 'ARCO', 'conservan', 'contacto@acaciaco.com.mx', 'revocar']) {
     assert.ok(t.includes(needle), `aviso must mention ${needle}`);
   }
 });
@@ -57,7 +64,7 @@ test('the terms quote the trial and prices the app actually applies', () => {
   const t = text(TERMINOS_SERVICIO);
   assert.ok(t.includes(`${TRIAL_DURATION_DAYS} días naturales`));
   for (const tier of PLAN_TIERS) assert.ok(t.includes(PLAN_CATALOG[tier].price), `${tier} price`);
-  assert.match(t, /SOLO LECTURA/);
+  assert.match(t, /solo lectura/);
   assert.match(t, /Mercado Pago/);
 });
 

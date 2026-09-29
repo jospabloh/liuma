@@ -4,7 +4,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import SessionHeartbeat from '@/lib/SessionHeartbeat'
 import { pagesConfig } from './pages.config'
-import { Suspense, useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -18,16 +18,14 @@ import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import Login from '@/pages/Login';
-import LegalDocumentPage from '@/components/legal/LegalDocumentPage';
-import { PRIVACY_NOTICE_URL, TERMS_URL } from '@/lib/consent/privacyNotice';
+import { PRIVACY_NOTICE, SERVICE_TERMS } from '@/lib/legal/legalDocs';
 
-// Aviso de Privacidad / Términos: reachable signed in AND signed out (the
-// onboarding consent links here). Kept out of pages.config/GuardedRoute on
-// purpose — they are not role-gated app pages.
-const legalRoutes = [
-  <Route key="aviso" path={PRIVACY_NOTICE_URL} element={<LegalDocumentPage kind="privacidad" />} />,
-  <Route key="terminos" path={TERMS_URL} element={<LegalDocumentPage kind="terminos" />} />,
-];
+const LegalDocumentPage = React.lazy(() => import('@/components/legal/LegalDocumentPage'));
+
+// Public legal pages. Rendered BEFORE AuthenticatedApp — no auth, no profile,
+// no GuardedRoute — because the onboarding consent checkbox links here and the
+// person reading it has no UserProfile yet. See src/lib/legal/legalDocs.js.
+const PUBLIC_LEGAL_DOCS = [PRIVACY_NOTICE, SERVICE_TERMS];
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -92,19 +90,13 @@ const AuthenticatedApp = () => {
       // of bouncing out to Base44's hosted login — any other path also lands
       // there, since nothing in the app is reachable while unauthenticated.
       // …except when the visitor arrived from a password-reset e-mail: that
-      // link must reach the reset form, not "Continuar como". The public legal
-      // pages stay reachable either way.
+      // link must reach the reset form, not "Continuar como". (The public
+      // legal pages are matched in App, before this component renders.)
       if (getRememberedIdentity() && !readResetToken(window.location.search)) {
-        return (
-          <Routes>
-            {legalRoutes}
-            <Route path="*" element={<ContinueAs />} />
-          </Routes>
-        );
+        return <ContinueAs />;
       }
       return (
         <Routes>
-          {legalRoutes}
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<RedirectToLogin />} />
         </Routes>
@@ -122,7 +114,6 @@ const AuthenticatedApp = () => {
           </RouteErrorBoundary>
         </LayoutWrapper>
       } />
-      {legalRoutes}
       {/* Already authenticated — /login has nothing to do, send them home. */}
       <Route path="/login" element={<Navigate to="/" replace />} />
       {Object.entries(Pages).map(([path, Page]) => (
@@ -157,7 +148,16 @@ function App() {
             <NavigationTracker />
             <SessionHeartbeat />
             <TenantThemeRuntime />
-            <AuthenticatedApp />
+            <Routes>
+              {PUBLIC_LEGAL_DOCS.map((doc) => (
+                <Route
+                  key={doc.path}
+                  path={doc.path}
+                  element={<Suspense fallback={<PageTransitionFallback />}><LegalDocumentPage doc={doc} /></Suspense>}
+                />
+              ))}
+              <Route path="*" element={<AuthenticatedApp />} />
+            </Routes>
           </Router>
           <Toaster />
           <ThemeSwitcher />

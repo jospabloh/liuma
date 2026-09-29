@@ -28,7 +28,7 @@ export default function ReadOnlyBanner({ className = '' }) {
         <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
           <p className="font-semibold text-amber-800 dark:text-amber-300 mb-0.5">Modo solo lectura</p>
-          <p className="text-sm text-amber-800/80">
+          <p className="text-sm text-amber-800/80 dark:text-amber-300/80">
             {message} Puedes consultar la información, pero no realizar cambios hasta reactivar tu suscripción.
           </p>
         </div>

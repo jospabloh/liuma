@@ -68,7 +68,7 @@ function SchoolLicenseView() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
-      <PageHeader title="Mi Licencia" subtitle={subscription ? 'Información de tu plan LIUMA' : 'Sin suscripción registrada'} />
+      <PageHeader title="Mi licencia" subtitle={subscription ? 'Información de tu plan LIUMA' : 'Sin suscripción registrada'} />
 
       <div className="space-y-4">
         <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border border-current/20 ${cfg.color}`}>

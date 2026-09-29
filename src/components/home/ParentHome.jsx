@@ -116,7 +116,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
             />
             <BigTile
               icon={ListChecks}
-              title="Operación Diaria"
+              title="Operación diaria"
               subtitle="Resumen del día de tus hijos"
               href={createPageUrl('OperacionDiaria')}
               delay={0.2}

@@ -19,7 +19,8 @@ test('the suite really runs at UTC-6 (otherwise the reminder test is vacuous)', 
 
 test('confirmation reminder fires 3 calendar days before a date-only deadline, in Mexico', () => {
   // With new Date('2026-06-25') the deadline read as June 24 18:00 local, the
-  // day difference came out as 2, and parents were never reminded.
+  // day difference came out as 2 on the 22nd, so the reminder went out a day
+  // early (on the 21st) instead of 3 days before the deadline.
   const events = [{ id: 'due', requires_confirmation: true, confirmation_deadline: '2026-06-25' }];
   for (const t of ['2026-06-22T00:01:00', '2026-06-22T12:00:00', '2026-06-22T23:59:00']) {
     assert.deepEqual(selectEventsNeedingReminder(events, new Date(t)).map((e) => e.id), ['due'], `at ${t}`);
@@ -29,6 +30,8 @@ test('confirmation reminder fires 3 calendar days before a date-only deadline, i
     selectEventsNeedingReminder([{ id: 'bad', requires_confirmation: true, confirmation_deadline: '2026-02-30' }], new Date('2026-02-27T10:00:00')),
     [],
   );
+  // ...and it does not fire a day early any more (old code matched on the 21st).
+  assert.deepEqual(selectEventsNeedingReminder(events, new Date('2026-06-21T12:00:00')), []);
 });
 
 test('batched linked-student lookup still reports orphaned links and keeps link order', () => {

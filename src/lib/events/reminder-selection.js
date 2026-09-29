@@ -8,7 +8,9 @@ import { parseLocalDate } from '../dates.js';
  * granularity (startOfDay on both sides) so a date-only deadline isn't thrown
  * off by the current time-of-day, and the deadline is read with parseLocalDate:
  * new Date('YYYY-MM-DD') is UTC midnight, the previous evening in Mexico, which
- * made the 3-day check land on the wrong day and skip the reminder. Kept free of IO / base44 so it is
+ * shifted the 3-day check one day early (the reminder went out 4 days before the
+ * deadline, and reminder_sent then kept it from firing on the right day). Kept
+ * free of IO / base44 so it is
  * unit-testable; the side-effecting send lives in sendDueEventReminders.
  */
 export function selectEventsNeedingReminder(events, now = new Date()) {

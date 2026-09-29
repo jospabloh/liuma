@@ -122,7 +122,7 @@ export default function GestionDocumentos() {
     MENU: 'Menú semanal',
     COMMUNICATION: 'Comunicación oficial',
     MINUTA: 'Minuta',
-    UNIFORM_CATALOG: 'Catálogo de Uniformes',
+    UNIFORM_CATALOG: 'Catálogo de uniformes',
   };
 
   if (profileLoading || isLoading) {
@@ -134,7 +134,7 @@ export default function GestionDocumentos() {
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
         <ReadOnlyBanner />
         <PageHeader
-          title="Documentos Oficiales"
+          title="Documentos oficiales"
           subtitle="Gestiona menús, comunicaciones, minutas y catálogos"
           showBack
           action={
@@ -151,7 +151,7 @@ export default function GestionDocumentos() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label>Tipo de Documento</Label>
+                    <Label>Tipo de documento</Label>
                     <Select
                       value={formData.document_type}
                       onValueChange={(value) => setFormData({ ...formData, document_type: value })}
@@ -163,7 +163,7 @@ export default function GestionDocumentos() {
                         <SelectItem value="MENU">Menú semanal</SelectItem>
                         <SelectItem value="COMMUNICATION">Comunicación oficial</SelectItem>
                         <SelectItem value="MINUTA">Minuta</SelectItem>
-                        <SelectItem value="UNIFORM_CATALOG">Catálogo de Uniformes</SelectItem>
+                        <SelectItem value="UNIFORM_CATALOG">Catálogo de uniformes</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

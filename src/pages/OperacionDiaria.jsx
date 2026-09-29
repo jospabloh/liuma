@@ -122,7 +122,7 @@ export default function OperacionDiaria() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
-      <PageHeader title="Operación Diaria" subtitle={`Vista por rol: ${roleDefaults[data.role]}`} showBack />
+      <PageHeader title="Operación diaria" subtitle={`Vista por rol: ${roleDefaults[data.role]}`} showBack />
       <div className="space-y-4">
         <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4">
           <div className="flex flex-wrap gap-2 mb-3">

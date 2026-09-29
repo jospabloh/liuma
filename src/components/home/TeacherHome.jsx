@@ -192,7 +192,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             />
             <BigTile
               icon={ListChecks}
-              title="Operación Diaria"
+              title="Operación diaria"
               subtitle="Mi timeline del día"
               href={createPageUrl('OperacionDiaria')}
               delay={0.2}

@@ -230,13 +230,16 @@ export default function ConfiguracionInicial() {
     }
     
     queryClient.invalidateQueries({ queryKey: ['setupGuide'] });
-      queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
+    queryClient.invalidateQueries({ queryKey: ['homeSetupGuide'] });
     toast.success('Pasos iniciales creados');
   };
 
   if (isLoading) return <LoadingScreen />;
 
   const categories = ['GENERAL', 'GUARDERIA', 'ESCUELA', 'COLEGIO'];
+  // Same labels as the category <Select> in the add-step dialog; the stored
+  // value stays the enum.
+  const categoryLabels = { GENERAL: 'General', GUARDERIA: 'Guardería', ESCUELA: 'Escuela', COLEGIO: 'Colegio' };
   const completedSteps = steps.filter(s => s.is_completed).length;
   const progress = steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0;
   const teachers = allProfiles.filter((p) => p.app_role === 'TEACHER');
@@ -305,12 +308,12 @@ export default function ConfiguracionInicial() {
           <DialogTrigger asChild>
             <Button>
               <Plus className="w-4 h-4 mr-2" />
-              Agregar Paso
+              Agregar paso
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Agregar Nuevo Paso</DialogTitle>
+              <DialogTitle>Agregar nuevo paso</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div>
@@ -371,7 +374,7 @@ export default function ConfiguracionInicial() {
                 disabled={!newStep.step_name || createStepMutation.isPending}
                 className="w-full"
               >
-                {createStepMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear Paso'}
+                {createStepMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear paso'}
               </Button>
             </div>
           </DialogContent>
@@ -379,7 +382,7 @@ export default function ConfiguracionInicial() {
 
         {steps.length === 0 && (
           <Button onClick={initializeDefaultSteps} variant="outline">
-            Cargar Pasos por Defecto
+            Cargar pasos sugeridos
           </Button>
         )}
       </div>
@@ -392,7 +395,7 @@ export default function ConfiguracionInicial() {
         return (
           <div key={category} className="mb-8">
             <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-              {category}
+              {categoryLabels[category] || category}
               <Badge variant="outline">{categorySteps.length}</Badge>
             </h2>
             <div className="space-y-3">
@@ -466,7 +469,7 @@ export default function ConfiguracionInicial() {
                             onClick={() => handleConfirmStep(step)}
                           >
                             <Check className="w-4 h-4 mr-2" />
-                            Confirmar Vigencia
+                            Confirmar vigencia
                           </Button>
                         )}
                         {step.is_completed && (
@@ -485,12 +488,12 @@ export default function ConfiguracionInicial() {
                               setStepNotes(step.notes || '');
                             }}>
                               <FileText className="w-4 h-4 mr-2" />
-                              Agregar Notas
+                              Agregar notas
                             </Button>
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
-                              <DialogTitle>Notas del Paso</DialogTitle>
+                              <DialogTitle>Notas del paso</DialogTitle>
                             </DialogHeader>
                             <Textarea
                               value={stepNotes}
@@ -499,7 +502,7 @@ export default function ConfiguracionInicial() {
                               rows={4}
                             />
                             <Button onClick={() => handleAddNotes(step)}>
-                              Guardar Notas
+                              Guardar notas
                             </Button>
                           </DialogContent>
                         </Dialog>
@@ -512,7 +515,7 @@ export default function ConfiguracionInicial() {
                               ) : (
                                 <Upload className="w-4 h-4 mr-2" />
                               )}
-                              Subir Documento
+                              Subir documento
                             </span>
                           </Button>
                           <input
@@ -562,7 +565,7 @@ export default function ConfiguracionInicial() {
         <Card className="p-12 text-center">
           <p className="text-muted-foreground mb-4">No hay pasos configurados aún</p>
           <Button onClick={initializeDefaultSteps}>
-            Cargar Pasos por Defecto
+            Cargar pasos sugeridos
           </Button>
         </Card>
       )}

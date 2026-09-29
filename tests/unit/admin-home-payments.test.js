@@ -183,3 +183,28 @@ test('invite code prefers a short join_code and falls back to the id onboarding 
   assert.ok(url.startsWith('https://wa.me/?text='));
   assert.equal(decodeURIComponent(url.slice('https://wa.me/?text='.length)), message);
 });
+
+test('the all-classrooms list does not share a cache slot with the active-classrooms lists', () => {
+  // GestionEscuela lists inactive classrooms too; AdminHome/AvisosAdmin count
+  // active ones under ['allClassrooms', school_id]. Same collision as students.
+  assert.match(read('src/pages/GestionEscuela.jsx'), /queryKey: \['allClassrooms', userProfile\?\.school_id, 'all'\]/);
+  for (const path of ['src/components/home/AdminHome.jsx', 'src/pages/AvisosAdmin.jsx']) {
+    const source = read(path);
+    const at = source.indexOf("queryKey: ['allClassrooms'");
+    assert.ok(at > 0, path);
+    assert.match(source.slice(at, at + 250), /is_active: true/, `${path} caches active classrooms only`);
+  }
+});
+
+test('admin home stats show "—" instead of a confident 0 while loading or after a failed load', () => {
+  const source = read('src/components/home/AdminHome.jsx');
+  assert.match(source, /q\.isPending \|\| q\.isError/);
+  assert.match(source, /statValue\(overdueCharges\.length, overdueChargesQuery\)/);
+});
+
+test('payment reminders wait for the school row (its notification preferences)', () => {
+  const source = read('src/pages/PagosAdmin.jsx');
+  assert.match(source, /if \(!schoolFetched\) return;/);
+  // A malformed due date renders a fallback instead of crashing the page.
+  assert.doesNotMatch(source, /format\(parseLocalDate\(/);
+});

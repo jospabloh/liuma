@@ -68,7 +68,7 @@ export default function PagosAdmin() {
   });
 
   const { data: students = [] } = useSchoolStudents(userProfile?.school_id);
-  const { data: school } = useQuery({
+  const { data: school, isFetched: schoolFetched } = useQuery({
     queryKey: ['school', userProfile?.school_id],
     queryFn: async () => {
       const schools = await base44.entities.School.filter({ id: userProfile.school_id });
@@ -276,6 +276,10 @@ export default function PagosAdmin() {
     // Read-only license: reminder_sent cannot be written, so every load would
     // re-send the same reminder.
     if (!canWrite || !userProfile?.school_id || !user) return;
+    // Wait for the school row: its notification_preferences decide whether a
+    // payment_due mail may go out, and a reminder is only attempted once per
+    // session — sending before it loads would ignore a school that opted out.
+    if (!schoolFetched) return;
     const due = pendingCharges.filter(
       (charge) => isPaymentReminderDue(charge) && !remindersHandled.current.has(charge.id),
     );
@@ -314,7 +318,7 @@ export default function PagosAdmin() {
                   studentName: `${student.first_name} ${student.last_name}`,
                   conceptName: charge.concept_name,
                   amountLabel: `$${charge.amount?.toLocaleString()}`,
-                  dueDateLabel: format(parseLocalDate(charge.due_date), "d 'de' MMMM, yyyy", { locale: es }),
+                  dueDateLabel: formatDueDate(charge.due_date, "d 'de' MMMM, yyyy"),
                 },
                 channels: ['email', 'in_app'],
               });
@@ -329,7 +333,7 @@ export default function PagosAdmin() {
     };
 
     sendReminders();
-  }, [pendingCharges, students, school, userProfile, user, canWrite]);
+  }, [pendingCharges, students, school, schoolFetched, userProfile, user, canWrite]);
 
   if (isLoading) return <LoadingScreen message="Cargando..." />;
 
@@ -629,6 +633,14 @@ export default function PagosAdmin() {
   );
 }
 
+// Date-only due date as the local calendar day. A missing or malformed value
+// renders a fallback instead of letting date-fns throw "Invalid time value"
+// and take the whole Pagos page down with it.
+function formatDueDate(dueDate, pattern) {
+  const date = parseLocalDate(dueDate);
+  return date ? format(date, pattern, { locale: es }) : 'Sin fecha';
+}
+
 function ChargeCard({ charge, studentName, onRecordPayment, isOverdue, isPaid }) {
   return (
     <motion.div
@@ -647,7 +659,7 @@ function ChargeCard({ charge, studentName, onRecordPayment, isOverdue, isPaid })
           <p className="text-sm text-muted-foreground mt-1">{charge.concept_name}</p>
           <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
             <Calendar className="w-3 h-3" />
-            Vence: {charge.due_date ? format(parseLocalDate(charge.due_date), "d MMM, yyyy", { locale: es }) : 'Sin fecha'}
+            Vence: {formatDueDate(charge.due_date, "d MMM, yyyy")}
           </div>
         </div>
         <div className="text-right">

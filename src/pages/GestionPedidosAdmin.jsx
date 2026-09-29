@@ -79,7 +79,7 @@ export default function GestionPedidosAdmin() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
         <PageHeader
-          title="Gestión de Pedidos"
+          title="Gestión de pedidos"
           subtitle={`${orders?.length || 0} pedidos totales • ${pendingCount} pendientes`}
           showBack
         />
@@ -150,12 +150,12 @@ export default function GestionPedidosAdmin() {
         <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Actualizar Pedido</DialogTitle>
+              <DialogTitle>Actualizar pedido</DialogTitle>
             </DialogHeader>
             {selectedOrder && (
               <div className="space-y-4">
                 <div>
-                  <Label>Estado del Pedido</Label>
+                  <Label>Estado del pedido</Label>
                   <Select value={newStatus} onValueChange={setNewStatus}>
                     <SelectTrigger>
                       <SelectValue />
@@ -171,7 +171,7 @@ export default function GestionPedidosAdmin() {
                 </div>
 
                 <div>
-                  <Label>Notas del Administrador</Label>
+                  <Label>Notas del administrador</Label>
                   <Textarea
                     value={adminNotes}
                     onChange={(e) => setAdminNotes(e.target.value)}
@@ -185,7 +185,7 @@ export default function GestionPedidosAdmin() {
                   className="w-full"
                   disabled={updateOrderMutation.isPending}
                 >
-                  Actualizar Pedido
+                  Actualizar pedido
                 </Button>
               </div>
             )}

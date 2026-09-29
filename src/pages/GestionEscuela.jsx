@@ -57,8 +57,12 @@ export default function GestionEscuela() {
 
   const { user, userProfile } = useCurrentProfile();
 
+  // Inactive classrooms included, so the key carries 'all': AdminHome and
+  // AvisosAdmin cache ACTIVE classrooms under ['allClassrooms', school_id], and
+  // sharing that slot made the home's "Salones" count include inactive ones
+  // after a visit here. Invalidating ['allClassrooms'] still hits both.
   const { data: classrooms = [], isLoading: loadingClassrooms } = useQuery({
-    queryKey: ['allClassrooms', userProfile?.school_id],
+    queryKey: ['allClassrooms', userProfile?.school_id, 'all'],
     queryFn: () => base44.entities.Classroom.filter({ 
       school_id: userProfile.school_id 
     }),

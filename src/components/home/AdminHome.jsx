@@ -22,14 +22,14 @@ export default function AdminHome({ user, userProfile, subscription }) {
   const navigate = useNavigate();
 
   // Get pending approvals
-  const { data: pendingUsers = [] } = useQuery({
+  const pendingUsersQuery = useQuery({
     queryKey: ['pendingUsers', userProfile.school_id],
     queryFn: () => base44.entities.UserProfile.filter({ 
       school_id: userProfile.school_id,
       status: 'PENDING' 
     }),
   });
-  const { data: allProfiles = [] } = useQuery({
+  const allProfilesQuery = useQuery({
     queryKey: ['allProfiles', userProfile.school_id],
     queryFn: () => base44.entities.UserProfile.filter({ school_id: userProfile.school_id }),
   });
@@ -44,7 +44,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
   });
 
   // Get classrooms count
-  const { data: classrooms = [] } = useQuery({
+  const classroomsQuery = useQuery({
     queryKey: ['allClassrooms', userProfile.school_id],
     queryFn: () => base44.entities.Classroom.filter({ 
       school_id: userProfile.school_id,
@@ -54,11 +54,11 @@ export default function AdminHome({ user, userProfile, subscription }) {
 
   // Active students. The key carries the filter (see useSchoolStudents), so
   // this list never shares a cache slot with an "all students" list.
-  const { data: students = [] } = useSchoolStudents(userProfile.school_id);
+  const studentsQuery = useSchoolStudents(userProfile.school_id);
 
   // Overdue payments: the same rule PagosAdmin uses (stored OVERDUE, or still
   // PENDING past its due date), so both screens show the same number.
-  const { data: overdueCharges = [] } = useQuery({
+  const overdueChargesQuery = useQuery({
     queryKey: ['overdueCharges', userProfile.school_id],
     queryFn: async () => {
       const charges = await base44.entities.ChargeItem.filter({
@@ -68,22 +68,22 @@ export default function AdminHome({ user, userProfile, subscription }) {
       return selectOverdueCharges(charges);
     },
   });
-  const { data: setupSteps = [] } = useQuery({
+  const setupStepsQuery = useQuery({
     queryKey: ['homeSetupGuide', userProfile.school_id],
     queryFn: () => base44.entities.SchoolSetupGuide.filter({ school_id: userProfile.school_id }),
   });
-  const { data: teacherAssignments = [] } = useQuery({
+  const teacherAssignmentsQuery = useQuery({
     queryKey: ['homeTeacherAssignments', userProfile.school_id],
     queryFn: () => base44.entities.TeacherClassroom.filter({ school_id: userProfile.school_id, is_active: true }),
   });
-  const { data: parentLinks = [] } = useQuery({
+  const parentLinksQuery = useQuery({
     queryKey: ['homeParentLinks', userProfile.school_id],
     queryFn: () => base44.entities.ParentStudent.filter({ school_id: userProfile.school_id, status: 'ACTIVE' }),
   });
   // One request for the whole school — this used to await one
   // EmergencyContact.filter per student, in sequence (300 round-trips for a
   // 300-student school on the director's first screen).
-  const { data: emergencyContacts = [] } = useQuery({
+  const emergencyContactsQuery = useQuery({
     queryKey: ['homeEmergencyContacts', userProfile.school_id],
     queryFn: () => base44.entities.EmergencyContact.filter(
       { school_id: userProfile.school_id },
@@ -102,6 +102,22 @@ export default function AdminHome({ user, userProfile, subscription }) {
     },
   });
 
+  const pendingUsers = pendingUsersQuery.data ?? [];
+  const allProfiles = allProfilesQuery.data ?? [];
+  const classrooms = classroomsQuery.data ?? [];
+  const students = studentsQuery.data ?? [];
+  const overdueCharges = overdueChargesQuery.data ?? [];
+  const setupSteps = setupStepsQuery.data ?? [];
+  const teacherAssignments = teacherAssignmentsQuery.data ?? [];
+  const parentLinks = parentLinksQuery.data ?? [];
+  const emergencyContacts = emergencyContactsQuery.data ?? [];
+
+  // A stat whose data is still loading, or failed to load, shows "—" rather
+  // than a confident 0 / 0% ("Pagos vencidos 0" while the query is in flight,
+  // or after it errored, reads as good news that nobody checked).
+  const unknown = (...queries) => queries.some((q) => q.isPending || q.isError);
+  const statValue = (value, ...queries) => (unknown(...queries) ? '—' : value);
+
   const handleEmergencyAlert = () => {
     navigate(createPageUrl('AlertaEmergencia'));
   };
@@ -113,26 +129,26 @@ export default function AdminHome({ user, userProfile, subscription }) {
   const emergencyCoverage = percentOfStudentsCovered(students, emergencyContacts);
 
   const stats = [
-    { key: 'students', value: students.length, label: 'Alumnos activos', tone: 'text-card-foreground' },
-    { key: 'classrooms', value: classrooms.length, label: 'Salones', tone: 'text-card-foreground' },
+    { key: 'students', value: statValue(students.length, studentsQuery), label: 'Alumnos activos', tone: 'text-card-foreground' },
+    { key: 'classrooms', value: statValue(classrooms.length, classroomsQuery), label: 'Salones', tone: 'text-card-foreground' },
     {
       key: 'pending',
-      value: pendingUsers.length,
+      value: statValue(pendingUsers.length, pendingUsersQuery),
       label: 'Usuarios por aprobar',
       tone: 'text-amber-600 dark:text-amber-400',
       href: createPageUrl('Aprobaciones'),
     },
     {
       key: 'overdue',
-      value: overdueCharges.length,
+      value: statValue(overdueCharges.length, overdueChargesQuery),
       label: 'Pagos vencidos',
       tone: 'text-red-600 dark:text-red-400',
       href: createPageUrl('PagosAdmin'),
     },
-    { key: 'setup', value: `${setupProgress}%`, label: 'Configuración completada', tone: 'text-brand', href: createPageUrl('ConfiguracionInicial') },
-    { key: 'teachers', value: `${teacherCoverage}%`, label: 'Maestros con salón asignado', tone: 'text-brand' },
-    { key: 'parents', value: `${parentCoverage}%`, label: 'Alumnos con tutor vinculado', tone: 'text-brand' },
-    { key: 'emergency', value: `${emergencyCoverage}%`, label: 'Alumnos con contacto de emergencia', tone: 'text-amber-600 dark:text-amber-400' },
+    { key: 'setup', value: statValue(`${setupProgress}%`, setupStepsQuery), label: 'Configuración completada', tone: 'text-brand', href: createPageUrl('ConfiguracionInicial') },
+    { key: 'teachers', value: statValue(`${teacherCoverage}%`, allProfilesQuery, teacherAssignmentsQuery), label: 'Maestros con salón asignado', tone: 'text-brand' },
+    { key: 'parents', value: statValue(`${parentCoverage}%`, studentsQuery, parentLinksQuery), label: 'Alumnos con tutor vinculado', tone: 'text-brand' },
+    { key: 'emergency', value: statValue(`${emergencyCoverage}%`, studentsQuery, emergencyContactsQuery), label: 'Alumnos con contacto de emergencia', tone: 'text-amber-600 dark:text-amber-400' },
   ];
 
   return (
@@ -140,7 +156,9 @@ export default function AdminHome({ user, userProfile, subscription }) {
       <HomeHeader
         eyebrow={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
         title={school?.name || 'Administración'}
-        subtitle={`${countLabel(classrooms.length, 'salón', 'salones')} · ${countLabel(students.length, 'alumno')}`}
+        subtitle={unknown(classroomsQuery, studentsQuery)
+          ? undefined
+          : `${countLabel(classrooms.length, 'salón', 'salones')} · ${countLabel(students.length, 'alumno')}`}
       />
       {/* Emergency Button */}
       <div className="relative z-10 mx-auto max-w-2xl px-6 -mt-6">

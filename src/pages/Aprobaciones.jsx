@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
-import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
+import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +30,7 @@ export default function Aprobaciones() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [actionType, setActionType] = useState(null);
 
-  const { user: currentUser, userProfile } = useCurrentProfile();
+  const { userProfile } = useCurrentProfile();
 
   const { data: pendingUsers = [], isLoading } = useQuery({
     queryKey: ['pendingUsers', userProfile?.school_id],
@@ -41,45 +41,35 @@ export default function Aprobaciones() {
     enabled: !!userProfile,
   });
 
-  const { data: allUsers = [] } = useQuery({
-    queryKey: ['allUsers'],
-    queryFn: () => base44.entities.User.list(),
-  });
+  // Names/emails come from the server-side member directory: UserProfile has
+  // neither, and a client User.list() only ever returns the caller's own row.
+  const { getName: getUserName, getEmail: getUserEmail } = useSchoolMembers(userProfile?.school_id);
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ profileId, status }) => {
-      await base44.entities.UserProfile.update(profileId, { status });
-      
-      await logAuditEvent({
-        user: currentUser,
-        userProfile,
-        entity: AUDIT_ENTITIES.USER_PROFILE,
-        entityId: profileId,
-        action: status === 'ACTIVE' ? 'USER_APPROVED' : 'USER_SUSPENDED',
-        reason: status === 'ACTIVE' ? 'Admin approval flow' : 'Admin rejection flow',
-        context: { approved_status: status }
-      });
-    },
+    // approveProfile re-checks that the caller is an ACTIVE ADMIN of the
+    // target's own school, that the target is still PENDING and not the
+    // caller themself, and writes the AuditLog row — all server-side.
+    mutationFn: ({ profileId, decision }) =>
+      base44.functions.invoke('approveProfile', { profileId, decision }),
     onSuccess: () => {
       queryClient.invalidateQueries(['pendingUsers']);
+      queryClient.invalidateQueries(['schoolMembers']);
       toast.success(actionType === 'approve' ? 'Usuario aprobado' : 'Usuario rechazado');
       setSelectedUser(null);
       setActionType(null);
     },
-    onError: () => {
-      toast.error('Error al actualizar usuario');
+    onError: (error) => {
+      const code = error?.data?.code;
+      if (code === 'NOT_PENDING') {
+        queryClient.invalidateQueries(['pendingUsers']);
+        toast.error('Esta solicitud ya fue atendida por otra persona.');
+      } else if (code === 'SELF_APPROVAL') {
+        toast.error('No puedes aprobar ni rechazar tu propia solicitud.');
+      } else {
+        toast.error('No se pudo actualizar la solicitud. Intenta de nuevo.');
+      }
     }
   });
-
-  const getUserEmail = (userId) => {
-    const user = allUsers.find(u => u.id === userId);
-    return user?.email || 'Sin correo';
-  };
-
-  const getUserName = (userId) => {
-    const user = allUsers.find(u => u.id === userId);
-    return user?.full_name || 'Sin nombre';
-  };
 
   const handleAction = (profile, type) => {
     setSelectedUser(profile);
@@ -89,7 +79,7 @@ export default function Aprobaciones() {
   const confirmAction = () => {
     updateUserMutation.mutate({
       profileId: selectedUser.id,
-      status: actionType === 'approve' ? 'ACTIVE' : 'SUSPENDED'
+      decision: actionType === 'approve' ? 'approve' : 'reject',
     });
   };
 

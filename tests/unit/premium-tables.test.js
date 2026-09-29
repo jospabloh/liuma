@@ -24,13 +24,14 @@ test('.ui-field focuses with the tenant brand ring', () => {
   assert.doesNotMatch(css.match(/\.ui-field[\s\S]*?\}/)?.[0] ?? '', /#[0-9a-fA-F]{6}/);
 });
 
-// The governance matrix (PermisosRoles) adopts the premium table + native
-// field treatment and tints its checkboxes with the brand.
-test('PermisosRoles adopts the premium table/field/checkbox treatment', () => {
+// The governance page (PermisosRoles) adopts the premium table + native
+// field treatment. (It used to also assert `accent-brand` checkboxes; those
+// only existed in the unsaved "plantillas de rol" grid, removed 2026-09-29 —
+// sales-readiness audit F20 — because nothing ever persisted or read it.)
+test('PermisosRoles adopts the premium table/field treatment', () => {
   const src = read('src/pages/PermisosRoles.jsx');
   assert.match(src, /className="ui-table min-w-full"/);
   assert.match(src, /className="ui-field"/);
-  assert.match(src, /accent-brand/);
   // The old hardcoded native-select class is fully replaced.
   assert.doesNotMatch(src, /h-10 rounded-md border border-border px-3 text-sm/);
 });

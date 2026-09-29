@@ -111,6 +111,16 @@
     "ai_brief": {
       "type": "object",
       "description": "Structured spec produced by the AI BA/PO intake when a FEATURE or TECHNICAL ticket is opened (user story, acceptance criteria, reproduction steps, severity, impact, etc.). The same brief is also embedded as Markdown in the seed thread message, so this field is purely additive for richer rendering."
+    },
+    "escalation_notified_recipients": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "'TIER:recipient' keys already sent the support_ticket_escalated notice for this ticket, written by sendBulkNotification only. Per recipient and per tier so a failed send is retried without re-mailing whoever already got it, and the later hand-off to soporte is still a fresh notice. rls.write:false — a client must never be able to clear this to re-send, or fill it to suppress the notice.",
+      "rls": {
+        "write": false
+      }
     }
   },
   "required": [

@@ -1,0 +1,92 @@
+// listSchoolMembers — the school's member directory: id, full_name and email
+// of every user with a UserProfile in ONE school, and nothing else.
+//
+// WHY THIS EXISTS (sales-readiness audit, finding F09, 2026-09-29).
+// UserProfile carries no name or email, so eight client call sites used to
+// resolve them with `base44.entities.User.list()`. Under Base44's built-in
+// User visibility a regular user can only read their OWN User row, so a
+// school ADMIN saw "Sin nombre / Sin correo" for everyone they were
+// approving, a teacher linking a parent picked from identical blanks, and the
+// emergency alert resolved `email: undefined` for every recipient — silently.
+// If the default were ever permissive the same call would instead download
+// the platform-wide user list (cross-tenant PII). Both outcomes were wrong;
+// this function is the replacement for every one of those reads.
+//
+// Authority model:
+//   1. Caller must be authenticated.
+//   2. `schoolId` comes from the request (the client shows the school it is
+//      on), but it is only honoured if the caller holds an ACTIVE ADMIN or
+//      TEACHER UserProfile IN THAT SCHOOL — re-read here with the service
+//      role, never trusted from the body. A PARENT has no use for the
+//      directory and gets 403. Platform owner (user.role === 'admin')
+//      bypasses, same convention as every other function in this app.
+//   3. An ADMIN sees every member of the school, including PENDING and
+//      SUSPENDED profiles (Aprobaciones needs the pending ones' names). A
+//      TEACHER sees only ACTIVE members — enough to link a parent to a
+//      student, without exposing who is waiting for approval.
+//   4. The response carries id / full_name / email ONLY. No role, phone,
+//      preferences or anything else from User — the client already has the
+//      profile rows it needs for those.
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+
+// A school directory bigger than this is not a real school; the cap only
+// exists so a bug can't turn one call into an unbounded scan.
+const MAX_MEMBERS = 5000;
+const DIRECTORY_ROLES = ['ADMIN', 'TEACHER'];
+
+type Profile = { user_id?: string; school_id?: string; app_role?: string; status?: string };
+type DirectoryUser = { id: string; full_name: string; email: string };
+
+function bad(status: number, code: string, message: string): Response {
+  return Response.json({ ok: false, code, error: message }, { status });
+}
+
+Deno.serve(async (req) => {
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me().catch(() => null);
+    if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
+
+    const body = await req.json().catch(() => ({}));
+    const schoolId = String(body?.schoolId || '');
+    if (!schoolId) return bad(400, 'MISSING_SCHOOL', 'schoolId is required');
+
+    const sr = base44.asServiceRole;
+    const isPlatformOwner = user.role === 'admin';
+
+    let callerRole = 'ADMIN';
+    if (!isPlatformOwner) {
+      const callerProfiles: Profile[] = await sr.entities.UserProfile.filter(
+        { user_id: user.id, school_id: schoolId },
+        '-created_date',
+      );
+      const callerProfile = callerProfiles.find(
+        (p) => p.status === 'ACTIVE' && DIRECTORY_ROLES.includes(String(p.app_role)),
+      );
+      if (!callerProfile) return bad(403, 'FORBIDDEN', 'Requires an active ADMIN or TEACHER profile in this school');
+      callerRole = String(callerProfile.app_role);
+    }
+
+    const schoolProfiles: Profile[] = await sr.entities.UserProfile.filter(
+      { school_id: schoolId },
+      '-created_date',
+      MAX_MEMBERS,
+    );
+    const visibleProfiles = callerRole === 'ADMIN'
+      ? schoolProfiles
+      : schoolProfiles.filter((p) => p.status === 'ACTIVE');
+
+    const userIds = [...new Set(visibleProfiles.map((p) => p.user_id).filter(Boolean) as string[])];
+    if (userIds.length === 0) return Response.json({ ok: true, users: [] });
+
+    // deno-lint-ignore no-explicit-any
+    const rows: any[] = await sr.entities.User.filter({ id: { $in: userIds } }, undefined, MAX_MEMBERS);
+    const users: DirectoryUser[] = (rows || [])
+      .filter((u) => u?.id && userIds.includes(u.id))
+      .map((u) => ({ id: String(u.id), full_name: String(u.full_name || ''), email: String(u.email || '') }));
+
+    return Response.json({ ok: true, users });
+  } catch (e) {
+    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+  }
+});

@@ -30,13 +30,22 @@ test('non-platform tickets keep the priority-based business-day SLA', () => {
   assert.notEqual(platform, school);
 });
 
-test('ticket creation emails the fixed support inbox on PLATFORM escalation', () => {
+test('ticket creation notifies assignees server-side, keyed on the stored ticket id', () => {
   const source = read('src/lib/support/tickets.js');
-  // notifyAssignees emails SUPPORT_EMAIL when the ticket escalates to the platform tier.
-  assert.match(source, /tier === SUPPORT_TIER\.PLATFORM/);
-  assert.match(source, /sendEventEmailTo\(\{[\s\S]*email: SUPPORT_EMAIL/);
+  // 2026-09-29 (sales-readiness audit F09/F30): the client no longer picks
+  // recipients or writes the email text — it names the ticket, and
+  // sendBulkNotification reads tier, recipients and description from it.
+  assert.match(source, /sendBulk\(\{ eventType: 'support_ticket_escalated', ticketId: ticket\.id \}\)/);
+  assert.doesNotMatch(source, /sendEventEmailTo\(/);
+  assert.doesNotMatch(source, /support_ticket_escalated'[\s\S]{0,200}templateContext/);
   // SLA is computed with the routing tier so platform tickets get 48h.
   assert.match(source, /computeSlaDueAt\(\{ priority, tier: routing\.tier \}\)/);
+});
+
+test('the server always emails the fixed Tier-2 inbox on a PLATFORM escalation', () => {
+  const source = read('base44/functions/sendBulkNotification/entry.ts');
+  assert.match(source, /const SUPPORT_EMAIL = 'soporte@acaciaco\.com\.mx';/);
+  assert.match(source, /if \(tier === 'PLATFORM' && !recipients\.some\([\s\S]*?email: SUPPORT_EMAIL/);
 });
 
 test('notification service can email a templated message to a fixed address', () => {
@@ -74,8 +83,9 @@ test('escalateTicketToSupport re-tiers to PLATFORM with a fresh 48h SLA and emai
   assert.match(source, /tier: SUPPORT_TIER\.PLATFORM/);
   assert.match(source, /computeSlaDueAt\(\{ priority: ticket\.priority, tier: SUPPORT_TIER\.PLATFORM/);
   assert.match(source, /first_response_at: null/);
-  // routes through notifyAssignees, which emails SUPPORT_EMAIL on PLATFORM tier
-  assert.match(source, /notifyAssignees\(\{[\s\S]*tier: SUPPORT_TIER\.PLATFORM/);
+  // routes through notifyAssignees with the UPDATED (PLATFORM-tier) ticket;
+  // the server emails SUPPORT_EMAIL for that tier
+  assert.match(source, /notifyAssignees\(\{ ticket: updated \}\)/);
   // guards: no double-escalation, no escalating terminal tickets
   assert.match(source, /ticket\.tier === SUPPORT_TIER\.PLATFORM\) return ticket/);
   assert.match(source, /TERMINAL_STATUSES\.includes\(ticket\.status\)/);

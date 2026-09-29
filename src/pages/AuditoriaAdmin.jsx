@@ -33,7 +33,7 @@ export default function AuditoriaAdmin() {
     if (actionFilter !== 'ALL' && row.action !== actionFilter) return false;
     if (search && !`${row.actor || ''} ${row.entity_id || ''} ${row.reason || ''}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }), [rows, entityFilter, actionFilter, search]);
+  }), [rows, entityFilter, actionFilter, search, user, userProfile]);
 
   const exportCsv = () => {
     const header = ['timestamp', 'actor', 'role', 'entity', 'entity_id', 'action', 'reason'];

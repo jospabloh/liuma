@@ -611,7 +611,7 @@ export default function PermisosRoles() {
         <div className="space-y-2">
           <label className="text-sm font-medium">Motivo del cambio (obligatorio)</label>
           <Textarea value={reasonText} onChange={(event) => setReasonText(event.target.value)} placeholder="Describe el motivo" />
-          {errorText ? <p className="text-sm text-red-600">{errorText}</p> : null}
+          {errorText ? <p className="text-sm text-red-600 dark:text-red-400">{errorText}</p> : null}
         </div>
 
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
@@ -623,7 +623,7 @@ export default function PermisosRoles() {
             </Button>
           </div>
           <div className="space-y-2 border-t border-border pt-3">
-            <p className="text-sm font-medium text-red-700">Solicitar eliminación de la escuela</p>
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">Solicitar eliminación de la escuela</p>
             <p className="text-xs text-muted-foreground">
               No es instantáneo: se envía como solicitud al equipo de ACACIA, quien la procesará manualmente.
               Descarga tus datos primero — la eliminación no tiene marcha atrás.

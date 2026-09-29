@@ -41,7 +41,6 @@
 //   would prevent.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
-import { IN_APP_TEMPLATES } from './_inApp.ts';
 import {
   countWithinWindow,
   escalationKey,
@@ -76,7 +75,7 @@ type Any = any;
 type Ctx = Record<string, string | number>;
 type Recipient = {
   key: string;          // idempotency identity: email if known, else user id
-  userId?: string;      // in-app Notice target (omitted for the support inbox)
+  userId?: string;      // the recipient's User id (omitted for the support inbox)
   email?: string;
   role?: string;
   prefs?: Any;
@@ -87,13 +86,11 @@ type Plan = {
   eventType: string;
   schoolPrefs?: Any;
   forceOn?: boolean;
-  priority?: string;
   recipients: Recipient[];
   finalize?: (delivered: Recipient[], summary: Summary) => Promise<void>;
 };
 type Summary = {
-  total: number; reached: number; emailed: number; emailFailed: number;
-  inApp: number; inAppFailed: number; noChannel: number;
+  total: number; reached: number; emailed: number; emailFailed: number; noChannel: number;
 };
 
 class HttpError extends Error {
@@ -184,7 +181,6 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
     // A family must not be able to mute an emergency — the only notification
     // that ignores preferences.
     forceOn: true,
-    priority: 'URGENT',
     recipients,
     finalize: async (_delivered, summary) => {
       await sr.entities.AuditLog.create({
@@ -200,7 +196,7 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
 }
 
 async function parentRecipientsForStudent(sr: Any, schoolId: string, studentId: string, ctx: Ctx): Promise<Recipient[]> {
-  const links: Any[] = await sr.entities.ParentStudent.filter({ student_id: studentId, status: 'ACTIVE' });
+  const links: Any[] = await sr.entities.ParentStudent.filter({ school_id: schoolId, student_id: studentId, status: 'ACTIVE' });
   const parentIds = [...new Set(links.map((l) => String(l.parent_id || '')).filter(Boolean))];
   const users = await usersByIds(sr, parentIds);
   const profiles: Any[] = parentIds.length
@@ -222,7 +218,12 @@ async function planPaymentDue(sr: Any, user: Any, body: Any): Promise<Plan | { s
   if (charge.reminder_sent) return { skipped: 'already_sent' };
   if (!['PENDING', 'OVERDUE'].includes(String(charge.status))) return { skipped: 'not_pending' };
 
-  const student: Any = await sr.entities.Student.get(charge.student_id).catch(() => null);
+  // The charge's school is what authorized the caller, so the student (and
+  // through it, the parents we mail) must be in that same school — otherwise
+  // an admin of school A could point a charge at a school-B student and mail
+  // that family a payment notice with a concept name of their choosing.
+  const fetchedStudent: Any = await sr.entities.Student.get(charge.student_id).catch(() => null);
+  const student: Any = fetchedStudent && String(fetchedStudent.school_id) === String(charge.school_id) ? fetchedStudent : null;
   const school: Any = await sr.entities.School.get(charge.school_id).catch(() => null);
   const ctx: Ctx = {
     studentName: student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : 'su hijo(a)',
@@ -263,7 +264,7 @@ async function planEventReminder(sr: Any, user: Any, body: Any): Promise<Plan | 
   const studentById = new Map(students.map((s) => [String(s.id), s]));
   const studentIds = [...studentById.keys()];
   const links: Any[] = studentIds.length
-    ? await sr.entities.ParentStudent.filter({ student_id: { $in: studentIds }, status: 'ACTIVE' }, undefined, MAX_RECIPIENTS)
+    ? await sr.entities.ParentStudent.filter({ school_id: event.school_id, student_id: { $in: studentIds }, status: 'ACTIVE' }, undefined, MAX_RECIPIENTS)
     : [];
   const responses: Any[] = await sr.entities.EventResponse.filter({ event_id: event.id }, undefined, MAX_RECIPIENTS);
   const pending = selectNonResponders(
@@ -330,10 +331,11 @@ async function planEscalation(sr: Any, user: Any, body: Any): Promise<Plan | { s
     }
   }
 
-  // Rate limit the requester path: how many of their own tickets opened in
-  // the last 24 h. An admin escalating to soporte is bounded by the
-  // once-per-(ticket, tier, recipient) key instead.
-  if (!isOwner && !isSchoolAdmin) {
+  // Rate limit whoever opened the ticket — a school ADMIN included, since an
+  // ADMIN's own tickets go straight to soporte: how many tickets they opened
+  // in the last 24 h. An admin notifying someone ELSE's ticket (the SLA
+  // hand-off) is bounded by the once-per-(ticket, tier, recipient) key.
+  if (!isOwner && isRequester) {
     const recent: Any[] = await sr.entities.SupportTicket.filter({ requester_user_id: user.id }, '-created_date', ESCALATION_TICKETS_PER_DAY + 5);
     if (countWithinWindow(recent.map((t) => t.created_date), new Date(), DAY_MS) > ESCALATION_TICKETS_PER_DAY) {
       throw new HttpError(429, 'RATE_LIMITED', 'Too many tickets in the last 24 hours');
@@ -384,7 +386,6 @@ async function planEscalation(sr: Any, user: Any, body: Any): Promise<Plan | { s
   return {
     schoolId: ticket.school_id,
     eventType: 'support_ticket_escalated',
-    priority: String(ticket.priority || 'NORMAL'),
     recipients: fresh,
     finalize: async (delivered) => {
       if (delivered.length === 0) return;
@@ -406,58 +407,42 @@ const PLANNERS: Record<string, (sr: Any, user: Any, body: Any) => Promise<Plan |
 
 async function deliver(sr: Any, user: Any, plan: Plan): Promise<Summary> {
   const emailTemplate = NOTIFICATION_TEMPLATES[plan.eventType];
-  const inAppTemplate = IN_APP_TEMPLATES[plan.eventType];
   const recipients = plan.recipients.slice(0, MAX_RECIPIENTS);
 
+  // Email is the only per-recipient channel. (Reviewer fix, 2026-09-29: the
+  // first draft also created one `Notice` per recipient with scope 'USER' and
+  // counted it as "reached". Notice.scope has no 'USER' value, Notice has no
+  // user_id field, it requires author_id, and no screen shows a USER-scoped
+  // notice — so a recipient could be reported as reached by a record they can
+  // never see, and "Enviado a X de Y" read 300 de 300 with every email
+  // failed. The emergency alert's in-app half is the school-wide Notice
+  // planEmergency creates; the reminders were email-only before this change.)
   const results = await mapWithConcurrency(recipients, CONCURRENCY, async (r) => {
-    const channel = (name: string) => isChannelEnabled({
-      schoolPrefs: plan.schoolPrefs, userPrefs: r.prefs, channel: name, role: r.role, forceOn: plan.forceOn,
+    const emailOn = isChannelEnabled({
+      schoolPrefs: plan.schoolPrefs, userPrefs: r.prefs, channel: 'email', role: r.role, forceOn: plan.forceOn,
     });
-    const out = { email: 'skip', inApp: 'skip' } as Record<string, string>;
-    if (r.email && channel('email')) {
-      try {
-        await withRetry(() => sr.integrations.Core.SendEmail({
-          to: r.email,
-          subject: emailTemplate.subject(r.ctx),
-          body: emailTemplate.emailBody(r.ctx),
-        }));
-        out.email = 'ok';
-      } catch (error) {
-        out.email = 'fail';
-        out.emailError = String((error as Error)?.message || error);
-      }
+    if (!r.email || !emailOn) return { email: 'skip' } as Record<string, string>;
+    try {
+      await withRetry(() => sr.integrations.Core.SendEmail({
+        to: r.email,
+        subject: emailTemplate.subject(r.ctx),
+        body: emailTemplate.emailBody(r.ctx),
+      }));
+      return { email: 'ok' } as Record<string, string>;
+    } catch (error) {
+      return { email: 'fail', emailError: String((error as Error)?.message || error) } as Record<string, string>;
     }
-    if (r.userId && channel('in_app')) {
-      try {
-        await withRetry(() => sr.entities.Notice.create({
-          school_id: plan.schoolId,
-          scope: 'USER',
-          user_id: r.userId,
-          title: inAppTemplate.title(r.ctx),
-          content: inAppTemplate.content(r.ctx),
-          priority: plan.priority || 'NORMAL',
-          sent_at: new Date().toISOString(),
-        }));
-        out.inApp = 'ok';
-      } catch {
-        out.inApp = 'fail';
-      }
-    }
-    return out;
   });
 
-  const summary: Summary = { total: recipients.length, reached: 0, emailed: 0, emailFailed: 0, inApp: 0, inAppFailed: 0, noChannel: 0 };
+  const summary: Summary = { total: recipients.length, reached: 0, emailed: 0, emailFailed: 0, noChannel: 0 };
   const delivered: Recipient[] = [];
   const failures: Array<{ key: string; error: string }> = [];
   results.forEach((res, i) => {
     const r = recipients[i];
-    const out = res.ok ? res.value : { email: 'fail', inApp: 'fail', emailError: res.error };
-    if (out.email === 'ok') summary.emailed += 1;
+    const out = res.ok ? res.value : { email: 'fail', emailError: res.error };
+    if (out.email === 'ok') { summary.emailed += 1; summary.reached += 1; delivered.push(r); }
     if (out.email === 'fail') { summary.emailFailed += 1; failures.push({ key: r.key, error: out.emailError || 'email' }); }
-    if (out.inApp === 'ok') summary.inApp += 1;
-    if (out.inApp === 'fail') summary.inAppFailed += 1;
-    if (out.email === 'ok' || out.inApp === 'ok') { summary.reached += 1; delivered.push(r); }
-    if (out.email === 'skip' && out.inApp === 'skip') summary.noChannel += 1;
+    if (out.email === 'skip') summary.noChannel += 1;
   });
 
   if (failures.length) {

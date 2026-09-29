@@ -43,8 +43,8 @@ export default function AlertaEmergencia() {
     enabled: !!userProfile?.school_id,
   });
 
-  // The whole alert — the school-wide banner, one in-app notice and one email
-  // per parent/teacher, and the audit row — is sent server-side by
+  // The whole alert — the school-wide banner, one email per parent/teacher,
+  // and the audit row — is sent server-side by
   // sendBulkNotification. It used to be fanned out from this page: recipient
   // emails came from a User.list() that only returns the caller's own row (so
   // nobody was emailed), and the loop stopped at the first failed recipient

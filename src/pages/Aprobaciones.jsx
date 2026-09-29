@@ -52,8 +52,8 @@ export default function Aprobaciones() {
     mutationFn: ({ profileId, decision }) =>
       base44.functions.invoke('approveProfile', { profileId, decision }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['pendingUsers']);
-      queryClient.invalidateQueries(['schoolMembers']);
+      queryClient.invalidateQueries({ queryKey: ['pendingUsers'] });
+      queryClient.invalidateQueries({ queryKey: ['schoolMembers'] });
       toast.success(actionType === 'approve' ? 'Usuario aprobado' : 'Usuario rechazado');
       setSelectedUser(null);
       setActionType(null);
@@ -61,10 +61,12 @@ export default function Aprobaciones() {
     onError: (error) => {
       const code = error?.data?.code;
       if (code === 'NOT_PENDING') {
-        queryClient.invalidateQueries(['pendingUsers']);
+        queryClient.invalidateQueries({ queryKey: ['pendingUsers'] });
         toast.error('Esta solicitud ya fue atendida por otra persona.');
       } else if (code === 'SELF_APPROVAL') {
         toast.error('No puedes aprobar ni rechazar tu propia solicitud.');
+      } else if (code === 'ADMIN_NEEDS_GOVERNANCE') {
+        toast.error('Una solicitud como directivo no se puede aprobar desde aquí. Escríbenos desde Soporte para revisarla.');
       } else {
         toast.error('No se pudo actualizar la solicitud. Intenta de nuevo.');
       }

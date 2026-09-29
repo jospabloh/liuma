@@ -168,3 +168,27 @@ test('sendByEvent no longer aborts the whole fan-out on one failed recipient', (
   assert.match(source, /mapWithConcurrency\(list, SEND_CONCURRENCY/);
   assert.doesNotMatch(source, /for \(const recipient of recipients\)/);
 });
+
+// Reviewer pass (2026-09-29): "Enviado a X de Y" must count only what a person
+// can actually receive. Notice has no 'USER' scope, no user_id and requires
+// author_id, and no screen shows a USER-scoped notice, so counting one as
+// "reached" reported 300 de 300 with every email failed.
+test('sendBulkNotification counts only delivered emails as reached, and never creates per-user notices', () => {
+  const source = read('base44/functions/sendBulkNotification/entry.ts');
+  assert.doesNotMatch(source, /scope: 'USER'/);
+  assert.doesNotMatch(source, /_inApp/);
+  assert.match(source, /if \(out\.email === 'ok'\) \{ summary\.emailed \+= 1; summary\.reached \+= 1; delivered\.push\(r\); \}/);
+  // The only Notice it creates is the school-wide emergency banner.
+  assert.equal((source.match(/Notice\.create\(/g) || []).length, 1);
+  assert.match(source, /scope: 'SCHOOL',[\s\S]{0,120}is_emergency: true/);
+});
+
+test('sendBulkNotification keeps recipients inside the stored record\'s school', () => {
+  const source = read('base44/functions/sendBulkNotification/entry.ts');
+  // A charge pointing at another school's student mails nobody.
+  assert.match(source, /String\(fetchedStudent\.school_id\) === String\(charge\.school_id\)/);
+  assert.match(source, /ParentStudent\.filter\(\{ school_id: schoolId, student_id: studentId, status: 'ACTIVE' \}\)/);
+  assert.match(source, /ParentStudent\.filter\(\{ school_id: event\.school_id, student_id: \{ \$in: studentIds \}/);
+  // Whoever opened the ticket is rate limited, a school ADMIN included.
+  assert.match(source, /if \(!isOwner && isRequester\) \{/);
+});

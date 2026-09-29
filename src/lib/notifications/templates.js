@@ -12,9 +12,9 @@ import { escapeHtml } from '@/lib/htmlEscape';
 // The four events that fan out to many recipients (emergency_alert,
 // payment_due, event_confirmation_reminder, support_ticket_escalated) are
 // now sent entirely server-side by base44/functions/sendBulkNotification,
-// which renders their in-app Notice text from its own `_inApp.ts` — a
-// hand-kept mirror of those four events' `inAppTitle`/`inAppContent` below.
-// Change them together.
+// by email only (its `_templates.ts` is a byte-identical copy of
+// sendNotificationEmail's, enforced by a test). Their `inAppTitle`/
+// `inAppContent` halves below are not used for those four any more.
 //
 // All interpolated values below are escaped before landing in an HTML email
 // body — several of them (userName/userEmail at signup, free-text ticket

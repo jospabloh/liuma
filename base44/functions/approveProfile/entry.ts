@@ -66,6 +66,14 @@ Deno.serve(async (req) => {
       if (!callerProfile) return bad(403, 'NOT_ADMIN', 'Requires an active ADMIN profile in the target\'s school');
     }
 
+    // Activating an ADMIN is a role grant, and role grants to ADMIN need a
+    // second director (governRoleChange's maker-checker). Onboarding never
+    // creates a PENDING ADMIN (provisionOnboardingProfile), so this only
+    // stops a row that should not exist from being activated by one person.
+    if (target.app_role === 'ADMIN' && decision.status === 'ACTIVE' && !isPlatformOwner) {
+      return bad(403, 'ADMIN_NEEDS_GOVERNANCE', 'An ADMIN profile cannot be activated through the approval queue');
+    }
+
     await sr.entities.UserProfile.update(target.id, { status: decision.status });
 
     // Best-effort: the approval already happened; a failed audit row must not

@@ -16,6 +16,16 @@ import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import Login from '@/pages/Login';
+import LegalDocumentPage from '@/components/legal/LegalDocumentPage';
+import { PRIVACY_NOTICE_URL, TERMS_URL } from '@/lib/consent/privacyNotice';
+
+// Aviso de Privacidad / Términos: reachable signed in AND signed out (the
+// onboarding consent links here). Kept out of pages.config/GuardedRoute on
+// purpose — they are not role-gated app pages.
+const legalRoutes = [
+  <Route key="aviso" path={PRIVACY_NOTICE_URL} element={<LegalDocumentPage kind="privacidad" />} />,
+  <Route key="terminos" path={TERMS_URL} element={<LegalDocumentPage kind="terminos" />} />,
+];
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -72,10 +82,16 @@ const AuthenticatedApp = () => {
       // of bouncing out to Base44's hosted login — any other path also lands
       // there, since nothing in the app is reachable while unauthenticated.
       if (getRememberedIdentity()) {
-        return <ContinueAs />;
+        return (
+          <Routes>
+            {legalRoutes}
+            <Route path="*" element={<ContinueAs />} />
+          </Routes>
+        );
       }
       return (
         <Routes>
+          {legalRoutes}
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
@@ -91,6 +107,7 @@ const AuthenticatedApp = () => {
           <Suspense fallback={<PageTransitionFallback />}><MainPage /></Suspense>
         </LayoutWrapper>
       } />
+      {legalRoutes}
       {/* Already authenticated — /login has nothing to do, send them home. */}
       <Route path="/login" element={<Navigate to="/" replace />} />
       {Object.entries(Pages).map(([path, Page]) => (

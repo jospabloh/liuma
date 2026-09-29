@@ -13,6 +13,7 @@ import { logAuditEvent } from '@/lib/audit';
 import {
   PRIVACY_NOTICE_VERSION,
   PRIVACY_NOTICE_URL,
+  TERMS_URL,
   consentIsComplete,
   sensitiveConsentLabel,
 } from '@/lib/consent/privacyNotice';
@@ -20,7 +21,29 @@ import {
   captureOnboardingFailure,
   completeOnboardingTenantCreation,
   mapOnboardingError,
+  validateOnboardingPayload,
+  ONBOARDING_ERROR_MESSAGES,
 } from '@/lib/onboardingTenantCreation';
+import { formatJoinCode, readJoinCodeFromSearch } from '@/lib/onboarding/joinCode';
+
+// Labels for the four palette slots. The keys are the stored theme_settings
+// keys (English, consumed by tenantTheme.js); only the labels are shown.
+const PALETTE_LABELS = {
+  primary: 'Principal',
+  secondary: 'Secundario',
+  accent: 'Acento',
+  neutral: 'Neutro',
+};
+
+// Field-level error, announced to screen readers and tied to its input.
+function FieldError({ id, message }) {
+  if (!message) return null;
+  return (
+    <p id={id} role="alert" className="mt-1 text-sm text-destructive">
+      {message}
+    </p>
+  );
+}
 
 function buildCorrelationId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -30,13 +53,16 @@ function buildCorrelationId() {
 export default function Onboarding({ user, onComplete, onCancel }) {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  // An invitation link (/?codigo=ABCD-EFGH, see JoinCodeCard) pre-fills the code.
+  const [invitedCode] = useState(() => (typeof window !== 'undefined' ? readJoinCodeFromSearch(window.location.search) : ''));
   const [formData, setFormData] = useState({
     role: '',
-    schoolCode: '',
+    schoolCode: invitedCode,
     newSchoolName: '',
     phone: '',
-    isDemo: false,
   });
+  // { field: 'schoolCode' | 'newSchoolName' | 'consent' | null, message }
+  const [formError, setFormError] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
   const [themePreview, setThemePreview] = useState(DEFAULT_THEME);
   const [consent, setConsent] = useState({ general: false, sensitive: false });
@@ -45,6 +71,23 @@ export default function Onboarding({ user, onComplete, onCancel }) {
 
   const handleRoleSelect = (role) => {
     setFormData({ ...formData, role });
+    setFormError(null);
+  };
+
+  const errorFor = (field) => (formError?.field === field ? formError.message : null);
+
+  // Validate step 2 locally so a mistyped code is flagged next to the input,
+  // before the consent step, instead of after "Finalizar".
+  const goToStep3 = () => {
+    const check = validateOnboardingPayload({ formData, user: user || { id: 'pending' } });
+    if (!check.valid && (check.field === 'schoolCode' || check.field === 'newSchoolName')) {
+      setFormError({ field: check.field, message: check.field === 'schoolCode'
+        ? ONBOARDING_ERROR_MESSAGES[check.code]
+        : 'Escribe el nombre de tu escuela.' });
+      return;
+    }
+    setFormError(null);
+    setStep(3);
   };
 
   const handleSubmit = async () => {
@@ -55,10 +98,10 @@ export default function Onboarding({ user, onComplete, onCancel }) {
       role: formData.role,
       schoolCode: formData.schoolCode,
       newSchoolName: formData.newSchoolName,
-      phone: formData.phone,
-      isDemo: formData.isDemo,
+      hasPhone: Boolean(formData.phone),
       hasLogo: Boolean(logoFile),
     };
+    setFormError(null);
 
     try {
       await completeOnboardingTenantCreation({
@@ -76,7 +119,9 @@ export default function Onboarding({ user, onComplete, onCancel }) {
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
         },
       });
+      setIsLoading(false);
       onComplete();
+      return;
     } catch (error) {
       const mappedError = mapOnboardingError(error);
       const failureDetails = captureOnboardingFailure({
@@ -89,7 +134,9 @@ export default function Onboarding({ user, onComplete, onCancel }) {
         ...failureDetails,
         userFacingErrorCode: mappedError.code,
       });
-      alert(mappedError.message);
+      // Errors that belong to an earlier step send the user back to it.
+      if (mappedError.field === 'schoolCode' || mappedError.field === 'newSchoolName') setStep(2);
+      setFormError({ field: mappedError.field || 'submit', message: mappedError.message });
     }
     setIsLoading(false);
   };
@@ -184,6 +231,8 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                   ].map((option) => (
                     <button
                       key={option.value}
+                      type="button"
+                      aria-pressed={formData.role === option.value}
                       onClick={() => handleRoleSelect(option.value)}
                       className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
                         formData.role === option.value
@@ -241,51 +290,70 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                       </p>
                     </div>
                     <div>
-                      <Label>Nombre de tu escuela</Label>
+                      <Label htmlFor="onb-school-name">Nombre de tu escuela</Label>
                       <Input
+                        id="onb-school-name"
                         value={formData.newSchoolName}
                         onChange={(e) => setFormData({ ...formData, newSchoolName: e.target.value })}
                         placeholder="Ej: Colegio Montessori"
                         className="mt-1 h-12"
+                        maxLength={120}
+                        autoComplete="organization"
+                        aria-invalid={Boolean(errorFor('newSchoolName'))}
+                        aria-describedby={errorFor('newSchoolName') ? 'onb-school-name-error' : undefined}
                       />
+                      <FieldError id="onb-school-name-error" message={errorFor('newSchoolName')} />
                     </div>
                     <div>
-                      <Label>Logo (opcional)</Label>
-                      <Input type="file" accept="image/*" onChange={handleLogoChange} className="mt-1 h-12" />
-                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Upload className="w-3 h-3" /> Extraemos colores automáticamente con fallback seguro.</p>
+                      <Label htmlFor="onb-logo">Logo (opcional)</Label>
+                      <Input id="onb-logo" type="file" accept="image/*" onChange={handleLogoChange} className="mt-1 h-12" aria-describedby="onb-logo-help" />
+                      <p id="onb-logo-help" className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Upload className="w-3 h-3" aria-hidden="true" /> Tomamos los colores de tu logo; puedes ajustarlos abajo.</p>
                     </div>
                     <div className="rounded-xl border border-border p-3 bg-muted">
-                      <p className="text-sm font-medium text-foreground mb-2">Vista previa de paleta</p>
+                      <p className="text-sm font-medium text-foreground mb-2">Colores de tu escuela</p>
                       <div className="grid grid-cols-2 gap-2">
                         {colorRoles.map((role) => (
-                          <label key={role} className="text-xs text-muted-foreground">
-                            <span className="capitalize">{role}</span>
-                            <Input type="color" value={themePreview.palette?.[role] || DEFAULT_THEME.palette[role]} onChange={(e) => updateThemeColor(role, e.target.value)} className="mt-1 h-10 p-1" />
-                          </label>
+                          <div key={role} className="text-xs text-muted-foreground">
+                            <Label htmlFor={`onb-color-${role}`} className="text-xs font-normal text-muted-foreground">{PALETTE_LABELS[role]}</Label>
+                            <Input id={`onb-color-${role}`} type="color" value={themePreview.palette?.[role] || DEFAULT_THEME.palette[role]} onChange={(e) => updateThemeColor(role, e.target.value)} className="mt-1 h-10 p-1" />
+                          </div>
                         ))}
                       </div>
-                      <div className="mt-3 rounded-lg p-3" style={{ background: themePreview.palette?.secondary || DEFAULT_THEME.palette.secondary }}>
-                        <Button className="mr-2" style={{ background: themePreview.palette?.primary || DEFAULT_THEME.palette.primary, color: '#fff' }}>Botón</Button>
-                        <Badge style={{ background: themePreview.palette?.accent || DEFAULT_THEME.palette.accent, color: '#fff' }}>Badge</Badge>
+                      <div className="mt-3 rounded-lg p-3" style={{ background: themePreview.palette?.secondary || DEFAULT_THEME.palette.secondary }} aria-hidden="true">
+                        <span className="mr-2 inline-flex rounded-md px-3 py-2 text-sm font-medium" style={{ background: themePreview.palette?.primary || DEFAULT_THEME.palette.primary, color: '#fff' }}>Botón</span>
+                        <Badge style={{ background: themePreview.palette?.accent || DEFAULT_THEME.palette.accent, color: '#fff' }}>Etiqueta</Badge>
                       </div>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     <div>
-                      <Label>Código de escuela (requerido)</Label>
+                      <Label htmlFor="onb-school-code">Código de tu escuela</Label>
                       <Input
+                        id="onb-school-code"
                         value={formData.schoolCode}
-                        onChange={(e) => setFormData({ ...formData, schoolCode: e.target.value })}
-                        placeholder="Código proporcionado por tu escuela"
-                        className="mt-1 h-12"
+                        onChange={(e) => setFormData({ ...formData, schoolCode: e.target.value.toUpperCase() })}
+                        onBlur={(e) => setFormData((f) => ({ ...f, schoolCode: formatJoinCode(e.target.value) || e.target.value.trim() }))}
+                        placeholder="Ej: ABCD-EFGH"
+                        className="mt-1 h-12 font-mono tracking-widest uppercase"
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
                         required
+                        aria-invalid={Boolean(errorFor('schoolCode'))}
+                        aria-describedby={`onb-school-code-help${errorFor('schoolCode') ? ' onb-school-code-error' : ''}`}
                       />
+                      <FieldError id="onb-school-code-error" message={errorFor('schoolCode')} />
                     </div>
-                    <div className="bg-brand/10 border border-brand/30 rounded-xl p-3">
+                    <div id="onb-school-code-help" className="bg-brand/10 border border-brand/30 rounded-xl p-3 space-y-1">
                       <p className="text-sm text-foreground">
-                        💡 El administrador de tu escuela te debe proporcionar este código único. 
-                        Sin él no podrás continuar.
+                        {invitedCode
+                          ? 'Tomamos el código de tu invitación. Verifica que coincida con el que te dio tu escuela.'
+                          : '¿Dónde está el código? Son 8 letras y números (por ejemplo ABCD-EFGH).'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Lo tiene la dirección de tu escuela: suele venir en el mensaje o correo de invitación a LIUMA.
+                        Si no lo tienes, pídeselo a la escuela. Al registrarte, la escuela aprobará tu acceso.
                       </p>
                     </div>
                   </div>
@@ -296,8 +364,8 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                     Atrás
                   </Button>
                   <Button
-                    onClick={() => setStep(3)}
-                    disabled={formData.role === 'ADMIN' ? !formData.newSchoolName : !formData.schoolCode}
+                    onClick={goToStep3}
+                    disabled={formData.role === 'ADMIN' ? !formData.newSchoolName.trim() : !formData.schoolCode.trim()}
                     className="flex-1 bg-brand text-white hover:bg-brand/90 h-12"
                   >
                     Continuar
@@ -318,8 +386,10 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                 </h2>
                 <div className="space-y-4">
                   <div>
-                    <Label>Teléfono (opcional)</Label>
+                    <Label htmlFor="onb-phone">Teléfono (opcional)</Label>
                     <Input
+                      id="onb-phone"
+                      autoComplete="tel"
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -332,21 +402,24 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                 <div className="bg-muted rounded-xl p-4 mt-4">
                   <p className="text-sm text-muted-foreground">
                     {formData.role === 'ADMIN'
-                      ? 'Tu cuenta se activará inmediatamente y tendrás acceso completo.'
-                      : 'Tu solicitud será enviada al administrador de la escuela para aprobación. Recibirás un correo cuando sea aprobada.'}
+                      ? 'Tu escuela queda creada al instante, con 30 días de prueba y acceso completo.'
+                      : 'Tu solicitud llegará a la dirección de la escuela para su aprobación. Podrás entrar en cuanto la aprueben.'}
                   </p>
                 </div>
 
                 {/* Privacy notice + express consent (LFPDPPP) */}
-                <div className="border border-border rounded-xl p-4 mt-4 space-y-3">
-                  <p className="text-sm font-medium text-foreground">Aviso de Privacidad y consentimiento</p>
+                <fieldset
+                  className="border border-border rounded-xl p-4 mt-4 space-y-3"
+                  aria-describedby={errorFor('consent') ? 'onb-consent-error' : undefined}
+                >
+                  <legend className="px-1 text-sm font-medium text-foreground">Aviso de Privacidad y consentimiento</legend>
 
                   <label className="flex items-start gap-3 cursor-pointer">
                     <Checkbox
                       checked={consent.general}
                       onCheckedChange={(value) => setConsent((c) => ({ ...c, general: value === true }))}
                       className="mt-0.5"
-                      aria-label="Acepto el Aviso de Privacidad"
+                      aria-label="Acepto el Aviso de Privacidad y los Términos del servicio"
                     />
                     <span className="text-sm text-muted-foreground">
                       He leído y acepto el{' '}
@@ -358,7 +431,16 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                       >
                         Aviso de Privacidad
                       </a>{' '}
-                      y el tratamiento de mis datos personales.
+                      y los{' '}
+                      <a
+                        href={TERMS_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand underline"
+                      >
+                        Términos del servicio
+                      </a>
+                      , y el tratamiento de mis datos personales.
                     </span>
                   </label>
 
@@ -373,7 +455,14 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                   </label>
 
                   <p className="text-xs text-muted-foreground">Versión del aviso: {PRIVACY_NOTICE_VERSION}</p>
-                </div>
+                  <FieldError id="onb-consent-error" message={errorFor('consent')} />
+                </fieldset>
+
+                {formError?.field === 'submit' && (
+                  <div role="alert" className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-foreground">
+                    {formError.message}
+                  </div>
+                )}
 
                 <div className="flex gap-3 mt-6">
                   <Button variant="outline" onClick={() => setStep(2)} className="flex-1 h-12">

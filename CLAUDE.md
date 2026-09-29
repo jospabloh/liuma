@@ -908,3 +908,45 @@ acepta, quitar nuestras llamadas satisface el scan pero no cierra la puerta.
 Después de `npm run deploy` + `npm run deploy:site`, vuelve a correr el scan.
 Prueba a mano: marcar una ausencia, crear una bitácora con envío a padres,
 «Generar con Lumi», el intake de soporte y una alerta de emergencia.
+
+## Onboarding, licencia y consentimiento por el servidor (P6, 2026-09-29)
+
+El onboarding no podía funcionar para nadie más que el dueño de la plataforma:
+el navegador creaba `School`/`SchoolSubscription` (sólo plataforma por RLS),
+buscaba el código de escuela con un `School.filter` que la RLS vaciaba, el
+chequeo de fundador leía un campo que el esquema descartaba, y el "bootstrap"
+escribía en `Role`/`PermissionTemplate`/`AccessBinding`, que no existen.
+
+- **Un solo camino:** `provisionOnboardingProfile` (service role) crea la
+  escuela del fundador (`created_by_user_id` y `join_code` los pone el
+  servidor), su prueba de 30 días con el reloj del servidor, el
+  `ConsentRecord` y, al final, el `UserProfile` — el punto de confirmación.
+  Todo lo anterior es idempotente al reintentar. El algoritmo vive probado en
+  `src/lib/authorization/onboardingProvision.js#runOnboardingProvision`; el
+  `entry.ts` es su copia a mano. Cámbialos juntos.
+- **Código para unirse:** 8 caracteres sin ambiguos (`ABCD-EFGH`,
+  `src/lib/onboarding/joinCode.js`), resuelto sólo en el servidor. El id de
+  24 hex que se repartía antes sigue aceptándose como respaldo (unirse deja el
+  perfil PENDING). `JoinCodeCard` lo muestra con Copiar / liga / WhatsApp; la
+  liga `/?codigo=` rellena el onboarding.
+- **Licencia, fallando cerrado:** sin `SchoolSubscription`, o prueba vencida
+  → **solo lectura** (`resolveEffectiveLicense` en `licenseModel.js`, copiado
+  en `getMySubscription` y `guardedEntityWrite`). Una licencia pagada vencida
+  sigue escribiendo: la gracia de 8 días es de Mission Control. El plan
+  `founder` de MC existe en el enum y nunca vence por fecha. Los avisos salen
+  7 días antes (urgentes a 3) y después, con botón de pago
+  (`VITE_LIUMA_PAYMENT_URL` o WhatsApp) sólo para el ADMIN.
+- **Lecturas de la escuela:** `getMySubscription` re-deriva la escuela del
+  `UserProfile` ACTIVE del que llama e ignora el cuerpo. La rama de lectura
+  `data.app_role` de `SchoolSubscription` (muerta: ningún `User` tiene esos
+  campos) se quitó.
+- **Aviso de Privacidad y Términos: BORRADOR** redactado por Claude,
+  publicado en `/aviso-de-privacidad` y `/terminos` (con y sin sesión) con la
+  marca visible. Falta revisión legal y los datos entre corchetes. Al
+  sustituirlo: `PRIVACY_NOTICE_IS_DRAFT = false` y sube las versiones (en
+  `privacyNotice.js` **y** en `provisionOnboardingProfile`).
+
+**Orden de despliegue:** `deploy:entities` (School, SchoolSubscription,
+ConsentRecord) → dar de alta `SchoolSubscription` a las escuelas existentes
+(sin eso pasan a solo lectura en cuanto llegue `guardedEntityWrite`) →
+`deploy` → `deploy:site`.

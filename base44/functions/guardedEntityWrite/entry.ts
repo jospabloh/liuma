@@ -63,6 +63,31 @@ const SERVER_ONLY_UPDATE_FIELDS: Record<string, string[]> = {
   DiaryEntry: ['parents_notified_at', 'notified_parent_emails'],
 };
 const READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];
+
+// Owner decision (2026-09-29): a missing or expired license FAILS CLOSED to
+// read-only. Before this the gate was `if (sub && ...)`, so a school with no
+// SchoolSubscription row — every school in production — could write forever,
+// and a trial past its 30 days never locked (Mission Control's lifecycle cron
+// skips non-paid plans, so nothing else ends a trial). MIRRORS
+// src/lib/license/licenseModel.js#resolveEffectiveLicense and
+// getMySubscription/entry.ts; tests/unit/license-lifecycle.test.js checks the
+// copies.
+function effectiveLicenseIsReadOnly(
+  sub: { subscription_status?: string; license_tier?: string; trial_end_date?: string } | null,
+  now: Date,
+): boolean {
+  if (!sub) return true;
+  const status = String(sub.subscription_status || 'trial');
+  if (READ_ONLY_STATUSES.includes(status)) return true;
+  if (sub.license_tier === 'founder') return false;
+  if (status === 'trial') {
+    const end = Date.parse(String(sub.trial_end_date || ''));
+    return Number.isNaN(end) || end <= now.getTime();
+  }
+  // Paid + past license_expires_at stays writable: Mission Control owns that
+  // grace period and writes view_only when it ends.
+  return false;
+}
 const OPERATIONS = ['create', 'update', 'delete'];
 
 type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string };
@@ -210,9 +235,10 @@ Deno.serve(async (req) => {
       if (!allowed) return bad(403, 'FORBIDDEN', 'Not permitted to write this resource');
 
       // Billing write-gate — same statuses the client already treats as read-only.
-      const subs: Array<{ subscription_status?: string }> = await sr.entities.SchoolSubscription.filter({ school_id: schoolId });
+      const subs: Array<{ subscription_status?: string; license_tier?: string; trial_end_date?: string }> =
+        await sr.entities.SchoolSubscription.filter({ school_id: schoolId }, '-created_date', 1);
       const sub = subs[0] || null;
-      if (sub && READ_ONLY_STATUSES.includes(String(sub.subscription_status))) {
+      if (effectiveLicenseIsReadOnly(sub, new Date())) {
         return bad(403, 'WRITE_BLOCKED', 'This school\'s subscription is read-only');
       }
     }

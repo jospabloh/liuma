@@ -10,6 +10,7 @@ import Onboarding from '@/components/onboarding/Onboarding';
 import WelcomeTrialModal from '@/components/subscription/WelcomeTrialModal';
 import SuspendedAccountModal from '@/components/subscription/SuspendedAccountModal';
 import { selectCurrentUserProfile } from '@/lib/tenantSelection';
+import { useSubscription } from '@/hooks/useSubscription';
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -39,16 +40,10 @@ export default function Home() {
     }
   }, [userProfile?.id, userProfile?.app_role, userProfile?.welcome_message_shown]);
 
-  const { data: subscription } = useQuery({
-    queryKey: ['schoolSubscription', userProfile?.school_id],
-    queryFn: async () => {
-      const subs = await base44.entities.SchoolSubscription.filter({
-        school_id: userProfile.school_id
-      });
-      return subs.length > 0 ? subs[0] : null;
-    },
-    enabled: !!userProfile?.school_id,
-  });
+  // Through getMySubscription (service role, school re-derived server-side):
+  // a direct SchoolSubscription read is platform-only and returned null for
+  // every school user, so these modals and banners never had data (audit F10).
+  const { subscription } = useSubscription();
 
   const markWelcomeShownMutation = useMutation({
     mutationFn: async () => {

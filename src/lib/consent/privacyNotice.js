@@ -10,10 +10,25 @@
  * Privacidad changes, so each consent record pins the version the user accepted.
  */
 
-export const PRIVACY_NOTICE_VERSION = '2026-06-18';
+// BORRADOR PENDIENTE DE REVISIÓN LEGAL (2026-09-29). El texto del aviso y de
+// los términos (src/lib/legal/*.js) lo redactó Claude a partir de la LFPDPPP y
+// no lo ha revisado un abogado. Se publica dentro de la app marcado como
+// borrador — visible en la página y aquí — porque lo contrario era peor: el
+// consentimiento apuntaba a una URL que no existía. Cuando el texto final
+// llegue: reemplaza el contenido, pon PRIVACY_NOTICE_IS_DRAFT en false y SUBE
+// las versiones (cada ConsentRecord fija la versión que el usuario aceptó).
+//
+// MIRROR: base44/functions/provisionOnboardingProfile/entry.ts rechaza un
+// consentimiento con otra versión (un cliente en caché con el aviso viejo), y
+// tests/unit/legal-consent.test.js falla si las dos copias se separan.
+export const PRIVACY_NOTICE_VERSION = '2026-09-29-borrador';
+export const TERMS_VERSION = '2026-09-29-borrador';
+export const PRIVACY_NOTICE_IS_DRAFT = true;
 
-// Where the full Aviso de Privacidad is published. Replace with the live URL.
-export const PRIVACY_NOTICE_URL = 'https://liuma-2232ffd8.base44.app/aviso-de-privacidad';
+// In-app routes (registered in src/App.jsx, reachable with or without a
+// session — a notice you can only read after accepting it is no notice).
+export const PRIVACY_NOTICE_URL = '/aviso-de-privacidad';
+export const TERMS_URL = '/terminos';
 
 export const CONSENT_SCOPES = {
   GENERAL: 'general_privacy_notice', // acceptance of the Aviso de Privacidad
@@ -34,9 +49,10 @@ export function sensitiveConsentLabel(role) {
 }
 
 /**
- * Build the stored consent artifact. Kept pure so it's unit-testable; the
- * onboarding flow persists the result (best-effort) to a ConsentRecord entity
- * and to the AuditLog.
+ * Shape of the stored consent artifact (ConsentRecord.jsonc). The record is
+ * written SERVER-side by provisionOnboardingProfile, which builds the same
+ * fields from its own clock and the authenticated user — this pure copy is the
+ * documented shape and what the tests pin.
  */
 export function buildConsentRecordPayload({
   user,
@@ -44,6 +60,7 @@ export function buildConsentRecordPayload({
   role,
   acceptances = {},
   noticeVersion = PRIVACY_NOTICE_VERSION,
+  termsVersion = TERMS_VERSION,
   at = new Date(),
   userAgent = null,
 } = {}) {
@@ -53,6 +70,7 @@ export function buildConsentRecordPayload({
     school_id: schoolId || null,
     app_role: role || null,
     notice_version: noticeVersion,
+    terms_version: termsVersion,
     accepted_general: Boolean(acceptances.general),
     accepted_sensitive_minor_data: Boolean(acceptances.sensitive),
     accepted_scopes: [

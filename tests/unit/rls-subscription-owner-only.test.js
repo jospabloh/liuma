@@ -24,8 +24,36 @@ test('SchoolSubscription write RLS is owner-only (no tenant app_role branch)', (
     assert.doesNotMatch(rule, /school_id/, `${op} must not be scoped to a tenant`);
   }
 
-  // Tenant admins must still be able to READ their own subscription.
-  assert.match(JSON.stringify(schema.rls.read), /app_role/);
+});
+
+// Audit F10 (2026-09-29): the tenant read branch keyed on
+// {{user.data.school_id}} + data.app_role, fields no User has — so it never
+// matched and every school user read null. It was dead, and a dead rule that
+// LOOKS like tenant access is how the next change turns it into a live leak.
+// Tenant reads go through getMySubscription (service role, school re-derived
+// from the caller's own ACTIVE profile) instead.
+test('SchoolSubscription read is platform-only; tenants read through getMySubscription', () => {
+  const schema = readJsonc('base44/entities/SchoolSubscription.jsonc');
+  assert.deepEqual(schema.rls.read, { user_condition: { role: 'admin' } });
+
+  const fn = read('base44/functions/getMySubscription/entry.ts');
+  assert.match(fn, /asServiceRole/);
+  assert.match(fn, /UserProfile\.filter\(\{ user_id: user\.id \}\)/, 'school comes from the caller\'s own profiles');
+  assert.doesNotMatch(fn, /req\.json\(\)/, 'the request body is never read — nothing in it can pick the school');
+  assert.match(fn, /profile\.status !== 'ACTIVE'/, 'only an ACTIVE profile reads its school license');
+
+  const hook = read('src/hooks/useSubscription.js');
+  assert.match(hook, /functions\.invoke\('getMySubscription'/);
+  assert.doesNotMatch(hook, /entities\.SchoolSubscription/);
+  assert.doesNotMatch(read('src/pages/Home.jsx'), /entities\.SchoolSubscription/);
+});
+
+test('getMySubscription gives non-admins only status, tier and trial end', () => {
+  const fn = read('base44/functions/getMySubscription/entry.ts');
+  assert.match(fn, /const MEMBER_FIELDS = \['subscription_status', 'license_tier', 'trial_end_date'\];/);
+  assert.match(fn, /INTERNAL_FIELDS = \['activation_notes', 'notes', 'last_payment_notes'/);
+  // join_code only in the ADMIN branch
+  assert.match(fn, /\.\.\.\(isAdmin \? \{ join_code:/);
 });
 
 // The welcome flag moved off the billing entity onto the user's own profile so

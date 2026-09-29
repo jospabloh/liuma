@@ -6,6 +6,7 @@ import { UserCheck, School, Bell, CreditCard, BarChart3, AlertTriangle, Users, C
 import BigTile from '@/components/ui/BigTile';
 import { HomeHeader } from '@/components/home/HomeChrome';
 import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
+import JoinCodeCard from '@/components/school/JoinCodeCard';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
@@ -353,18 +354,8 @@ export default function AdminHome({ user, userProfile, subscription }) {
           </div>
         </motion.div>
 
-        {/* School Code */}
-        {school && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="mt-6 rounded-xl p-4 border border-brand/20 bg-brand/5"
-          >
-            <p className="text-sm text-brand mb-1">Código de escuela para invitar usuarios:</p>
-            <p className="text-xl font-mono font-bold text-foreground">{school.id}</p>
-          </motion.div>
-        )}
+        {/* Short join code (server-resolved) with copy/share — P6. */}
+        <JoinCodeCard className="mt-6" />
       </div>
 
     </div>

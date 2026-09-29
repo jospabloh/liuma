@@ -285,14 +285,28 @@ html, body, #root {
 }
 
 /* Corner theme switcher (src/components/ThemeSwitcher.jsx) — placement only.
-   Below `md` the bottom nav owns the bottom edge, so lift the control clear of
-   it. This is also why the theme control no longer lives in the command
-   palette: the corner is reachable from every screen on a phone, which the
-   palette footer was only ever a workaround for. */
+   The bottom-right corner is owned by the Lumi bubble (GlobalLumiBubble.jsx),
+   and below `md` by the bottom nav under it, so the switcher sits ABOVE both
+   (module 12: "se mueve el selector, no el control"). With the old values it
+   sat on top of Lumi's centre on phones and won the tap (z-50 vs z-40), so
+   tapping Lumi opened the theme selector instead of the assistant.
+     phone:   Lumi bottom-20 (5rem) + h-14 (3.5rem) = 8.5rem  -> 9.5rem
+     md+:     Lumi bottom-6 (1.5rem) + h-16 (4rem)  = 5.5rem  -> 6.5rem
+   If the Lumi bubble moves or grows, move these with it.
+   This is also why the theme control no longer lives in the command palette:
+   the corner is reachable from every screen on a phone, which the palette
+   footer was only ever a workaround for. */
 :root {
-  --theme-switcher-bottom: 1rem;
+  --theme-switcher-bottom: 6.5rem;
   --theme-switcher-right: 1rem;
 }
 @media (max-width: 767px) {
-  :root { --theme-switcher-bottom: 5.25rem; }
+  :root { --theme-switcher-bottom: 9.5rem; }
 }
+
+/* Out of the way while something modal is on screen: it floated over the
+   open Lumi chat's input and over dialog footers. One rule per selector so an
+   engine without :has() still honours the other two. */
+html[data-lumi-open] [data-theme-switcher] { visibility: hidden; }
+body[data-scroll-locked] [data-theme-switcher] { visibility: hidden; }
+body:has([role="dialog"][aria-modal="true"]) [data-theme-switcher] { visibility: hidden; }

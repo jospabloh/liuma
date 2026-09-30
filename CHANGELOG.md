@@ -5,6 +5,56 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.8.2] - 2026-09-30
+
+Loose-ends pass: four fix packages (pay, notify, shell, director) integrated
+on one branch. Detail in CLAUDE.md → "v1.8.2 — cabos sueltos (2026-09-30)" and
+each package's own section.
+
+### Fixed
+
+- **"Registrar pago" marked the whole charge `PAID`** whatever the amount.
+  The server (`guardedEntityWrite`, `_money.ts` / `_payments.ts`) now derives
+  the status from the charge's `PaymentRecord`s: `PAID` only when covered,
+  `PARTIAL` with some payment, `OVERDUE` by Mexico's day. Payments are capped
+  at the balance and dated by the server; discounts are clipped to the charge
+  (no more negative charges) and bounded (percentage in (0, 100]); Reportes,
+  the parent home and Lumi count `PENDING|PARTIAL|OVERDUE` and sum balances.
+  Families see original, discount, paid and balance per charge.
+- **Manual payment reminder** per charge, once every 24 h, asking for the
+  balance; an overdue charge gets the new `payment_overdue` email.
+- **Switching off or renaming a discount** without touching its terms saves.
+- **The emergency alert never reached Avisos** (no `NoticeDelivery` rows):
+  it now does, with unread badges, for parents and teachers. The parent badge
+  counts notices, not one copy per child.
+- **Absence requests and uniform orders notified nobody.** A new request
+  emails the school's admins and the child's teachers; the review / status
+  change emails the parent.
+- **An anonymous visitor at `/` saw the onboarding role picker**; they now
+  land on the login, which moves to `/entrar` (Base44 serves `/login` and
+  `/reset-password` itself, in English). Logout returns to `/entrar`.
+- **Mobile:** 44px touch targets, 16px fields on touch (no iOS focus zoom),
+  safe areas (`viewport-fit=cover`), titles no longer crushed by header
+  actions, calendar dots on phones.
+- **"Today" is the school's day** (America/Mexico_City) everywhere in the
+  client, matching the server; a date-only trial end is no longer shown a
+  day early.
+- **Director forms:** students can be edited (including allergies, medical
+  notes and blood type); document upload no longer stays on "Subiendo..."
+  after a failure; classroom, student, document, permission and event forms
+  name each invalid field in Spanish.
+- Also included from `main` since 1.8.1 (#188): an unverified account that
+  logs in gets the e-mail code step; the approving admin chooses the role.
+
+### Schema
+
+- `ChargeItem.status` gains `PARTIAL`; new `amount_paid`,
+  `last_payment_date`, `last_reminder_at` (`rls.write: false`).
+  **Deploy order: `npm run deploy:entities` → `npm run deploy` →
+  `npm run deploy:site`.**
+
+---
+
 ## [1.8.1] - 2026-09-30
 
 Fixes from the live QA pass of 2026-09-29/30 (18/18 cases passed, no

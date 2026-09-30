@@ -1584,8 +1584,9 @@ el bundle publicado, backend simulado). Detalle y porqué en
 fecha sola `'2026-10-29'` vence a la medianoche **UTC** — el 28 a las 18:00 en
 México — aunque Mission Control (`set_dates`) la entiende como "vale durante el
 29". Cambiarlo toca el candado de escritura en tres lugares; va aparte.
-`PagosAdmin`'s `payment_date` sigue con `formatLocalDate(new Date())` (paquete
-de pagos). El `ThemeSwitcher` (38/34px) es canónico: se cambia en
+~~`PagosAdmin`'s `payment_date` sigue con `formatLocalDate(new Date())`~~ —
+cerrado en la integración v1.8.2: el paquete de pagos quitó `payment_date` del
+navegador y la vista previa del descuento pasó a `schoolToday()`. El `ThemeSwitcher` (38/34px) es canónico: se cambia en
 `acacia-app-standard`.
 
 **Verificado:** `lint`, `typecheck`, `build`, `test`, `test:permissions`,
@@ -1598,3 +1599,61 @@ táctil y 14px en escritorio; con el dispositivo en Tokio (1 de octubre) la app
 marca hoy el 30 de septiembre. **No verificado:** Safari/WebKit real (zoom al
 enfocar, recortes reales), y el deploy — esto es sólo frontend:
 `npm run deploy:site`, no `npm run deploy`.
+
+## v1.8.2 — cabos sueltos (2026-09-30)
+
+Cuatro paquetes hechos en paralelo desde `main` (`9796776`) e integrados con
+`--no-ff` en `fix/loose-ends-integration`. El detalle de cada uno está en su
+sección de arriba; director no tiene sección propia (está en sus commits).
+
+- **pay** (`fix/loose-ends-pay`): abonos parciales — el estado del cargo lo
+  deriva el servidor de sus `PaymentRecord` (`PAID`/`PARTIAL`/`OVERDUE`/
+  `PENDING`), pago ≤ saldo y fechado por el servidor, descuentos acotados y
+  recortados al cargo, recordatorio manual cada 24 h con `payment_overdue`,
+  saldos en Reportes/ParentHome/Lumi. **Cambia el esquema de `ChargeItem`.**
+- **notify** (`fix/loose-ends-notify`): la alerta de emergencia llega a Avisos
+  (`NoticeDelivery` por destinatario), el maestro lee lo suyo, ausencias y
+  uniformes avisan por correo desde la escritura, badge del padre por aviso.
+- **shell** (`fix/loose-ends-shell`): `/` anónimo → login, login en `/entrar`,
+  44px táctil, 16px en campos táctiles, safe areas, "hoy" de la escuela.
+- **director** (`fix/loose-ends-director`): editar alumno con datos médicos,
+  subida de documentos que no se atora, errores por campo en español
+  (salón, alumno, documentos, permisos, evento).
+
+**Lo que tocó la integración** (conflictos resueltos conservando las dos
+intenciones): los `_templates.ts` que notify añadió en `guardedEntityWrite/` y
+`guardedFamilyWrite/` eran de antes de `payment_overdue` (pay) — se recopiaron
+de `sendNotificationEmail/_templates.ts`, así que las **cuatro** copias siguen
+idénticas; `_schoolWrite.ts`, `_fanout.ts` y `sendBulkNotification/entry.ts`
+suman las dos cosas (validación de descuentos + aviso de estado;
+`planChargeReminder` + `planEmergencyDeliveries`); los imports de
+`ParentHome`, `Reportes`, `overdue.js`, `EventFormDialog` y
+`GestionDocumentos` conservan el saldo de pay y el `schoolToday()` de shell.
+La vista previa de descuento de `PagosAdmin` (nueva de pay) usaba el día del
+dispositivo: ahora `schoolToday()`, y `mobile-shell.test.js` ya no exenta a
+`PagosAdmin`.
+
+**Desplegar, en este orden (o se rompe):**
+
+1. `npm run deploy:entities` — `ChargeItem`: `PARTIAL` en el enum de
+   `status` y `amount_paid`, `last_payment_date`, `last_reminder_at`
+   (`rls.write:false`). Sin esto el servidor nuevo no puede guardar un abono.
+2. `npm run deploy` — `guardedEntityWrite`, `guardedFamilyWrite`,
+   `sendBulkNotification`, `sendNotificationEmail`, `schoolRead`,
+   `lumiQuery`, `lumiWrite` (y `approveProfile` de #188 si aún no se
+   desplegó). Ninguna función nueva: 20/40.
+3. `npm run deploy:site` — el sitio nuevo ya no marca `PAID` él mismo; con el
+   servidor viejo ningún pago cerraría su cargo.
+
+**Comprobar por comportamiento:** un pago menor al saldo deja el cargo en
+«Pago parcial»; apagar un descuento existente sin tocar sus términos guarda;
+la alerta de emergencia aparece en Avisos de un padre; en ventana privada
+`https://liuma.acaciaco.com.mx/` termina en `/entrar` en español y cerrar
+sesión vuelve a `/entrar`.
+
+**Sigue abierto:** los cargos que el flujo viejo cerró `PAID` con un abono
+parcial no se corrigen solos (conciliación única con datos de producción);
+conceptos anteriores sin tipo cuentan como `OTRO`; `resolveEffectiveLicense`
+y sus dos espejos Deno vencen una fecha sola a medianoche UTC; `/login` y
+`/reset-password` hospedados por Base44 siguen en inglés; nada de esto corrió
+contra Base44 en vivo.

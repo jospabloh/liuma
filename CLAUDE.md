@@ -1446,7 +1446,10 @@ el bundle publicado, backend simulado). Detalle y porqué en
   que `mexicoToday()` en el servidor. Antes el cliente usaba el reloj del
   dispositivo: un navegador fuera de hora de México mostraba "30 de
   septiembre" mientras Lumi respondía por el 29. `formatLocalDate()` sin
-  argumento ya significa lo mismo.
+  argumento ya significa lo mismo. `calendarDaysUntilDue` (`overdue.js`:
+  ventana de recordatorio de cobro) también cuenta desde el día de la escuela;
+  si no, el mismo cargo era "vence hoy" para `isChargeOverdue` y "vencido hace
+  1 día" para el recordatorio.
 - **Fin de prueba con fecha sola** (`'2026-10-29'`) se pintaba un día antes
   (`new Date()` = medianoche UTC); `WelcomeTrialModal` y `LicenseAdmin` usan
   `parseLocalDate` + días de calendario.

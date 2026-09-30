@@ -19,6 +19,7 @@ import {
   schoolToday, schoolTodayDate, schoolDaysFromToday, isSchoolToday, isBeforeToday,
   isOnOrAfterToday, formatLocalDate, parseLocalDate, SCHOOL_TIME_ZONE,
 } from '../../src/lib/dates.js';
+import { calendarDaysUntilDue, isChargeOverdue } from '../../src/lib/payments/overdue.js';
 
 const ROOT = new URL('../../', import.meta.url);
 const read = (p) => fs.readFileSync(new URL(p, ROOT), 'utf8');
@@ -205,6 +206,17 @@ test('schoolToday is Mexico\'s calendar day, whatever the device says', () => {
   assert.equal(isBeforeToday('2026-09-29', lateEvening), false, 'due today is not overdue yet');
   assert.equal(isOnOrAfterToday('2026-09-29', lateEvening), true, 'an event today is still upcoming');
   assert.equal(schoolDaysFromToday('2026-09-30', lateEvening), 1, 'tomorrow, for the school');
+});
+
+// Review follow-up: isBeforeToday moved to the school's day but
+// calendarDaysUntilDue (reminder window, "vence en N días") kept the device's,
+// so the same charge was "due today" and "1 day late" at once off Mexico time.
+test('charge day counts and the overdue rule agree on what today is', () => {
+  const lateEvening = new Date('2026-09-30T03:00:00Z'); // Sept 29, 21:00 in Mexico
+  assert.equal(calendarDaysUntilDue('2026-09-29', lateEvening), 0);
+  assert.equal(isChargeOverdue({ status: 'PENDING', due_date: '2026-09-29' }, lateEvening), false);
+  assert.equal(calendarDaysUntilDue('2026-09-28', lateEvening), -1);
+  assert.equal(isChargeOverdue({ status: 'PENDING', due_date: '2026-09-28' }, lateEvening), true);
 });
 
 test('no page computes "today" from the device clock any more', () => {

@@ -268,7 +268,7 @@ export default function CalendarioEscolar() {
                           variant="ghost"
                           size="icon"
                           aria-label="Eliminar evento"
-                          className="h-6 w-6 text-red-500 hover:text-red-600 dark:hover:text-red-400"
+                          className="h-6 w-6 coarse:h-11 coarse:w-11 coarse:-m-2.5 shrink-0 text-red-500 hover:text-red-600 dark:hover:text-red-400"
                           onClick={(e) => handleDeleteEvent(event.id, e)}
                         >
                           <Trash2 className="w-3 h-3" />
@@ -331,7 +331,7 @@ export default function CalendarioEscolar() {
                           variant="ghost"
                           size="icon"
                           aria-label="Eliminar evento"
-                          className="h-6 w-6 text-red-500 hover:text-red-600 dark:hover:text-red-400"
+                          className="h-6 w-6 coarse:h-11 coarse:w-11 coarse:-m-2.5 shrink-0 text-red-500 hover:text-red-600 dark:hover:text-red-400"
                           onClick={(e) => handleDeleteEvent(event.id, e)}
                         >
                           <Trash2 className="w-3 h-3" />

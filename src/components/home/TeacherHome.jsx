@@ -105,7 +105,10 @@ export default function TeacherHome({ user, userProfile, subscription }) {
 
   const classStudentIds = new Set(students.map((student) => student.id));
   const todayDiaries = homeLists.diaries.filter((d) => classroomIds.includes(d.classroom_id));
-  const unreadUrgentNotices = homeLists.unreadUrgent.filter((row) => classStudentIds.has(row.student_id));
+  // Unread urgent copies among this teacher's families, plus the teacher's
+  // own (the emergency alert reaches teachers too, with no student on it).
+  const unreadUrgentNotices = homeLists.unreadUrgent.filter((row) =>
+    classStudentIds.has(row.student_id) || row.recipient_user_id === user.id);
 
   // Counted in students, not entries: two bitácoras for one child do not
   // cover a second child (see diaryCoverage.js).

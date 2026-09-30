@@ -119,3 +119,100 @@ export function moneyLabel(amount: unknown): string {
   if (!Number.isFinite(n)) return '';
   return `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+// deno-lint-ignore no-explicit-any
+type Row = Record<string, any>;
+
+/**
+ * The in-app half of the emergency alert: the NoticeDelivery rows that put
+ * the alert in each recipient's Avisos list and unread badge.
+ *
+ * WHY (loose-ends audit, 2026-09-30). The parent's Avisos page lists the
+ * caller's NoticeDelivery rows joined to their Notice — a Notice with no
+ * delivery for you is not on your list. The alert only ever created the
+ * school-wide Notice, so it showed on the parent's home card and nowhere
+ * else: no Avisos entry, no unread badge, and none of the "urgentes sin
+ * leer" counters on the teacher's and director's homes saw it.
+ *
+ * The rows, for the recipients the email half already targets (ACTIVE
+ * PARENT and TEACHER profiles of THIS school):
+ *   - a PARENT gets one row per ACTIVE link to an ACTIVE student of this
+ *     school — the same (parent, student) shape guardedEntityWrite's
+ *     planNoticeDeliveries gives every other notice, so the teacher's home
+ *     counts the unread ones among their own families;
+ *   - a PARENT with no such link still gets one row (no student): an
+ *     emergency reaches every active member, not only linked ones;
+ *   - a TEACHER gets one row addressed to them (no student).
+ * Rows that already exist for this notice are skipped, so a retry never
+ * duplicates. School, recipients and dates never come from the request.
+ */
+export function planEmergencyDeliveries(input: {
+  notice: Row;
+  schoolId: string;
+  now: Date;
+  profiles: Row[];
+  links: Row[];
+  students: Row[];
+  existing?: Row[];
+}): Row[] {
+  const { notice, schoolId, now } = input;
+  if (!schoolId || !notice?.id || String(notice.school_id || '') !== schoolId) return [];
+  const activeStudents = new Set(
+    (input.students || [])
+      .filter((s) => s && String(s.school_id || '') === schoolId && s.is_active !== false)
+      .map((s) => String(s.id)),
+  );
+  const keyOf = (recipient: string, student: string) => `${recipient}|${student}`;
+  const seen = new Set(
+    (input.existing || [])
+      .filter((d) => d && String(d.notice_id || '') === String(notice.id))
+      .map((d) => keyOf(String(d.recipient_user_id || ''), String(d.student_id || ''))),
+  );
+  const sentAt = notice.sent_at || now.toISOString();
+  const escalationDueAt = notice.priority === 'URGENT' ? new Date(now.getTime() + 24 * 3600 * 1000).toISOString() : null;
+  const rows: Row[] = [];
+  const push = (recipient: string, role: string, studentId: string) => {
+    const key = keyOf(recipient, studentId);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const row: Row = {
+      school_id: schoolId,
+      notice_id: String(notice.id),
+      recipient_user_id: recipient,
+      recipient_role: role,
+      status: 'SENT',
+      sent_at: sentAt,
+      escalation_due_at: escalationDueAt,
+    };
+    if (studentId) row.student_id = studentId;
+    rows.push(row);
+  };
+
+  const members = new Map<string, string>();
+  for (const p of input.profiles || []) {
+    if (!p || String(p.school_id || '') !== schoolId || p.status !== 'ACTIVE') continue;
+    const id = String(p.user_id || '');
+    const role = String(p.app_role || '');
+    if (!id || !['PARENT', 'TEACHER'].includes(role) || members.has(id)) continue;
+    members.set(id, role);
+  }
+  for (const [userId, role] of members) {
+    if (role === 'TEACHER') {
+      push(userId, 'TEACHER', '');
+      continue;
+    }
+    const children = [...new Set((input.links || [])
+      .filter((l) => l && String(l.parent_id || '') === userId && l.status === 'ACTIVE')
+      .filter((l) => !l.school_id || String(l.school_id) === schoolId)
+      .map((l) => String(l.student_id || ''))
+      .filter((id) => activeStudents.has(id)))];
+    if (children.length === 0) push(userId, 'PARENT', '');
+    for (const studentId of children) push(userId, 'PARENT', studentId);
+  }
+  return rows;
+}
+
+/** How many distinct people a set of delivery rows reaches. */
+export function distinctRecipients(rows: Row[]): number {
+  return new Set((rows || []).map((r) => String(r?.recipient_user_id || '')).filter(Boolean)).size;
+}

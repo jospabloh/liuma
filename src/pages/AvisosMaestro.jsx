@@ -7,7 +7,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import NoticeCard from '@/components/notices/NoticeCard';
 import EmptyState from '@/components/ui/EmptyState';
-import { Bell, Plus, Loader2, ArrowRight, ArrowLeft, Send, CheckCircle } from 'lucide-react';
+import { Bell, Plus, Loader2, ArrowRight, ArrowLeft, Send, CheckCircle, Check } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +16,9 @@ import { createPageUrl } from '@/utils';
 import { toast } from "sonner";
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
-import { guardedCreate, publishNoticeDeliveries } from '@/lib/authorization/guardedWrite';
+import { guardedCreate, guardedUpdate, publishNoticeDeliveries } from '@/lib/authorization/guardedWrite';
+import { unreadCopies } from '@/lib/notifications/inbox';
+import { readNoticeInbox } from '@/lib/notifications/readInbox';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +62,24 @@ export default function AvisosMaestro() {
       author_id: user.id 
     }, '-created_date', 20),
     enabled: !!user,
+  });
+
+  // What the school sent TO this teacher — today, the emergency alert, which
+  // sendBulkNotification delivers to every active teacher as well as to the
+  // families. This page used to list only the teacher's own notices, so a
+  // teacher had no in-app copy of the alert at all.
+  const { data: received = [] } = useQuery({
+    queryKey: ['noticeDeliveries', 'teacherInbox', user?.id, userProfile?.school_id],
+    queryFn: () => readNoticeInbox({ schoolId: userProfile.school_id, userId: user.id }),
+    enabled: !!user?.id && !!userProfile?.school_id,
+  });
+
+  const markReceivedAsRead = useMutation({
+    mutationFn: (entry) => Promise.all(
+      unreadCopies(entry).map((copy) => guardedUpdate('NoticeDelivery', copy.id, { status: 'READ' })),
+    ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['noticeDeliveries'] }),
+    onError: () => toast.error('No se pudo marcar como leído. Intenta de nuevo.'),
   });
 
   const createNoticeMutation = useMutation({
@@ -133,6 +153,33 @@ export default function AvisosMaestro() {
           </Button>
         }
       />
+
+      {received.length > 0 && (
+        <section className="mb-8" aria-labelledby="avisos-recibidos">
+          <h2 id="avisos-recibidos" className="text-sm font-semibold text-muted-foreground mb-3">
+            Recibidos de la escuela
+          </h2>
+          <div className="space-y-4">
+            {received.map((entry) => (
+              <div key={entry.notice.id} className="space-y-2">
+                <NoticeCard notice={entry.notice} />
+                {entry.delivery.status === 'SENT' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={markReceivedAsRead.isPending}
+                    onClick={() => markReceivedAsRead.mutate(entry)}
+                  >
+                    <Check className="w-4 h-4 mr-1" /> Marcar como leído
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <h2 className="text-sm font-semibold text-muted-foreground mt-8">Tus avisos</h2>
+        </section>
+      )}
 
       {notices.length === 0 ? (
         <EmptyState

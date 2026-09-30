@@ -216,7 +216,14 @@ export const READ_RULES: Record<string, EntityRule> = {
     // row only when its recipient is a member of their school.
     roles: {
       ADMIN: SCHOOL_MEMBERS('recipient_user_id'),
-      TEACHER: { rows: [{ student_id: set('studentIds') }], members: ['recipient_user_id'] },
+      // A teacher reads the deliveries of their own students' families (the
+      // "urgentes sin leer" count on their home) and, since the emergency
+      // alert got per-recipient copies (2026-09-30), the ones addressed to
+      // them — their own copy of the alert, which they mark read.
+      TEACHER: {
+        rows: [{ student_id: set('studentIds') }, { recipient_user_id: set('self') }],
+        members: ['recipient_user_id'],
+      },
       PARENT: { rows: [{ recipient_user_id: set('self') }] },
     },
   },

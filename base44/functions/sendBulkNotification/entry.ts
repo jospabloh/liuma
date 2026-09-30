@@ -43,10 +43,12 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import {
   countWithinWindow,
+  distinctRecipients,
   escalationKey,
   isChannelEnabled,
   mapWithConcurrency,
   moneyLabel,
+  planEmergencyDeliveries,
   selectNonResponders,
   spanishDate,
 } from './_fanout.ts';
@@ -57,6 +59,7 @@ const SEND_ATTEMPTS = 2;
 const MAX_RECIPIENTS = 2000;
 const MAX_MESSAGE_LEN = 2000;
 const MAX_DESCRIPTION_LEN = 4000;
+const DELIVERY_CHUNK = 100;
 const ESCALATION_TICKETS_PER_DAY = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EMERGENCY_MESSAGE =
@@ -87,6 +90,9 @@ type Plan = {
   schoolPrefs?: Any;
   forceOn?: boolean;
   recipients: Recipient[];
+  // Counters the planner itself produced (the emergency alert's in-app rows),
+  // merged into the response next to the email summary.
+  extra?: Record<string, number>;
   finalize?: (delivered: Recipient[], summary: Summary) => Promise<void>;
 };
 type Summary = {
@@ -149,7 +155,8 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
 
   // The school-wide banner first: it is what every open app shows, so it must
   // exist even if every individual email below fails.
-  await sr.entities.Notice.create({
+  const sentAt = new Date();
+  const notice: Any = await sr.entities.Notice.create({
     school_id: schoolId,
     scope: 'SCHOOL',
     title: '🚨 ALERTA DE EMERGENCIA',
@@ -157,11 +164,12 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
     priority: 'URGENT',
     is_emergency: true,
     author_id: user.id,
-    sent_at: new Date().toISOString(),
+    sent_at: sentAt.toISOString(),
   });
 
   const profiles: Any[] = await sr.entities.UserProfile.filter({ school_id: schoolId, status: 'ACTIVE' }, undefined, MAX_RECIPIENTS);
   const targets = profiles.filter((p) => ['PARENT', 'TEACHER'].includes(String(p.app_role)));
+  const inApp = await fanOutEmergencyDeliveries(sr, notice, schoolId, profiles, sentAt);
   const users = await usersByIds(sr, targets.map((p) => String(p.user_id)));
   const ctx: Ctx = { schoolName: String(school.name || ''), message };
   const seen = new Set<string>();
@@ -182,6 +190,7 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
     // that ignores preferences.
     forceOn: true,
     recipients,
+    extra: { inAppRecipients: inApp.recipients, inAppFailed: inApp.failed ? 1 : 0 },
     finalize: async (_delivered, summary) => {
       await sr.entities.AuditLog.create({
         school_id: schoolId,
@@ -189,10 +198,49 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
         user_email: user.email,
         action: 'EMERGENCY_ALERT',
         target_type: 'Notice',
-        details: { message, total: summary.total, reached: summary.reached, email_failed: summary.emailFailed },
+        target_id: String(notice?.id || ''),
+        details: {
+          message,
+          total: summary.total,
+          reached: summary.reached,
+          email_failed: summary.emailFailed,
+          in_app_recipients: inApp.recipients,
+          in_app_rows: inApp.rows,
+          in_app_error: inApp.failed || undefined,
+        },
       }).catch(() => null);
     },
   };
+}
+
+// The alert's per-recipient in-app copies (see planEmergencyDeliveries): what
+// puts it in the parent's Avisos and in every "urgentes sin leer" badge.
+// Best-effort by design — the banner above already exists and the emails
+// below must still go out if this fails, so a failure is reported (response
+// + audit), never thrown.
+async function fanOutEmergencyDeliveries(
+  sr: Any, notice: Any, schoolId: string, profiles: Any[], now: Date,
+): Promise<{ rows: number; recipients: number; failed?: string }> {
+  try {
+    if (!notice?.id) return { rows: 0, recipients: 0, failed: 'notice_without_id' };
+    const [links, students, existing] = await Promise.all([
+      sr.entities.ParentStudent.filter({ school_id: schoolId, status: 'ACTIVE' }, undefined, 5000),
+      // Every student of the school; the planner drops the inactive ones (a
+      // legacy row with no is_active is active, as in planNoticeDeliveries).
+      sr.entities.Student.filter({ school_id: schoolId }, undefined, 5000),
+      sr.entities.NoticeDelivery.filter({ notice_id: String(notice.id) }, undefined, 5000),
+    ]);
+    const rows = planEmergencyDeliveries({ notice, schoolId, now, profiles, links, students, existing });
+    const handler = sr.entities.NoticeDelivery;
+    for (let i = 0; i < rows.length; i += DELIVERY_CHUNK) {
+      const chunk = rows.slice(i, i + DELIVERY_CHUNK);
+      if (typeof handler.bulkCreate === 'function') await handler.bulkCreate(chunk);
+      else for (const row of chunk) await handler.create(row);
+    }
+    return { rows: rows.length, recipients: distinctRecipients(rows) };
+  } catch (error) {
+    return { rows: 0, recipients: 0, failed: String((error as Error)?.message || error).slice(0, 300) };
+  }
 }
 
 async function parentRecipientsForStudent(sr: Any, schoolId: string, studentId: string, ctx: Ctx): Promise<Recipient[]> {
@@ -416,7 +464,11 @@ async function deliver(sr: Any, user: Any, plan: Plan): Promise<Summary> {
   // notice — so a recipient could be reported as reached by a record they can
   // never see, and "Enviado a X de Y" read 300 de 300 with every email
   // failed. The emergency alert's in-app half is the school-wide Notice
-  // planEmergency creates; the reminders were email-only before this change.)
+  // planEmergency creates; the reminders were email-only before this change.
+  // Since 2026-09-30 the alert also writes one NoticeDelivery per recipient —
+  // planEmergencyDeliveries — so it is on each parent's Avisos list and in
+  // the unread badges. Those are reported apart, as `inAppRecipients`: an
+  // Avisos row is not an email, and "Enviado a X de Y" keeps meaning email.)
   const results = await mapWithConcurrency(recipients, CONCURRENCY, async (r) => {
     const emailOn = isChannelEnabled({
       schoolPrefs: plan.schoolPrefs, userPrefs: r.prefs, channel: 'email', role: r.role, forceOn: plan.forceOn,
@@ -478,7 +530,7 @@ Deno.serve(async (req) => {
     if ('skipped' in plan) return Response.json({ ok: true, eventType, skipped: true, reason: plan.skipped, total: 0, reached: 0 });
 
     const summary = await deliver(sr, user, plan);
-    return Response.json({ ok: true, eventType, ...summary });
+    return Response.json({ ok: true, eventType, ...(plan.extra || {}), ...summary });
   } catch (e) {
     if (e instanceof HttpError) return bad(e.status, e.code, e.message);
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });

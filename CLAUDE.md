@@ -1401,3 +1401,78 @@ cambió); comprobar por comportamiento: llamarla con `role: 'X'` debe dar 400
 `INVALID_ROLE`, no `unknown` ni un 200. Si dijera `unchanged` y el 400 no
 aparece, toca **Publish**. (2) `npm run deploy:site` (Login, Aprobaciones,
 PendingApproval). Sin cambios de entidad: `deploy:entities` no hace falta.
+
+## Dinero: abonos, descuentos, vencidos y recordatorios (2026-09-30)
+
+Cinco hallazgos del QA de pagos, todos verificados contra `main` (v1.8.1) antes
+de tocarlos. El más grave: **«Registrar pago» marcaba el cargo entero `PAID`**
+fuera cual fuera el monto (`PagosAdmin.jsx` escribía `status:'PAID'` y *luego*
+creaba el `PaymentRecord`), así que $400 sobre $1,000 dejaba a la familia «Al
+día» con $600 por pagar. Además: un descuento fijo de $500 sobre un cargo de
+$300 guardaba `amount: -200`; `Discount` aceptaba 150 % y -10 %; Reportes leía
+solo `PENDING` y perdía todo cargo `OVERDUE`; nunca se recordaba un cargo
+vencido; y la familia no veía abonos ni descuentos.
+
+**Las reglas viven en el servidor** — `guardedEntityWrite/_money.ts` (puras, en
+centavos enteros) y `_payments.ts` (las aplica sobre la base):
+
+- **Estado del cargo** (`deriveChargeStatus`): `PAID` solo si la suma de sus
+  `PaymentRecord` ≥ `amount` (que ya es neto del descuento); si no, `OVERDUE`
+  si `due_date` < hoy **en México** (`mexicoToday`, no `toISOString()`); si no,
+  `PARTIAL` con algún pago o `PENDING` sin pagos. `CANCELLED` solo lo pone la
+  dirección. Ningún cliente escribe `status`, `amount_paid` ni
+  `last_payment_date`: `settleCharge` los recalcula tras cada pago creado o
+  borrado, y un `update` de `ChargeItem` los re-deriva (por eso el
+  `{status:'OVERDUE'}` de `PagosAdmin` es solo «refréscalo»).
+- **Precio** (`prepareChargeCreate`): el `concept_type` sale del
+  `PaymentConcept` guardado; el descuento lo nombra el cliente pero el servidor
+  comprueba vigencia, tipo y `allows_discounts`, y lo **recorta** al monto del
+  cargo. Monto, descuento, concepto y alumno quedan fijos: se cancela y se crea
+  otro (`AMOUNT_LOCKED`). Un cargo con pagos no se borra (`CHARGE_HAS_PAYMENTS`).
+- **Pago** (`preparePaymentCreate`): positivo, en centavos, no mayor al saldo
+  (`OVERPAYMENT`; no hay saldo a favor que lo registre), contra un cargo de la
+  misma escuela que no esté pagado ni cancelado; el alumno es el del cargo;
+  fecha ≤ hoy. Monto/cargo/fecha no se editan (`PAYMENT_LOCKED`).
+- **Descuento** (`validateDiscount`, en `_schoolWrite.ts`): porcentaje en
+  (0, 100], monto fijo > 0, al menos un tipo de concepto, «hasta» ≥ «desde».
+  Solo se valida si el cambio toca esos términos, para poder **desactivar** un
+  descuento viejo mal capturado.
+
+`src/lib/payments/money.js` es su espejo para los formularios (vista previa y
+error por campo); `tests/unit/payments-money.test.js` corre las dos copias
+sobre los mismos casos y las reglas del servidor contra la base en memoria.
+
+**Recordatorios:** botón «Enviar recordatorio» en cada cargo abierto
+(`sendBulk({ …, manual: true })`), uno por cargo cada 24 h
+(`last_reminder_at`, `REMINDER_COOLDOWN`); el correo pide el **saldo**, y un
+cargo vencido recibe la plantilla nueva `payment_overdue` (en las tres copias
+de plantillas; `sendNotificationEmail` no la acepta). El recordatorio
+automático sigue igual (una vez, 0-7 días antes, al abrir Pagos) e incluye
+`PARTIAL`. **No** se añadió un recordatorio automático de vencidos: el primer
+deploy lo habría mandado de golpe a todo cargo vencido histórico.
+
+**Familias:** ven original, descuento, total, pagado y saldo por cargo
+(`ChargeAmounts.jsx`) a partir de `amount_paid`/`last_payment_date` del
+`ChargeItem` (añadidos a `READ_RULES`, tres copias de `_scope.ts`).
+`PaymentRecord` **sigue sin lectura para PARENT** — referencias y quién cobró
+no son suyos. Reportes, `ParentHome` y Lumi cuentan `PENDING|PARTIAL|OVERDUE`
+y suman saldos, no montos.
+
+**Esquema:** `ChargeItem.status` gana `PARTIAL`; nuevos `amount_paid`,
+`last_payment_date`, `last_reminder_at` (`rls.write:false`).
+
+**No verificado:** nada corrió contra Base44 en vivo (sin sesiones de QA);
+`Deno.serve` no corre en node, así que `entry.ts` se prueba por código fuente y
+`deno check`/`deno lint`. Los cargos que el flujo viejo cerró como `PAID` con
+un abono parcial **no se corrigen solos** (ninguna pantalla los toca); una
+conciliación única (sumar `PaymentRecord` por cargo) necesita datos de
+producción. Los conceptos creados antes no tienen tipo y cuentan como `OTRO`
+(no hay pantalla para editarlos; se crea uno nuevo con su tipo).
+
+**Desplegar, en este orden, o se rompe:** (1) `npm run deploy:entities` — sin
+`PARTIAL` en el enum, el servidor nuevo no puede guardar un abono; (2)
+`npm run deploy` (`guardedEntityWrite`, `sendBulkNotification`,
+`sendNotificationEmail`, `schoolRead`, `lumiQuery`, `lumiWrite`); (3)
+`npm run deploy:site` — el sitio nuevo ya no marca `PAID` él mismo, así que
+con el servidor viejo **ningún pago cerraría su cargo**. Comprobar por
+comportamiento: un pago menor al saldo debe dejar el cargo en «Pago parcial».

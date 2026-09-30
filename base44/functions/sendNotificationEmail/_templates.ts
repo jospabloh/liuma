@@ -55,10 +55,28 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
       <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fbbf24; margin: 16px 0;">
         <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
         <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>
-        <p><strong>Monto:</strong> ${escapeHtml(amountLabel)}</p>
+        <p><strong>Saldo pendiente:</strong> ${escapeHtml(amountLabel)}</p>
         <p><strong>Fecha de vencimiento:</strong> ${escapeHtml(dueDateLabel)}</p>
       </div>
       <p>Por favor, realice su pago antes de la fecha de vencimiento para evitar recargos.</p>
+      <p>Atentamente,<br>Equipo LIUMA</p>
+    `,
+  },
+  // Same fields as payment_due; sent instead of it once the due date has
+  // passed (a "vence pronto" email about a late charge reads wrong).
+  payment_overdue: {
+    subject: ({ studentName }) => `Recordatorio: Pago vencido - ${studentName}`,
+    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel }) => `
+      <h2>Pago vencido</h2>
+      <p>Estimado padre/madre de familia:</p>
+      <p>Le recordamos que el siguiente pago ya venció y tiene saldo pendiente:</p>
+      <div style="background: #fee2e2; padding: 16px; border-radius: 8px; border: 1px solid #f87171; margin: 16px 0;">
+        <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
+        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>
+        <p><strong>Saldo pendiente:</strong> ${escapeHtml(amountLabel)}</p>
+        <p><strong>Venció el:</strong> ${escapeHtml(dueDateLabel)}</p>
+      </div>
+      <p>Por favor, liquide su saldo lo antes posible o comuníquese con la dirección de la escuela.</p>
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
   },

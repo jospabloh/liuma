@@ -1114,8 +1114,8 @@ director (salón, alumno, vínculo) en la UI, la alerta de emergencia,
 los correos, y el modo oscuro de las pantallas autenticadas.
 
 **Datos de QA siguen en producción**, pendientes de decisión del dueño: las
-escuelas «QA-LIUMA Escuela A/B» (`6abc382a1766cc904383d9b6` y su par
-terminado en `…b7`) y 5 usuarios `+qa-*`. No se borraron: borrar en
+escuelas «QA-LIUMA Escuela A/B» (`6abc382a1766cc904383d9b6` y
+`6abc382a1766cc904383d9b7`) y 5 usuarios `+qa-*`. No se borraron: borrar en
 producción es decisión del dueño, no de un pase de QA.
 
 ## Lecturas por inquilino (P10, 2026-09-29)

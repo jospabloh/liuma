@@ -1,4 +1,5 @@
-// _fanout.ts — the pure, IO-free half of sendBulkNotification. Kept in its
+// _fanout.ts — the pure half of sendBulkNotification (plus the reminder
+// claim, which takes its store as a parameter). Kept in its
 // own file with no imports so tests/unit/notifications-fanout.test.js can load
 // the REAL server code under `node --test` (Node 22 strips the types), rather
 // than a client-side look-alike that could drift from it.
@@ -171,6 +172,111 @@ export function planChargeReminder(
   const due = String(charge.due_date || '');
   const overdue = status === 'OVERDUE' || (/^\d{4}-\d{2}-\d{2}$/.test(due) && due < mexicoToday(opts.now));
   return { send: true, overdue, balance: balanceCents / 100 };
+}
+
+// --- claiming a payment reminder before sending it ----------------------------
+// (Codex review on PR #190, 2026-09-30.)
+//
+// The 24 h cooldown used to be written only AFTER delivery, so two clicks on
+// "Enviar recordatorio" (two tabs, two directors, a double tap on a slow
+// phone) both read "no reminder yet", both passed planChargeReminder and both
+// mailed the family. Base44 has no conditional write, so the claim is a
+// write-then-verify:
+//
+//   1. re-read the charge and re-run planChargeReminder on the FRESH copy
+//      (and refuse while another claim younger than REMINDER_CLAIM_TTL_MS is
+//      still open);
+//   2. write last_reminder_at = now and reminder_claim_id = a random id;
+//   3. wait REMINDER_CLAIM_SETTLE_MS and re-read: whoever's claim id is
+//      stored won (last writer wins); everyone else backs off untouched;
+//   4. after delivery: success clears the claim id (and sets reminder_sent);
+//      a pass that reached nobody puts last_reminder_at back as it was, so
+//      the director can retry now instead of in 24 h.
+//
+// What this does NOT close, stated plainly: a request whose fresh read (1)
+// lands before a rival's claim write but whose own write (2) lands more than
+// REMINDER_CLAIM_SETTLE_MS after that rival re-read (3) finds its own claim
+// and sends too. That needs one request to stall for over a second between
+// two consecutive calls — the old window was the whole email fan-out. And if
+// the reminder_claim_id field is not deployed yet (deploy:entities), the
+// store may drop it: the verify then falls back to comparing
+// last_reminder_at, which two claims in the same millisecond would share.
+
+export const REMINDER_CLAIM_SETTLE_MS = 1000;
+export const REMINDER_CLAIM_TTL_MS = 5 * 60 * 1000;
+
+// deno-lint-ignore no-explicit-any
+type ClaimDb = { entities: { ChargeItem: { get(id: string): Promise<any>; update(id: string, patch: Record<string, unknown>): Promise<any> } } };
+
+export type ReminderClaim = {
+  chargeId: string;
+  claimId: string;
+  claimedAt: string;
+  previousLastReminderAt: unknown;
+  // deno-lint-ignore no-explicit-any
+  charge: Record<string, any>;
+  overdue: boolean;
+  balance: number;
+};
+
+function ownsClaim(stored: Record<string, unknown> | null, claimId: string, claimedAt: string): boolean {
+  if (!stored) return false;
+  const id = stored.reminder_claim_id;
+  if (typeof id === 'string' && id) return id === claimId;
+  // Field dropped by a store that does not know it yet: weaker fallback.
+  return Date.parse(String(stored.last_reminder_at || '')) === Date.parse(claimedAt);
+}
+
+export async function claimChargeReminder(
+  db: ClaimDb,
+  chargeId: string,
+  opts: { manual: boolean; now: Date; claimId: string; sleep: (ms: number) => Promise<void>; settleMs?: number },
+): Promise<{ ok: true; claim: ReminderClaim } | { ok: false; reason: string }> {
+  const fresh = await db.entities.ChargeItem.get(chargeId).catch(() => null);
+  if (!fresh) return { ok: false, reason: 'not_found' };
+  const openClaim = typeof fresh.reminder_claim_id === 'string' && fresh.reminder_claim_id !== '';
+  const openSince = Date.parse(String(fresh.last_reminder_at || ''));
+  if (openClaim && !Number.isNaN(openSince) && opts.now.getTime() - openSince < REMINDER_CLAIM_TTL_MS) {
+    return { ok: false, reason: 'in_progress' };
+  }
+  const plan = planChargeReminder(fresh, { manual: opts.manual, now: opts.now });
+  if (!plan.send) return { ok: false, reason: plan.reason };
+
+  const claimedAt = opts.now.toISOString();
+  await db.entities.ChargeItem.update(chargeId, { last_reminder_at: claimedAt, reminder_claim_id: opts.claimId });
+  await opts.sleep(opts.settleMs ?? REMINDER_CLAIM_SETTLE_MS);
+  const after = await db.entities.ChargeItem.get(chargeId).catch(() => null);
+  if (!ownsClaim(after, opts.claimId, claimedAt)) return { ok: false, reason: 'in_progress' };
+  return {
+    ok: true,
+    claim: {
+      chargeId,
+      claimId: opts.claimId,
+      claimedAt,
+      previousLastReminderAt: fresh.last_reminder_at ?? null,
+      charge: fresh,
+      overdue: plan.overdue,
+      balance: plan.balance,
+    },
+  };
+}
+
+/**
+ * Close a claim. `sent`: the reminder reached somebody (or there was nobody
+ * to reach) — keep last_reminder_at, mark reminder_sent. Otherwise roll
+ * last_reminder_at back, but only while the claim is still ours.
+ */
+export async function releaseChargeReminder(db: ClaimDb, claim: ReminderClaim, sent: boolean): Promise<void> {
+  if (sent) {
+    await db.entities.ChargeItem.update(claim.chargeId, { reminder_sent: true, reminder_claim_id: null });
+    return;
+  }
+  const stored = await db.entities.ChargeItem.get(claim.chargeId).catch(() => null);
+  if (!ownsClaim(stored, claim.claimId, claim.claimedAt)) return;
+  await db.entities.ChargeItem.update(claim.chargeId, {
+    last_reminder_at: claim.previousLastReminderAt ?? null,
+    reminder_claim_id: null,
+  });
 }
 
 // deno-lint-ignore no-explicit-any

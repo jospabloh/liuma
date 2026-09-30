@@ -59,6 +59,13 @@
         "write": false
       }
     },
+    "reminder_claim_id": {
+      "description": "Recordatorio de pago en curso: id del env\u00edo que lo reclam\u00f3. Lo escribe y lo limpia sendBulkNotification (claimChargeReminder); vac\u00edo cuando no hay env\u00edo en curso.",
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
     "event_id": {
       "description": "Reference to Event si es pago de evento",
       "type": "string"

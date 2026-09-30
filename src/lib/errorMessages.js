@@ -47,6 +47,10 @@ const CODE_MESSAGES = {
   AMOUNT_LOCKED: 'El monto de un cargo ya creado no se puede cambiar. Cancélalo y crea uno nuevo.',
   PAYMENT_LOCKED: 'El monto de un pago registrado no se puede cambiar. Bórralo y regístralo de nuevo.',
   REMINDER_COOLDOWN: 'Ya se envió un recordatorio de este cargo en las últimas 24 horas.',
+  // Concurrency (Codex review on PR #190, 2026-09-30).
+  PAYMENT_CONFLICT: 'Otro pago se registró al mismo tiempo; revisa el saldo y vuelve a intentar.',
+  PAYMENT_CONFLICT_UNRESOLVED: 'Otro pago se registró al mismo tiempo y este quedó de más. Revisa los pagos del cargo y borra el sobrante.',
+  REMINDER_IN_PROGRESS: 'Ya se está enviando un recordatorio de este cargo. Espera un momento y recarga.',
 };
 
 const STATUS_MESSAGES = {

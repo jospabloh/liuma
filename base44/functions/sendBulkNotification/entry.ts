@@ -35,7 +35,8 @@
 //   payment_due and event_confirmation_reminder are once per record
 //   (`reminder_sent`, which this function now owns). A director's manual
 //   payment reminder (`manual: true`) may repeat, once per charge per 24 h
-//   (`last_reminder_at`). An escalation is once
+//   (`last_reminder_at`, claimed BEFORE sending and given back if nobody was
+//   reached — claimChargeReminder in ./_fanout.ts). An escalation is once
 //   per (ticket, tier, recipient) — `SupportTicket.escalation_notified_recipients`,
 //   a server-only field — and a requester can trigger escalation notices for
 //   at most ESCALATION_TICKETS_PER_DAY tickets in 24 h. The emergency alert
@@ -45,6 +46,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import {
+  claimChargeReminder,
   countWithinWindow,
   distinctRecipients,
   escalationKey,
@@ -53,6 +55,7 @@ import {
   moneyLabel,
   planChargeReminder,
   planEmergencyDeliveries,
+  releaseChargeReminder,
   selectNonResponders,
   spanishDate,
 } from './_fanout.ts';
@@ -98,6 +101,8 @@ type Plan = {
   // merged into the response next to the email summary.
   extra?: Record<string, number>;
   finalize?: (delivered: Recipient[], summary: Summary) => Promise<void>;
+  // Undo whatever the planner claimed when delivery never got to finalize.
+  abort?: () => Promise<void>;
 };
 type Summary = {
   total: number; reached: number; emailed: number; emailFailed: number; noChannel: number;
@@ -273,41 +278,76 @@ async function planPaymentDue(sr: Any, user: Any, body: Any): Promise<Plan | { s
   // that window — so an overdue charge was never reminded at all.
   const manual = body?.manual === true;
   const now = new Date();
-  const reminder = planChargeReminder(charge, { manual, now });
-  if (!reminder.send && reminder.reason === 'cooldown') {
+  // Cheap early answer from the copy just read; the binding check is the one
+  // claimChargeReminder repeats on a fresh read right before it claims.
+  const early = planChargeReminder(charge, { manual, now });
+  if (!early.send && early.reason === 'cooldown') {
     throw new HttpError(429, 'REMINDER_COOLDOWN', 'This charge was already reminded in the last 24 hours');
   }
-  if (!reminder.send) return { skipped: reminder.reason };
+  if (!early.send) return { skipped: early.reason };
 
-  // The charge's school is what authorized the caller, so the student (and
-  // through it, the parents we mail) must be in that same school — otherwise
-  // an admin of school A could point a charge at a school-B student and mail
-  // that family a payment notice with a concept name of their choosing.
-  const fetchedStudent: Any = await sr.entities.Student.get(charge.student_id).catch(() => null);
-  const student: Any = fetchedStudent && String(fetchedStudent.school_id) === String(charge.school_id) ? fetchedStudent : null;
-  const school: Any = await sr.entities.School.get(charge.school_id).catch(() => null);
-  const ctx: Ctx = {
-    studentName: student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : 'su hijo(a)',
-    conceptName: String(charge.concept_name || ''),
-    // What is still owed, not the charge's full amount: after a partial
-    // payment the family is asked only for the rest.
-    amountLabel: moneyLabel(reminder.balance),
-    dueDateLabel: spanishDate(charge.due_date),
-  };
-  const recipients = student ? await parentRecipientsForStudent(sr, charge.school_id, student.id, ctx) : [];
-  return {
-    schoolId: charge.school_id,
-    eventType: reminder.overdue ? 'payment_overdue' : 'payment_due',
-    schoolPrefs: school?.notification_preferences,
-    recipients,
-    finalize: async (_delivered, summary) => {
-      // Mark it only if somebody got it (or there was nobody to tell): a pass
-      // where every send failed stays retryable on the next load.
-      if (summary.reached > 0 || summary.total === 0) {
-        await sr.entities.ChargeItem.update(charge.id, { reminder_sent: true, last_reminder_at: now.toISOString() });
-      }
-    },
-  };
+  // Claim BEFORE sending (Codex review on PR #190): the cooldown used to be
+  // written only after delivery, so two clicks both mailed the family. See
+  // claimChargeReminder in ./_fanout.ts for the protocol and the window it
+  // still leaves open.
+  const claimed = await claimChargeReminder(sr, charge.id, {
+    manual,
+    now,
+    claimId: crypto.randomUUID(),
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  });
+  if (!claimed.ok) {
+    if (claimed.reason === 'cooldown') {
+      throw new HttpError(429, 'REMINDER_COOLDOWN', 'This charge was already reminded in the last 24 hours');
+    }
+    if (claimed.reason === 'in_progress' && manual) {
+      throw new HttpError(409, 'REMINDER_IN_PROGRESS', 'Another reminder for this charge is being sent right now');
+    }
+    return { skipped: claimed.reason };
+  }
+  const { claim } = claimed;
+  const reminder = claim;
+
+  try {
+    // The charge's school is what authorized the caller, so the student (and
+    // through it, the parents we mail) must be in that same school — otherwise
+    // an admin of school A could point a charge at a school-B student and mail
+    // that family a payment notice with a concept name of their choosing.
+    const fetchedStudent: Any = await sr.entities.Student.get(charge.student_id).catch(() => null);
+    const student: Any = fetchedStudent && String(fetchedStudent.school_id) === String(charge.school_id) ? fetchedStudent : null;
+    const school: Any = await sr.entities.School.get(charge.school_id).catch(() => null);
+    const ctx: Ctx = {
+      studentName: student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : 'su hijo(a)',
+      conceptName: String(claim.charge.concept_name || ''),
+      // What is still owed, not the charge's full amount: after a partial
+      // payment the family is asked only for the rest.
+      amountLabel: moneyLabel(reminder.balance),
+      dueDateLabel: spanishDate(claim.charge.due_date),
+    };
+    const recipients = student ? await parentRecipientsForStudent(sr, charge.school_id, student.id, ctx) : [];
+    return {
+      schoolId: charge.school_id,
+      eventType: reminder.overdue ? 'payment_overdue' : 'payment_due',
+      schoolPrefs: school?.notification_preferences,
+      recipients,
+      // Keep the claim only if somebody got it (or there was nobody to
+      // tell): a pass where every send failed gives last_reminder_at back,
+      // so it stays retryable now rather than in 24 h.
+      finalize: async (_delivered, summary) => {
+        // Never throws: if this write fails the claim simply stays (cooldown
+        // holds, claim expires after REMINDER_CLAIM_TTL_MS) — it must not
+        // reach the abort below, which would re-open a reminder already sent.
+        await releaseChargeReminder(sr, claim, summary.reached > 0 || summary.total === 0)
+          .catch((e) => console.error('sendBulkNotification: reminder claim not released', (e as Error)?.message));
+      },
+      abort: async () => {
+        await releaseChargeReminder(sr, claim, false).catch(() => null);
+      },
+    };
+  } catch (e) {
+    await releaseChargeReminder(sr, claim, false).catch(() => null);
+    throw e;
+  }
 }
 
 async function planEventReminder(sr: Any, user: Any, body: Any): Promise<Plan | { skipped: string }> {
@@ -544,7 +584,13 @@ Deno.serve(async (req) => {
     const plan = await planner(sr, user, body);
     if ('skipped' in plan) return Response.json({ ok: true, eventType, skipped: true, reason: plan.skipped, total: 0, reached: 0 });
 
-    const summary = await deliver(sr, user, plan);
+    let summary: Summary;
+    try {
+      summary = await deliver(sr, user, plan);
+    } catch (e) {
+      if (plan.abort) await plan.abort();
+      throw e;
+    }
     return Response.json({ ok: true, eventType, ...(plan.extra || {}), ...summary });
   } catch (e) {
     if (e instanceof HttpError) return bad(e.status, e.code, e.message);

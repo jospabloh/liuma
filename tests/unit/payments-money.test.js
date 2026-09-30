@@ -379,12 +379,12 @@ test('a charge edit cannot change its price, and never takes a status from the c
 });
 
 test('the paid/reminder bookkeeping is server-only on ChargeItem', () => {
-  assert.deepEqual(SERVER_ONLY_FIELDS.ChargeItem.sort(), ['amount_paid', 'last_payment_date', 'last_reminder_at', 'reminder_sent']);
+  assert.deepEqual(SERVER_ONLY_FIELDS.ChargeItem.sort(), ['amount_paid', 'last_payment_date', 'last_reminder_at', 'reminder_claim_id', 'reminder_sent']);
   assert.deepEqual(stripServerOnlyFields('ChargeItem', { amount_paid: 1000, notes: 'x' }), { notes: 'x' });
   const schema = JSON.parse(read('base44/entities/ChargeItem.jsonc'));
   assert.deepEqual(schema.properties.status.enum, ['PENDING', 'PARTIAL', 'PAID', 'OVERDUE', 'CANCELLED']);
   assert.deepEqual([...schema.properties.status.enum].sort(), [...server.CHARGE_STATUSES].sort());
-  for (const field of ['amount_paid', 'last_payment_date', 'last_reminder_at']) {
+  for (const field of ['amount_paid', 'last_payment_date', 'last_reminder_at', 'reminder_claim_id']) {
     assert.equal(schema.properties[field]?.rls?.write, false, `${field} must be rls.write:false`);
   }
   assert.deepEqual(schema.properties.concept_type.enum, server.CONCEPT_TYPES);
@@ -480,7 +480,8 @@ test('the overdue template exists in every copy and names the balance', () => {
   assert.match(bulk, /eventType: reminder\.overdue \? 'payment_overdue' : 'payment_due'/);
   assert.match(bulk, /amountLabel: moneyLabel\(reminder\.balance\)/);
   assert.match(bulk, /throw new HttpError\(429, 'REMINDER_COOLDOWN'/);
-  assert.match(bulk, /last_reminder_at: now\.toISOString\(\)/);
+  assert.match(bulk, /claimChargeReminder\(sr, charge\.id/);
+  assert.match(bulk, /throw new HttpError\(409, 'REMINDER_IN_PROGRESS'/);
 });
 
 // --- screens ---------------------------------------------------------------------
@@ -531,7 +532,8 @@ test('guardedEntityWrite runs the money rules on every ChargeItem / PaymentRecor
   assert.match(entry, /prepareConceptWrite\('create', data\)/);
   assert.match(entry, /await prepareChargeUpdate\(sr, existing as Record<string, unknown>, patch, schoolId, now\)/);
   assert.match(entry, /preparePaymentUpdate\(existing as Record<string, unknown>, patch\)/);
-  assert.match(entry, /const charge = await settleAfterPayment\(sr, data\.charge_id, schoolId, now\);/);
+  assert.match(entry, /const race = await resolvePaymentRace\(sr, created, schoolId\);/);
+  assert.match(entry, /const charge = await settleAfterPayment\(sr, data\.charge_id, schoolId, now, \{ keptOnly: true \}\);/);
   assert.match(entry, /await settleAfterPayment\(sr, \(existing as \{ charge_id\?: string \}\)\.charge_id, schoolId, now\);/);
   assert.match(entry, /await chargeDeleteProblem\(sr, existing as Record<string, unknown>, schoolId\)/);
   // The event carve-out's charge goes through the same pricing.

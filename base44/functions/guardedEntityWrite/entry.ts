@@ -69,6 +69,7 @@ import {
   prepareConceptWrite,
   preparePaymentCreate,
   preparePaymentUpdate,
+  resolvePaymentRace,
   settleCharge,
 } from './_payments.ts';
 
@@ -147,10 +148,12 @@ async function buildEventChargeData(
 // so a failure here must NOT turn into an error the director retries — that
 // would record the same money twice. The next payment, charge edit or the
 // Pagos overdue refresh re-derives it again.
-// deno-lint-ignore no-explicit-any
-async function settleAfterPayment(sr: any, chargeId: unknown, schoolId: string, now: Date): Promise<Record<string, unknown> | null> {
+async function settleAfterPayment(
+  // deno-lint-ignore no-explicit-any
+  sr: any, chargeId: unknown, schoolId: string, now: Date, opts: { keptOnly?: boolean } = {},
+): Promise<Record<string, unknown> | null> {
   try {
-    return await settleCharge(sr, chargeId, schoolId, now);
+    return await settleCharge(sr, chargeId, schoolId, now, opts);
   } catch (e) {
     console.error('guardedEntityWrite settleCharge failed', (e as Error).message);
     return null;
@@ -364,7 +367,13 @@ Deno.serve(async (req) => {
 
       const created = await sr.entities[entity].create(data);
       if (entity === 'PaymentRecord') {
-        const charge = await settleAfterPayment(sr, data.charge_id, schoolId, now);
+        // Two payments at once can both pass the balance check above (no
+        // transactions in Base44): re-read, keep the earlier, delete ours if
+        // it overflows — and only then settle, from the kept ones. See
+        // resolvePaymentRace in ./_payments.ts.
+        const race = await resolvePaymentRace(sr, created, schoolId);
+        if (!race.ok) return bad(race.status, race.code, race.message);
+        const charge = await settleAfterPayment(sr, data.charge_id, schoolId, now, { keptOnly: true });
         return Response.json({ ok: true, record: created, charge });
       }
       return Response.json({ ok: true, record: created });

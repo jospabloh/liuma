@@ -244,15 +244,120 @@ export async function chargeDeleteProblem(sr: Db, existing: Rec, schoolId: strin
     : null;
 }
 
+// --- two payments at once (Codex review on PR #190, 2026-09-30) -------------
+//
+// preparePaymentCreate checks the balance BEFORE the insert, and Base44 has no
+// transactions and no conditional writes: two "Registrar pago" of $600 on a
+// $1,000 charge, sent at the same moment, both read "balance 1000", both pass,
+// both insert — $1,200 recorded on a $1,000 charge. The fix is compensating:
+// insert, then re-read every payment of the charge and decide, in ONE order
+// every request agrees on, which records fit.
+//
+//   - Order: created_date ascending, then id ascending. Both requests sort the
+//     same set the same way, so they agree on who was first.
+//   - Greedy: walk that order adding each payment to a running total of the
+//     KEPT ones; a payment that would push the total past the charge's net
+//     amount (`amount`, already net of the discount, in cents) is an overflow
+//     and is not added. A record's fate therefore depends only on the records
+//     BEFORE it, so the earlier of two colliding payments is kept whatever the
+//     later one sees — two overflowing inserts cannot both be deleted, and the
+//     first is never the one thrown away.
+//   - Each request deletes ONLY its own record, and only when it is an
+//     overflow; it never touches another request's row.
+//
+// What remains (documented, not solved — solving it needs a compare-and-set
+// Base44 does not have): the order is only as good as created_date. Two
+// inserts stamped in the same millisecond are ordered by id; if the ids are
+// not monotonic AND each request's re-read missed the other's row (replica
+// lag), both can be kept. Every other interleaving keeps exactly one.
+
+export type PaymentRace =
+  | { ok: true; overflowIds: string[] }
+  | { ok: false; status: number; code: string; message: string };
+
+/** created_date ascending, then id ascending — the one order every request uses. */
+export function orderPayments(payments: Rec[]): Rec[] {
+  return [...(payments || [])].sort((a, b) => {
+    const ad = String(a.created_date ?? '');
+    const bd = String(b.created_date ?? '');
+    if (ad !== bd) return ad < bd ? -1 : 1;
+    const ai = String(a.id ?? '');
+    const bi = String(b.id ?? '');
+    return ai === bi ? 0 : ai < bi ? -1 : 1;
+  });
+}
+
+/** Which payments fit in `netCents`, walking orderPayments' order (see above). */
+export function classifyPayments(payments: Rec[], netCents: number): { kept: Rec[]; overflow: Rec[] } {
+  const kept: Rec[] = [];
+  const overflow: Rec[] = [];
+  let total = 0;
+  for (const p of orderPayments(payments)) {
+    const cents = Math.max(0, storedCents(p.amount));
+    if (total + cents > netCents) {
+      overflow.push(p);
+    } else {
+      total += cents;
+      kept.push(p);
+    }
+  }
+  return { kept, overflow };
+}
+
+/**
+ * Called right after a PaymentRecord insert, BEFORE the charge is settled.
+ * If the new record is an overflow it is deleted and a 409 comes back; the
+ * director sees "otro pago se registró al mismo tiempo" and the real balance.
+ */
+export async function resolvePaymentRace(sr: Db, created: Rec, schoolId: string): Promise<PaymentRace> {
+  const createdId = String(created?.id || '');
+  const chargeId = String(created?.charge_id || '');
+  const charge = await sameSchoolRecord(sr, 'ChargeItem', chargeId, schoolId);
+  if (!createdId || !charge) return { ok: true, overflowIds: [] };
+  const payments = await paymentsFor(sr, chargeId, schoolId);
+  // The insert may not be visible to the re-read yet; it is certainly in the
+  // set, so add it (its created_date comes from the create response).
+  if (!payments.some((p) => String(p.id) === createdId)) payments.push(created);
+  const { overflow } = classifyPayments(payments, Math.max(0, storedCents(charge.amount)));
+  const overflowIds = overflow.map((p) => String(p.id));
+  if (!overflowIds.includes(createdId)) return { ok: true, overflowIds };
+
+  try {
+    await sr.entities.PaymentRecord.delete(createdId);
+  } catch (e) {
+    console.error('guardedEntityWrite: overflowing payment could not be removed', createdId, (e as Error)?.message);
+    return {
+      ok: false,
+      status: 500,
+      code: 'PAYMENT_CONFLICT_UNRESOLVED',
+      message: `payment ${createdId} overpays charge ${chargeId} and could not be removed; delete it by hand`,
+    };
+  }
+  return {
+    ok: false,
+    status: 409,
+    code: 'PAYMENT_CONFLICT',
+    message: 'Otro pago se registró al mismo tiempo; revisa el saldo y vuelve a intentar.',
+  };
+}
+
 /**
  * Re-derive a charge's amount_paid, status and last_payment_date from its
  * PaymentRecords and write them. Called after a payment is recorded or
  * deleted. Returns the updated charge (null when it is gone or foreign).
+ *
+ * `keptOnly` (the payment-create path): count only the payments
+ * classifyPayments keeps, so a concurrent overflow that its own request has
+ * not deleted yet never shows up as money received. Not used elsewhere: a
+ * charge overpaid before 2026-09-30 must keep reading as paid.
  */
-export async function settleCharge(sr: Db, chargeId: unknown, schoolId: string, now: Date): Promise<Rec | null> {
+export async function settleCharge(
+  sr: Db, chargeId: unknown, schoolId: string, now: Date, opts: { keptOnly?: boolean } = {},
+): Promise<Rec | null> {
   const charge = await sameSchoolRecord(sr, 'ChargeItem', chargeId, schoolId);
   if (!charge) return null;
-  const payments = await paymentsFor(sr, String(charge.id), schoolId);
+  const all = await paymentsFor(sr, String(charge.id), schoolId);
+  const payments = opts.keptOnly ? classifyPayments(all, Math.max(0, storedCents(charge.amount))).kept : all;
   const paidCents = sumPaymentsCents(payments);
   const lastPayment = payments
     .map((p) => String(p.payment_date || ''))

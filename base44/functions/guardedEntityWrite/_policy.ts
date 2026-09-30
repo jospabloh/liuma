@@ -41,7 +41,7 @@ export const SERVER_ONLY_FIELDS: Record<string, string[]> = {
   Attendance: ['parent_notified', 'notified_at'],
   // What has been paid (re-derived from PaymentRecords, ./_payments.ts) and
   // when a family was last reminded (sendBulkNotification's).
-  ChargeItem: ['amount_paid', 'last_payment_date', 'last_reminder_at', 'reminder_sent'],
+  ChargeItem: ['amount_paid', 'last_payment_date', 'last_reminder_at', 'reminder_claim_id', 'reminder_sent'],
 };
 
 // Client-supplied references that must point at a record of the SAME school.

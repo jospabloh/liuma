@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, X, Calendar } from 'lucide-react';
+import { Sparkles, Calendar } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -15,15 +15,11 @@ export default function WelcomeTrialModal({ subscription, onClose }) {
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-md p-0 overflow-hidden">
+      {/* One close button: DialogContent's own. The [&>button] variants only
+          recolor it for the brand band it sits on (it used to be doubled by a
+          second, hand-made X). */}
+      <DialogContent className="max-w-md p-0 overflow-hidden [&>button]:text-white/80 [&>button:hover]:bg-white/20 [&>button:hover]:text-white">
         <div className="relative bg-brand p-8 text-white">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-white/80 hover:text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -34,10 +30,10 @@ export default function WelcomeTrialModal({ subscription, onClose }) {
               <Sparkles className="w-10 h-10" />
             </div>
             
-            <h2 className="text-2xl font-bold mb-2">¡Bienvenido a LIUMA!</h2>
-            <p className="text-white/90 text-sm">
+            <DialogTitle className="text-2xl font-bold leading-normal tracking-normal mb-2">¡Bienvenido a LIUMA!</DialogTitle>
+            <DialogDescription className="text-white/90 text-sm">
               Tu período de prueba gratuito ha comenzado
-            </p>
+            </DialogDescription>
           </motion.div>
         </div>
 

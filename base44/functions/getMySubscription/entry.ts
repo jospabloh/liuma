@@ -31,7 +31,10 @@ const FOUNDER_TIER = 'founder';
 const JOIN_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const JOIN_CODE_LENGTH = 8;
 // ACACIA-internal bookkeeping a school admin has no business reading.
-const INTERNAL_FIELDS = ['activation_notes', 'notes', 'last_payment_notes', 'activated_by_admin', 'last_payment_confirmed_by'];
+// created_by / created_by_id are Base44's built-in record owner: for a
+// subscription that is whoever provisioned it (an ACACIA operator's email),
+// which live QA on 2026-09-30 saw reaching school ADMINs.
+const INTERNAL_FIELDS = ['activation_notes', 'notes', 'last_payment_notes', 'activated_by_admin', 'last_payment_confirmed_by', 'created_by', 'created_by_id'];
 const MEMBER_FIELDS = ['subscription_status', 'license_tier', 'trial_end_date'];
 
 type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string; onboarding_completed?: boolean; created_date?: string };

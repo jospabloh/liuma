@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { Card } from "@/components/ui/card";
 import { formatLocalDate, parseLocalDate } from '@/lib/dates';
+import { diaryCoverage } from '@/lib/diaryCoverage';
 
 // `events`: upcoming events the server already limited to the school-wide
 // ones and this teacher's classrooms (read with the rest of the home lists).
@@ -106,11 +107,11 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   const todayDiaries = homeLists.diaries.filter((d) => classroomIds.includes(d.classroom_id));
   const unreadUrgentNotices = homeLists.unreadUrgent.filter((row) => classStudentIds.has(row.student_id));
 
-  const studentsWithDiary = new Set(todayDiaries.map(d => d.student_id));
-  const studentsMissingDiary = students.filter(s => !studentsWithDiary.has(s.id));
-  const diaryProgress = students.length > 0 
-    ? Math.round((todayDiaries.length / students.length) * 100) 
-    : 0;
+  // Counted in students, not entries: two bitácoras for one child do not
+  // cover a second child (see diaryCoverage.js).
+  const diaryStats = diaryCoverage(students, todayDiaries);
+  const studentsMissingDiary = diaryStats.missing;
+  const diaryProgress = diaryStats.percent;
 
   return (
     <div className="min-h-screen bg-background">
@@ -128,8 +129,8 @@ export default function TeacherHome({ user, userProfile, subscription }) {
         >
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-display font-semibold text-card-foreground">Bitácoras de hoy</h3>
-            <Badge className={diaryProgress === 100 ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}>
-              {diaryProgress === 100 ? (
+            <Badge className={diaryStats.complete ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'}>
+              {diaryStats.complete ? (
                 <><CheckCircle className="w-3 h-3 mr-1" /> Completo</>
               ) : (
                 <><AlertCircle className="w-3 h-3 mr-1" /> {studentsMissingDiary.length} pendientes</>
@@ -142,12 +143,12 @@ export default function TeacherHome({ user, userProfile, subscription }) {
               animate={{ width: `${diaryProgress}%` }}
               transition={{ delay: 0.5, duration: 0.8 }}
               className={`h-full rounded-full ${
-                diaryProgress === 100 ? 'bg-green-500' : 'bg-amber-500'
+                diaryStats.complete ? 'bg-green-500' : 'bg-amber-500'
               }`}
             />
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            {todayDiaries.length} de {students.length} alumnos
+            {diaryStats.covered} de {diaryStats.total} alumnos
           </p>
         </motion.div>
       </div>
@@ -234,10 +235,8 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             <div className="space-y-2">
               {classrooms.map((classroom) => {
                 const classStudents = students.filter(s => s.classroom_id === classroom.id);
-                const classDiaries = todayDiaries.filter(d => d.classroom_id === classroom.id);
-                const progress = classStudents.length > 0
-                  ? Math.round((classDiaries.length / classStudents.length) * 100)
-                  : 0;
+                const classStats = diaryCoverage(classStudents, todayDiaries.filter(d => d.classroom_id === classroom.id));
+                const progress = classStats.percent;
 
                 return (
                   <div
@@ -248,11 +247,11 @@ export default function TeacherHome({ user, userProfile, subscription }) {
                       <div>
                         <h4 className="font-medium text-card-foreground">{classroom.name}</h4>
                         <p className="text-sm text-muted-foreground">
-                          {classDiaries.length}/{classStudents.length} bitácoras
+                          {classStats.covered}/{classStats.total} alumnos con bitácora
                         </p>
                       </div>
                       <div className={`text-2xl font-bold ${
-                        progress === 100 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
+                        classStats.complete ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
                       }`}>
                         {progress}%
                       </div>

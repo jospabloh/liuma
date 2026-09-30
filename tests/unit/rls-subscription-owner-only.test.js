@@ -52,6 +52,14 @@ test('getMySubscription gives non-admins only status, tier and trial end', () =>
   const fn = read('base44/functions/getMySubscription/entry.ts');
   assert.match(fn, /const MEMBER_FIELDS = \['subscription_status', 'license_tier', 'trial_end_date'\];/);
   assert.match(fn, /INTERNAL_FIELDS = \['activation_notes', 'notes', 'last_payment_notes'/);
+  // Base44's record owner (the ACACIA operator who provisioned the license)
+  // is stripped too: live QA 2026-09-30 saw an admin receive created_by (an
+  // email) and created_by_id.
+  const internal = fn.match(/const INTERNAL_FIELDS = \[([^\]]*)\]/)[1];
+  for (const field of ['created_by', 'created_by_id']) {
+    assert.ok(internal.includes(`'${field}'`), `INTERNAL_FIELDS must strip ${field}`);
+  }
+  assert.match(fn, /for \(const f of INTERNAL_FIELDS\) delete subscription\[f\];/);
   // join_code only in the ADMIN branch
   assert.match(fn, /\.\.\.\(isAdmin \? \{ join_code:/);
 });

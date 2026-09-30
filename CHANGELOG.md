@@ -5,6 +5,31 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.8.1] - 2026-09-30
+
+Fixes from the live QA pass of 2026-09-29/30 (18/18 cases passed, no
+cross-school read or write). Detail in CLAUDE.md → "QA en vivo 2026-09-29/30".
+
+### Fixed
+
+- **Teacher home counted diary entries, not students**: two bitácoras for one
+  child and none for another showed "Completo · 2 de 2 alumnos". Summary and
+  per-classroom cards now use `diaryCoverage()` (`src/lib/diaryCoverage.js`).
+- **`/CrearBitacora` without `?classroomId` claimed every diary was done.**
+  Step 1 now distinguishes loading / no classrooms / pick a classroom (auto-
+  picked when there is only one) / error / empty classroom / list / all done.
+- **Trial welcome modal shown on a `view_only` license**; it now opens only
+  when the effective status is `trial`. Duplicate close button removed and a
+  `DialogTitle`/`DialogDescription` added (Radix accessibility warning).
+
+### Security
+
+- `getMySubscription` no longer returns `created_by` / `created_by_id` (the
+  provisioning operator's email) to school ADMINs. **Function change —
+  needs `npm run deploy`.**
+
+---
+
 ## [1.8.0] - 2026-09-29
 
 Sales-readiness pass: thirteen fix packages (P0–P12) built in parallel,

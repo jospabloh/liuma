@@ -46,7 +46,10 @@ export default function Home() {
   // Through getMySubscription (service role, school re-derived server-side):
   // a direct SchoolSubscription read is platform-only and returned null for
   // every school user, so these modals and banners never had data (audit F10).
-  const { subscription } = useSubscription();
+  // effectiveStatus is the server's verdict (an expired trial comes back as
+  // view_only), so the trial welcome never shows over a read-only license —
+  // QA 2026-09-29 saw "Tu período de prueba ha comenzado" on a view_only school.
+  const { subscription, effectiveStatus } = useSubscription();
 
   const markWelcomeShownMutation = useMutation({
     mutationFn: async () => {
@@ -122,7 +125,7 @@ export default function Home() {
   return (
     <>
       <SuspendedAccountModal subscription={subscription} />
-      {showWelcome && subscription && userProfile.app_role === 'ADMIN' && (
+      {showWelcome && subscription && effectiveStatus === 'trial' && userProfile.app_role === 'ADMIN' && (
         <WelcomeTrialModal subscription={subscription} onClose={handleCloseWelcome} />
       )}
       <HomeComponent />

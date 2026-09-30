@@ -1081,6 +1081,43 @@ por campo a un usuario sobre su propia fila, ni si una creación con service
 role llena `created_by_id`. Las pantallas autenticadas no se vieron en
 navegador. Los textos legales no los ha revisado un abogado.
 
+### QA en vivo 2026-09-29/30 — 18/18, cuatro arreglos (v1.8.1)
+
+Pase de QA contra producción con dos escuelas de prueba y usuarios de cada
+rol. **18/18 casos pasaron.** Ningún cruce entre escuelas, ni de lectura ni de
+escritura, por ninguna de las vías que existen: `schoolRead`,
+`guardedEntityWrite`, REST directo a las entidades, `exportSchoolData` y Lumi.
+
+Lo que sí encontró, arreglado en 1.8.1 (`tests/unit/qa-live-fixes.test.js`):
+
+1. **Medio — el inicio del maestro contaba bitácoras, no alumnos.** Un alumno
+   con dos bitácoras y otro con ninguna daba «Completo · 2 de 2 alumnos».
+   `TeacherHome` (resumen y tarjeta por salón) cuenta ahora alumnos distintos
+   con `diaryCoverage()` (`src/lib/diaryCoverage.js`, sin imports).
+2. **Bajo — `/CrearBitacora` sin `?classroomId` decía «¡Todas las bitácoras
+   completas!»** porque la lista vacía era indistinguible de «todos tienen».
+   `crearBitacoraStep1View()` separa cargando / sin salones / elige salón /
+   error / salón sin alumnos / lista / todas completas; con un solo salón se
+   elige solo, como en Asistencia.
+3. **Bajo — la bienvenida de prueba salía con licencia `view_only`**, con dos
+   botones de cerrar y sin `DialogTitle` (aviso de Radix en consola). `Home`
+   la abre sólo si `effectiveStatus === 'trial'`; el modal usa el cierre de
+   `DialogContent` y `DialogTitle`/`DialogDescription`.
+4. **Info — `getMySubscription` devolvía `created_by`/`created_by_id`** (el
+   correo de quien dio de alta la licencia) a los ADMIN de escuela. Van en
+   `INTERNAL_FIELDS`. **Cambia una función: requiere `npm run deploy`**, no
+   sólo `deploy:site`.
+
+**No verificado en ese pase:** los clics de formulario de las altas del
+director (salón, alumno, vínculo) en la UI, la alerta de emergencia,
+`PermissionOverride`, los flujos de Pagos, Uniformes y ausencias, el cuerpo de
+los correos, y el modo oscuro de las pantallas autenticadas.
+
+**Datos de QA siguen en producción**, pendientes de decisión del dueño: las
+escuelas «QA-LIUMA Escuela A/B» (`6abc382a1766cc904383d9b6` y su par
+terminado en `…b7`) y 5 usuarios `+qa-*`. No se borraron: borrar en
+producción es decisión del dueño, no de un pase de QA.
+
 ## Lecturas por inquilino (P10, 2026-09-29)
 
 Cierra F01. Decisión del dueño: **la RLS de las entidades se queda estricta**

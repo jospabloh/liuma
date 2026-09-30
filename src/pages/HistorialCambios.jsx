@@ -10,6 +10,16 @@ import { APP_VERSION, RELEASE_DATE } from '@/lib/appConfig';
 // ChangeLog pages.
 const CHANGES = [
   {
+    date: '2026-09-30',
+    title: 'Versión 1.8.1: correcciones de la prueba en vivo',
+    items: [
+      'Corregido: el avance de bitácoras del inicio del maestro cuenta alumnos, no bitácoras. Si un alumno tenía dos bitácoras y otro ninguna, decía "Completo"; ya no.',
+      'Corregido: al entrar a crear una bitácora sin haber elegido salón, la app te pide elegirlo (o lo elige sola si sólo tienes uno) en lugar de decir que todas estaban completas.',
+      'Corregido: la bienvenida del periodo de prueba ya sólo aparece si tu escuela está en prueba, y tiene un solo botón para cerrarla.',
+      'Más privacidad: la información de tu licencia ya no incluye datos internos de quien la dio de alta.',
+    ],
+  },
+  {
     date: '2026-09-29',
     title: 'Versión 1.8: registro, licencia, Lumi y mucho más confiable',
     items: [

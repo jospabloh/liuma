@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { schoolRead } from '@/lib/data/schoolRead';
+import { schoolRead, schoolReadContext } from '@/lib/data/schoolRead';
 import { invokeFunction } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
-import { User, CheckCircle, AlertCircle, Sparkles, ArrowRight, ArrowLeft, Send, Loader2, Undo2 } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
+import { User, CheckCircle, AlertCircle, Sparkles, ArrowRight, ArrowLeft, Send, Loader2, Undo2, School, ChevronRight, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
 import { formatLocalDate, parseLocalDate } from '@/lib/dates';
+import { diaryCoverage, crearBitacoraStep1View } from '@/lib/diaryCoverage';
 
 // Etiquetas en español para los valores guardados (el resumen de revisión
 // mostraba "necesita_apoyo" / "casi_todo" tal cual).
@@ -45,7 +47,11 @@ export default function CrearBitacora() {
   const queryClient = useQueryClient();
   const { canWrite } = useCanWrite();
   const urlParams = new URLSearchParams(window.location.search);
-  const classroomId = urlParams.get('classroomId');
+  const urlClassroomId = urlParams.get('classroomId');
+  // Sin ?classroomId (enlace directo, o el menú), la maestra elige salón aquí
+  // mismo; si sólo tiene uno se elige solo, igual que en Asistencia.
+  const [pickedClassroomId, setPickedClassroomId] = useState(null);
+  const classroomId = urlClassroomId || pickedClassroomId;
   // Día local de la escuela (no toISOString: después de las 18:00 en México
   // eso ya es mañana). La misma cadena se guarda y se muestra.
   const today = formatLocalDate(new Date());
@@ -73,6 +79,21 @@ export default function CrearBitacora() {
 
   const { user, userProfile } = useCurrentProfile();
 
+  const { data: teacherClassrooms = [], isLoading: classroomsLoading } = useQuery({
+    queryKey: ['crearBitacoraClassrooms', user?.id],
+    queryFn: async () => {
+      const context = await schoolReadContext();
+      return context.classrooms.filter((c) => c.is_active !== false);
+    },
+    enabled: !urlClassroomId && !!user,
+  });
+
+  useEffect(() => {
+    if (!urlClassroomId && !pickedClassroomId && teacherClassrooms.length === 1) {
+      setPickedClassroomId(teacherClassrooms[0].id);
+    }
+  }, [urlClassroomId, pickedClassroomId, teacherClassrooms]);
+
   const { data: classroom } = useQuery({
     queryKey: ['classroom', classroomId],
     queryFn: async () => {
@@ -82,7 +103,7 @@ export default function CrearBitacora() {
     enabled: !!classroomId,
   });
 
-  const { data: students = [], isLoading } = useQuery({
+  const { data: students = [], isLoading: studentsLoading, isError: studentsError } = useQuery({
     queryKey: ['students', classroomId],
     queryFn: () => schoolRead('Student', { 
       classroom_id: classroomId,
@@ -91,7 +112,7 @@ export default function CrearBitacora() {
     enabled: !!classroomId,
   });
 
-  const { data: todayDiaries = [] } = useQuery({
+  const { data: todayDiaries = [], isLoading: diariesLoading, isError: diariesError } = useQuery({
     queryKey: ['todayDiaries', today, classroomId],
     queryFn: () => schoolRead('DiaryEntry', { 
       date: today,
@@ -100,8 +121,16 @@ export default function CrearBitacora() {
     enabled: !!classroomId,
   });
 
-  const studentsWithDiary = new Set(todayDiaries.map(d => d.student_id));
-  const studentsWithoutDiary = students.filter(s => !studentsWithDiary.has(s.id));
+  const studentsWithoutDiary = diaryCoverage(students, todayDiaries).missing;
+  const step1View = crearBitacoraStep1View({
+    classroomId,
+    classroomsLoading: !urlClassroomId && (classroomsLoading || !user),
+    classroomCount: teacherClassrooms.length,
+    loading: studentsLoading || diariesLoading,
+    error: studentsError || diariesError,
+    studentCount: students.length,
+    missingCount: studentsWithoutDiary.length,
+  });
 
   const createDiaryMutation = useMutation({
     mutationFn: async (data) => {
@@ -224,7 +253,7 @@ export default function CrearBitacora() {
     });
   };
 
-  if (isLoading) return <LoadingScreen message="Cargando..." />;
+  if (step1View === 'loading' && step === 1) return <LoadingScreen message="Cargando..." />;
 
   return (
     <div className="min-h-screen bg-background">
@@ -259,41 +288,92 @@ export default function CrearBitacora() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <h2 className="text-lg font-semibold text-foreground mb-4">
-              Selecciona un alumno
-            </h2>
-            <div className="space-y-2">
-              {studentsWithoutDiary.map((student) => (
-                <button
-                  key={student.id}
-                  onClick={() => {
-                    setSelectedStudent(student);
-                    setStep(2);
-                  }}
-                  className="w-full flex items-center gap-3 p-4 bg-card text-card-foreground rounded-2xl border border-border hover:border-brand/30 hover:bg-brand/10 transition-colors text-left"
-                >
-                  <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
-                    <User className="w-5 h-5 text-brand" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-card-foreground">
-                      {student.first_name} {student.last_name}
-                    </p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" /> Sin bitácora hoy
-                    </p>
-                  </div>
-                </button>
-              ))}
+            {step1View === 'no-classrooms' && (
+              <EmptyState
+                icon={School}
+                title="No tienes salones asignados"
+                description="Pide a la dirección que te asigne un salón para poder escribir bitácoras."
+              />
+            )}
 
-              {studentsWithoutDiary.length === 0 && (
-                <div className="text-center py-8">
-                  <CheckCircle className="w-16 h-16 text-green-500 dark:text-green-400 mx-auto mb-4" />
-                  <p className="text-lg font-medium text-foreground">¡Todas las bitácoras completas!</p>
-                  <p className="text-muted-foreground">Todos los alumnos tienen su bitácora de hoy.</p>
+            {step1View === 'pick-classroom' && (
+              <>
+                <h2 className="text-lg font-semibold text-foreground mb-4">
+                  Selecciona un salón
+                </h2>
+                <div className="space-y-2">
+                  {teacherClassrooms.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => setPickedClassroomId(c.id)}
+                      className="w-full flex items-center gap-3 p-4 bg-card text-card-foreground rounded-2xl border border-border hover:border-brand/30 hover:bg-brand/10 transition-colors text-left"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+                        <School className="w-5 h-5 text-brand" />
+                      </div>
+                      <p className="flex-1 font-medium text-card-foreground">{c.name}</p>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
+              </>
+            )}
+
+            {step1View === 'error' && (
+              <EmptyState
+                icon={AlertCircle}
+                title="No se pudo cargar la lista de alumnos"
+                description="Revisa tu conexión y vuelve a intentarlo."
+              />
+            )}
+
+            {step1View === 'no-students' && (
+              <EmptyState
+                icon={Users}
+                title="No hay alumnos en este salón"
+                description="Cuando la dirección inscriba alumnos aquí, podrás escribir su bitácora."
+              />
+            )}
+
+            {step1View === 'all-complete' && (
+              <div className="text-center py-8">
+                <CheckCircle className="w-16 h-16 text-green-500 dark:text-green-400 mx-auto mb-4" />
+                <p className="text-lg font-medium text-foreground">¡Todas las bitácoras completas!</p>
+                <p className="text-muted-foreground">Todos los alumnos tienen su bitácora de hoy.</p>
+              </div>
+            )}
+
+            {step1View === 'list' && (
+              <>
+                <h2 className="text-lg font-semibold text-foreground mb-4">
+                  Selecciona un alumno
+                </h2>
+                <div className="space-y-2">
+                  {studentsWithoutDiary.map((student) => (
+                    <button
+                      key={student.id}
+                      onClick={() => {
+                        setSelectedStudent(student);
+                        setStep(2);
+                      }}
+                      className="w-full flex items-center gap-3 p-4 bg-card text-card-foreground rounded-2xl border border-border hover:border-brand/30 hover:bg-brand/10 transition-colors text-left"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+                        <User className="w-5 h-5 text-brand" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-card-foreground">
+                          {student.first_name} {student.last_name}
+                        </p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Sin bitácora hoy
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </motion.div>
         )}
 

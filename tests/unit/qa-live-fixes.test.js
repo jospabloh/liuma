@@ -42,6 +42,8 @@ test('CrearBitacora only claims "todas completas" for a loaded classroom whose e
   const v = crearBitacoraStep1View;
   assert.equal(v({ classroomId: null, classroomsLoading: true }), 'loading');
   assert.equal(v({ classroomId: null, classroomCount: 0 }), 'no-classrooms');
+  // A failed classroom load is an error, not "no tienes salones" (Codex review, PR #189).
+  assert.equal(v({ classroomId: null, classroomsError: true, classroomCount: 0 }), 'classrooms-error');
   assert.equal(v({ classroomId: null, classroomCount: 2 }), 'pick-classroom');
   assert.equal(v({ classroomId: 'c1', loading: true }), 'loading');
   assert.equal(v({ classroomId: 'c1', error: true }), 'error');

@@ -79,7 +79,7 @@ export default function CrearBitacora() {
 
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: teacherClassrooms = [], isLoading: classroomsLoading } = useQuery({
+  const { data: teacherClassrooms = [], isLoading: classroomsLoading, isError: classroomsError } = useQuery({
     queryKey: ['crearBitacoraClassrooms', user?.id],
     queryFn: async () => {
       const context = await schoolReadContext();
@@ -125,6 +125,7 @@ export default function CrearBitacora() {
   const step1View = crearBitacoraStep1View({
     classroomId,
     classroomsLoading: !urlClassroomId && (classroomsLoading || !user),
+    classroomsError: !urlClassroomId && classroomsError,
     classroomCount: teacherClassrooms.length,
     loading: studentsLoading || diariesLoading,
     error: studentsError || diariesError,
@@ -317,6 +318,14 @@ export default function CrearBitacora() {
                   ))}
                 </div>
               </>
+            )}
+
+            {step1View === 'classrooms-error' && (
+              <EmptyState
+                icon={AlertCircle}
+                title="No se pudieron cargar tus salones"
+                description="Revisa tu conexión y vuelve a intentarlo."
+              />
             )}
 
             {step1View === 'error' && (

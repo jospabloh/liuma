@@ -30,6 +30,7 @@ export function diaryCoverage(students = [], diaries = []) {
 export function crearBitacoraStep1View({
   classroomId,
   classroomsLoading = false,
+  classroomsError = false,
   classroomCount = 0,
   loading = false,
   error = false,
@@ -38,6 +39,8 @@ export function crearBitacoraStep1View({
 }) {
   if (!classroomId) {
     if (classroomsLoading) return 'loading';
+    // A failed load must not read as "you have no classrooms".
+    if (classroomsError) return 'classrooms-error';
     return classroomCount === 0 ? 'no-classrooms' : 'pick-classroom';
   }
   if (loading) return 'loading';

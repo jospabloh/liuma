@@ -30,6 +30,7 @@ import {
   studentUpdatePatch,
   validateClassroomForm,
   validateDocumentForm,
+  validateEventForm,
   validateStudentForm,
 } from '../../src/lib/forms/directorForms.js';
 
@@ -239,6 +240,51 @@ test('the director forms no longer rely on a disabled button or the browser\'s o
   assert.match(docs, /noValidate/);
   for (const field of ['title', 'file', 'valid_until']) {
     assert.match(docs, new RegExp(`<FieldError id="doc-${field}-error" message=\\{errors\\.${field}\\}`));
+  }
+});
+
+// Nuevo evento (Calendario) is a director form too, and the QA run's own
+// requests show what it let through: CLASSROOM scope with classroom_id "",
+// end_time "09:00" after time "10:00", and only the browser's own tooltip
+// for an empty title.
+test('event validation names the field in Spanish and refuses what QA saw go through', () => {
+  const ok = {
+    title: 'Festival', description: '', date: '2026-10-15', time: '10:00', end_time: '11:00', location: '',
+    scope: 'SCHOOL', classroom_id: '', requires_confirmation: false, confirmation_deadline: '',
+    has_cost: false, cost_amount: '', cost_concept: '',
+  };
+  assert.deepEqual(validateEventForm(ok), {});
+
+  const empty = validateEventForm({ ...ok, title: '  ', date: '' });
+  assert.equal(empty.title, 'Escribe el título del evento.');
+  assert.equal(empty.date, 'Elige la fecha del evento.');
+
+  assert.match(validateEventForm({ ...ok, scope: 'CLASSROOM' }).classroom_id, /Elige el salón/);
+  assert.deepEqual(validateEventForm({ ...ok, scope: 'CLASSROOM', classroom_id: 'c1' }), {});
+  assert.equal(validateEventForm({ ...ok, end_time: '09:00' }).end_time, 'Debe ser posterior a la hora de inicio.');
+  assert.equal(validateEventForm({ ...ok, end_time: '10:00' }).end_time, 'Debe ser posterior a la hora de inicio.');
+  assert.deepEqual(validateEventForm({ ...ok, time: '', end_time: '' }), {}, 'times are optional');
+
+  const paid = { ...ok, has_cost: true };
+  assert.match(validateEventForm({ ...paid, cost_amount: '' }).cost_amount, /Escribe el monto/);
+  assert.equal(validateEventForm({ ...paid, cost_amount: '0' }).cost_amount, 'El monto debe ser mayor a 0.');
+  assert.ok(validateEventForm({ ...paid, cost_amount: '-5' }).cost_amount);
+  assert.ok(validateEventForm({ ...paid, cost_amount: '150.505' }).cost_amount, 'no fractions of a centavo');
+  assert.deepEqual(validateEventForm({ ...paid, cost_amount: '150.50' }), {});
+  assert.deepEqual(validateEventForm({ ...ok, cost_amount: '-5' }), {}, 'amount ignored when the event has no cost');
+
+  const rsvp = { ...ok, requires_confirmation: true };
+  assert.match(validateEventForm({ ...rsvp, confirmation_deadline: '2026-10-16' }).confirmation_deadline, /posterior a la fecha del evento/);
+  assert.deepEqual(validateEventForm({ ...rsvp, confirmation_deadline: '2026-10-15' }), {});
+});
+
+test('EventFormDialog reports errors under each field instead of the browser tooltip', () => {
+  const src = code('src/components/calendar/EventFormDialog.jsx');
+  assert.doesNotMatch(src, /\brequired\b(?!-)/);
+  assert.match(src, /noValidate/);
+  assert.match(src, /validateEventForm\(formData\)/);
+  for (const field of ['title', 'date', 'end_time', 'classroom_id', 'cost_amount']) {
+    assert.match(src, new RegExp(`<FieldError id="event-${field}-error" message=\\{errors\\.${field}\\}`), field);
   }
 });
 

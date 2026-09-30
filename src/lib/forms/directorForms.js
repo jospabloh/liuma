@@ -98,9 +98,13 @@ export function studentFormFromRecord(student) {
  *                  one must be one of them); legacyBloodType: a value already
  *                  stored that is not one of BLOOD_TYPES — kept valid so an
  *                  edit of the rest of the record never forces it to change;
- *                  today: for tests.
+ *                  today: for tests. Left undefined in the app on purpose:
+ *                  startOfLocalDay() with no argument is "today", and once the
+ *                  shared date helper resolves that in the school's time zone
+ *                  (America/Mexico_City) this check follows it without a change
+ *                  here — passing `new Date()` would pin it to the device's day.
  */
-export function validateStudentForm(form, { classroomIds, legacyBloodType = '', today = new Date() } = {}) {
+export function validateStudentForm(form, { classroomIds, legacyBloodType, today } = {}) {
   const errors = {};
   requireText(errors, 'first_name', form?.first_name, 'Escribe el nombre del alumno.');
   requireText(errors, 'last_name', form?.last_name, 'Escribe los apellidos del alumno.');
@@ -178,5 +182,77 @@ export function validateDocumentForm(form, file) {
 
   if (!file) errors.file = 'Elige el archivo PDF que vas a subir.';
   else if (!isPdfFile(file)) errors.file = 'El archivo debe ser un PDF.';
+  return errors;
+}
+
+// --- Evento (Calendario escolar) ---------------------------------------------
+//
+// Same finding as the other forms (QA 2026-09-30): Nuevo evento leaned on the
+// native `required` tooltip ("Please fill out this field." in an English
+// Chrome), and three things the director cannot have meant went straight
+// through — found in that run's own requests:
+//   - "Por salón" with no salón chosen: stored as a CLASSROOM event with
+//     classroom_id null, which no teacher or parent ever sees;
+//   - an end time before the start time (10:00 → 09:00);
+//   - "¿Tiene costo?" on with no amount, or a zero/negative one — and a
+//     parent who accepts the event gets a ChargeItem for exactly that amount
+//     (EventosParaPadres).
+
+export const EVENT_FIELD_ORDER = [
+  'title',
+  'description',
+  'date',
+  'time',
+  'end_time',
+  'location',
+  'classroom_id',
+  'confirmation_deadline',
+  'cost_amount',
+  'cost_concept',
+];
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Pesos with at most two decimals, as typed in the "Monto" box.
+const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
+
+export function validateEventForm(form) {
+  const errors = {};
+  requireText(errors, 'title', form?.title, 'Escribe el título del evento.');
+  limitText(errors, 'description', form?.description, MAX_LONG_TEXT);
+  limitText(errors, 'location', form?.location, MAX_SHORT_TEXT);
+
+  const date = text(form?.date);
+  const eventDay = date ? parseLocalDate(date) : null;
+  if (!date) errors.date = 'Elige la fecha del evento.';
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !eventDay) errors.date = 'La fecha no es válida.';
+
+  const start = text(form?.time);
+  const end = text(form?.end_time);
+  if (start && !TIME_RE.test(start)) errors.time = 'La hora no es válida.';
+  if (end && !TIME_RE.test(end)) errors.end_time = 'La hora no es válida.';
+  else if (end && !start) errors.time = 'Escribe también la hora de inicio.';
+  else if (end && TIME_RE.test(start) && end <= start) errors.end_time = 'Debe ser posterior a la hora de inicio.';
+
+  if (form?.scope === 'CLASSROOM' && !text(form?.classroom_id)) {
+    errors.classroom_id = 'Elige el salón del evento, o cambia el alcance a «Toda la escuela».';
+  }
+
+  if (form?.requires_confirmation) {
+    const deadline = text(form?.confirmation_deadline);
+    const deadlineDay = deadline ? parseLocalDate(deadline) : null;
+    if (deadline && (!/^\d{4}-\d{2}-\d{2}$/.test(deadline) || !deadlineDay)) {
+      errors.confirmation_deadline = 'La fecha no es válida.';
+    } else if (deadlineDay && eventDay && deadlineDay > eventDay) {
+      errors.confirmation_deadline = 'No puede ser posterior a la fecha del evento.';
+    }
+  }
+
+  if (form?.has_cost) {
+    const amount = text(form?.cost_amount);
+    if (!amount) errors.cost_amount = 'Escribe el monto, o apaga «¿Tiene costo?».';
+    else if (!AMOUNT_RE.test(amount)) errors.cost_amount = 'Escribe un monto válido, con hasta dos decimales (ej. 150 o 150.50).';
+    else if (Number(amount) <= 0) errors.cost_amount = 'El monto debe ser mayor a 0.';
+    limitText(errors, 'cost_concept', form?.cost_concept, MAX_SHORT_TEXT);
+  }
   return errors;
 }

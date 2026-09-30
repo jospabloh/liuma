@@ -13,7 +13,7 @@
 // Only relative, explicit-extension imports so `node --test` loads it.
 
 import { ATTENDANCE_STATUS, ATTENDANCE_STATUSES, ATTENDED_STATUSES } from '../attendance/status.js';
-import { formatLocalDate, parseLocalDate } from '../dates.js';
+import { formatLocalDate, parseLocalDate, schoolToday } from '../dates.js';
 
 /**
  * Count Attendance records per status and derive the attendance rate:
@@ -78,7 +78,7 @@ export function countSchoolDays(from, to) {
  *   bitácora yet, so a range ending next Friday must not read as behind.
  * - Weekend entries are ignored: the denominator only has weekdays.
  */
-export function diaryCoverage({ diaries = [], students = [], dateFrom, dateTo, today = formatLocalDate(new Date()) }) {
+export function diaryCoverage({ diaries = [], students = [], dateFrom, dateTo, today = schoolToday() }) {
   const effectiveTo = dateTo && today && dateTo > today ? today : dateTo;
   const schoolDays = countSchoolDays(dateFrom, effectiveTo);
   const studentIds = new Set(students.map((s) => s.id));

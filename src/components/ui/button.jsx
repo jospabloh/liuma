@@ -22,7 +22,10 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-11 px-4 py-2",
-        sm: "h-8 rounded-lg px-3 text-xs",
+        // sm stays 32px under a mouse; a finger gets 44px (PagosAdmin
+        // "Registrar pago", the invite-card copy/share buttons, "Ayúdame con
+        // Lumi", calendar month arrows were all 32px on phones).
+        sm: "h-8 coarse:min-h-11 rounded-lg px-3 text-xs",
         lg: "h-10 rounded-lg px-8",
         icon: "h-11 w-11",
       },

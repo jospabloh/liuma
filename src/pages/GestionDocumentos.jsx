@@ -16,7 +16,7 @@ import { FileText, Upload, Loader2, Trash2, Download, Calendar } from 'lucide-re
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { parseLocalDate } from '@/lib/dates';
+import { parseLocalDate, schoolToday } from '@/lib/dates';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
@@ -31,7 +31,7 @@ export default function GestionDocumentos() {
     description: '',
     document_type: 'COMMUNICATION',
     target_audience: 'TODOS',
-    valid_from: format(new Date(), 'yyyy-MM-dd'),
+    valid_from: schoolToday(),
     valid_until: '',
   });
   const [selectedFile, setSelectedFile] = useState(null);
@@ -90,7 +90,7 @@ export default function GestionDocumentos() {
         description: '',
         document_type: 'COMMUNICATION',
         target_audience: 'TODOS',
-        valid_from: format(new Date(), 'yyyy-MM-dd'),
+        valid_from: schoolToday(),
         valid_until: '',
       });
       setSelectedFile(null);

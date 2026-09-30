@@ -21,7 +21,7 @@
 // Import-free except for the sibling date and money helpers, so `node --test`
 // loads it.
 
-import { isBeforeToday, parseLocalDate, startOfLocalDay } from '../dates.js';
+import { isBeforeToday, parseLocalDate, schoolTodayDate, startOfLocalDay } from '../dates.js';
 import { centsToAmount, chargeBalanceCents } from './money.js';
 
 export const CHARGE_STATUS = Object.freeze({
@@ -103,7 +103,10 @@ export function summarizeUnpaidCharges(charges = [], now = new Date()) {
 /** Whole calendar days from today to the due date (negative once past). */
 export function calendarDaysUntilDue(dueDate, now = new Date()) {
   const due = parseLocalDate(dueDate);
-  const today = startOfLocalDay(now);
+  // The school's day, like isBeforeToday above: with the device's day a
+  // browser off Mexico time counted a charge as due "in -1 days" (reminder
+  // window, labels) while isChargeOverdue still called it due today.
+  const today = schoolTodayDate(now);
   if (!due || !today) return null;
   const dueDay = startOfLocalDay(due);
   // Round, not floor: the two midnights can be 23h or 25h apart across a DST

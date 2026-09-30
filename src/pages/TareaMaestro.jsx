@@ -7,7 +7,7 @@ import LoadingScreen from '@/components/ui/LoadingScreen';
 import HomeworkCard from '@/components/homework/HomeworkCard';
 import EmptyState from '@/components/ui/EmptyState';
 import { BookOpen, Plus, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { schoolToday } from '@/lib/dates';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,7 +42,7 @@ export default function TareaMaestro() {
     subject: '',
     title: '',
     description: '',
-    due_date: format(new Date(), 'yyyy-MM-dd'),
+    due_date: schoolToday(),
   });
 
   const { user, userProfile } = useCurrentProfile();
@@ -73,7 +73,7 @@ export default function TareaMaestro() {
         subject: '',
         title: '',
         description: '',
-        due_date: format(new Date(), 'yyyy-MM-dd'),
+        due_date: schoolToday(),
       });
     },
     onError: () => {
@@ -89,12 +89,12 @@ export default function TareaMaestro() {
       school_id: userProfile.school_id,
       teacher_id: user.id,
       teacher_name: user.full_name,
-      assigned_date: format(new Date(), 'yyyy-MM-dd'),
+      assigned_date: schoolToday(),
     });
   };
 
   const isDirty = useMemo(() => (
-    formData.classroom_id || formData.subject || formData.title || formData.description || formData.due_date !== format(new Date(), 'yyyy-MM-dd')
+    formData.classroom_id || formData.subject || formData.title || formData.description || formData.due_date !== schoolToday()
   ), [formData]);
 
   const getClassroomName = (id) => {

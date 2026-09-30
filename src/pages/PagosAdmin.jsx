@@ -21,7 +21,7 @@ import { notificationService } from '@/lib/notifications/service';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
-import { formatLocalDate, parseLocalDate } from '@/lib/dates';
+import { parseLocalDate, schoolToday } from '@/lib/dates';
 import {
   CHARGE_STATUS,
   isPaymentReminderDue,
@@ -225,7 +225,7 @@ export default function PagosAdmin() {
     const original = parseAmountCents(chargeForm.amount);
     if (!original.ok) return { ok: false };
     const conceptType = chargeConcept?.concept_type || 'OTRO';
-    const today = formatLocalDate(new Date());
+    const today = schoolToday();
     const discount = discounts.find((d) =>
       discountApplies(d, { conceptType, today, allowsDiscounts: chargeConcept?.allows_discounts }).ok) || null;
     return { ok: true, discount, ...priceCharge(original.cents, discount) };

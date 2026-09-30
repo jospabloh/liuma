@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { CheckCircle, AlertCircle, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { schoolToday, schoolTodayDate } from '@/lib/dates';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
@@ -14,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function BitacorasMaestro() {
   const navigate = useNavigate();
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = schoolToday();
 
   const { user, userProfile } = useCurrentProfile();
 
@@ -61,7 +62,7 @@ export default function BitacorasMaestro() {
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Bitácoras de hoy"
-        subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+        subtitle={format(schoolTodayDate(), "EEEE d 'de' MMMM", { locale: es })}
         showBack
         backTo={createPageUrl('Home')}
       />

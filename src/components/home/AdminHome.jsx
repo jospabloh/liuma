@@ -8,6 +8,7 @@ import { HomeHeader } from '@/components/home/HomeChrome';
 import PaymentReminderBanner from '@/components/subscription/PaymentReminderBanner';
 import JoinCodeCard from '@/components/school/JoinCodeCard';
 import { format } from 'date-fns';
+import { schoolTodayDate } from '@/lib/dates';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
@@ -150,7 +151,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
   return (
     <div className="min-h-screen bg-background">
       <HomeHeader
-        eyebrow={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+        eyebrow={format(schoolTodayDate(), "EEEE d 'de' MMMM", { locale: es })}
         title={school?.name || 'Administración'}
         subtitle={unknown(classroomsQuery, studentsQuery)
           ? undefined

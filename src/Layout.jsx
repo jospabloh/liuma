@@ -33,7 +33,9 @@ export default function Layout({ children, currentPageName }) {
           border-radius: 2px;
         }
         
-        @media (max-width: 767px) {
+        /* A finger, not a width: a large iPhone in landscape is wider than
+           767px and still zooms on a <16px field and still needs 44px. */
+        @media (max-width: 767px), (pointer: coarse) {
           .mobile-touch-target {
             min-height: 44px;
           }

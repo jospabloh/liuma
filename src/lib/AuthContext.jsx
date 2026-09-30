@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 import { rememberIdentity, clearRememberedIdentity } from '@/lib/lastIdentity';
+import { authErrorAfterFailedMe, loginUrl } from '@/lib/authLinks';
 
 const AuthContext = createContext();
 
@@ -38,13 +39,11 @@ export const AuthProvider = ({ children }) => {
         const publicSettings = await appClient.get(`/prod/public-settings/by-id/${appParams.appId}`);
         setAppPublicSettings(publicSettings);
         
-        // If we got the app public settings successfully, check if user is authenticated
-        if (appParams.token) {
-          await checkUserAuth();
-        } else {
-          setIsLoadingAuth(false);
-          setIsAuthenticated(false);
-        }
+        // Always ask who this is, token or not. Without a token this used to
+        // stop here with isAuthenticated=false and NO authError, so App.jsx
+        // rendered the signed-in routes and an anonymous visitor at "/" got
+        // the onboarding role picker. See authErrorAfterFailedMe.
+        await checkUserAuth();
         setIsLoadingPublicSettings(false);
       } catch (appError) {
         console.error('App state check failed:', appError);
@@ -104,13 +103,10 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       
-      // If user auth fails, it might be an expired token
-      if (error.status === 401 || error.status === 403) {
-        setAuthError({
-          type: 'auth_required',
-          message: 'Authentication required'
-        });
-      }
+      // No token at all → sign in. With a token, only an expired/refused one
+      // (401/403) does; see authErrorAfterFailedMe in authLinks.js.
+      const nextError = authErrorAfterFailedMe(error, { hadToken: Boolean(appParams.token) });
+      if (nextError) setAuthError(nextError);
     }
   };
 
@@ -121,8 +117,10 @@ export const AuthProvider = ({ children }) => {
     clearRememberedIdentity();
 
     if (shouldRedirect) {
-      // Use the SDK's logout method which handles token cleanup and redirect
-      base44.auth.logout(window.location.href);
+      // Use the SDK's logout method which handles token cleanup and redirect.
+      // Come back to LIUMA's own Spanish login (/entrar), not to the page the
+      // user was on — nor to /login, which the platform serves in English.
+      base44.auth.logout(loginUrl());
     } else {
       // Just remove the token without redirect
       base44.auth.logout();

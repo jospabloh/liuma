@@ -3,15 +3,23 @@ import { motion } from 'framer-motion';
 import { Sparkles, Calendar } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { format, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseLocalDate, schoolDaysFromToday } from '@/lib/dates';
 
 export default function WelcomeTrialModal({ subscription, onClose }) {
   // "Seen" state now lives on the user profile (see Home.jsx); this modal only
   // needs the subscription for the trial details it displays.
   if (!subscription) return null;
 
-  const daysLeft = differenceInDays(new Date(subscription.trial_end_date), new Date());
+  // trial_end_date may be date-only ('2026-10-29', written by Mission
+  // Control's set_dates, fixtures or a hand edit) or a full instant (what
+  // provisionOnboardingProfile writes). new Date('2026-10-29') is UTC midnight
+  // = Oct 28 18:00 in Mexico, so this modal said "Vence: 28 de octubre" and
+  // counted a day short. parseLocalDate keeps the calendar day; the count is
+  // whole calendar days from the school's today.
+  const trialEnd = parseLocalDate(subscription.trial_end_date);
+  const daysLeft = Math.max(0, schoolDaysFromToday(trialEnd) ?? 0);
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -44,11 +52,13 @@ export default function WelcomeTrialModal({ subscription, onClose }) {
               <p className="font-semibold text-foreground">Período de prueba</p>
             </div>
             <p className="text-sm text-muted-foreground">
-              Tienes <strong className="text-brand">{daysLeft} días</strong> para explorar todas las funcionalidades de LIUMA sin costo.
+              Tienes <strong className="text-brand">{daysLeft === 1 ? '1 día' : `${daysLeft} días`}</strong> para explorar todas las funcionalidades de LIUMA sin costo.
             </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Vence: {format(new Date(subscription.trial_end_date), "d 'de' MMMM, yyyy", { locale: es })}
-            </p>
+            {trialEnd && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Vence: {format(trialEnd, "d 'de' MMMM, yyyy", { locale: es })}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

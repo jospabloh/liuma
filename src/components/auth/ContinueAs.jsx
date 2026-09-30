@@ -1,5 +1,6 @@
 import { base44 } from '@/api/base44Client';
 import { getRememberedIdentity, clearRememberedIdentity } from '@/lib/lastIdentity';
+import { loginUrl } from '@/lib/authLinks';
 
 // Welcome-back screen shown when there is NO active session but we remember who
 // signed in last. Purely cosmetic: the buttons just kick off the real Base44
@@ -24,7 +25,8 @@ export default function ContinueAs() {
   const continueAs = () => base44.auth.redirectToLogin(window.location.href);
   const useOther = () => {
     clearRememberedIdentity();
-    base44.auth.logout(window.location.href);
+    // Back to LIUMA's Spanish login (/entrar), where "otra cuenta" can sign in.
+    base44.auth.logout(loginUrl());
   };
 
   return (

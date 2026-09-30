@@ -23,12 +23,13 @@ test('App scrolls to top on route change', () => {
 // in-app /login route declaratively via react-router's <Navigate>, which is
 // safe during render (no imperative side effect to guard against), so the
 // hosted-login redirect call must be gone entirely from this branch.
-test('auth_required renders the in-app /login route instead of bouncing to the Base44 hosted login', () => {
+test('auth_required renders the in-app login route instead of bouncing to the Base44 hosted login', () => {
   const app = read('src/App.jsx');
   assert.match(app, /authError\.type === 'auth_required'/);
-  // Redirects to /login keeping the query string, so a password-reset link
+  // Redirects to LOGIN_PATH (/entrar — the platform owns /login on a full
+  // page load) keeping the query string, so a password-reset link
   // (?reset_token=…) opened on any path still reaches the reset form.
-  assert.match(app, /<Navigate to=\{\{ pathname: '\/login', search \}\}/);
+  assert.match(app, /<Navigate to=\{\{ pathname: LOGIN_PATH, search \}\}/);
   assert.doesNotMatch(app, /auth_required'\) \{\s*\n\s*\/\/ Redirect to login automatically\s*\n\s*navigateToLogin\(\);/);
 });
 

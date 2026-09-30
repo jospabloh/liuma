@@ -1525,3 +1525,76 @@ Pruebas: `tests/unit/loose-ends-notify.test.js`. Ninguna función nueva (20/40).
 `npm run deploy` (sendBulkNotification, guardedEntityWrite, guardedFamilyWrite,
 schoolRead, lumiQuery, lumiWrite, sendNotificationEmail) y `npm run deploy:site`.
 Sin cambios de entidad.
+
+## Shell y móvil: entrada anónima, `/entrar`, "hoy" en México (2026-09-30)
+
+Hallazgos del QA móvil en vivo (Chromium con descriptores de dispositivo contra
+el bundle publicado, backend simulado). Detalle y porqué en
+`tests/unit/mobile-shell.test.js`.
+
+- **Un visitante sin sesión en `/` veía el selector de rol del onboarding**
+  (con "Cerrar sesión"): sin token, `AuthContext` ponía
+  `isAuthenticated=false` **sin** `authError`, y `App.jsx` pintaba las rutas
+  de sesión. Ahora siempre pregunta `auth.me()` y
+  `authErrorAfterFailedMe()` (`src/lib/authLinks.js`) decide: sin token,
+  cualquier fallo = iniciar sesión; con token, sólo 401/403 (un corte de red
+  no saca a una maestra a la pantalla de login).
+- **El login de LIUMA vive en `/entrar`, no en `/login`.** Base44 sirve él
+  mismo `/login` y `/reset-password` en una carga completa, en inglés
+  (comprobado en `liuma-2232ffd8.base44.app` y `liuma.acaciaco.com.mx`: esas
+  dos rutas devuelven `<html lang="en">`, `/entrar` devuelve nuestro
+  `index.html`). La ruta `/login` de la app sólo ganaba por navegación en el
+  cliente. `LOGIN_PATH` es la única fuente; el cierre de sesión vuelve a
+  `/entrar` (`loginUrl()`), y un test falla si algo del código navega a una
+  ruta de `PLATFORM_HOSTED_PATHS`.
+  **Límite, no arreglable desde el repo:** quien abra `/login` a mano (un
+  marcador viejo) sigue viendo la página hospedada en inglés, y el enlace del
+  correo de recuperación apunta a `/reset-password`, también hospedada — ahí
+  Base44 completa el cambio de contraseña. Si Base44 permite configurar el
+  idioma o la ruta de esas páginas, es en el panel, no aquí.
+- **`PageHeader` envuelve las acciones debajo del título** en vez de
+  aplastarlo (a 320px "Gestión de descuentos" quedaba en "G…"); el título
+  admite dos líneas en teléfono.
+- **Dedo, no ancho:** variantes `coarse:`/`fine:` (`pointer`) en
+  `tailwind.config.js`. Los primitivos (`Button size="sm"`, `Input`, `Select`,
+  `Tabs`, cierre de `Dialog`, `Switch`) dan 44px en táctil; los campos se quedan
+  en 16px en táctil a cualquier ancho (`md:fine:text-sm`), porque un iPhone
+  grande en horizontal pasa de 768px e iOS hace zoom en un campo de <16px.
+- **`viewport-fit=cover`**: sin él, todo `env(safe-area-inset-*)` valía 0.
+  El espaciador de `BottomNav` crece con la barra, la burbuja de Lumi y
+  `SideNav` se apartan del recorte, y `body` lleva el margen lateral.
+- **Calendario en teléfono:** puntos por evento en vez de chips ilegibles; la
+  agenda del día lista los títulos.
+- **"Hoy" es el día de la escuela** (`schoolToday()` / `schoolTodayDate()` /
+  `schoolDaysFromToday()` en `src/lib/dates.js`, America/Mexico_City), igual
+  que `mexicoToday()` en el servidor. Antes el cliente usaba el reloj del
+  dispositivo: un navegador fuera de hora de México mostraba "30 de
+  septiembre" mientras Lumi respondía por el 29. `formatLocalDate()` sin
+  argumento ya significa lo mismo. `calendarDaysUntilDue` (`overdue.js`:
+  ventana de recordatorio de cobro) también cuenta desde el día de la escuela;
+  si no, el mismo cargo era "vence hoy" para `isChargeOverdue` y "vencido hace
+  1 día" para el recordatorio.
+- **Fin de prueba con fecha sola** (`'2026-10-29'`) se pintaba un día antes
+  (`new Date()` = medianoche UTC); `WelcomeTrialModal` y `LicenseAdmin` usan
+  `parseLocalDate` + días de calendario.
+
+**Abierto, a propósito fuera de este paquete:** `resolveEffectiveLicense`
+(`licenseModel.js`) y sus dos espejos Deno (`getMySubscription`,
+`guardedEntityWrite/_policy.ts`) comparan `Date.parse(trial_end_date)`: una
+fecha sola `'2026-10-29'` vence a la medianoche **UTC** — el 28 a las 18:00 en
+México — aunque Mission Control (`set_dates`) la entiende como "vale durante el
+29". Cambiarlo toca el candado de escritura en tres lugares; va aparte.
+`PagosAdmin`'s `payment_date` sigue con `formatLocalDate(new Date())` (paquete
+de pagos). El `ThemeSwitcher` (38/34px) es canónico: se cambia en
+`acacia-app-standard`.
+
+**Verificado:** `lint`, `typecheck`, `build`, `test`, `test:permissions`,
+`validate:rls`, `validate:tenant-roles`, `release:gate`; y en Chromium con
+descriptores de dispositivo contra el dev server y `/api` simulado: `/`,
+`/Home` y `/GestionDescuentos?x=1` sin token terminan en `/entrar` (con el
+query); títulos completos en SE/13/Pixel 7/iPad Mini; botones y pestañas de
+PagosAdmin a 44px en táctil y 32/28px con ratón; campos de login 16px en
+táctil y 14px en escritorio; con el dispositivo en Tokio (1 de octubre) la app
+marca hoy el 30 de septiembre. **No verificado:** Safari/WebKit real (zoom al
+enfocar, recortes reales), y el deploy — esto es sólo frontend:
+`npm run deploy:site`, no `npm run deploy`.

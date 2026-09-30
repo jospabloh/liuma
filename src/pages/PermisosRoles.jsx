@@ -35,6 +35,8 @@ import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
+import { humanizeError } from '@/lib/errorMessages';
+import FieldError from '@/components/forms/FieldError';
 
 const PENDING_CHANGE_ENTITY = 'PendingChange';
 // The "plantillas de rol" grid and the tenant "Danger Zone" spec table that
@@ -51,6 +53,12 @@ const PENDING_CHANGE_STATUSES = {
   REJECTED: 'REJECTED',
 };
 
+const REASON_REQUIRED = 'El motivo es obligatorio para cualquier cambio.';
+// Shown in the section whose button was pressed: the "Motivo" box is shared by
+// every section and sits away from most of them, so a message only under it
+// was easy to miss (QA 2026-09-30) — this one says where to go.
+const REASON_POINTER = 'Falta el motivo: escríbelo en «Motivo del cambio» y vuelve a intentarlo.';
+
 function hasMutationReason(value) {
   return Boolean(value && value.trim().length > 0);
 }
@@ -63,7 +71,12 @@ export default function PermisosRoles() {
   const { user, userProfile, isLoading: profileLoading } = useCurrentProfile();
 
   const [reasonText, setReasonText] = React.useState('');
-  const [errorText, setErrorText] = React.useState('');
+  // Errors by section ('role' | 'rollback' | 'override' | 'deletion') plus
+  // 'reason' for the shared Motivo box — each one rendered next to its own
+  // controls instead of one line under Motivo for all of them.
+  const [errors, setErrors] = React.useState({});
+  const [deletingOverrideId, setDeletingOverrideId] = React.useState('');
+  const reasonRef = React.useRef(null);
   const [selectedProfileId, setSelectedProfileId] = React.useState('');
   const [selectedRole, setSelectedRole] = React.useState('PARENT');
   const [isUpdatingRole, setIsUpdatingRole] = React.useState(false);
@@ -137,25 +150,32 @@ export default function PermisosRoles() {
   const describeOverride = (override) =>
     `${overrideOwnerName(override)}: ${effectLabel(override.effect).toLowerCase()} ${actionLabel(override.action).toLowerCase()}`;
 
+  const showError = (section, message) => setErrors({ [section]: message });
+  const clearErrors = () => setErrors({});
+  /** False (and both messages shown, Motivo focused) when the reason is missing. */
+  const requireReason = (section) => {
+    if (hasMutationReason(reasonText)) return true;
+    setErrors({ reason: REASON_REQUIRED, [section]: REASON_POINTER });
+    reasonRef.current?.focus();
+    return false;
+  };
+
   const handleRoleChange = async () => {
     if (!selectedProfile) {
-      setErrorText('Selecciona un usuario para cambiar el rol.');
+      showError('role', 'Selecciona un usuario para cambiar el rol.');
       return;
     }
-    if (!hasMutationReason(reasonText)) {
-      setErrorText('El motivo es obligatorio para cualquier cambio.');
-      return;
-    }
+    if (!requireReason('role')) return;
     if (selectedProfile.app_role === selectedRole) {
-      setErrorText('Selecciona un rol distinto al actual.');
+      showError('role', 'Selecciona un rol distinto al actual.');
       return;
     }
     if (isSelfAdminDemotion) {
-      setErrorText('No puedes quitarte a ti mismo el rol de directivo.');
+      showError('role', 'No puedes quitarte a ti mismo el rol de directivo.');
       return;
     }
     if (isLastManagePermissionsAdminAtRisk) {
-      setErrorText('Debe haber otro directivo activo antes de quitar este rol: la escuela no puede quedarse sin directivos.');
+      showError('role', 'Debe haber otro directivo activo antes de quitar este rol: la escuela no puede quedarse sin directivos.');
       return;
     }
 
@@ -164,7 +184,7 @@ export default function PermisosRoles() {
       [PENDING_CHANGE_STATUSES.PENDING_ADMIN_APPROVAL, PENDING_CHANGE_STATUSES.PENDING_SECOND_ADMIN_APPROVAL].includes(change.status),
     );
     if (pendingOpenRequest) {
-      setErrorText('Ya existe una solicitud pendiente para este usuario.');
+      showError('role', 'Ya existe una solicitud pendiente para este usuario.');
       return;
     }
     // Shared maker-checker rules (mirrored server-side in governRoleChange).
@@ -175,13 +195,13 @@ export default function PermisosRoles() {
       profiles: schoolProfiles,
     });
     if (!requestValidation.ok) {
-      setErrorText(requestValidation.message);
+      showError('role', requestValidation.message);
       return;
     }
     if (isAdminRoleChange && !requireExplicitConfirmation('Este cambio da o quita el rol de directivo y requiere la aprobación de un segundo directivo. ¿Deseas continuar?')) {
       return;
     }
-    setErrorText('');
+    clearErrors();
     setIsUpdatingRole(true);
     try {
       // Role mutations go exclusively through the server-authoritative function;
@@ -289,23 +309,20 @@ export default function PermisosRoles() {
     }
   };
   const handleSaveOverride = async () => {
-    if (!hasMutationReason(reasonText)) {
-      setErrorText('El motivo es obligatorio para cualquier cambio.');
-      return;
-    }
+    if (!requireReason('override')) return;
     if (!overrideTargetProfile) {
-      setErrorText('Selecciona a la persona para la excepción.');
+      showError('override', 'Selecciona a la persona para la excepción.');
       return;
     }
     if (isOverrideTargetAdmin) {
-      setErrorText('Los directivos ya tienen todos los permisos; no se les pueden poner excepciones.');
+      showError('override', 'Los directivos ya tienen todos los permisos; no se les pueden poner excepciones.');
       return;
     }
     if (overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id) {
-      setErrorText('No puedes cambiar tus propios permisos de administración.');
+      showError('override', 'No puedes cambiar tus propios permisos de administración.');
       return;
     }
-    setErrorText('');
+    clearErrors();
     setIsSavingOverride(true);
     const payload = {
       ...overrideForm,
@@ -356,8 +373,8 @@ export default function PermisosRoles() {
       setReasonText('');
       setEditingOverrideId('');
       toast.success('Excepción guardada');
-    } catch {
-      toast.error('No se pudo guardar la excepción');
+    } catch (error) {
+      toast.error(`No se pudo guardar la excepción. ${humanizeError(error)}`);
     } finally {
       setIsSavingOverride(false);
     }
@@ -373,50 +390,65 @@ export default function PermisosRoles() {
     });
   };
 
+  // Before 2026-09-30 this had no try/catch (unlike handleSaveOverride): a
+  // failed delete showed nothing, rejected unhandled, and left the page as if
+  // nothing had been pressed.
   const handleDeleteOverride = async (overrideId) => {
-    if (!hasMutationReason(reasonText)) {
-      setErrorText('El motivo es obligatorio para cualquier cambio.');
-      return;
-    }
+    if (!requireReason('override')) return;
     if (!requireExplicitConfirmation('Vas a eliminar esta excepción; la persona volverá a los permisos de su rol. ¿Deseas continuar?')) {
       return;
     }
+    clearErrors();
+    setDeletingOverrideId(overrideId);
     const current = permissionOverrides.find((entry) => entry.id === overrideId);
-    await deletePermissionOverride(overrideId);
+    const reason = reasonText.trim();
+    try {
+      await deletePermissionOverride(overrideId);
+    } catch (error) {
+      // The exception is still there: keep the reason so a retry is one click.
+      const message = `No se pudo eliminar la excepción. ${humanizeError(error)}`;
+      showError('override', message);
+      toast.error(message);
+      setDeletingOverrideId('');
+      return;
+    }
+    // The delete happened (and guardedEntityWrite audited it as
+    // RECORD_DELETED). This extra PERMISSION_CHANGE row carries the reason; if
+    // it fails, the change must not be reported as failed — that would invite
+    // deleting something that is already gone.
     await logAuditEvent({
       user,
       userProfile,
       entity: AUDIT_ENTITIES.PERMISSION_CHANGE,
       entityId: overrideId,
       action: AUDIT_ACTIONS.PERMISSION_CHANGE,
-      reason: reasonText.trim(),
+      reason,
       context: buildPermissionChangeContext({
         changeType: 'PERMISSION_OVERRIDE_DELETE',
         before: current || null,
         after: null,
         actorProfileId: userProfile.id,
-        reason: reasonText.trim(),
+        reason,
         snapshot: { applied_at: new Date().toISOString() },
       }),
-    });
-    await refetchOverrides();
+    }).catch((e) => console.error('audit PERMISSION_OVERRIDE_DELETE failed', e));
+    if (editingOverrideId === overrideId) setEditingOverrideId('');
     setReasonText('');
+    setDeletingOverrideId('');
     toast.success('Excepción eliminada');
+    await refetchOverrides().catch(() => {});
   };
 
   const handleApplyRollback = async () => {
-    if (!hasMutationReason(reasonText)) {
-      setErrorText('El motivo es obligatorio para cualquier cambio.');
-      return;
-    }
+    if (!requireReason('rollback')) return;
     if (!rollbackOverride) {
-      setErrorText('Selecciona la excepción que quieres revertir.');
+      showError('rollback', 'Selecciona la excepción que quieres revertir.');
       return;
     }
     if (!requireExplicitConfirmation('Vas a revertir esta excepción de permisos. ¿Deseas continuar?')) {
       return;
     }
-    setErrorText('');
+    clearErrors();
     setIsApplyingRollback(true);
     const isHighRiskRollback = rollbackOverride.action === 'manage_permissions';
     try {
@@ -495,9 +527,10 @@ export default function PermisosRoles() {
   // other tenant-wide deletion in this portfolio going through a human.
   const handleRequestSchoolDeletion = async () => {
     if (!deletionReason.trim()) {
-      toast.error('Describe el motivo de la solicitud.');
+      showError('deletion', 'Describe el motivo de la solicitud.');
       return;
     }
+    clearErrors();
     if (!requireExplicitConfirmation('Vas a solicitar la eliminación de tu escuela. Esta acción es irreversible una vez procesada. ¿Deseas continuar?')) {
       return;
     }
@@ -559,6 +592,7 @@ export default function PermisosRoles() {
           {isAdminRoleChange ? <p className="text-sm text-red-700 dark:text-red-400">Este cambio da o quita el rol de directivo: requiere la aprobación de un segundo directivo.</p> : null}
           {isSelfAdminDemotion ? <p className="text-sm text-red-700 dark:text-red-400">No puedes quitarte a ti mismo el rol de directivo.</p> : null}
           {isLastManagePermissionsAdminAtRisk ? <p className="text-sm text-red-700 dark:text-red-400">Debe haber otro directivo activo antes de quitar este rol.</p> : null}
+          <FieldError id="role-error" message={errors.role} />
           <Button variant={isAdminRoleChange ? 'destructive' : 'default'} onClick={handleRoleChange} disabled={isUpdatingRole}>
             {isUpdatingRole ? 'Guardando...' : isAdminRoleChange ? 'Solicitar cambio de rol de directivo' : 'Solicitar cambio de rol'}
           </Button>
@@ -580,6 +614,7 @@ export default function PermisosRoles() {
             </p>
           ) : null}
           {rollbackOverride?.action === 'manage_permissions' ? <p className="text-sm text-red-700 dark:text-red-400">Requiere la aprobación de un segundo directivo.</p> : null}
+          <FieldError id="rollback-error" message={errors.rollback} />
           <Button variant={rollbackOverride?.action === 'manage_permissions' ? 'destructive' : 'outline'} onClick={handleApplyRollback} disabled={isApplyingRollback}>
             {isApplyingRollback ? 'Aplicando...' : rollbackOverride?.action === 'manage_permissions' ? 'Solicitar reversión' : 'Revertir excepción'}
           </Button>
@@ -612,9 +647,21 @@ export default function PermisosRoles() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Motivo del cambio (obligatorio)</label>
-          <Textarea value={reasonText} onChange={(event) => setReasonText(event.target.value)} placeholder="Describe el motivo" />
-          {errorText ? <p className="text-sm text-red-600 dark:text-red-400">{errorText}</p> : null}
+          <label htmlFor="permission-reason" className="text-sm font-medium">Motivo del cambio (obligatorio)</label>
+          <Textarea
+            id="permission-reason"
+            ref={reasonRef}
+            value={reasonText}
+            onChange={(event) => {
+              setReasonText(event.target.value);
+              if (errors.reason) clearErrors();
+            }}
+            placeholder="Describe el motivo"
+            aria-invalid={Boolean(errors.reason)}
+            aria-describedby={errors.reason ? 'permission-reason-error' : undefined}
+            className={errors.reason ? 'border-red-500 dark:border-red-400' : undefined}
+          />
+          <FieldError id="permission-reason-error" message={errors.reason} />
         </div>
 
         <div className="space-y-3 border border-border rounded-2xl bg-card p-3">
@@ -633,9 +680,17 @@ export default function PermisosRoles() {
             </p>
             <Textarea
               value={deletionReason}
-              onChange={(event) => setDeletionReason(event.target.value)}
+              onChange={(event) => {
+                setDeletionReason(event.target.value);
+                if (errors.deletion) clearErrors();
+              }}
               placeholder="Motivo de la solicitud (obligatorio)"
+              aria-label="Motivo de la solicitud de eliminación"
+              aria-invalid={Boolean(errors.deletion)}
+              aria-describedby={errors.deletion ? 'deletion-error' : undefined}
+              className={errors.deletion ? 'border-red-500 dark:border-red-400' : undefined}
             />
+            <FieldError id="deletion-error" message={errors.deletion} />
             <Button variant="destructive" onClick={handleRequestSchoolDeletion} disabled={isRequestingDeletion}>
               {isRequestingDeletion ? 'Enviando...' : 'Solicitar eliminación de la escuela'}
             </Button>
@@ -663,6 +718,7 @@ export default function PermisosRoles() {
           </div>
           {isOverrideTargetAdmin ? <p className="text-sm text-red-700 dark:text-red-400">Los directivos ya tienen todos los permisos; no se les pueden poner excepciones.</p> : null}
           {overrideForm.action === 'manage_permissions' && overrideForm.user_profile_id === userProfile?.id ? <p className="text-sm text-red-700 dark:text-red-400">No puedes cambiar tus propios permisos de administración.</p> : null}
+          <FieldError id="override-error" message={errors.override} />
           <Button onClick={handleSaveOverride} disabled={isSavingOverride || isOverrideTargetAdmin}>{editingOverrideId ? 'Actualizar excepción' : 'Crear excepción'}</Button>
           <div className="overflow-auto border border-border rounded-2xl">
             <table className="ui-table min-w-full">
@@ -676,7 +732,7 @@ export default function PermisosRoles() {
                       <td className="p-2">{profile ? `${getUserName(profile.user_id)} (${roleLabel(profile.app_role)})` : 'Usuario no encontrado'}</td>
                       <td className="p-2">{resourceLabel(override.resource)}</td><td className="p-2">{actionLabel(override.action)}</td><td className="p-2">{effectLabel(override.effect)}</td>
                       <td className="p-2">{preview.allowed ? 'Permitido' : 'Denegado'} ({precedenceLabel(preview.precedence)})</td>
-                      <td className="p-2 space-x-2"><Button variant="outline" onClick={() => handleEditOverride(override)}>Editar</Button><Button variant="destructive" onClick={() => handleDeleteOverride(override.id)}>Eliminar</Button></td>
+                      <td className="p-2 space-x-2"><Button variant="outline" onClick={() => handleEditOverride(override)}>Editar</Button><Button variant="destructive" onClick={() => handleDeleteOverride(override.id)} disabled={Boolean(deletingOverrideId)}>{deletingOverrideId === override.id ? 'Eliminando...' : 'Eliminar'}</Button></td>
                     </tr>
                   );
                 })}

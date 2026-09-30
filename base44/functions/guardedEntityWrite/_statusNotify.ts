@@ -37,7 +37,7 @@
 // send leaves one NOTIFICATION_DELIVERY_FAILED audit row.
 //
 // Import-free and duck-typed on `sr` so `node --test` runs the real code
-// (tests/unit/request-status-notify.test.js). Byte-identical copies in
+// (tests/unit/loose-ends-notify.test.js). Byte-identical copies in
 // guardedFamilyWrite/ and guardedEntityWrite/ (Deno functions can't import
 // across directories); the test fails if they differ. The templates live in
 // the shared _templates.ts and are passed in.

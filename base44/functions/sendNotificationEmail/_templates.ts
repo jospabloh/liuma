@@ -13,8 +13,8 @@
 // for emergency alerts, reminders and ticket escalations — same
 // no-cross-directory-import constraint), and to guardedFamilyWrite/ and
 // guardedEntityWrite/ (the three request-status emails below). Edit it here,
-// then `cp` it to all three; tests/unit/notifications-fanout.test.js fails if
-// any copy differs.
+// then `cp` it to all three; tests/unit/notifications-fanout.test.js and
+// tests/unit/loose-ends-notify.test.js fail if any copy differs.
 //
 // absence_request_submitted / absence_request_reviewed / uniform_order_status
 // have NO client half in templates.js and no entry in sendNotificationEmail's

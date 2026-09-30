@@ -1449,7 +1449,18 @@ cargo vencido recibe la plantilla nueva `payment_overdue` (en las tres copias
 de plantillas; `sendNotificationEmail` no la acepta). El recordatorio
 automático sigue igual (una vez, 0-7 días antes, al abrir Pagos) e incluye
 `PARTIAL`. **No** se añadió un recordatorio automático de vencidos: el primer
-deploy lo habría mandado de golpe a todo cargo vencido histórico.
+deploy lo habría mandado de golpe a todo cargo vencido histórico. Ojo: el
+manual también marca `reminder_sent`, así que un cargo recordado a mano ya no
+recibe después el automático de 0-7 días.
+
+Revisión adversarial (mismo día): el pago ya no manda `payment_date` desde el
+navegador — el servidor pone el día de México, y un navegador en otra zona o
+con el reloj mal habría recibido `INVALID_PAYMENT_DATE` por dinero cobrado hoy.
+«Nuevo cargo» espera a que carguen los descuentos antes de dejar guardar (antes
+de eso el cargo salía sin descuento, en silencio). Y editar un descuento sin
+tocar sus términos (renombrarlo, apagarlo) ya no los reenvía: con el
+formulario reenviándolo todo, la validación bloqueaba justo el apagado de un
+descuento viejo mal capturado que la regla del servidor quería permitir.
 
 **Familias:** ven original, descuento, total, pagado y saldo por cargo
 (`ChargeAmounts.jsx`) a partir de `amount_paid`/`last_payment_date` del

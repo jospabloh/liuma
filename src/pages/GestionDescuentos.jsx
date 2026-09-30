@@ -21,6 +21,15 @@ import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
 import { DISCOUNT_FIELD_ERRORS, formatMoney, validateDiscount } from '@/lib/payments/money';
 
+// The fields that make up what a discount takes off — the ones
+// validateDiscount checks. Same list as guardedEntityWrite/_schoolWrite.ts's
+// DISCOUNT_TERMS.
+const DISCOUNT_TERMS = ['discount_type', 'discount_value', 'valid_from', 'valid_until', 'applicable_to_concepts'];
+// '' / undefined / null / [] all mean "not set"; a stored number and the
+// form's Number() of it compare equal.
+const termValue = (value) =>
+  (value === '' || value === undefined || (Array.isArray(value) && value.length === 0) ? null : value);
+
 export default function GestionDescuentos() {
   const { canWrite } = useCanWrite();
   const [showForm, setShowForm] = useState(false);
@@ -107,15 +116,26 @@ export default function GestionDescuentos() {
     // a percentage in (0, 100], a fixed amount above 0 in whole cents, at
     // least one concept type, and "hasta" not before "desde". A 150 % or a
     // -10 % discount used to be saved as typed.
-    const check = validateDiscount(data);
-    if (!check.ok) {
-      setFormError(check.field);
-      return;
+    // On an edit that leaves the terms as they were (renaming it, switching
+    // it off), the terms are not re-sent and not re-checked — the server
+    // skips the check the same way — so a discount saved malformed before
+    // this rule existed can still be deactivated without fixing it first.
+    const termsChanged = !editingDiscount || DISCOUNT_TERMS.some(
+      (field) => JSON.stringify(termValue(data[field])) !== JSON.stringify(termValue(editingDiscount[field])),
+    );
+    if (termsChanged) {
+      const check = validateDiscount(data);
+      if (!check.ok) {
+        setFormError(check.field);
+        return;
+      }
     }
     setFormError(null);
 
     if (editingDiscount) {
-      updateDiscountMutation.mutate({ id: editingDiscount.id, data });
+      const patch = { ...data };
+      if (!termsChanged) DISCOUNT_TERMS.forEach((field) => { delete patch[field]; });
+      updateDiscountMutation.mutate({ id: editingDiscount.id, data: patch });
     } else {
       createDiscountMutation.mutate(data);
     }

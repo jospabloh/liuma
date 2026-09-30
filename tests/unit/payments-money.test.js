@@ -560,3 +560,21 @@ test('Lumi reports the balance of partly paid charges too', () => {
   assert.doesNotMatch(lumi, /\['PENDING', 'OVERDUE'\]\.map/);
   assert.match(lumi, /OPEN_CHARGE_STATUSES\.map/);
 });
+
+test('review: the payment date is the server\'s Mexico day, discounts load before a charge saves, a discount edit sends only changed terms', () => {
+  const pagosAdmin = read('src/pages/PagosAdmin.jsx');
+  // A browser ahead of Mexico would send "tomorrow" → INVALID_PAYMENT_DATE.
+  assert.doesNotMatch(pagosAdmin, /payment_date: formatLocalDate/);
+  // Saving before the discounts query answered created the charge with no discount.
+  assert.match(pagosAdmin, /isFetching: discountsLoading/);
+  assert.match(pagosAdmin, /\|\| discountsLoading \|\|/);
+  // Two buttons side by side overflow a 390 px card unless they can wrap.
+  assert.match(pagosAdmin, /className="flex flex-wrap gap-2 mt-3"/);
+
+  const descuentos = read('src/pages/GestionDescuentos.jsx');
+  assert.match(descuentos, /const DISCOUNT_TERMS = \['discount_type', 'discount_value', 'valid_from', 'valid_until', 'applicable_to_concepts'\];/);
+  assert.match(descuentos, /if \(!termsChanged\) DISCOUNT_TERMS\.forEach/);
+  // Same list as the server's, or the "switch off a malformed discount" path breaks.
+  assert.match(read('base44/functions/guardedEntityWrite/_schoolWrite.ts'),
+    /const DISCOUNT_TERMS = \['discount_type', 'discount_value', 'valid_from', 'valid_until', 'applicable_to_concepts'\];/);
+});

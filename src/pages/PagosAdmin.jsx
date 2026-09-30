@@ -77,7 +77,7 @@ export default function PagosAdmin() {
 
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: discounts = [] } = useQuery({
+  const { data: discounts = [], isFetching: discountsLoading } = useQuery({
     queryKey: ['discounts', userProfile?.school_id, 'active'],
     queryFn: () => schoolRead('Discount', { school_id: userProfile.school_id, is_active: true }),
     enabled: !!userProfile && showChargeForm,
@@ -291,7 +291,9 @@ export default function PagosAdmin() {
       school_id: userProfile.school_id,
       charge_id: selectedCharge.id,
       amount: centsToAmount(amount.cents),
-      payment_date: formatLocalDate(new Date()),
+      // No payment_date: the server stamps today's MEXICO day. A browser in
+      // another time zone (or with a wrong clock) would otherwise send
+      // "tomorrow" and get INVALID_PAYMENT_DATE for money received today.
       payment_method: paymentForm.payment_method,
       reference: paymentForm.reference,
     });
@@ -623,7 +625,7 @@ export default function PagosAdmin() {
               </Button>
               <Button 
                 type="submit" 
-                disabled={!chargeForm.student_id || !chargeForm.concept_id || !chargePreview.ok || !chargeForm.due_date || createChargeMutation.isPending}
+                disabled={!chargeForm.student_id || !chargeForm.concept_id || !chargePreview.ok || !chargeForm.due_date || discountsLoading || createChargeMutation.isPending}
                 className="flex-1"
               >
                 {createChargeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear cargo'}
@@ -757,7 +759,7 @@ function ChargeCard({ charge, studentName, onRecordPayment, onSendReminder, remi
       </div>
       <ChargeAmounts charge={charge} className="mt-3" />
       {!isPaid && (
-        <div className="flex gap-2 mt-3">
+        <div className="flex flex-wrap gap-2 mt-3">
           <Button
             onClick={onRecordPayment}
             size="sm"
@@ -775,7 +777,7 @@ function ChargeCard({ charge, studentName, onRecordPayment, onSendReminder, remi
               title={nextReminderAt > 0 ? 'Ya se envió un recordatorio de este cargo en las últimas 24 horas.' : 'Enviar por correo a la familia un recordatorio del saldo pendiente.'}
             >
               {reminderSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
-              {nextReminderAt > 0 ? 'Recordado hoy' : 'Enviar recordatorio'}
+              {nextReminderAt > 0 ? 'Ya recordado' : 'Enviar recordatorio'}
             </Button>
           )}
         </div>

@@ -43,7 +43,7 @@ const CODE_MESSAGES = {
   INVALID_DUE_DATE: 'La fecha de vencimiento no es válida.',
   INVALID_PAYMENT_DATE: 'La fecha del pago no es válida o está en el futuro.',
   DISCOUNT_NOT_APPLICABLE: 'Ese descuento ya no aplica a este concepto (vigencia o tipo). Recarga e inténtalo de nuevo.',
-  INVALID_DISCOUNT: 'Revisa el descuento: un porcentaje va de 0 a 100, un monto fijo debe ser mayor que 0, elige al menos un tipo de concepto y la vigencia debe ser coherente.',
+  INVALID_DISCOUNT: 'Revisa el descuento: un porcentaje debe ser mayor que 0 y como máximo 100, un monto fijo debe ser mayor que 0, elige al menos un tipo de concepto y la vigencia debe ser coherente.',
   AMOUNT_LOCKED: 'El monto de un cargo ya creado no se puede cambiar. Cancélalo y crea uno nuevo.',
   PAYMENT_LOCKED: 'El monto de un pago registrado no se puede cambiar. Bórralo y regístralo de nuevo.',
   REMINDER_COOLDOWN: 'Ya se envió un recordatorio de este cargo en las últimas 24 horas.',

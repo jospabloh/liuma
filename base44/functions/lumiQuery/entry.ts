@@ -268,7 +268,7 @@ Deno.serve(async (req) => {
             concept: c.concept_name || label('charge_type', c.concept_type),
             amount: formatMXN(chargeOwed(c)),
             due: spanishLongDate(String(c.due_date)),
-            status: overdue(c) ? 'vencido' : 'pendiente',
+            status: overdue(c) ? 'vencido' : c.status === 'PARTIAL' ? 'pago parcial' : 'pendiente',
           })),
         });
       }

@@ -61,6 +61,16 @@ import {
   runSchoolWrite,
   writeAudit,
 } from './_schoolWrite.ts';
+import {
+  PAYMENT_ENTITIES,
+  chargeDeleteProblem,
+  prepareChargeCreate,
+  prepareChargeUpdate,
+  prepareConceptWrite,
+  preparePaymentCreate,
+  preparePaymentUpdate,
+  settleCharge,
+} from './_payments.ts';
 
 const ENTITIES = Object.keys(POLICY_WRITE);
 // effectiveLicenseIsReadOnly (fail closed: no row or an expired trial is
@@ -132,6 +142,21 @@ async function buildEventChargeData(
 // the same school) and writeAudit (server-side AuditLog rows, best-effort)
 // live in ./_schoolWrite.ts, shared by both write paths.
 
+// After a payment is recorded or deleted, its charge's amount_paid/status are
+// re-derived (./_payments.ts). The payment itself is already written by then,
+// so a failure here must NOT turn into an error the director retries — that
+// would record the same money twice. The next payment, charge edit or the
+// Pagos overdue refresh re-derives it again.
+// deno-lint-ignore no-explicit-any
+async function settleAfterPayment(sr: any, chargeId: unknown, schoolId: string, now: Date): Promise<Record<string, unknown> | null> {
+  try {
+    return await settleCharge(sr, chargeId, schoolId, now);
+  } catch (e) {
+    console.error('guardedEntityWrite settleCharge failed', (e as Error).message);
+    return null;
+  }
+}
+
 function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
@@ -143,6 +168,7 @@ Deno.serve(async (req) => {
     if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
 
     const body = await req.json().catch(() => ({}));
+    const now = new Date();
     const entity = String(body?.entity || '');
     const operation = String(body?.operation || '');
 
@@ -280,6 +306,20 @@ Deno.serve(async (req) => {
       // submitted amount/status/etc. never reach the write. Server-only
       // notification fields are stripped on create too, not just on update.
       const data: Record<string, unknown> = eventChargeData ?? stripServerOnlyFields(entity, body.data || {});
+      // Money (loose-ends pass, 2026-09-30): a charge's price and status, a
+      // payment's amount and student, a concept's price are rebuilt by the
+      // server from stored records — see ./_payments.ts. What comes back
+      // REPLACES the client's data.
+      if (PAYMENT_ENTITIES.includes(entity)) {
+        const prepared = entity === 'ChargeItem'
+          ? await prepareChargeCreate(sr, data, schoolId, now)
+          : entity === 'PaymentRecord'
+            ? await preparePaymentCreate(sr, data, schoolId, now)
+            : prepareConceptWrite('create', data);
+        if (!prepared.ok) return bad(prepared.status, prepared.code, prepared.message);
+        for (const key of Object.keys(data)) delete data[key];
+        Object.assign(data, prepared.data);
+      }
       data.school_id = schoolId;
 
       const attribution = ATTRIBUTION_FIELDS[entity];
@@ -323,6 +363,10 @@ Deno.serve(async (req) => {
       }
 
       const created = await sr.entities[entity].create(data);
+      if (entity === 'PaymentRecord') {
+        const charge = await settleAfterPayment(sr, data.charge_id, schoolId, now);
+        return Response.json({ ok: true, record: created, charge });
+      }
       return Response.json({ ok: true, record: created });
     }
 
@@ -344,6 +388,16 @@ Deno.serve(async (req) => {
       if (attribution) {
         delete (patch as Record<string, unknown>)[attribution.id];
         if (attribution.name) delete (patch as Record<string, unknown>)[attribution.name];
+      }
+      if (PAYMENT_ENTITIES.includes(entity)) {
+        const prepared = entity === 'ChargeItem'
+          ? await prepareChargeUpdate(sr, existing as Record<string, unknown>, patch, schoolId, now)
+          : entity === 'PaymentRecord'
+            ? preparePaymentUpdate(existing as Record<string, unknown>, patch)
+            : prepareConceptWrite('update', patch);
+        if (!prepared.ok) return bad(prepared.status, prepared.code, prepared.message);
+        for (const key of Object.keys(patch)) delete (patch as Record<string, unknown>)[key];
+        Object.assign(patch, prepared.data);
       }
       const foreignRef = await firstForeignReference(sr, patch, schoolId);
       if (foreignRef) return bad(400, 'REFERENCE_NOT_IN_SCHOOL', `${foreignRef} does not belong to this school`);
@@ -389,7 +443,14 @@ Deno.serve(async (req) => {
     }
 
     // operation === 'delete'
+    if (entity === 'ChargeItem') {
+      const problem = await chargeDeleteProblem(sr, existing as Record<string, unknown>, schoolId);
+      if (problem && !problem.ok) return bad(problem.status, problem.code, problem.message);
+    }
     await sr.entities[entity].delete(recordId);
+    if (entity === 'PaymentRecord') {
+      await settleAfterPayment(sr, (existing as { charge_id?: string }).charge_id, schoolId, now);
+    }
     const attribution = ATTRIBUTION_FIELDS[entity];
     await writeAudit(sr, {
       school_id: schoolId,

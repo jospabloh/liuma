@@ -264,7 +264,10 @@ export const READ_RULES: Record<string, EntityRule> = {
     },
   },
   ChargeItem: {
-    fields: ['amount', 'concept_id', 'concept_name', 'concept_type', 'discount_amount', 'discount_id', 'due_date', 'event_id', 'notes', 'original_amount', 'reminder_sent', 'school_id', 'status', 'student_id'],
+    // amount_paid / last_payment_date: what the family has paid, so Pagos can
+    // show a partial payment and the balance (loose-ends pass, 2026-09-30) —
+    // without opening PaymentRecord (references, who recorded it) to parents.
+    fields: ['amount', 'amount_paid', 'concept_id', 'concept_name', 'concept_type', 'discount_amount', 'discount_id', 'due_date', 'event_id', 'last_payment_date', 'last_reminder_at', 'notes', 'original_amount', 'reminder_sent', 'school_id', 'status', 'student_id'],
     roles: {
       ADMIN: SCHOOL,
       PARENT: { rows: [{ student_id: set('studentIds') }] },

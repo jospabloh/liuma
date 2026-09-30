@@ -24,7 +24,8 @@
 //
 // Authority, per event:
 //   emergency_alert           ACTIVE ADMIN of `schoolId`.
-//   payment_due               ACTIVE ADMIN of the charge's STORED school.
+//   payment_due               ACTIVE ADMIN of the charge's STORED school
+//                             (sent as payment_overdue once the charge is late).
 //   event_confirmation_reminder ACTIVE ADMIN of the event's STORED school.
 //   support_ticket_escalated  the ticket's own requester, or an ACTIVE ADMIN
 //                             of the ticket's STORED school.
@@ -32,7 +33,9 @@
 //
 // Idempotency / rate limits:
 //   payment_due and event_confirmation_reminder are once per record
-//   (`reminder_sent`, which this function now owns). An escalation is once
+//   (`reminder_sent`, which this function now owns). A director's manual
+//   payment reminder (`manual: true`) may repeat, once per charge per 24 h
+//   (`last_reminder_at`). An escalation is once
 //   per (ticket, tier, recipient) — `SupportTicket.escalation_notified_recipients`,
 //   a server-only field — and a requester can trigger escalation notices for
 //   at most ESCALATION_TICKETS_PER_DAY tickets in 24 h. The emergency alert
@@ -47,6 +50,7 @@ import {
   isChannelEnabled,
   mapWithConcurrency,
   moneyLabel,
+  planChargeReminder,
   selectNonResponders,
   spanishDate,
 } from './_fanout.ts';
@@ -215,8 +219,17 @@ async function planPaymentDue(sr: Any, user: Any, body: Any): Promise<Plan | { s
   const charge: Any = await sr.entities.ChargeItem.get(chargeId).catch(() => null);
   if (!charge?.school_id) throw new HttpError(404, 'NOT_FOUND', 'Charge not found');
   await requireActiveAdmin(sr, user, charge.school_id);
-  if (charge.reminder_sent) return { skipped: 'already_sent' };
-  if (!['PENDING', 'OVERDUE'].includes(String(charge.status))) return { skipped: 'not_pending' };
+  // `manual`: the director's "Enviar recordatorio" button (loose-ends pass,
+  // 2026-09-30). Before it the only reminder was the automatic one — once per
+  // charge, only while due in 0-7 days and only if someone opened Pagos in
+  // that window — so an overdue charge was never reminded at all.
+  const manual = body?.manual === true;
+  const now = new Date();
+  const reminder = planChargeReminder(charge, { manual, now });
+  if (!reminder.send && reminder.reason === 'cooldown') {
+    throw new HttpError(429, 'REMINDER_COOLDOWN', 'This charge was already reminded in the last 24 hours');
+  }
+  if (!reminder.send) return { skipped: reminder.reason };
 
   // The charge's school is what authorized the caller, so the student (and
   // through it, the parents we mail) must be in that same school — otherwise
@@ -228,20 +241,22 @@ async function planPaymentDue(sr: Any, user: Any, body: Any): Promise<Plan | { s
   const ctx: Ctx = {
     studentName: student ? `${student.first_name || ''} ${student.last_name || ''}`.trim() : 'su hijo(a)',
     conceptName: String(charge.concept_name || ''),
-    amountLabel: moneyLabel(charge.amount),
+    // What is still owed, not the charge's full amount: after a partial
+    // payment the family is asked only for the rest.
+    amountLabel: moneyLabel(reminder.balance),
     dueDateLabel: spanishDate(charge.due_date),
   };
   const recipients = student ? await parentRecipientsForStudent(sr, charge.school_id, student.id, ctx) : [];
   return {
     schoolId: charge.school_id,
-    eventType: 'payment_due',
+    eventType: reminder.overdue ? 'payment_overdue' : 'payment_due',
     schoolPrefs: school?.notification_preferences,
     recipients,
     finalize: async (_delivered, summary) => {
       // Mark it only if somebody got it (or there was nobody to tell): a pass
       // where every send failed stays retryable on the next load.
       if (summary.reached > 0 || summary.total === 0) {
-        await sr.entities.ChargeItem.update(charge.id, { reminder_sent: true });
+        await sr.entities.ChargeItem.update(charge.id, { reminder_sent: true, last_reminder_at: now.toISOString() });
       }
     },
   };

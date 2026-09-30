@@ -11,7 +11,8 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
-import { formatLocalDate, isBeforeToday } from '@/lib/dates';
+import { formatLocalDate } from '@/lib/dates';
+import { selectOverdueCharges, UNPAID_CHARGE_STATUSES } from '@/lib/payments/overdue';
 
 export default function ParentHome({ user, userProfile, subscription }) {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -70,18 +71,19 @@ export default function ParentHome({ user, userProfile, subscription }) {
     queryKey: ['pendingCharges', studentIds],
     queryFn: async () => {
       if (studentIds.length === 0) return [];
+      // Every status that still owes money: a charge the school already
+      // flipped to OVERDUE (or a partly paid one) is exactly the one the
+      // family must not stop seeing here.
       const charges = await schoolRead('ChargeItem', {
         school_id: userProfile.school_id,
-        status: 'PENDING'
+        status: { $in: [...UNPAID_CHARGE_STATUSES] },
       });
       return charges.filter(c => studentIds.includes(c.student_id));
     },
     enabled: studentIds.length > 0,
   });
 
-  const overdueCharges = pendingCharges.filter(c =>
-    isBeforeToday(c.due_date) && c.status !== 'PAID'
-  );
+  const overdueCharges = selectOverdueCharges(pendingCharges);
 
   return (
     <div className="min-h-screen bg-background">

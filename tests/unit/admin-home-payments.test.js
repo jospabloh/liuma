@@ -81,7 +81,8 @@ test('paid charges are never vencido, and home + Pagos agree on a mixed set', ()
 });
 
 test('the home fetches exactly the statuses that can be vencido', () => {
-  assert.deepEqual([...UNPAID_CHARGE_STATUSES].sort(), ['OVERDUE', 'PENDING']);
+  // PARTIAL (something paid, not all) still owes money and can be late.
+  assert.deepEqual([...UNPAID_CHARGE_STATUSES].sort(), ['OVERDUE', 'PARTIAL', 'PENDING']);
 });
 
 test('payment reminders fire once inside the 7-day window, not only on day 7 exactly', () => {

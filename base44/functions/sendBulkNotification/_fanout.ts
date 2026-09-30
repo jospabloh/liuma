@@ -119,3 +119,56 @@ export function moneyLabel(amount: unknown): string {
   if (!Number.isFinite(n)) return '';
   return `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+/**
+ * Today's calendar day in Mexico, 'YYYY-MM-DD'. MIRRORS
+ * guardedEntityWrite/_money.ts#mexicoToday (functions cannot import across
+ * directories; tests/unit/payments-money.test.js compares the two).
+ */
+export function mexicoToday(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+export const MANUAL_REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * What a payment reminder may say about one stored charge, or why it must not
+ * go out. Pure, so the rules are tested rather than grepped:
+ *   - only a charge that still owes money (PENDING / PARTIAL / OVERDUE with a
+ *     balance) is reminded — never a paid or cancelled one;
+ *   - the amount in the email is the BALANCE, so a family that already paid
+ *     $400 of $1,000 is asked for $600, not the full amount again;
+ *   - an overdue charge gets the "vencido" email, not "vence pronto";
+ *   - the automatic reminder is once per charge (reminder_sent); a director's
+ *     manual reminder may repeat, but at most once per charge per day
+ *     (last_reminder_at), so a double click cannot mail a family twice.
+ */
+export function planChargeReminder(
+  charge: Record<string, unknown>,
+  opts: { manual: boolean; now: Date },
+): { send: false; reason: string } | { send: true; overdue: boolean; balance: number } {
+  const status = String(charge.status || '');
+  if (!['PENDING', 'PARTIAL', 'OVERDUE'].includes(status)) return { send: false, reason: 'not_pending' };
+  const cents = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  };
+  const balanceCents = Math.max(0, cents(charge.amount) - cents(charge.amount_paid));
+  if (balanceCents === 0) return { send: false, reason: 'not_pending' };
+  if (opts.manual) {
+    const last = Date.parse(String(charge.last_reminder_at || ''));
+    if (!Number.isNaN(last) && last + MANUAL_REMINDER_COOLDOWN_MS > opts.now.getTime()) return { send: false, reason: 'cooldown' };
+  } else if (charge.reminder_sent) {
+    return { send: false, reason: 'already_sent' };
+  }
+  const due = String(charge.due_date || '');
+  const overdue = status === 'OVERDUE' || (/^\d{4}-\d{2}-\d{2}$/.test(due) && due < mexicoToday(opts.now));
+  return { send: true, overdue, balance: balanceCents / 100 };
+}

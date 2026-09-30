@@ -23,7 +23,7 @@
 //      student, classroom, notice, profile, teacher, parent — must belong to
 //      the same school.
 //
-// Import-free apart from the sibling ./_policy.ts and duck-typed on
+// Import-free apart from the siblings ./_policy.ts and ./_money.ts, and duck-typed on
 // `sr.entities[Name]`, so tests/unit/write-path-p10b.test.js runs the real
 // thing against an in-memory database with two schools.
 import {
@@ -42,6 +42,9 @@ import {
   userReferencesToCheck,
 } from './_policy.ts';
 import type { CallerProfile, Op } from './_policy.ts';
+import { validateDiscount } from './_money.ts';
+
+const DISCOUNT_TERMS = ['discount_type', 'discount_value', 'valid_from', 'valid_until', 'applicable_to_concepts'];
 
 // deno-lint-ignore no-explicit-any
 export type Db = any;
@@ -285,6 +288,15 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
   });
   if (!built.ok) return fail(400, built.code, built.message);
   const data = built.data;
+
+  // A discount of 150 %, -10 % or "valid until" before "valid from" used to
+  // be saved as typed (loose-ends pass, 2026-09-30). Checked over the stored
+  // record merged with the patch, but only when the patch touches the
+  // discount's terms — so switching off an old, malformed discount still works.
+  if (entity === 'Discount' && DISCOUNT_TERMS.some((field) => field in data)) {
+    const check = validateDiscount(operation === 'update' && existing ? { ...existing, ...data } : data);
+    if (!check.ok) return fail(400, check.code, `${check.field} is not valid`);
+  }
 
   // Every id the record carries must be of this school.
   if (typeof data.student_id === 'string' && data.student_id) {

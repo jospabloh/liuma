@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { formatMoney } from '@/lib/payments/money';
 
 const statusConfig = {
   'Al día': {
@@ -53,7 +54,7 @@ export default function PaymentStatusCard({
         </div>
         <div className="text-right">
           {totalPending > 0 && (
-            <p className="font-bold text-foreground">${totalPending.toLocaleString()}</p>
+            <p className="font-bold text-foreground">{formatMoney(totalPending)}</p>
           )}
           {nextDueDate && (
             <p className="text-xs text-muted-foreground">Vence: {nextDueDate}</p>

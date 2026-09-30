@@ -19,11 +19,22 @@ import { Badge } from '@/components/ui/badge';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
+import { DISCOUNT_FIELD_ERRORS, formatMoney, validateDiscount } from '@/lib/payments/money';
+
+// The fields that make up what a discount takes off — the ones
+// validateDiscount checks. Same list as guardedEntityWrite/_schoolWrite.ts's
+// DISCOUNT_TERMS.
+const DISCOUNT_TERMS = ['discount_type', 'discount_value', 'valid_from', 'valid_until', 'applicable_to_concepts'];
+// '' / undefined / null / [] all mean "not set"; a stored number and the
+// form's Number() of it compare equal.
+const termValue = (value) =>
+  (value === '' || value === undefined || (Array.isArray(value) && value.length === 0) ? null : value);
 
 export default function GestionDescuentos() {
   const { canWrite } = useCanWrite();
   const [showForm, setShowForm] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(null);
+  const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -77,6 +88,7 @@ export default function GestionDescuentos() {
   const resetForm = () => {
     setShowForm(false);
     setEditingDiscount(null);
+    setFormError(null);
     setFormData({
       name: '',
       description: '',
@@ -95,11 +107,35 @@ export default function GestionDescuentos() {
 
     const data = {
       ...formData,
-      discount_value: parseFloat(formData.discount_value),
+      name: formData.name.trim(),
+      discount_value: Number(formData.discount_value),
+      valid_from: formData.valid_from || null,
+      valid_until: formData.valid_until || null,
     };
+    // Same rule the server enforces (guardedEntityWrite → validateDiscount):
+    // a percentage in (0, 100], a fixed amount above 0 in whole cents, at
+    // least one concept type, and "hasta" not before "desde". A 150 % or a
+    // -10 % discount used to be saved as typed.
+    // On an edit that leaves the terms as they were (renaming it, switching
+    // it off), the terms are not re-sent and not re-checked — the server
+    // skips the check the same way — so a discount saved malformed before
+    // this rule existed can still be deactivated without fixing it first.
+    const termsChanged = !editingDiscount || DISCOUNT_TERMS.some(
+      (field) => JSON.stringify(termValue(data[field])) !== JSON.stringify(termValue(editingDiscount[field])),
+    );
+    if (termsChanged) {
+      const check = validateDiscount(data);
+      if (!check.ok) {
+        setFormError(check.field);
+        return;
+      }
+    }
+    setFormError(null);
 
     if (editingDiscount) {
-      updateDiscountMutation.mutate({ id: editingDiscount.id, data });
+      const patch = { ...data };
+      if (!termsChanged) DISCOUNT_TERMS.forEach((field) => { delete patch[field]; });
+      updateDiscountMutation.mutate({ id: editingDiscount.id, data: patch });
     } else {
       createDiscountMutation.mutate(data);
     }
@@ -210,13 +246,21 @@ export default function GestionDescuentos() {
                       <Input
                         type="number"
                         step="0.01"
+                        min="0.01"
+                        max={formData.discount_type === 'PERCENTAGE' ? '100' : undefined}
+                        inputMode="decimal"
                         value={formData.discount_value}
                         onChange={(e) => setFormData({ ...formData, discount_value: e.target.value })}
                         placeholder={formData.discount_type === 'PERCENTAGE' ? '10' : '100'}
+                        aria-invalid={formError === 'discount_value'}
                         required
                       />
                     </div>
                   </div>
+
+                  {formError === 'discount_value' && (
+                    <p role="alert" className="text-xs text-destructive -mt-2">{DISCOUNT_FIELD_ERRORS.discount_value}</p>
+                  )}
 
                   <div>
                     <Label className="mb-2 block">Aplica a conceptos:</Label>
@@ -233,6 +277,9 @@ export default function GestionDescuentos() {
                         </div>
                       ))}
                     </div>
+                    {formError === 'applicable_to_concepts' && (
+                      <p role="alert" className="text-xs text-destructive mt-1">{DISCOUNT_FIELD_ERRORS.applicable_to_concepts}</p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -248,11 +295,16 @@ export default function GestionDescuentos() {
                       <Label>Válido hasta</Label>
                       <Input
                         type="date"
+                        min={formData.valid_from || undefined}
                         value={formData.valid_until}
                         onChange={(e) => setFormData({ ...formData, valid_until: e.target.value })}
+                        aria-invalid={formError === 'valid_until'}
                       />
                     </div>
                   </div>
+                  {['valid_from', 'valid_until', 'discount_type'].includes(formError) && (
+                    <p role="alert" className="text-xs text-destructive -mt-2">{DISCOUNT_FIELD_ERRORS[formError]}</p>
+                  )}
 
                   <div className="flex items-center gap-2">
                     <Switch
@@ -305,7 +357,7 @@ export default function GestionDescuentos() {
                         <CardDescription>
                           {discount.discount_type === 'PERCENTAGE' 
                             ? `${discount.discount_value}%` 
-                            : `$${discount.discount_value}`} de descuento
+                            : formatMoney(discount.discount_value)} de descuento
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">

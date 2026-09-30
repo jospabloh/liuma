@@ -32,7 +32,7 @@ import {
   type Profile, type Scope,
   selectCurrentProfile, profileProblem, canRunIntent, QUERY_INTENTS, scopeRows,
   mexicoToday, mexicoDayOf, addDays, isDateOnly, spanishLongDate, isoWeek, menuDayKey,
-  label, formatMXN, fullName, matchStudents, errorMessage,
+  label, formatMXN, fullName, matchStudents, errorMessage, chargeOwed, OPEN_CHARGE_STATUSES,
 } from './_lumiCore.ts';
 
 const MAX_ROWS = 200;
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
             await sr.entities.Attendance.filter({ school_id: scope.schoolId, student_id: s.id, date: today }));
           const charges: Row[] = scopeRows(scope, 'ChargeItem',
             await sr.entities.ChargeItem.filter({ school_id: scope.schoolId, student_id: s.id }));
-          const open = charges.filter((c) => c.status === 'PENDING' || c.status === 'OVERDUE');
+          const open = charges.filter((c) => chargeOwed(c) > 0);
           const diary: Row[] = scopeRows(scope, 'DiaryEntry',
             await sr.entities.DiaryEntry.filter({ school_id: scope.schoolId, student_id: s.id, date: today }));
           return {
@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
             attendance_today: att[0] ? label('attendance_status', att[0].status) : 'sin registro todavía',
             has_diary_today: diary.length > 0,
             pending_charges: open.length,
-            pending_total: formatMXN(open.reduce((sum, c) => sum + Number(c.amount || 0), 0)),
+            pending_total: formatMXN(open.reduce((sum, c) => sum + chargeOwed(c), 0)),
           };
         }));
         return Response.json({ ...base, children });
@@ -250,13 +250,14 @@ Deno.serve(async (req) => {
             sr.entities.ChargeItem.filter({ school_id: scope.schoolId, student_id: id })))).flat()
           // Query the two open statuses directly: a school's paid history must
           // not crowd pending charges out of a row cap.
-          : (await Promise.all(['PENDING', 'OVERDUE'].map((status) =>
+          : (await Promise.all(OPEN_CHARGE_STATUSES.map((status) =>
             sr.entities.ChargeItem.filter({ school_id: scope.schoolId, status }, 'due_date', 1000)))).flat();
         const open = scopeRows(scope, 'ChargeItem', rows)
-          .filter((c) => c.status === 'PENDING' || c.status === 'OVERDUE')
+          .filter((c) => chargeOwed(c) > 0)
           .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
         const overdue = (c: Row) => c.status === 'OVERDUE' || String(c.due_date || '') < today;
-        const total = open.reduce((s, c) => s + Number(c.amount || 0), 0);
+        // What is still owed after partial payments, not the full amounts.
+        const total = open.reduce((s, c) => s + chargeOwed(c), 0);
         return Response.json({
           ...base,
           count: open.length,
@@ -265,9 +266,9 @@ Deno.serve(async (req) => {
           charges: open.slice(0, scope.role === 'PARENT' ? MAX_ROWS : 30).map((c) => ({
             student: names.get(String(c.student_id)) || '',
             concept: c.concept_name || label('charge_type', c.concept_type),
-            amount: formatMXN(c.amount),
+            amount: formatMXN(chargeOwed(c)),
             due: spanishLongDate(String(c.due_date)),
-            status: overdue(c) ? 'vencido' : 'pendiente',
+            status: overdue(c) ? 'vencido' : c.status === 'PARTIAL' ? 'pago parcial' : 'pendiente',
           })),
         });
       }

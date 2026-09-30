@@ -7,9 +7,12 @@ import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import PaymentStatusCard from '@/components/payments/PaymentStatusCard';
+import ChargeAmounts from '@/components/payments/ChargeAmounts';
 import { CreditCard, CheckCircle, Calendar } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
-import { parseLocalDate, isBeforeToday, startOfLocalDay } from '@/lib/dates';
+import { parseLocalDate, startOfLocalDay } from '@/lib/dates';
+import { isChargeOverdue } from '@/lib/payments/overdue';
+import { centsToAmount, chargeBalanceCents, chargePaid, isChargeOpen } from '@/lib/payments/money';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
@@ -54,12 +57,17 @@ export default function Pagos() {
     enabled: studentIds.length > 0 && !!userProfile,
   });
 
+  // What a family still owes is the BALANCE of each open charge — after
+  // partial payments (amount_paid, re-derived by the server) — never the
+  // charge's full amount. A $1,000 charge with $400 paid owes $600 here.
+  const openChargesOf = (studentId) => charges.filter(c => c.student_id === studentId && isChargeOpen(c));
+
   const getStudentStatus = (studentId) => {
-    const studentCharges = charges.filter(c => c.student_id === studentId && c.status !== 'PAID' && c.status !== 'CANCELLED');
+    const studentCharges = openChargesOf(studentId);
     
     if (studentCharges.length === 0) return 'Al día';
     
-    const hasOverdue = studentCharges.some(c => isBeforeToday(c.due_date));
+    const hasOverdue = studentCharges.some(c => isChargeOverdue(c));
     if (hasOverdue) return 'Vencido';
     
     const daysToNext = Math.min(...studentCharges
@@ -72,14 +80,11 @@ export default function Pagos() {
   };
 
   const getStudentPending = (studentId) => {
-    return charges
-      .filter(c => c.student_id === studentId && c.status !== 'PAID' && c.status !== 'CANCELLED')
-      .reduce((sum, c) => sum + (c.amount || 0), 0);
+    return centsToAmount(openChargesOf(studentId).reduce((sum, c) => sum + chargeBalanceCents(c), 0));
   };
 
   const getNextDueDate = (studentId) => {
-    const studentCharges = charges
-      .filter(c => c.student_id === studentId && c.status !== 'PAID' && c.status !== 'CANCELLED')
+    const studentCharges = openChargesOf(studentId)
       .filter(c => parseLocalDate(c.due_date))
       .sort((a, b) => parseLocalDate(a.due_date) - parseLocalDate(b.due_date));
     
@@ -163,12 +168,16 @@ export default function Pagos() {
                 </div>
               ) : (
                 getStudentCharges(selectedStudent.id).map((charge) => {
-                  const isOverdue = charge.status !== 'PAID' && isBeforeToday(charge.due_date);
+                  const isPaid = charge.status === 'PAID';
+                  const isCancelled = charge.status === 'CANCELLED';
+                  const isOverdue = isChargeOverdue(charge);
+                  const isPartial = !isPaid && !isCancelled && chargePaid(charge) > 0;
+                  const lastPayment = parseLocalDate(charge.last_payment_date);
                   return (
                     <div
                       key={charge.id}
                       className={`p-4 rounded-xl border ${
-                        charge.status === 'PAID' ? 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900' :
+                        isPaid ? 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900' :
                         isOverdue ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900' :
                         'bg-card border-border'
                       }`}
@@ -182,16 +191,23 @@ export default function Pagos() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-lg">${charge.amount?.toLocaleString()}</p>
                           <Badge className={
-                            charge.status === 'PAID' ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' :
+                            isPaid ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' :
+                            isCancelled ? 'bg-muted text-muted-foreground' :
                             isOverdue ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300' :
+                            isPartial ? 'bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-300' :
                             'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
                           }>
-                            {charge.status === 'PAID' ? 'Pagado' : isOverdue ? 'Vencido' : 'Pendiente'}
+                            {isPaid ? 'Pagado' : isCancelled ? 'Cancelado' : isOverdue ? (isPartial ? 'Vencido · parcial' : 'Vencido') : isPartial ? 'Pago parcial' : 'Pendiente'}
                           </Badge>
                         </div>
                       </div>
+                      <ChargeAmounts charge={charge} className="mt-3" />
+                      {lastPayment && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Último pago registrado: {format(lastPayment, "d 'de' MMM, yyyy", { locale: es })}
+                        </p>
+                      )}
                     </div>
                   );
                 })

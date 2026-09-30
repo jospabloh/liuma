@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { guardedUpdate } from '@/lib/authorization/guardedWrite';
+import { collapseInbox, unreadCopies } from '@/lib/notifications/inbox';
 
 export default function Avisos() {
   const [selectedNotice, setSelectedNotice] = useState(null);
@@ -77,14 +78,15 @@ export default function Avisos() {
   });
 
   const markAsReadMutation = useMutation({
-    // read_at is stamped by the server the first time (P10b).
-    mutationFn: async (delivery) => guardedUpdate('NoticeDelivery', delivery.id, { status: 'READ' }),
+    // read_at is stamped by the server the first time (P10b). One notice can
+    // have a copy per child (collapseInbox): reading it reads all of them.
+    mutationFn: async (entry) => Promise.all(
+      unreadCopies(entry).map((copy) => guardedUpdate('NoticeDelivery', copy.id, { status: 'READ' })),
+    ),
     onSuccess: () => queryClient.invalidateQueries(['noticeDeliveries']),
   });
   const noticesById = useMemo(() => new Map(notices.map((notice) => [notice.id, notice])), [notices]);
-  const noticeRows = deliveries
-    .map((delivery) => ({ notice: noticesById.get(delivery.notice_id), delivery }))
-    .filter((item) => !!item.notice);
+  const noticeRows = collapseInbox(deliveries, noticesById);
 
   const filteredNotices = noticeRows.filter(({ notice, delivery }) => {
     const priorityOk = filterPriority === 'all' || notice.priority === filterPriority;
@@ -154,7 +156,9 @@ export default function Avisos() {
         />
       ) : (
         <div className="space-y-4">
-          {filteredNotices.map(({ notice, delivery }, index) => (
+          {filteredNotices.map((entry, index) => {
+            const { notice, delivery } = entry;
+            return (
             <motion.div
               key={notice.id}
               initial={{ opacity: 0, y: 20 }}
@@ -170,7 +174,7 @@ export default function Avisos() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => markAsReadMutation.mutate(delivery)}
+                    onClick={() => markAsReadMutation.mutate(entry)}
                     className="w-full"
                   >
                     <Check className="w-4 h-4 mr-1" /> Marcar como leído
@@ -178,7 +182,8 @@ export default function Avisos() {
                 )}
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       )}
 

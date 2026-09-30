@@ -51,7 +51,12 @@ export default function ParentHome({ user, userProfile, subscription }) {
     }, '-created_date', 50),
   });
   const urgentNoticeIds = new Set(notices.filter((n) => n.priority === 'URGENT').map((n) => n.id));
-  const unreadUrgentDeliveries = unreadDeliveries.filter((row) => urgentNoticeIds.has(row.notice_id));
+  // Counted in notices, not copies: a parent with two children gets one copy
+  // per child of the same notice (and of the emergency alert), and Avisos
+  // shows it once (collapseInbox) — the badge must agree with that list.
+  const unreadUrgentCount = new Set(
+    unreadDeliveries.filter((row) => urgentNoticeIds.has(row.notice_id)).map((row) => row.notice_id),
+  ).size;
 
   // Get upcoming events
   const { data: events = [] } = useQuery({
@@ -132,7 +137,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
               title="Avisos"
               subtitle="Leer mensajes de la escuela"
               href={createPageUrl('Avisos')}
-              badge={unreadUrgentDeliveries.length}
+              badge={unreadUrgentCount}
               delay={0.05}
             />
             <BigTile

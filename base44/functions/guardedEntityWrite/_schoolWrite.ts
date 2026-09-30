@@ -23,9 +23,14 @@
 //      student, classroom, notice, profile, teacher, parent — must belong to
 //      the same school.
 //
-// Import-free apart from the siblings ./_policy.ts and ./_money.ts, and duck-typed on
-// `sr.entities[Name]`, so tests/unit/write-path-p10b.test.js runs the real
-// thing against an in-memory database with two schools.
+// The school's review of a family request (AbsenceNotification approved or
+// rejected, a UniformOrder moving on) emails the parent who filed it, after
+// the write (./_statusNotify.ts, best-effort, never throws).
+//
+// Import-free apart from its siblings (./_policy.ts, ./_money.ts,
+// ./_statusNotify.ts, ./_templates.ts) and duck-typed on `sr.entities[Name]`,
+// so tests/unit/write-path-p10b.test.js runs the real thing against an
+// in-memory database with two schools.
 import {
   buildSchoolWrite,
   decideCreateTargets,
@@ -43,6 +48,8 @@ import {
 } from './_policy.ts';
 import type { CallerProfile, Op } from './_policy.ts';
 import { validateDiscount } from './_money.ts';
+import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
+import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 
 const DISCOUNT_TERMS = ['discount_type', 'discount_value', 'valid_from', 'valid_until', 'applicable_to_concepts'];
 
@@ -352,5 +359,13 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
     target_id: recordId,
     details: { fields: Object.keys(data), authorized_as: authorizedAs },
   }, now);
+  // The stored transition decides (existing → record), not the request.
+  const event = statusEventFor(entity, operation, existing, { ...existing, ...(record || data) });
+  if (event) {
+    const notified = await notifyStatusChange({
+      sr, templates: NOTIFICATION_TEMPLATES, event, schoolId, record: { ...existing, ...(record || data) }, actorId: String(user.id),
+    });
+    return { status: 200, body: { ok: true, record, notified } };
+  }
   return { status: 200, body: { ok: true, record } };
 }

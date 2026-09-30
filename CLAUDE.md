@@ -1487,3 +1487,41 @@ producción. Los conceptos creados antes no tienen tipo y cuentan como `OTRO`
 `npm run deploy:site` — el sitio nuevo ya no marca `PAID` él mismo, así que
 con el servidor viejo **ningún pago cerraría su cargo**. Comprobar por
 comportamiento: un pago menor al saldo debe dejar el cargo en «Pago parcial».
+
+## Avisos que faltaban: alerta en Avisos, ausencias y uniformes (2026-09-30)
+
+**La alerta de emergencia no llegaba a Avisos.** `sendBulkNotification`
+(`planEmergency`) sólo creaba el `Notice` de toda la escuela, y `Avisos.jsx`
+lista las `NoticeDelivery` del que llama unidas a su aviso: sin fila, no hay
+aviso, ni badge de no leídos, ni cuenta en «urgentes sin leer». Ahora
+`planEmergencyDeliveries` (`_fanout.ts`) escribe una copia por destinatario con
+service role: una por (padre, hijo activo de esta escuela) — la forma de
+`planNoticeDeliveries` —, una sin alumno para el padre sin vínculo y una por
+maestro. Idempotente (lee las que ya existen), escuela y destinatarios del
+servidor, y best-effort: si falla, el correo sale igual y la respuesta lo dice
+(`inAppRecipients` / `inAppFailed`, aparte de «Enviado a X de Y», que sigue
+contando correos). Para que el maestro vea **su** copia, el `READ_RULES` de
+`NoticeDelivery` para TEACHER suma la rama `recipient_user_id: self` (las tres
+copias de `_scope.ts`), y `AvisosMaestro` muestra «Recibidos de la escuela» vía
+`src/lib/notifications/readInbox.js`. `collapseInbox` muestra cada aviso una vez
+aunque haya una copia por hijo, y «Marcar como leído» marca todas.
+
+**Ausencias y uniformes no avisaban a nadie.** `_statusNotify.ts` (copia
+idéntica en `guardedFamilyWrite/` y `guardedEntityWrite/`) manda el correo
+**desde la escritura misma**, después de guardar: solicitud nueva → ADMINs
+activos + maestros activos del salón del alumno; revisión → el padre que la
+pidió; `UniformOrder` a PROCESSING/READY/DELIVERED/CANCELLED → el padre del
+pedido (sólo si sigue con vínculo ACTIVE al alumno). Decide la transición
+**almacenada** (re-guardar sin cambiar `status` no manda nada), nunca el
+cuerpo; nunca al autor; nunca lanza (un fallo deja
+`NOTIFICATION_DELIVERY_FAILED`). Las tres plantillas nuevas viven en
+`_templates.ts`, ahora con **cuatro** copias idénticas, y no están en
+`CALLER_ROLES` de `sendNotificationEmail`: ningún navegador puede dispararlas.
+Sólo correo, a propósito: el único modelo in-app es `Notice`, que es un
+comunicado de escuela y contaría en Reportes como tal.
+
+Pruebas: `tests/unit/loose-ends-notify.test.js`. Ninguna función nueva (20/40).
+**No verificado:** nada en vivo (sin sesiones ni `SendEmail` real). **Desplegar:**
+`npm run deploy` (sendBulkNotification, guardedEntityWrite, guardedFamilyWrite,
+schoolRead, lumiQuery, lumiWrite, sendNotificationEmail) y `npm run deploy:site`.
+Sin cambios de entidad.

@@ -13,7 +13,7 @@ import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 import { notificationService } from '@/lib/notifications/service';
-import { formatDeliverySummary, hasUndelivered } from '@/lib/notifications/fanout';
+import { formatDeliverySummary, formatInAppSummary, hasUndelivered } from '@/lib/notifications/fanout';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -94,6 +94,11 @@ export default function AlertaEmergencia() {
           <p className="text-muted-foreground mb-2">
             {formatDeliverySummary(delivery) || 'La alerta quedó publicada para toda la escuela.'}
           </p>
+          {formatInAppSummary(delivery) && (
+            <p className="text-sm text-muted-foreground mb-2 max-w-sm mx-auto">
+              {formatInAppSummary(delivery)}
+            </p>
+          )}
           {hasUndelivered(delivery) ? (
             <p className="text-sm text-amber-700 dark:text-amber-300 mb-6 max-w-sm mx-auto">
               Algunas personas no recibieron el correo (sin correo registrado o fallo de envío).

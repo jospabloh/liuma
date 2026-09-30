@@ -20,7 +20,13 @@
 //   4. The target must currently be PENDING. This is an approval queue, not
 //      a general status editor: reactivating a SUSPENDED user or suspending
 //      an ACTIVE one is a different decision and does not go through here.
-//   5. Nobody approves their own profile, even an ADMIN of the school with a
+//   5. The role the user ends up with is the APPROVING ADMIN's choice
+//      (`body.role`, allowlist ADMIN/TEACHER/PARENT), never what the
+//      applicant picked in onboarding: the stored role is only the
+//      applicant's request, and the audit row keeps both. Omitted `role`
+//      keeps the requested one. Handing out ADMIN still needs a second
+//      director (governRoleChange), so one director cannot pick it here.
+//   6. Nobody approves their own profile, even an ADMIN of the school with a
 //      second, pending profile — self-activation is exactly what an approval
 //      step exists to prevent.
 // The write and its AuditLog row both happen with the service role.
@@ -30,6 +36,8 @@ const DECISIONS: Record<string, { status: string; action: string }> = {
   approve: { status: 'ACTIVE', action: 'USER_APPROVED' },
   reject: { status: 'SUSPENDED', action: 'USER_SUSPENDED' },
 };
+
+const APP_ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 
 type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string };
 
@@ -48,6 +56,10 @@ Deno.serve(async (req) => {
     const decision = DECISIONS[String(body?.decision || '')];
     if (!profileId) return bad(400, 'MISSING_PROFILE', 'profileId is required');
     if (!decision) return bad(400, 'BAD_DECISION', 'decision must be "approve" or "reject"');
+    const rawRole = body?.role;
+    if (rawRole !== undefined && rawRole !== null && rawRole !== '' && !APP_ROLES.includes(String(rawRole))) {
+      return bad(400, 'INVALID_ROLE', 'role must be ADMIN, TEACHER or PARENT');
+    }
 
     const sr = base44.asServiceRole;
     const target: Profile | null = await sr.entities.UserProfile.get(profileId).catch(() => null);
@@ -70,11 +82,20 @@ Deno.serve(async (req) => {
     // second director (governRoleChange's maker-checker). Onboarding never
     // creates a PENDING ADMIN (provisionOnboardingProfile), so this only
     // stops a row that should not exist from being activated by one person.
-    if (target.app_role === 'ADMIN' && decision.status === 'ACTIVE' && !isPlatformOwner) {
+    // Judged on the role the profile would END UP with (the admin's choice, or
+    // the requested one when none was sent).
+    const finalRole = decision.status === 'ACTIVE' && rawRole ? String(rawRole) : String(target.app_role || '');
+    if (decision.status === 'ACTIVE' && !APP_ROLES.includes(finalRole)) {
+      return bad(409, 'INVALID_ROLE', 'The profile has no valid role; choose one to approve it');
+    }
+    if (finalRole === 'ADMIN' && decision.status === 'ACTIVE' && !isPlatformOwner) {
       return bad(403, 'ADMIN_NEEDS_GOVERNANCE', 'An ADMIN profile cannot be activated through the approval queue');
     }
 
-    await sr.entities.UserProfile.update(target.id, { status: decision.status });
+    // Role changes only on approval; a rejection never rewrites app_role.
+    const patch: Record<string, string> = { status: decision.status };
+    if (decision.status === 'ACTIVE' && finalRole && finalRole !== target.app_role) patch.app_role = finalRole;
+    await sr.entities.UserProfile.update(target.id, patch);
 
     // Best-effort: the approval already happened; a failed audit row must not
     // turn it into an error the admin would retry.
@@ -88,13 +109,19 @@ Deno.serve(async (req) => {
       details: {
         from_status: 'PENDING',
         to_status: decision.status,
-        target_role: target.app_role,
+        requested_role: target.app_role,
+        assigned_role: decision.status === 'ACTIVE' ? finalRole : target.app_role,
         actor_profile_id: callerProfile?.id || null,
         via: 'approveProfile',
       },
     }).catch(() => null);
 
-    return Response.json({ ok: true, profileId: target.id, status: decision.status });
+    return Response.json({
+      ok: true,
+      profileId: target.id,
+      status: decision.status,
+      appRole: decision.status === 'ACTIVE' ? finalRole : target.app_role,
+    });
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }

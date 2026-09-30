@@ -75,10 +75,10 @@ test('approveProfile checks the ADMIN against the TARGET\'s stored school, PENDI
   assert.match(source, /if \(target\.user_id === user\.id\) return bad\(403, 'SELF_APPROVAL'/);
   assert.doesNotMatch(source, /body\?\.status/);
   // One director cannot activate an ADMIN through the approval queue.
-  assert.match(source, /target\.app_role === 'ADMIN' && decision\.status === 'ACTIVE' && !isPlatformOwner/);
+  assert.match(source, /finalRole === 'ADMIN' && decision\.status === 'ACTIVE' && !isPlatformOwner/);
 
   const page = read('src/pages/Aprobaciones.jsx');
-  assert.match(page, /invokeFunction\(base44, 'approveProfile', \{ profileId, decision \}\)/);
+  assert.match(page, /invokeFunction\(base44, 'approveProfile', \{ profileId, decision, \.\.\.\(role \? \{ role \} : \{\}\) \}\)/);
   assert.doesNotMatch(page, /UserProfile\.update\(/);
 });
 

@@ -15,11 +15,13 @@ export default function PendingApproval() {
           <Clock className="w-10 h-10 text-amber-600 dark:text-amber-400" />
         </div>
         <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-3">
-          Cuenta pendiente de aprobación
+          Solicitud enviada
         </h1>
         <p className="text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
-          Tu cuenta está siendo revisada por el administrador de la escuela.
-          Te notificaremos cuando sea aprobada.
+          Esperando aprobación: la dirección de la escuela revisará tu solicitud y
+          te dará acceso con el rol que corresponda. Mientras tanto no puedes ver
+          información de la escuela. Puedes cerrar esta pantalla; al volver
+          seguirás aquí hasta que te aprueben.
         </p>
         <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-4 mb-6">
           <p className="text-sm text-amber-800 dark:text-amber-300">

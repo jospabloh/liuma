@@ -70,6 +70,21 @@ export function isNetworkError(error) {
   return /network\s*error|failed to fetch|load failed|timeout/i.test(message);
 }
 
+/**
+ * True when a sign-in was refused because the e-mail was never verified with
+ * the one-time code. Base44 words it in English ("Please verify your email",
+ * "verification code"); the text can sit on the error, its `data`, or the raw
+ * axios `response.data`.
+ */
+export function needsEmailVerification(error) {
+  if (!error || typeof error !== 'object') return false;
+  const bodies = [error.data, error.response?.data, error.originalError?.response?.data];
+  const text = [error.message, ...bodies.flatMap((b) => (b && typeof b === 'object' ? [b.message, b.detail, b.error] : [b]))]
+    .filter((t) => typeof t === 'string')
+    .join(' ');
+  return /verify your email|verification code|email (is )?not verified|not verified/i.test(text);
+}
+
 /** One user-facing Spanish sentence for any thrown error. */
 export function humanizeError(error) {
   if (!error) return GENERIC_ERROR_MESSAGE;
@@ -92,6 +107,11 @@ export function humanizeError(error) {
  */
 export function describeLoginError(error) {
   if (isNetworkError(error)) return { kind: 'network', message: NETWORK_ERROR_MESSAGE };
+  // Registered but never entered the e-mail code (closed the tab, lost the
+  // mail): not a bad password. The login screen sends them to the code step.
+  if (needsEmailVerification(error)) {
+    return { kind: 'unverified', message: 'Falta confirmar tu correo. Escribe el código que te enviamos.' };
+  }
   const status = errorStatus(error);
   if (status === 429) return { kind: 'rate_limited', message: STATUS_MESSAGES[429] };
   if (status && status >= 500) return { kind: 'server', message: SERVER_ERROR_MESSAGE };

@@ -98,7 +98,23 @@ export default function Login() {
         await base44.auth.loginViaEmailPassword(email.trim(), password);
         window.location.href = "/";
       } catch (err) {
-        setError(describeLoginError(err).message);
+        const failure = describeLoginError(err);
+        if (failure.kind === 'unverified') {
+          // Registered earlier and never confirmed the code: go to the code
+          // step (keeping the typed password for the automatic sign-in after
+          // it) and send a fresh code, since the first one may be long gone.
+          setCode("");
+          setMode("verify");
+          try {
+            await base44.auth.resendOtp(email.trim());
+            setNotice("Tu correo aún no está confirmado. Te enviamos un código nuevo.");
+          } catch (resendErr) {
+            setNotice("");
+            setError(describeOtpError(resendErr).message);
+          }
+          return;
+        }
+        setError(failure.message);
       }
     });
   };
@@ -176,6 +192,7 @@ export default function Login() {
       try {
         await base44.auth.verifyOtp({ email: email.trim(), otpCode: code.trim() });
       } catch (err) {
+        setNotice("");
         setError(describeOtpError(err).message);
         return;
       }
@@ -195,6 +212,7 @@ export default function Login() {
     run(async () => {
       try {
         await base44.auth.resendOtp(email.trim());
+        setError("");
         setNotice("Te enviamos un código nuevo.");
       } catch (err) {
         setError(describeOtpError(err).message);

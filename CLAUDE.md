@@ -1340,3 +1340,64 @@ de alumnos por plan sólo lo aplica la UI (`useStudentQuota`, detrás de
 `SchoolSubscription` (paso 1 del orden de arriba) — sin ella la licencia falla
 cerrada y **toda** escritura de P10b responde 403 `WRITE_BLOCKED`.
 `governRoleChange` también se redespliega (va en `npm run deploy`).
+
+## Código de correo al entrar, y el rol lo elige quien aprueba (2026-09-30)
+
+Dos pedidos, uno por la app hermana (stockflow #412: un cliente recibió el
+código de Base44 y la app no le mostraba dónde escribirlo) y otro por el
+contrato de tenant/roles.
+
+**A. Verificación de correo por código (`src/pages/Login.jsx`).** El registro ya
+tenía el modo `verify` (register, `verifyOtp({email, otpCode})`, login
+automático, `resendOtp`, errores con `describeOtpError`). Lo que faltaba era
+quien se registró, cerró la pestaña y vuelve por **login**: recibía el error
+crudo. Ahora `describeLoginError` devuelve `kind: 'unverified'` cuando el mensaje
+(en el error, en `data` o en el `response.data` de axios) dice
+«verify your email» / «verification code» / «not verified»
+(`needsEmailVerification`, `src/lib/errorMessages.js`), y `handleLogin` cae al
+modo `verify`, **conserva la contraseña escrita** para el login automático tras
+el código y manda un código nuevo (el primero puede llevar horas perdido).
+Pruebas: `tests/unit/join-approval-and-verify.test.js`.
+
+**B. Tenant, roles y unión por código: auditado contra el contrato.** Ya
+cumplían, sin cambios (leído en código y cubierto por las pruebas existentes):
+el fundador queda ACTIVE ADMIN de SU escuela (`provisionOnboardingProfile`, la
+única rama que asigna ACTIVE es la del fundador); unirse con código deja el
+perfil PENDING; `schoolRead`/`_scope.ts` y `guardedEntityWrite`/`_policy.ts`
+rechazan un perfil que no es ACTIVE con `INACTIVE_PROFILE`; `Home.jsx` pinta
+`PendingApproval` a partir del perfil **guardado**, así que sobrevive a
+recargar; `UserProfile` create/update es solo service role y `governRoleChange`
+solo toca `app_role`, nunca `status`, así que no activa a nadie; una cuenta, una
+escuela (409 `ALREADY_ONBOARDED`).
+
+Lo que **sí cambió**: la pantalla y la función de aprobación ya existían
+(`Aprobaciones.jsx`, `approveProfile`) pero el rol del usuario era el que él
+pidió en el onboarding. Ahora:
+
+- `approveProfile` acepta `role` (lista blanca `ADMIN|TEACHER|PARENT`, si no
+  400 `INVALID_ROLE`). Al aprobar escribe `{status:'ACTIVE', app_role}` con el
+  rol que **eligió el ADMIN**; sin `role` conserva el pedido. Rechazar nunca
+  reescribe `app_role`. El `AuditLog` guarda `requested_role` y `assigned_role`.
+- **Desviación del contrato, a propósito:** la interfaz ofrece solo
+  Maestro/Familia (`src/lib/members/approvalRoles.js`). Elegir ADMIN sigue
+  respondiendo 403 `ADMIN_NEEDS_GOVERNANCE` a un director que no es dueño de
+  plataforma, porque dar ADMIN es el permiso que `governRoleChange` protege con
+  un segundo director; un solo ADMIN eligiéndolo desde la cola sería saltarse ese
+  maker-checker. El texto del diálogo remite a Permisos y Roles. Si el dueño
+  decide que un director basta para nombrar otro, es quitar ese `if` y añadir
+  `ADMIN` a `APPROVABLE_ROLES`.
+- `PendingApproval` dice «Solicitud enviada / esperando aprobación».
+- No se añadió ninguna función (20/40).
+
+**No verificado:** nada corrió contra Base44 en vivo. Ni el texto real del
+error de login sin verificar (la regex cubre las variantes conocidas; si Base44
+usa otra frase, `needsEmailVerification` es el único sitio a ajustar), ni un
+código real llegando por correo, ni `approveProfile` desplegado con `role`
+(`deno lint` y `deno check` sí pasan; sus pruebas son de código fuente, porque
+`Deno.serve` no corre en node), ni una sesión de ADMIN/PENDING en navegador.
+
+**Desplegar, en este orden:** (1) `npm run deploy` (solo `approveProfile`
+cambió); comprobar por comportamiento: llamarla con `role: 'X'` debe dar 400
+`INVALID_ROLE`, no `unknown` ni un 200. Si dijera `unchanged` y el 400 no
+aparece, toca **Publish**. (2) `npm run deploy:site` (Login, Aprobaciones,
+PendingApproval). Sin cambios de entidad: `deploy:entities` no hace falta.

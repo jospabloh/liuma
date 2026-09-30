@@ -90,5 +90,19 @@ module.exports = {
   		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // Primary-pointer variants. `coarse:` = a finger (phones, tablets — also a
+    // large iPhone in landscape, which is ≥768px wide and so already past
+    // `md:`); `fine:` = a mouse/trackpad. Width alone cannot tell the two
+    // apart, and both touch rules below are about the finger, not the width:
+    //   - tap targets get 44px (Apple HIG / WCAG 2.5.5) — `coarse:min-h-11`
+    //   - text fields keep 16px, or iOS Safari zooms the page on focus —
+    //     fields only drop to 14px on `md:fine:`.
+    // See tests/unit/mobile-shell.test.js.
+    function ({ addVariant }) {
+      addVariant("coarse", "@media (pointer: coarse)");
+      addVariant("fine", "@media (pointer: fine)");
+    },
+  ],
 }

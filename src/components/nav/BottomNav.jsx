@@ -35,7 +35,11 @@ export default function BottomNav() {
     <>
       <nav
         className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-background/95 backdrop-blur md:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+        }}
         aria-label="Navegación principal"
       >
         <div className="mx-auto grid max-w-lg grid-cols-4">
@@ -68,8 +72,17 @@ export default function BottomNav() {
         </div>
       </nav>
 
-      {/* Spacer so fixed bar never covers page content on mobile. */}
-      <div className="h-16 md:hidden" aria-hidden="true" />
+      {/* Spacer so the fixed bar never covers page content on mobile. It must
+          grow with the bar: the bar is 4rem PLUS the home-indicator inset
+          (34px on a notched iPhone), so a flat h-16 would leave the last 34px
+          of every page under the nav once viewport-fit=cover makes the inset
+          real. */}
+      <div
+        className="h-16 md:hidden"
+        style={{ height: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+        aria-hidden="true"
+        data-bottom-nav-spacer=""
+      />
     </>
   );
 }

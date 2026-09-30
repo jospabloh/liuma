@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { schoolToday } from '@/lib/dates';
 import { Switch } from "@/components/ui/switch";
 import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
 import { humanizeError } from '@/lib/errorMessages';
@@ -17,7 +17,7 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: schoolToday(),
     time: '',
     end_time: '',
     location: '',
@@ -35,7 +35,7 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
       setFormData({
         title: event.title || '',
         description: event.description || '',
-        date: event.date || format(new Date(), 'yyyy-MM-dd'),
+        date: event.date || schoolToday(),
         time: event.time || '',
         end_time: event.end_time || '',
         location: event.location || '',
@@ -51,7 +51,7 @@ export default function EventFormDialog({ isOpen, onClose, event, schoolId, clas
       setFormData({
         title: '',
         description: '',
-        date: format(new Date(), 'yyyy-MM-dd'),
+        date: schoolToday(),
         time: '',
         end_time: '',
         location: '',

@@ -13,12 +13,12 @@ import { Button } from '@/components/ui/button';
 import { canReadEntity } from '@/lib/authorization/policy';
 import { canExportReports, exportReportCSV, exportReportPDF } from '@/lib/report-export';
 import { attendanceSummary, diaryCoverage } from '@/lib/reports/kpis';
-import { formatLocalDate, isBeforeToday, parseLocalDate } from '@/lib/dates';
+import { isBeforeToday, parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import { toast } from 'sonner';
 
 export default function Reportes() {
   const reportRef = useRef(null);
-  const today = formatLocalDate(new Date());
+  const today = schoolToday();
   const [filters, setFilters] = useState({ dateFrom: today, dateTo: today, classroomId: 'ALL', studentStatus: 'ACTIVE', roleScope: 'ALL' });
   const [openPanel, setOpenPanel] = useState(null);
 
@@ -95,7 +95,7 @@ export default function Reportes() {
     () => diaryCoverage({ diaries, students: filteredStudents, dateFrom: filters.dateFrom, dateTo: filters.dateTo, today }),
     [diaries, filteredStudents, filters.dateFrom, filters.dateTo, today],
   );
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekStart = startOfWeek(schoolTodayDate(), { weekStartsOn: 1 });
   const weekNotices = notices.filter((n) => new Date(n.created_date) >= weekStart).filter((n) => filters.roleScope === 'ALL' || (n.scope || 'SCHOOL') === filters.roleScope);
 
   // While a range loads, show a placeholder rather than a 0% that reads as
@@ -133,7 +133,7 @@ export default function Reportes() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
-      <PageHeader eyebrow="Administración" title="Reportes" subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })} showBack backTo={createPageUrl('Home')} />
+      <PageHeader eyebrow="Administración" title="Reportes" subtitle={format(schoolTodayDate(), "EEEE d 'de' MMMM", { locale: es })} showBack backTo={createPageUrl('Home')} />
 
       <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4 mb-4">
         <p className="text-xs text-muted-foreground mb-2">Filtros</p>

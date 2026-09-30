@@ -1,20 +1,23 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Clock, MapPin } from 'lucide-react';
-import { format, isToday, isTomorrow, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
-import { parseLocalDate, startOfLocalDay } from '@/lib/dates';
+import { parseLocalDate, schoolDaysFromToday } from '@/lib/dates';
 
 export default function EventCard({ event, onClick }) {
   const eventDate = parseLocalDate(event.date);
   if (!eventDate) return null;
-  // Whole calendar days between today and the event, not 24h blocks from now.
-  const daysUntil = differenceInDays(eventDate, startOfLocalDay());
+  // Whole calendar days between the school's today and the event, not 24h
+  // blocks from the device clock.
+  const daysUntil = schoolDaysFromToday(eventDate);
+  const isToday = daysUntil === 0;
+  const isTomorrow = daysUntil === 1;
   
   const getDateLabel = () => {
-    if (isToday(eventDate)) return 'Hoy';
-    if (isTomorrow(eventDate)) return 'Mañana';
+    if (isToday) return 'Hoy';
+    if (isTomorrow) return 'Mañana';
     if (daysUntil <= 7 && daysUntil > 0) return `En ${daysUntil} días`;
     return format(eventDate, "d 'de' MMMM", { locale: es });
   };
@@ -38,7 +41,7 @@ export default function EventCard({ event, onClick }) {
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            {(isToday(eventDate) || isTomorrow(eventDate)) && (
+            {(isToday || isTomorrow) && (
               <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-xs">
                 {getDateLabel()}
               </Badge>

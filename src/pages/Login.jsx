@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { AuthError, AuthNotice, EmailField, PasswordField, SubmitButton } from "@/components/auth/parts";
 import { getRememberedIdentity, clearRememberedIdentity } from "@/lib/lastIdentity";
 import { describeLoginError, describeOtpError, describeResetRequestError, describeSignupError, errorStatus, humanizeError, isNetworkError, NETWORK_ERROR_MESSAGE } from "@/lib/errorMessages";
-import { MIN_PASSWORD_LENGTH, readResetToken } from "@/lib/authLinks";
+import { LOGIN_PATH, MIN_PASSWORD_LENGTH, readResetToken } from "@/lib/authLinks";
 
 // Pantalla de inicio de sesión propia de LIUMA, en lugar de la página genérica
 // hospedada por Base44. Usa los métodos de correo+contraseña del SDK
@@ -152,7 +152,7 @@ export default function Login() {
       try {
         await base44.auth.resetPassword({ resetToken, newPassword: password });
         // Drop the token from the URL so a reload doesn't reopen this form.
-        navigate("/login", { replace: true });
+        navigate(LOGIN_PATH, { replace: true });
         go("login", { keepNotice: true });
         setNotice("Listo, tu contraseña cambió. Ya puedes iniciar sesión.");
       } catch (err) {
@@ -298,7 +298,7 @@ export default function Login() {
             minLength={MIN_PASSWORD_LENGTH}
           />
           <SubmitButton loading={loading} idle="Guardar contraseña" busy="Guardando…" />
-          <div className="text-center"><LinkButton onClick={() => { navigate("/login", { replace: true }); go("login"); }}>Volver a iniciar sesión</LinkButton></div>
+          <div className="text-center"><LinkButton onClick={() => { navigate(LOGIN_PATH, { replace: true }); go("login"); }}>Volver a iniciar sesión</LinkButton></div>
         </form>
       )}
 

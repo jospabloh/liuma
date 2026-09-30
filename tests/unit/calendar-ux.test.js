@@ -9,7 +9,8 @@ function read(path) {
 test('calendar days are selectable so agenda changes to the clicked day', () => {
   const calendar = read('src/pages/CalendarioEscolar.jsx');
 
-  assert.match(calendar, /const \[selectedDate, setSelectedDate\] = useState\(new Date\(\)\)/);
+  // Opens on the school's today (America/Mexico_City), not the device's.
+  assert.match(calendar, /const \[selectedDate, setSelectedDate\] = useState\(\(\) => schoolTodayDate\(\)\)/);
   assert.match(calendar, /const selectedDayEvents = getEventsForDate\(selectedDate\)/);
   assert.match(calendar, /const handleDaySelect = \(day\) => \{\s*setSelectedDate\(day\);\s*\}/);
   assert.match(calendar, /onClick=\{\(\) => handleDaySelect\(day\)\}/);

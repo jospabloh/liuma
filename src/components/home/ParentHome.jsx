@@ -11,10 +11,10 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
-import { formatLocalDate, isBeforeToday } from '@/lib/dates';
+import { formatLocalDate, isBeforeToday, schoolToday, schoolTodayDate } from '@/lib/dates';
 
 export default function ParentHome({ user, userProfile, subscription }) {
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = schoolToday();
 
   // Get linked students
   const { data: linkedStudents = { students: [], studentIds: [] } } = useQuery({
@@ -86,7 +86,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
   return (
     <div className="min-h-screen bg-background">
       <HomeHeader
-        eyebrow={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+        eyebrow={format(schoolTodayDate(), "EEEE d 'de' MMMM", { locale: es })}
         title={`Hola, ${user.full_name?.split(' ')[0] || 'Padre'}`}
       />
 

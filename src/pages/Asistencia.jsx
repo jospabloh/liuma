@@ -22,7 +22,7 @@ import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import { ATTENDANCE_STATUS, ATTENDANCE_STATUSES, ATTENDANCE_STATUS_LABELS } from '@/lib/attendance/status';
-import { formatLocalDate, parseLocalDate } from '@/lib/dates';
+import { formatLocalDate, parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 
@@ -219,8 +219,8 @@ function TeacherAdminAttendanceView({ role, classrooms, classroomsError, selecte
 
 function ParentAttendanceView({ user, userProfile }) {
   const [selectedStudent, setSelectedStudent] = useState('all');
-  const [startDate, setStartDate] = useState(formatLocalDate(subDays(new Date(), 30)));
-  const [endDate, setEndDate] = useState(formatLocalDate(new Date()));
+  const [startDate, setStartDate] = useState(() => formatLocalDate(subDays(schoolTodayDate(), 30)));
+  const [endDate, setEndDate] = useState(() => schoolToday());
 
   const { data: linkedStudents = { students: [] }, isLoading: loadingLinkedStudents } = useQuery({
     queryKey: ['attendance-linkedStudents', user?.id],
@@ -341,7 +341,7 @@ function ParentAttendanceView({ user, userProfile }) {
 
 export default function Asistencia() {
   const [selectedClassroom, setSelectedClassroom] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(() => formatLocalDate(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => schoolToday());
   // Rows (salón|fecha|alumno) whose mark is being saved right now. Per row,
   // so one slow save does not freeze the whole class (it used to: every
   // button in the list was disabled while ANY mark was in flight).

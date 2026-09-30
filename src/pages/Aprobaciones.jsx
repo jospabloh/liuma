@@ -14,6 +14,9 @@ import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { APPROVABLE_ROLES, defaultApprovalRole } from '@/lib/members/approvalRoles';
 import { toast } from "sonner";
 import { useSchoolMembers } from '@/lib/members/useSchoolMembers';
 import {
@@ -31,6 +34,7 @@ export default function Aprobaciones() {
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState(null);
   const [actionType, setActionType] = useState(null);
+  const [chosenRole, setChosenRole] = useState('PARENT');
 
   const { userProfile } = useCurrentProfile();
 
@@ -51,8 +55,8 @@ export default function Aprobaciones() {
     // approveProfile re-checks that the caller is an ACTIVE ADMIN of the
     // target's own school, that the target is still PENDING and not the
     // caller themself, and writes the AuditLog row — all server-side.
-    mutationFn: ({ profileId, decision }) =>
-      invokeFunction(base44, 'approveProfile', { profileId, decision }),
+    mutationFn: ({ profileId, decision, role }) =>
+      invokeFunction(base44, 'approveProfile', { profileId, decision, ...(role ? { role } : {}) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingUsers'] });
       queryClient.invalidateQueries({ queryKey: ['schoolMembers'] });
@@ -68,7 +72,7 @@ export default function Aprobaciones() {
       } else if (code === 'SELF_APPROVAL') {
         toast.error('No puedes aprobar ni rechazar tu propia solicitud.');
       } else if (code === 'ADMIN_NEEDS_GOVERNANCE') {
-        toast.error('Una solicitud como directivo no se puede aprobar desde aquí. Escríbenos desde Soporte para revisarla.');
+        toast.error('Directivo no se puede asignar desde aquí. Aprueba como maestro o familia y pide el cambio en Permisos y Roles.');
       } else {
         toast.error('No se pudo actualizar la solicitud. Intenta de nuevo.');
       }
@@ -78,12 +82,15 @@ export default function Aprobaciones() {
   const handleAction = (profile, type) => {
     setSelectedUser(profile);
     setActionType(type);
+    setChosenRole(defaultApprovalRole(profile.app_role));
   };
 
   const confirmAction = () => {
     updateUserMutation.mutate({
       profileId: selectedUser.id,
       decision: actionType === 'approve' ? 'approve' : 'reject',
+      // The approving admin's choice decides the role, not the applicant's.
+      role: actionType === 'approve' ? chosenRole : undefined,
     });
   };
 
@@ -139,7 +146,7 @@ export default function Aprobaciones() {
                     {getUserEmail(profile.user_id)}
                   </p>
                   <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline">{roleLabels[profile.app_role] || profile.app_role}</Badge>
+                    <Badge variant="outline">Pidió: {roleLabels[profile.app_role] || profile.app_role}</Badge>
                     <span className="text-xs text-muted-foreground">
                       Registrado: {format(new Date(profile.created_date), "d MMM, yyyy", { locale: es })}
                     </span>
@@ -176,11 +183,27 @@ export default function Aprobaciones() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {actionType === 'approve' 
-                ? `${getUserName(selectedUser?.user_id)} podrá acceder a la aplicación como ${roleLabels[selectedUser?.app_role]?.toLowerCase()}.`
+                ? `${getUserName(selectedUser?.user_id)} podrá acceder a la aplicación con el rol que elijas abajo.`
                 : `${getUserName(selectedUser?.user_id)} no podrá acceder a la aplicación.`
               }
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {actionType === 'approve' && (
+            <div className="space-y-2">
+              <Label htmlFor="approval-role">Rol en la escuela</Label>
+              <Select value={chosenRole} onValueChange={setChosenRole}>
+                <SelectTrigger id="approval-role"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {APPROVABLE_ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>{roleLabels[r]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Para nombrar a otro directivo usa Permisos y Roles: requiere la aprobación de un segundo directivo.
+              </p>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction

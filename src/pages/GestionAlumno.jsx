@@ -7,7 +7,7 @@ import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
-import { User, Link, Unlink, UserPlus, Mail, Loader2, CheckCircle } from 'lucide-react';
+import { User, Link, Unlink, UserPlus, Mail, Loader2, CheckCircle, Pencil, Heart, Shield, Stethoscope } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { parseLocalDate } from '@/lib/dates';
@@ -32,6 +32,10 @@ import {
 } from "@/components/ui/select";
 import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
 import { canGuardedWrite } from '@/lib/authorization/guardedWritePolicy';
+import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import { invalidateSchoolStudents } from '@/hooks/useSchoolStudents';
+import StudentFormDialog from '@/components/school/StudentFormDialog';
+import { studentUpdatePatch } from '@/lib/forms/directorForms';
 
 export default function GestionAlumno() {
   const queryClient = useQueryClient();
@@ -40,8 +44,10 @@ export default function GestionAlumno() {
   const [showLinkForm, setShowLinkForm] = useState(false);
   const [selectedParentId, setSelectedParentId] = useState('');
   const [relationship, setRelationship] = useState('tutor');
+  const [showEditForm, setShowEditForm] = useState(false);
+  const { canWrite } = useCanWrite();
 
-  const { user, userProfile } = useCurrentProfile();
+  const { userProfile } = useCurrentProfile();
 
   const { data: student, isLoading } = useQuery({
     queryKey: ['student', studentId],
@@ -87,6 +93,54 @@ export default function GestionAlumno() {
   // out — guardedEntityWrite refuses anyone else (P10b). A teacher still sees
   // who is linked.
   const canManageLinks = canGuardedWrite(userProfile?.app_role, 'ParentStudent', 'create');
+
+  // Editing a student (name, classroom, birth date and the medical fields) is
+  // ADMIN-only on the server (guardedEntityWrite, Student.update). A teacher
+  // reaches this page too and still sees the record, read-only.
+  const canEditStudent = canGuardedWrite(userProfile?.app_role, 'Student', 'update');
+
+  // Same key as GestionEscuela's list (all classrooms, inactive included), so
+  // creating a classroom there refreshes this select too.
+  const { data: schoolClassrooms = [], isLoading: loadingClassrooms } = useQuery({
+    queryKey: ['allClassrooms', userProfile?.school_id, 'all'],
+    queryFn: () => schoolRead('Classroom', { school_id: userProfile.school_id }),
+    enabled: !!userProfile?.school_id && canEditStudent,
+  });
+
+  const updateStudentMutation = useMutation({
+    // The server records RECORD_UPDATED with the names of the changed fields
+    // (never their values: these are a minor's medical data).
+    mutationFn: (patch) => guardedUpdate('Student', studentId, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', studentId] });
+      queryClient.invalidateQueries({ queryKey: ['classroom'] });
+      invalidateSchoolStudents(queryClient);
+      toast.success('Datos del alumno actualizados');
+      setShowEditForm(false);
+    },
+    onError: (error) => {
+      toast.error(`No se pudieron guardar los cambios. ${humanizeError(error)}`);
+    },
+  });
+
+  const blockReadOnly = () => toast.error('Tu licencia está en modo solo lectura. Reactívala para hacer cambios.');
+
+  const handleOpenEdit = () => {
+    if (!guardWrite(canWrite, blockReadOnly)) return;
+    setShowEditForm(true);
+  };
+
+  // The dialog has already validated the form, field by field.
+  const handleSaveStudent = (form) => {
+    if (!guardWrite(canWrite, blockReadOnly)) return;
+    const patch = studentUpdatePatch(student, form);
+    if (Object.keys(patch).length === 0) {
+      toast.info('No hay cambios que guardar');
+      setShowEditForm(false);
+      return;
+    }
+    updateStudentMutation.mutate(patch);
+  };
 
   const linkedParentIds = parentLinks.map(l => l.parent_id);
   const availableParents = parentProfiles.filter(p => !linkedParentIds.includes(p.user_id));
@@ -175,11 +229,11 @@ export default function GestionAlumno() {
             animate={{ opacity: 1, y: 0 }}
             className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-5"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-brand/10 flex items-center justify-center">
+            <div className="flex items-start gap-4">
+              <div className="w-16 h-16 shrink-0 rounded-2xl bg-brand/10 flex items-center justify-center">
                 <User className="w-8 h-8 text-brand" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <h2 className="text-xl font-bold text-card-foreground">
                   {student.first_name} {student.last_name}
                 </h2>
@@ -192,7 +246,35 @@ export default function GestionAlumno() {
                   </p>
                 )}
               </div>
+              {canEditStudent && (
+                <Button variant="outline" size="sm" onClick={handleOpenEdit} disabled={!canWrite || loadingClassrooms} className="gap-1 shrink-0">
+                  <Pencil className="w-4 h-4" aria-hidden="true" /> Editar
+                </Button>
+              )}
             </div>
+
+            {/* Datos médicos. Shown to whoever reaches this page: schoolRead
+                only returns this student to the ADMIN and the student's own
+                teachers and parents. */}
+            <dl className="mt-4 pt-4 border-t border-border space-y-2 text-sm">
+              <div className="flex items-start gap-2">
+                <Heart className="w-4 h-4 mt-0.5 shrink-0 text-red-400" aria-hidden="true" />
+                <dt className="text-muted-foreground">Tipo de sangre:</dt>
+                <dd className="text-card-foreground">{student.blood_type || 'Sin registrar'}</dd>
+              </div>
+              <div className="flex items-start gap-2">
+                <Shield className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                <dt className="text-muted-foreground">Alergias:</dt>
+                <dd className={student.allergies ? 'text-amber-700 dark:text-amber-300 whitespace-pre-line break-words min-w-0' : 'text-card-foreground'}>
+                  {student.allergies || 'Ninguna registrada'}
+                </dd>
+              </div>
+              <div className="flex items-start gap-2">
+                <Stethoscope className="w-4 h-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <dt className="text-muted-foreground">Notas médicas:</dt>
+                <dd className="text-card-foreground whitespace-pre-line break-words min-w-0">{student.medical_notes || 'Sin notas'}</dd>
+              </div>
+            </dl>
           </motion.div>
 
           {/* Parent Links */}
@@ -254,6 +336,18 @@ export default function GestionAlumno() {
             )}
           </motion.div>
         </div>
+      )}
+
+      {canEditStudent && student && (
+        <StudentFormDialog
+          open={showEditForm}
+          onOpenChange={setShowEditForm}
+          mode="edit"
+          student={student}
+          classrooms={schoolClassrooms}
+          isPending={updateStudentMutation.isPending}
+          onSubmit={handleSaveStudent}
+        />
       )}
 
       {/* Link Parent Modal */}

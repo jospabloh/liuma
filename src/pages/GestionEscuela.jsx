@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
@@ -13,6 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import FieldError from '@/components/forms/FieldError';
+import StudentFormDialog from '@/components/school/StudentFormDialog';
+import { cn } from '@/lib/utils';
+import {
+  INVALID_FIELD_CLASS,
+  firstErrorField,
+  hasErrors,
+  studentCreatePayload,
+  validateClassroomForm,
+} from '@/lib/forms/directorForms';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
@@ -22,13 +32,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UpgradePlansModal from '@/components/subscription/UpgradePlansModal';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
@@ -51,14 +54,10 @@ export default function GestionEscuela() {
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [classroomForm, setClassroomForm] = useState({ name: '', grade: '' });
-  const [studentForm, setStudentForm] = useState({ 
-    first_name: '', 
-    last_name: '', 
-    classroom_id: '',
-    birth_date: '' 
-  });
+  const [classroomErrors, setClassroomErrors] = useState({});
+  const classroomFieldRefs = useRef({});
 
-  const { user, userProfile } = useCurrentProfile();
+  const { userProfile } = useCurrentProfile();
 
   // Inactive classrooms included, so the key carries 'all': AdminHome and
   // AvisosAdmin cache ACTIVE classrooms under ['allClassrooms', school_id], and
@@ -97,6 +96,7 @@ export default function GestionEscuela() {
       toast.success('Salón creado correctamente');
       setShowClassroomForm(false);
       setClassroomForm({ name: '', grade: '' });
+      setClassroomErrors({});
     },
     onError: (error) => {
       toast.error(`Error al crear salón. ${humanizeError(error)}`);
@@ -120,7 +120,6 @@ export default function GestionEscuela() {
       queryClient.invalidateQueries({ queryKey: ['activeStudentCount'] });
       toast.success('Alumno agregado correctamente');
       setShowStudentForm(false);
-      setStudentForm({ first_name: '', last_name: '', classroom_id: '', birth_date: '' });
     },
     onError: (error) => {
       toast.error(`Error al agregar alumno. ${humanizeError(error)}`);
@@ -132,11 +131,30 @@ export default function GestionEscuela() {
   const handleCreateClassroom = (e) => {
     e.preventDefault();
     if (!guardWrite(canWrite, blockReadOnly)) return;
+    // Field-level Spanish errors instead of a submit button that was just
+    // disabled with no reason (QA 2026-09-30).
+    const errors = validateClassroomForm(classroomForm);
+    setClassroomErrors(errors);
+    if (hasErrors(errors)) {
+      classroomFieldRefs.current[firstErrorField(errors, ['name', 'grade'])]?.focus?.();
+      return;
+    }
     createClassroomMutation.mutate({
-      ...classroomForm,
+      name: classroomForm.name.trim(),
+      grade: classroomForm.grade.trim(),
       school_id: userProfile.school_id,
       is_active: true,
     });
+  };
+
+  const updateClassroomField = (field, value) => {
+    setClassroomForm((prev) => ({ ...prev, [field]: value }));
+    if (classroomErrors[field]) setClassroomErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  const handleClassroomFormOpenChange = (open) => {
+    setShowClassroomForm(open);
+    if (!open) setClassroomErrors({});
   };
 
   const handleOpenStudentForm = () => {
@@ -150,8 +168,8 @@ export default function GestionEscuela() {
     setShowStudentForm(true);
   };
 
-  const handleCreateStudent = (e) => {
-    e.preventDefault();
+  // The dialog has already validated the form, field by field.
+  const handleCreateStudent = (form) => {
     if (!guardWrite(canWrite, blockReadOnly)) return;
     // Guard again at submit time in case the count changed while the form was open.
     if (studentQuota.exceeded) {
@@ -160,7 +178,7 @@ export default function GestionEscuela() {
       return;
     }
     createStudentMutation.mutate({
-      ...studentForm,
+      ...studentCreatePayload(form),
       school_id: userProfile.school_id,
       is_active: true,
     });
@@ -311,37 +329,47 @@ export default function GestionEscuela() {
       />
 
       {/* Create Classroom Modal */}
-      <Dialog open={showClassroomForm} onOpenChange={setShowClassroomForm}>
+      <Dialog open={showClassroomForm} onOpenChange={handleClassroomFormOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nuevo salón</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreateClassroom} className="space-y-4">
+          <form onSubmit={handleCreateClassroom} noValidate className="space-y-4">
             <div>
-              <Label>Nombre del salón *</Label>
+              <Label htmlFor="classroom-name">Nombre del salón *</Label>
               <Input
+                id="classroom-name"
+                ref={(el) => { classroomFieldRefs.current.name = el; }}
                 value={classroomForm.name}
-                onChange={(e) => setClassroomForm({ ...classroomForm, name: e.target.value })}
+                onChange={(e) => updateClassroomField('name', e.target.value)}
                 placeholder="Ej: 1-A, Preescolar Azul..."
-                className="mt-1"
+                aria-invalid={Boolean(classroomErrors.name)}
+                aria-describedby={classroomErrors.name ? 'classroom-name-error' : undefined}
+                className={cn('mt-1', classroomErrors.name && INVALID_FIELD_CLASS)}
               />
+              <FieldError id="classroom-name-error" message={classroomErrors.name} />
             </div>
             <div>
-              <Label>Grado (opcional)</Label>
+              <Label htmlFor="classroom-grade">Grado (opcional)</Label>
               <Input
+                id="classroom-grade"
+                ref={(el) => { classroomFieldRefs.current.grade = el; }}
                 value={classroomForm.grade}
-                onChange={(e) => setClassroomForm({ ...classroomForm, grade: e.target.value })}
+                onChange={(e) => updateClassroomField('grade', e.target.value)}
                 placeholder="Ej: 1°, 2°, Preescolar..."
-                className="mt-1"
+                aria-invalid={Boolean(classroomErrors.grade)}
+                aria-describedby={classroomErrors.grade ? 'classroom-grade-error' : undefined}
+                className={cn('mt-1', classroomErrors.grade && INVALID_FIELD_CLASS)}
               />
+              <FieldError id="classroom-grade-error" message={classroomErrors.grade} />
             </div>
             <div className="flex gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowClassroomForm(false)} className="flex-1">
+              <Button type="button" variant="outline" onClick={() => handleClassroomFormOpenChange(false)} className="flex-1">
                 Cancelar
               </Button>
               <Button 
                 type="submit" 
-                disabled={!classroomForm.name || createClassroomMutation.isPending}
+                disabled={createClassroomMutation.isPending}
                 className="flex-1"
               >
                 {createClassroomMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear'}
@@ -351,73 +379,15 @@ export default function GestionEscuela() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Student Modal */}
-      <Dialog open={showStudentForm} onOpenChange={setShowStudentForm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nuevo alumno</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreateStudent} className="space-y-4">
-            <div>
-              <Label>Nombre *</Label>
-              <Input
-                value={studentForm.first_name}
-                onChange={(e) => setStudentForm({ ...studentForm, first_name: e.target.value })}
-                placeholder="Nombre"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label>Apellidos *</Label>
-              <Input
-                value={studentForm.last_name}
-                onChange={(e) => setStudentForm({ ...studentForm, last_name: e.target.value })}
-                placeholder="Apellidos"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label>Salón *</Label>
-              <Select
-                value={studentForm.classroom_id}
-                onValueChange={(value) => setStudentForm({ ...studentForm, classroom_id: value })}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Seleccionar salón" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classrooms.filter(c => c.is_active).map((classroom) => (
-                    <SelectItem key={classroom.id} value={classroom.id}>
-                      {classroom.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Fecha de nacimiento</Label>
-              <Input
-                type="date"
-                value={studentForm.birth_date}
-                onChange={(e) => setStudentForm({ ...studentForm, birth_date: e.target.value })}
-                className="mt-1"
-              />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowStudentForm(false)} className="flex-1">
-                Cancelar
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={!studentForm.first_name || !studentForm.last_name || !studentForm.classroom_id || createStudentMutation.isPending}
-                className="flex-1"
-              >
-                {createStudentMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Agregar'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Create Student Modal — same form as "Editar alumno" (GestionAlumno). */}
+      <StudentFormDialog
+        open={showStudentForm}
+        onOpenChange={setShowStudentForm}
+        mode="create"
+        classrooms={classrooms}
+        isPending={createStudentMutation.isPending}
+        onSubmit={handleCreateStudent}
+      />
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
@@ -21,20 +21,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
+import { humanizeError } from '@/lib/errorMessages';
+import FieldError from '@/components/forms/FieldError';
+import { cn } from '@/lib/utils';
+import {
+  DOCUMENT_FIELD_ORDER,
+  INVALID_FIELD_CLASS,
+  firstErrorField,
+  hasErrors,
+  validateDocumentForm,
+} from '@/lib/forms/directorForms';
+
+const emptyDocumentForm = () => ({
+  title: '',
+  description: '',
+  document_type: 'COMMUNICATION',
+  target_audience: 'TODOS',
+  valid_from: format(new Date(), 'yyyy-MM-dd'),
+  valid_until: '',
+});
 
 export default function GestionDocumentos() {
   const { canWrite } = useCanWrite();
-  const [isUploading, setIsUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    document_type: 'COMMUNICATION',
-    target_audience: 'TODOS',
-    valid_from: format(new Date(), 'yyyy-MM-dd'),
-    valid_until: '',
-  });
+  const [formData, setFormData] = useState(emptyDocumentForm);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [errors, setErrors] = useState({});
+  const fieldRefs = useRef({});
 
   const queryClient = useQueryClient();
 
@@ -85,18 +98,14 @@ export default function GestionDocumentos() {
       queryClient.invalidateQueries({ queryKey: ['officialDocuments'] });
       toast.success('Documento subido exitosamente');
       setShowForm(false);
-      setFormData({
-        title: '',
-        description: '',
-        document_type: 'COMMUNICATION',
-        target_audience: 'TODOS',
-        valid_from: format(new Date(), 'yyyy-MM-dd'),
-        valid_until: '',
-      });
+      setFormData(emptyDocumentForm());
       setSelectedFile(null);
+      setErrors({});
     },
     onError: (error) => {
-      toast.error('Error al subir el documento');
+      // The dialog stays open with what was typed, and — because the button
+      // follows uploadMutation.isPending — ready to retry.
+      toast.error(`Error al subir el documento. ${humanizeError(error)}`);
       console.error(error);
     },
   });
@@ -109,18 +118,48 @@ export default function GestionDocumentos() {
     },
   });
 
-  const handleSubmit = async (e) => {
+  // `mutate`, not `await mutateAsync`, and no local "uploading" flag: the old
+  // handler set isUploading, awaited mutateAsync and only then cleared it, so a
+  // failed upload rejected past the handler (unhandled rejection) and left the
+  // button on "Subiendo..." until a reload (QA 2026-09-30). The mutation's own
+  // isPending is cleared on success and on failure alike.
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!guardWrite(canWrite, () => toast.error('Tu licencia está en modo solo lectura. Reactívala para subir documentos.'))) return;
-    if (!selectedFile) {
-      toast.error('Por favor selecciona un archivo PDF');
+    const found = validateDocumentForm(formData, selectedFile);
+    setErrors(found);
+    if (hasErrors(found)) {
+      fieldRefs.current[firstErrorField(found, DOCUMENT_FIELD_ORDER)]?.focus?.();
       return;
     }
-
-    setIsUploading(true);
-    await uploadMutation.mutateAsync({ ...formData, file: selectedFile });
-    setIsUploading(false);
+    uploadMutation.mutate({ ...formData, title: formData.title.trim(), file: selectedFile });
   };
+
+  const isUploading = uploadMutation.isPending;
+
+  const updateField = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  const handleSelectFile = (file) => {
+    setSelectedFile(file || null);
+    if (errors.file) setErrors((prev) => ({ ...prev, file: undefined }));
+  };
+
+  // A closed dialog unmounts its file input, so a file kept in state would be
+  // uploaded next time while the reopened input reads "no file chosen".
+  const handleOpenChange = (open) => {
+    if (!open && isUploading) return;
+    setShowForm(open);
+    if (!open) {
+      setSelectedFile(null);
+      setErrors({});
+    }
+  };
+
+  const describedBy = (field) => (errors[field] ? `doc-${field}-error` : undefined);
+  const fieldRef = (field) => (el) => { fieldRefs.current[field] = el; };
 
   const documentTypeLabels = {
     MENU: 'Menú semanal',
@@ -142,7 +181,7 @@ export default function GestionDocumentos() {
           subtitle="Gestiona menús, comunicaciones, minutas y catálogos"
           showBack
           action={
-            <Dialog open={showForm} onOpenChange={setShowForm}>
+            <Dialog open={showForm} onOpenChange={handleOpenChange}>
               <DialogTrigger asChild>
                 <Button>
                   <Upload className="w-4 h-4 mr-2" />
@@ -153,7 +192,7 @@ export default function GestionDocumentos() {
                 <DialogHeader>
                   <DialogTitle>Subir documento</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} noValidate className="space-y-4">
                   <div>
                     <Label>Tipo de documento</Label>
                     <Select
@@ -173,23 +212,34 @@ export default function GestionDocumentos() {
                   </div>
 
                   <div>
-                    <Label>Título</Label>
+                    <Label htmlFor="doc-title">Título *</Label>
                     <Input
+                      id="doc-title"
+                      ref={fieldRef('title')}
                       value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      onChange={(e) => updateField('title', e.target.value)}
                       placeholder="Ej: Menú Semana 5"
-                      required
+                      aria-invalid={Boolean(errors.title)}
+                      aria-describedby={describedBy('title')}
+                      className={cn(errors.title && INVALID_FIELD_CLASS)}
                     />
+                    <FieldError id="doc-title-error" message={errors.title} />
                   </div>
 
                   <div>
-                    <Label>Descripción</Label>
+                    <Label htmlFor="doc-description">Descripción</Label>
                     <Textarea
+                      id="doc-description"
+                      ref={fieldRef('description')}
                       value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      onChange={(e) => updateField('description', e.target.value)}
                       placeholder="Descripción breve del documento"
                       rows={3}
+                      aria-invalid={Boolean(errors.description)}
+                      aria-describedby={describedBy('description')}
+                      className={cn(errors.description && INVALID_FIELD_CLASS)}
                     />
+                    <FieldError id="doc-description-error" message={errors.description} />
                   </div>
 
                   <div>
@@ -212,31 +262,49 @@ export default function GestionDocumentos() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label>Válido desde</Label>
+                      <Label htmlFor="doc-valid_from">Válido desde</Label>
                       <Input
+                        id="doc-valid_from"
+                        ref={fieldRef('valid_from')}
                         type="date"
                         value={formData.valid_from}
-                        onChange={(e) => setFormData({ ...formData, valid_from: e.target.value })}
+                        onChange={(e) => updateField('valid_from', e.target.value)}
+                        aria-invalid={Boolean(errors.valid_from)}
+                        aria-describedby={describedBy('valid_from')}
+                        className={cn(errors.valid_from && INVALID_FIELD_CLASS)}
                       />
+                      <FieldError id="doc-valid_from-error" message={errors.valid_from} />
                     </div>
                     <div>
-                      <Label>Válido hasta (opcional)</Label>
+                      <Label htmlFor="doc-valid_until">Válido hasta (opcional)</Label>
                       <Input
+                        id="doc-valid_until"
+                        ref={fieldRef('valid_until')}
                         type="date"
+                        min={formData.valid_from || undefined}
                         value={formData.valid_until}
-                        onChange={(e) => setFormData({ ...formData, valid_until: e.target.value })}
+                        onChange={(e) => updateField('valid_until', e.target.value)}
+                        aria-invalid={Boolean(errors.valid_until)}
+                        aria-describedby={describedBy('valid_until')}
+                        className={cn(errors.valid_until && INVALID_FIELD_CLASS)}
                       />
+                      <FieldError id="doc-valid_until-error" message={errors.valid_until} />
                     </div>
                   </div>
 
                   <div>
-                    <Label>Archivo PDF</Label>
+                    <Label htmlFor="doc-file">Archivo PDF *</Label>
                     <Input
+                      id="doc-file"
+                      ref={fieldRef('file')}
                       type="file"
-                      accept=".pdf"
-                      onChange={(e) => setSelectedFile(e.target.files[0])}
-                      required
+                      accept=".pdf,application/pdf"
+                      onChange={(e) => handleSelectFile(e.target.files?.[0])}
+                      aria-invalid={Boolean(errors.file)}
+                      aria-describedby={describedBy('file')}
+                      className={cn(errors.file && INVALID_FIELD_CLASS)}
                     />
+                    <FieldError id="doc-file-error" message={errors.file} />
                   </div>
 
                   <Button

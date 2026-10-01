@@ -8,6 +8,7 @@ import {
 } from '../../src/lib/errorMessages.js';
 import { queryErrorToast, mutationErrorToast } from '../../src/lib/queryErrorPolicy.js';
 import { readResetToken } from '../../src/lib/authLinks.js';
+import { resetRequestedNotice } from '../../src/lib/platformEmails.js';
 
 const root = new URL('../../', import.meta.url);
 const read = (path) => fs.readFileSync(new URL(path, root), 'utf8');
@@ -232,7 +233,11 @@ test('the login screen offers recovery, sign-up and a show-password toggle', () 
 test('the forgot-password answer is the same whether or not the account exists', () => {
   const login = read('src/pages/Login.jsx');
   const forgot = login.slice(login.indexOf('const handleForgot'), login.indexOf('const handleReset'));
-  assert.match(forgot, /Si hay una cuenta con/);
+  // The wording lives in platformEmails.js since it also has to warn that
+  // Base44's e-mail arrives in English; it must still open with the same
+  // "si hay una cuenta" hedge, whatever the account's existence.
+  assert.match(forgot, /setNotice\(resetRequestedNotice\(email\.trim\(\)\)\)/);
+  assert.match(resetRequestedNotice('x@y.mx'), /^Si hay una cuenta con x@y\.mx,/);
   assert.match(forgot, /describeResetRequestError\(err\)/);
   // Any 4xx ("no such account" included) looks like success…
   for (const status of [400, 401, 403, 404, 422]) {

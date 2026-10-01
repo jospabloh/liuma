@@ -1657,3 +1657,62 @@ conceptos anteriores sin tipo cuentan como `OTRO`; `resolveEffectiveLicense`
 y sus dos espejos Deno vencen una fecha sola a medianoche UTC; `/login` y
 `/reset-password` hospedados por Base44 siguen en inglés; nada de esto corrió
 contra Base44 en vivo.
+
+## Correos y login de Base44 en inglés: qué se puede y qué no (2026-10-01)
+
+QA en vivo de v1.8.2: el correo de código («Verify your email for LIUMA»), el
+de recuperación («Reset your password for LIUMA») y la invitación («…with the
+role of user») llegan **en inglés**, desde `no-reply@base44-apps.com`; y una
+carga directa de `/login` (o `/reset-password`) sirve la página hospedada de
+Base44, también en inglés. Ninguno es código de este repo.
+
+**Se revisó la API de plataforma (solo lectura) y no hay perilla de idioma.**
+`PUT /api/apps/{app_id}` acepta `name`, `user_description`, `public_settings`,
+`auth_config`, `is_remixable`, `hide_entity_created_by` y
+`dev_environment_enabled` — nada de idioma. No existe endpoint de plantillas
+de correo de autenticación. `register` / `resendOtp` / `resetPasswordRequest`
+/ `inviteUser` del SDK (0.8.52) no reciben locale. `sso/settings` es sólo el
+proveedor OAuth. El `login_path` de la config MCP sólo gobierna el
+consentimiento OAuth del servidor MCP y `PATCH …/mcp/config` ni siquiera lo
+acepta.
+
+**Redirigir `/login` → `/entrar` con `url-redirects` no sirve, por dos
+razones.** El contrato de `POST /api/apps/{app_id}/url-redirects` rechaza
+como origen «the app's auth paths»; y aunque lo aceptara, sería un 301
+(cacheado por el navegador) sobre la ruta que `redirectToLogin` usa a
+propósito para el «Continuar como» silencioso por cookie (`ContinueAs.jsx`,
+`AuthContext.navigateToLogin`) y que `OAuthConsent.jsx` usa de respaldo. Hoy
+no hay ninguna regla (`GET …/url-redirects` → `[]`). Lo de `/login` ya está
+acotado en cliente: nada enlaza ahí, el `start_url` del PWA es `/`, y una
+navegación interna a `/login` cae en `/entrar` (`authLinks.js`).
+
+**Lo que sí se hizo, en el repo:** `src/lib/platformEmails.js` guarda el
+asunto, el botón y la vigencia **reales** de los dos correos (leídos de los
+correos de QA, no adivinados), y `Login.jsx` los dice en español justo donde
+se manda cada uno: bajo el campo del código («llega en inglés, con el asunto
+«Verify your email for LIUMA»… 6 dígitos; vence en 10 minutos») y en el aviso
+tras pedir recuperación (asunto, botón «Reset password», 1 hora, página en
+inglés). El aviso de recuperación conserva el «Si hay una cuenta con…» para no
+enumerar cuentas. El remitente **no** se cita a propósito: activar un dominio
+de correo propio lo cambiaría. `tests/unit/platform-auth-emails.test.js` lo fija.
+
+**La invitación de Base44 no la recibe ningún usuario real**: LIUMA entra por
+registro propio + código de escuela. Sólo la manda quien invita desde el panel
+de Base44 o el sembrado de datos de prueba (`seedTestData`, dueño). No la uses
+para dar de alta escuelas.
+
+**Pendiente, en la plataforma (no lo hace este repo):** dominio de correo
+propio, para que el remitente diga «LIUMA» y no `base44-apps.com` (también
+arregla «el remitente no tiene nombre» de los correos propios). Requiere
+publicar los registros DNS que devuelva en `acaciaco.com.mx`:
+
+    POST /api/apps/696e967c430ceb6a2232ffd8/custom-email-domains
+    { "domain": "liuma.acaciaco.com.mx",
+      "sender_name": "LIUMA · Gestión escolar",
+      "from_email": "no-reply@liuma.acaciaco.com.mx" }
+
+y sondear `GET …/custom-email-domains` hasta `configuration_status: "active"`.
+El cuerpo de los correos de Base44 sigue en inglés aun así: sólo cambia el
+«De:». Traducirlo de verdad pide a Base44 una opción de idioma, o sacar el
+registro/recuperación a funciones propias — que no puede emitir tokens de
+sesión, así que no es un cambio menor.

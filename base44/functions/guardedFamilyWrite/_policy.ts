@@ -33,6 +33,65 @@ function text(value: unknown, max: number): string {
 }
 
 /**
+ * Today's calendar day at the school (Mexico), 'YYYY-MM-DD'. MIRRORS
+ * guardedEntityWrite/_money.ts#mexicoToday (functions cannot import across
+ * directories; tests/unit/payments-money.test.js compares the copies).
+ */
+export function mexicoToday(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+/** 'YYYY-MM-DD' that names a real calendar day (no 2026-02-31). */
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/**
+ * Whether a family may file an absence request for this day (v1.8.3, live QA
+ * of v1.8.1: the server took any well-formed date, so a direct call filed one
+ * for a day already gone, and a second request for the same day went in next
+ * to the first — the school then reviewed the same absence twice).
+ *
+ *  - The day is the school's today or later. An absence request is notice
+ *    given ahead of time; what already happened is the teacher's attendance
+ *    record (Asistencia), not a request. SolicitarAusencia's date picker has
+ *    always said so (min = today); this is the server saying it too.
+ *  - One live request per child per day. A REJECTED one doesn't count: the
+ *    family may file again with a better reason.
+ *
+ * `sameDay` is what the store holds for this student on that day (the caller
+ * reads it); rows for another student or day are ignored, so a broad read is
+ * harmless.
+ */
+export function checkAbsenceRequest(input: {
+  absenceDate: string;
+  studentId: string;
+  today: string;
+  sameDay?: Array<Record<string, unknown>> | null;
+}): Decision {
+  const { absenceDate, studentId, today } = input;
+  if (!isCalendarDate(absenceDate)) return fail('MISSING_FIELDS', 'absence_date must be a real YYYY-MM-DD day');
+  if (absenceDate < today) return fail('ABSENCE_DATE_PAST', `absence_date ${absenceDate} is before the school's today (${today})`);
+  const duplicate = (input.sameDay || []).some((row) =>
+    row &&
+    String(row.student_id || '') === studentId &&
+    String(row.absence_date || '').slice(0, 10) === absenceDate &&
+    row.status !== 'REJECTED');
+  if (duplicate) return fail('ABSENCE_DUPLICATE', `there is already a request for ${absenceDate}`);
+  return { ok: true };
+}
+
+/**
  * Who may write a family record for a student. Runs after the caller's
  * ACTIVE profile in the STUDENT's school (never a client-supplied school) has
  * been found.
@@ -91,6 +150,10 @@ export function buildFamilyPayload(
     existing?: Record<string, unknown> | null;
     event?: { has_cost?: boolean } | null;
     chargeId?: string | null;
+    // AbsenceNotification only: the school's today (defaults to Mexico's) and
+    // the requests already stored for this student on the requested day.
+    today?: string;
+    sameDayAbsences?: Array<Record<string, unknown>> | null;
   },
 ): Built {
   const data = input || {};
@@ -149,6 +212,13 @@ export function buildFamilyPayload(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(absenceDate) || !reason) {
       return fail('MISSING_FIELDS', 'absence_date (YYYY-MM-DD) and reason are required');
     }
+    const allowed = checkAbsenceRequest({
+      absenceDate,
+      studentId: ctx.studentId,
+      today: ctx.today || mexicoToday(),
+      sameDay: ctx.sameDayAbsences,
+    });
+    if (!allowed.ok) return allowed;
     return {
       ok: true,
       data: {

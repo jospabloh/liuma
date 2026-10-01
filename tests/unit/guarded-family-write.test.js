@@ -104,7 +104,7 @@ test('an absence request is always filed as PENDING, by the caller', () => {
     'AbsenceNotification',
     'create',
     { absence_date: '2026-10-02', reason: 'Cita médica', status: 'APPROVED', parent_id: 'someone-else', reviewed_by: 'x' },
-    ctx,
+    { ...ctx, today: '2026-10-01' },
   );
   assert.equal(built.ok, true);
   assert.equal(built.data.status, 'PENDING');

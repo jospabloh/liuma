@@ -71,6 +71,10 @@ export default function AvisosMaestro() {
   // sendBulkNotification delivers to every active teacher as well as to the
   // families. This page used to list only the teacher's own notices, so a
   // teacher had no in-app copy of the alert at all.
+  //
+  // A failed read must not look like "nothing received": the home's
+  // "N urgentes sin leer" leads here, so an empty page after a failed load
+  // reads as "the badge lied" (live QA of v1.8.2, under the rate limit).
   const receivedQuery = useQuery({
     queryKey: ['noticeDeliveries', 'teacherInbox', user?.id, userProfile?.school_id],
     queryFn: () => readNoticeInbox({ schoolId: userProfile.school_id, userId: user.id }),

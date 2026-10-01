@@ -197,15 +197,24 @@ html, body, #root {
     border: 1px solid hsl(var(--input));
     background: transparent;
     padding: 0 0.75rem;
-    font-size: 0.875rem;
+    font-size: 1rem;
     color: hsl(var(--foreground));
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
-  /* On a touch screen: 16px or iOS Safari zooms the page when the field is
-     focused, and 44px to tap. Same rule as Input (`md:fine:text-sm`). */
+  /* 16px unless the screen is wide AND driven by a mouse — exactly Input's
+     `text-base md:fine:text-sm`. Below 16px iOS Safari zooms the page when the
+     field is focused. The rule until v1.8.3 was "14px except on coarse", which
+     trusted the pointer query alone: a phone-width viewport that reports
+     pointer: fine (live QA measured the edit-student blood-type select at 14px
+     at 390px) got the zooming size. Now width decides too, like Input. */
+  @media (min-width: 768px) and (pointer: fine) {
+    .ui-field {
+      font-size: 0.875rem;
+    }
+  }
+  /* A finger gets 44px to tap. */
   @media (pointer: coarse) {
     .ui-field {
-      font-size: 1rem;
       min-height: 2.75rem;
     }
   }

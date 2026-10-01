@@ -26,6 +26,9 @@ const CODE_MESSAGES = {
   USER_NOT_IN_SCHOOL: 'Esa persona ya no está activa en tu escuela con ese rol.',
   INVALID_FIELD: 'Uno de los datos no tiene un formato válido. Revísalo e inténtalo de nuevo.',
   MISSING_FIELDS: 'Falta un dato obligatorio.',
+  // guardedFamilyWrite/_policy.ts#checkAbsenceRequest (v1.8.3).
+  ABSENCE_DATE_PAST: 'La fecha de la ausencia debe ser hoy o un día futuro.',
+  ABSENCE_DUPLICATE: 'Ya hay una solicitud de ausencia para ese alumno en ese día.',
   NOT_RECIPIENT: 'Este aviso no está dirigido a ti.',
   INACTIVE_PROFILE: 'Tu perfil no está activo en esta escuela.',
   TOO_MANY_RECIPIENTS: 'Este aviso tiene demasiados destinatarios para enviarse de una vez.',

@@ -22,6 +22,23 @@ import { escapeHtml } from '@/lib/htmlEscape';
 // recipient's email client (OWASP A03 / CWE-79). Escaping every interpolated
 // value uniformly, including the ones that are normally safe, keeps this
 // file safe by default as new templates/fields are added.
+// Mirrors _templates.ts's APP_URL / appButton / paidBreakdown (see there for
+// why every email links to the app's root).
+export const APP_URL = 'https://liuma.acaciaco.com.mx/';
+
+export function appButton() {
+  return `
+      <p style="margin: 24px 0 8px;"><a href="${APP_URL}" style="display: inline-block; background: #4f46e5; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Abrir LIUMA</a></p>
+      <p style="margin: 0 0 16px; color: #64748b; font-size: 12px;">O entra a liuma.acaciaco.com.mx</p>`;
+}
+
+function paidBreakdown({ totalLabel, paidLabel }) {
+  if (!paidLabel) return '';
+  return `
+        <p><strong>Total del cargo:</strong> ${escapeHtml(totalLabel)}</p>
+        <p><strong>Ya pagado:</strong> ${escapeHtml(paidLabel)}</p>`;
+}
+
 export const NOTIFICATION_TEMPLATES = {
   new_user_pending: {
     subject: ({ schoolName }) => `Nuevo usuario pendiente de aprobación - ${schoolName || 'LIUMA'}`,
@@ -34,23 +51,25 @@ export const NOTIFICATION_TEMPLATES = {
         <li><strong>Rol:</strong> ${escapeHtml(roleName)}</li>
       </ul>
       <p>Por favor, ingresa a la aplicación para aprobar o rechazar esta solicitud.</p>
+      ${appButton()}
     `,
     inAppTitle: () => 'Nuevo usuario pendiente',
     inAppContent: ({ userName, roleName }) => `${userName} (${roleName}) está pendiente de aprobación.`,
   },
   payment_due: {
-    subject: ({ studentName }) => `Recordatorio: Pago próximo a vencer - ${studentName}`,
-    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel }) => `
-      <h2>Recordatorio de Pago</h2>
+    subject: ({ studentName }) => `Recordatorio de pago - ${studentName}`,
+    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel, totalLabel, paidLabel }) => `
+      <h2>Recordatorio de pago</h2>
       <p>Estimado padre/madre de familia:</p>
-      <p>Le recordamos que tiene un pago pendiente que vence pronto:</p>
+      <p>Le recordamos que tiene un saldo pendiente con la escuela:</p>
       <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fbbf24; margin: 16px 0;">
         <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
-        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>
+        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>${paidBreakdown({ totalLabel, paidLabel })}
         <p><strong>Saldo pendiente:</strong> ${escapeHtml(amountLabel)}</p>
         <p><strong>Fecha de vencimiento:</strong> ${escapeHtml(dueDateLabel)}</p>
       </div>
-      <p>Por favor, realice su pago antes de la fecha de vencimiento para evitar recargos.</p>
+      <p>Por favor, realice su pago a más tardar en la fecha de vencimiento. Si ya lo hizo, puede ignorar este mensaje.</p>
+      ${appButton()}
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
     inAppTitle: () => 'Pago por vencer',
@@ -60,17 +79,18 @@ export const NOTIFICATION_TEMPLATES = {
   // passed (a "vence pronto" email about a late charge reads wrong).
   payment_overdue: {
     subject: ({ studentName }) => `Recordatorio: Pago vencido - ${studentName}`,
-    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel }) => `
+    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel, totalLabel, paidLabel }) => `
       <h2>Pago vencido</h2>
       <p>Estimado padre/madre de familia:</p>
       <p>Le recordamos que el siguiente pago ya venció y tiene saldo pendiente:</p>
       <div style="background: #fee2e2; padding: 16px; border-radius: 8px; border: 1px solid #f87171; margin: 16px 0;">
         <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
-        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>
+        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>${paidBreakdown({ totalLabel, paidLabel })}
         <p><strong>Saldo pendiente:</strong> ${escapeHtml(amountLabel)}</p>
         <p><strong>Venció el:</strong> ${escapeHtml(dueDateLabel)}</p>
       </div>
       <p>Por favor, liquide su saldo lo antes posible o comuníquese con la dirección de la escuela.</p>
+      ${appButton()}
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
     inAppTitle: () => 'Pago vencido',
@@ -90,6 +110,7 @@ export const NOTIFICATION_TEMPLATES = {
         <p><strong>Fecha límite:</strong> ${escapeHtml(deadlineLabel)}</p>
       </div>
       <p>Por favor, confirme su asistencia lo antes posible.</p>
+      ${appButton()}
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
     inAppTitle: ({ eventTitle }) => `Confirma asistencia a ${eventTitle}`,
@@ -101,6 +122,7 @@ export const NOTIFICATION_TEMPLATES = {
       <h2>🚨 Alerta de emergencia</h2>
       <p>${escapeHtml(message)}</p>
       <p>Por favor, siga las instrucciones del personal de la escuela.</p>
+      ${appButton()}
     `,
     inAppTitle: () => '🚨 Alerta de emergencia',
     inAppContent: ({ message }) => message,
@@ -120,6 +142,7 @@ export const NOTIFICATION_TEMPLATES = {
       </div>
       <p>${escapeHtml(description || '')}</p>
       <p>Ingresa a LIUMA &gt; Soporte para responder.</p>
+      ${appButton()}
     `,
     inAppTitle: ({ ticketNumber }) => `Nuevo ticket ${ticketNumber}`,
     inAppContent: ({ subjectText, priorityLabel }) => `${subjectText} (prioridad ${priorityLabel}).`,
@@ -134,6 +157,7 @@ export const NOTIFICATION_TEMPLATES = {
       </div>
       <p>${escapeHtml(replyBody || '')}</p>
       <p>Ingresa a LIUMA &gt; Soporte para ver la conversación completa.</p>
+      ${appButton()}
     `,
     inAppTitle: ({ ticketNumber }) => `Respuesta en ${ticketNumber}`,
     inAppContent: ({ subjectText }) => `Tu ticket "${subjectText}" tiene una nueva respuesta.`,
@@ -147,6 +171,7 @@ export const NOTIFICATION_TEMPLATES = {
         <p><strong>Asunto:</strong> ${escapeHtml(subjectText)}</p>
       </div>
       <p>${escapeHtml(resolutionNote || 'Si tu problema continúa, puedes reabrir el ticket desde la app.')}</p>
+      ${appButton()}
     `,
     inAppTitle: ({ ticketNumber }) => `Ticket ${ticketNumber} resuelto`,
     inAppContent: ({ subjectText }) => `Tu ticket "${subjectText}" fue marcado como resuelto.`,

@@ -283,7 +283,8 @@ function screens({ q, read, readMany, context, user, chained, school = 'A' }) {
       await Promise.all([scope, q.use(['todayDiaries', 'teacherHome', TODAY, user, school], () => readMany({
         diaries: ['DiaryEntry', { school_id: school, date: TODAY }],
         events: ['Event', { school_id: school, date: { $gte: TODAY } }, 'date', 3],
-        deliveries: ['NoticeDelivery', { school_id: school, status: 'SENT' }, '-created_date', 100],
+        // v1.8.3 (notify-copy) asks only for the teacher's own copies.
+        deliveries: ['NoticeDelivery', chained ? { school_id: school, status: 'SENT' } : { school_id: school, recipient_user_id: user, status: 'SENT' }, '-created_date', 100],
         urgent: ['Notice', { school_id: school, priority: 'URGENT' }, '-created_date', 50],
       }))]);
     },
@@ -292,10 +293,17 @@ function screens({ q, read, readMany, context, user, chained, school = 'A' }) {
       await Promise.all([
         q.use(['linkedClassrooms', user], () => context()),
         q.use(['teacherNotices', user], () => read('Notice', { author_id: user }, '-created_date', 20)),
-        q.use(['noticeDeliveries', 'teacherInbox', user, school], () => Promise.all([
-          read('NoticeDelivery', { school_id: school, recipient_user_id: user }, '-created_date', 50),
-          read('Notice', { school_id: school }, '-created_date', 50),
-        ])),
+        // v1.8.2 read the inbox as two schoolRead calls; v1.8.3 (notify-copy)
+        // sends them as one schoolReadMany.
+        q.use(['noticeDeliveries', 'teacherInbox', user, school], () => (chained
+          ? Promise.all([
+            read('NoticeDelivery', { school_id: school, recipient_user_id: user }, '-created_date', 50),
+            read('Notice', { school_id: school }, '-created_date', 50),
+          ])
+          : readMany({
+            deliveries: ['NoticeDelivery', { school_id: school, recipient_user_id: user }, '-created_date', 50],
+            notices: ['Notice', { school_id: school }, '-created_date', 50],
+          }))),
       ]);
     },
     // src/pages/CrearBitacora.jsx

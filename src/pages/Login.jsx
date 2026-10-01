@@ -47,7 +47,9 @@ function LinkButton({ onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+      // A finger needs 44px; the text line is 20. coarse: only, so a mouse
+      // keeps the compact row.
+      className="inline-flex items-center text-sm font-medium text-primary underline-offset-4 hover:underline coarse:min-h-11"
     >
       {children}
     </button>
@@ -257,7 +259,7 @@ export default function Login() {
             <button
               type="button"
               onClick={useOtherAccount}
-              className="mt-4 w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="mt-4 w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground coarse:min-h-11"
             >
               Usar otra cuenta
             </button>

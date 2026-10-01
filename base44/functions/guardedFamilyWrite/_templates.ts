@@ -38,8 +38,32 @@ export function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
+// Every email ends with a way back into the app. Live QA of v1.8.2: no LIUMA
+// email had a link at all, only "Ingresa a LIUMA > …" directions. The custom
+// domain, not the *.base44.app one, because it is the address families are
+// given. The ROOT, not a deep link: Home sends each role to its own screens,
+// while a page meant for another role answers "no es para tu tipo de cuenta"
+// (and the director, the teacher and the support inbox all get some of these).
+export const APP_URL = 'https://liuma.acaciaco.com.mx/';
+
+export function appButton(): string {
+  return `
+      <p style="margin: 24px 0 8px;"><a href="${APP_URL}" style="display: inline-block; background: #4f46e5; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Abrir LIUMA</a></p>
+      <p style="margin: 0 0 16px; color: #64748b; font-size: 12px;">O entra a liuma.acaciaco.com.mx</p>`;
+}
+
 // deno-lint-ignore no-explicit-any
 type Ctx = Record<string, any>;
+
+// A partial payment's breakdown (payment_due / payment_overdue): total, paid,
+// and what is left. Before v1.8.3 a family that had paid $400 of $1,000 got
+// "Saldo pendiente: $600.00" with nothing saying where the other $400 went.
+function paidBreakdown({ totalLabel, paidLabel }: Ctx): string {
+  if (!paidLabel) return '';
+  return `
+        <p><strong>Total del cargo:</strong> ${escapeHtml(totalLabel)}</p>
+        <p><strong>Ya pagado:</strong> ${escapeHtml(paidLabel)}</p>`;
+}
 
 export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => string; emailBody: (ctx: Ctx) => string }> = {
   new_user_pending: {
@@ -53,21 +77,27 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
         <li><strong>Rol:</strong> ${escapeHtml(roleName)}</li>
       </ul>
       <p>Por favor, ingresa a la aplicación para aprobar o rechazar esta solicitud.</p>
+      ${appButton()}
     `,
   },
+  // Not "vence pronto" and no "recargos": a director's manual reminder can go
+  // out weeks before the due date (live QA: "vence pronto" for a charge due in
+  // four weeks), and LIUMA applies no late fees — the email must not promise
+  // one. It states the balance and the date; the date says how soon.
   payment_due: {
-    subject: ({ studentName }) => `Recordatorio: Pago próximo a vencer - ${studentName}`,
-    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel }) => `
-      <h2>Recordatorio de Pago</h2>
+    subject: ({ studentName }) => `Recordatorio de pago - ${studentName}`,
+    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel, totalLabel, paidLabel }) => `
+      <h2>Recordatorio de pago</h2>
       <p>Estimado padre/madre de familia:</p>
-      <p>Le recordamos que tiene un pago pendiente que vence pronto:</p>
+      <p>Le recordamos que tiene un saldo pendiente con la escuela:</p>
       <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fbbf24; margin: 16px 0;">
         <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
-        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>
+        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>${paidBreakdown({ totalLabel, paidLabel })}
         <p><strong>Saldo pendiente:</strong> ${escapeHtml(amountLabel)}</p>
         <p><strong>Fecha de vencimiento:</strong> ${escapeHtml(dueDateLabel)}</p>
       </div>
-      <p>Por favor, realice su pago antes de la fecha de vencimiento para evitar recargos.</p>
+      <p>Por favor, realice su pago a más tardar en la fecha de vencimiento. Si ya lo hizo, puede ignorar este mensaje.</p>
+      ${appButton()}
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
   },
@@ -75,17 +105,18 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
   // passed (a "vence pronto" email about a late charge reads wrong).
   payment_overdue: {
     subject: ({ studentName }) => `Recordatorio: Pago vencido - ${studentName}`,
-    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel }) => `
+    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel, totalLabel, paidLabel }) => `
       <h2>Pago vencido</h2>
       <p>Estimado padre/madre de familia:</p>
       <p>Le recordamos que el siguiente pago ya venció y tiene saldo pendiente:</p>
       <div style="background: #fee2e2; padding: 16px; border-radius: 8px; border: 1px solid #f87171; margin: 16px 0;">
         <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
-        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>
+        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>${paidBreakdown({ totalLabel, paidLabel })}
         <p><strong>Saldo pendiente:</strong> ${escapeHtml(amountLabel)}</p>
         <p><strong>Venció el:</strong> ${escapeHtml(dueDateLabel)}</p>
       </div>
       <p>Por favor, liquide su saldo lo antes posible o comuníquese con la dirección de la escuela.</p>
+      ${appButton()}
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
   },
@@ -103,6 +134,7 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
         <p><strong>Fecha límite:</strong> ${escapeHtml(deadlineLabel)}</p>
       </div>
       <p>Por favor, confirme su asistencia lo antes posible.</p>
+      ${appButton()}
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
   },
@@ -112,6 +144,7 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
       <h2>🚨 Alerta de emergencia</h2>
       <p>${escapeHtml(message)}</p>
       <p>Por favor, siga las instrucciones del personal de la escuela.</p>
+      ${appButton()}
     `,
   },
   support_ticket_escalated: {
@@ -129,6 +162,7 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
       </div>
       <p>${escapeHtml(description || '')}</p>
       <p>Ingresa a LIUMA &gt; Soporte para responder.</p>
+      ${appButton()}
     `,
   },
   support_ticket_reply: {
@@ -141,6 +175,7 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
       </div>
       <p>${escapeHtml(replyBody || '')}</p>
       <p>Ingresa a LIUMA &gt; Soporte para ver la conversación completa.</p>
+      ${appButton()}
     `,
   },
   absence_request_submitted: {
@@ -153,6 +188,7 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
         <p><strong>Motivo:</strong> ${escapeHtml(reason)}</p>
       </div>
       <p>${escapeHtml(actionHint)}</p>
+      ${appButton()}
     `,
   },
   absence_request_reviewed: {
@@ -166,6 +202,7 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
       </div>
       ${adminNotes ? `<p><strong>Nota de la escuela:</strong> ${escapeHtml(adminNotes)}</p>` : ''}
       <p>Puedes ver el detalle en LIUMA &gt; Trámites &gt; Solicitar ausencia.</p>
+      ${appButton()}
     `,
   },
   uniform_order_status: {
@@ -180,6 +217,7 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
       <p>${escapeHtml(statusDetail)}</p>
       ${adminNotes ? `<p><strong>Nota de la escuela:</strong> ${escapeHtml(adminNotes)}</p>` : ''}
       <p>Puedes ver el pedido en LIUMA &gt; Trámites &gt; Uniformes.</p>
+      ${appButton()}
     `,
   },
   support_ticket_resolved: {
@@ -191,6 +229,7 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
         <p><strong>Asunto:</strong> ${escapeHtml(subjectText)}</p>
       </div>
       <p>${escapeHtml(resolutionNote || 'Si tu problema continúa, puedes reabrir el ticket desde la app.')}</p>
+      ${appButton()}
     `,
   },
 };

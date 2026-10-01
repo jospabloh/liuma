@@ -132,7 +132,7 @@ export default function CalendarioEscolar() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Calendar */}
         <div className="lg:col-span-2">
-          <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-3 sm:p-6">
+          <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-2 sm:p-6">
             {/* Month Navigation */}
             <div className="flex items-center justify-between mb-4 sm:mb-6">
               <Button
@@ -160,8 +160,12 @@ export default function CalendarioEscolar() {
                 event title fits in (a "Festival" chip showed 12px of 123px),
                 so below `sm` each day shows one dot per event instead and the
                 selected day's events are listed in full in "Agenda del día".
-                Chips with titles come back from `sm` up. */}
-            <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                Chips with titles come back from `sm` up.
+                Tight gutters below `sm` (p-2 on the card, 2px between days)
+                buy the width back: a day is ≥44px wide from 375px up (it was
+                ~42px at 375 and 34px at 320). At 320 seven columns cannot
+                reach 44px with any gutter (~37px now); the cell is 48px tall. */}
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-2">
               {/* Day Headers */}
               {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, i) => (
                 <div key={i} className="text-center text-sm font-medium text-muted-foreground py-2">

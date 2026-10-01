@@ -361,12 +361,13 @@ export default function GestionDescuentos() {
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => handleEdit(discount)}>
+                        <Button size="icon" variant="outline" aria-label="Editar descuento" onClick={() => handleEdit(discount)}>
                           <Edit className="w-4 h-4" />
                         </Button>
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="outline"
+                          aria-label="Eliminar descuento"
                           onClick={() => deleteDiscountMutation.mutate(discount.id)}
                         >
                           <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />

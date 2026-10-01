@@ -209,6 +209,54 @@ export function displayUserName(fullName: unknown, email?: unknown): string {
   return name;
 }
 
+// A staff name to show (teacher_name on homework and bitácoras). Same rule as
+// displayUserName without an email to compare: a stored handle such as
+// "h.josepablo+qa-maestro" is not a name, so Lumi got '' and said "su
+// maestra" out of it (live QA of v1.8.3).
+export function displayPersonName(name: unknown): string {
+  return displayUserName(name);
+}
+
+// What Lumi may offer to help with, per role, derived from QUERY_INTENTS and
+// WRITE_KINDS on the server. The prompt alone did not stop Lumi offering
+// pagos and uniformes to a docente (live QA of v1.8.3, LM06/LM09): it now
+// reads this list from my_context instead of recalling it.
+const HELP_LABELS: Array<{ label: string; intent?: string; write?: string }> = [
+  { label: 'el resumen de hoy de tus hijos', intent: 'my_children_summary' },
+  { label: 'tareas', intent: 'homework' },
+  { label: 'asistencia', intent: 'attendance' },
+  { label: 'registrar asistencia', write: 'attendance' },
+  { label: 'bitácoras', intent: 'diary_recent' },
+  { label: 'registrar bitácoras', write: 'diary' },
+  { label: 'pagos pendientes', intent: 'pending_charges' },
+  { label: 'avisos', intent: 'notices' },
+  { label: 'eventos', intent: 'upcoming_events' },
+  { label: 'menú', intent: 'current_menu' },
+  { label: 'documentos de la escuela', intent: 'official_documents' },
+  { label: 'pedidos de uniforme', intent: 'uniform_status' },
+  { label: 'configuración inicial', intent: 'setup_pending' },
+  { label: 'cómo usar la app', intent: 'my_context' },
+];
+
+export function helpsWith(role: string): string[] {
+  return HELP_LABELS
+    .filter((h) => (h.intent ? canRunIntent(role, h.intent) : canWriteKind(role, String(h.write))))
+    .map((h) => h.label);
+}
+
+// Homework due on the nearest date after an empty range: ALL of them, not
+// the first one (live QA of v1.8.3: two tasks due on the 20th, Lumi named
+// one). Never a past date. `rows` must be sorted by due_date ascending.
+export function nextDueGroup<T extends { due_date?: unknown }>(rows: T[] = [], to: string, today: string): T[] {
+  const first = rows.find((h) => {
+    const due = String(h.due_date || '');
+    return due > to && due >= today;
+  });
+  if (!first) return [];
+  const day = String(first.due_date);
+  return rows.filter((h) => String(h.due_date || '') === day);
+}
+
 // --- Date windows the model must not have to guess --------------------------
 
 // "¿Qué tareas tiene pendientes?" has no end date. With a 7-day default the

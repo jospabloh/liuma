@@ -142,3 +142,15 @@ test('Reportes reads statuses from the shared module and filters by date on the 
   assert.doesNotMatch(page, /Attendance\.filter\(\{ school_id: userProfile\.school_id \}\)/);
   assert.doesNotMatch(page, /DiaryEntry\.filter\(\{ school_id: userProfile\.school_id \}\)/);
 });
+
+// Live QA of v1.8.3: under the "las cifras pueden estar incompletas" banner the
+// cards still read "$0.00 · 0 cargos · 0 vencidos" and "0 enviados" while the
+// truth was $950 and 4 avisos. A failed list with nothing cached shows "—".
+test('Reportes shows a dash, not zeros, for a card whose list failed to load', () => {
+  const src = fs.readFileSync(new URL('../../src/pages/Reportes.jsx', import.meta.url), 'utf8');
+  assert.match(src, /const unavailable = \(\.\.\.queries\) => queries\.some\(\(q\) => q\.isError && q\.data === undefined\)/);
+  for (const flag of ['attendanceNA', 'diaryNA', 'unpaidNA', 'noticesNA', 'eventsNA']) {
+    assert.match(src, new RegExp(`${flag} \\?`), flag);
+  }
+  assert.match(src, /unpaidNA \? DASH : formatMoney\(totalPending\)/);
+});

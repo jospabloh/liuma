@@ -126,6 +126,16 @@ export default function Reportes() {
   // While a range loads, show a placeholder rather than a 0% that reads as
   // "nobody came", and do not let it be exported.
   const kpisLoading = attendanceLoading || diariesLoading;
+  // A list that failed with nothing cached has no figure: show "—", not a
+  // $0.00 / 0 cargos / 0% that reads as real under the "incompletas" banner
+  // (live QA of v1.8.3). Stale data from an earlier load still shows.
+  const unavailable = (...queries) => queries.some((q) => q.isError && q.data === undefined);
+  const DASH = '—';
+  const attendanceNA = unavailable(attendanceQuery);
+  const diaryNA = unavailable(diariesQuery, studentsQuery);
+  const unpaidNA = unavailable(unpaidQuery);
+  const noticesNA = unavailable(noticesQuery);
+  const eventsNA = unavailable(eventsQuery);
   const attendanceRate = attendance.rate;
   const diaryProgress = diary.percent;
   // Same "vencido" rule as Pagos and the admin home, and the total is what is
@@ -199,35 +209,35 @@ export default function Reportes() {
 
       <div className="space-y-4" ref={reportRef}>
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Users className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Asistencia</h3><p className="text-sm text-muted-foreground">{attendanceLoading ? 'Cargando…' : `${attendance.total} registros`}</p></div><div className="ml-auto text-2xl font-bold text-brand" aria-busy={attendanceLoading}>{attendanceLoading ? '—' : `${attendanceRate}%`}</div></div>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Users className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Asistencia</h3><p className="text-sm text-muted-foreground">{attendanceLoading ? 'Cargando…' : attendanceNA ? 'No disponible' : `${attendance.total} registros`}</p></div><div className="ml-auto text-2xl font-bold text-brand" aria-busy={attendanceLoading}>{attendanceLoading || attendanceNA ? DASH : `${attendanceRate}%`}</div></div>
           <button className="text-sm text-brand flex items-center gap-1" onClick={() => togglePanel('attendance')}>Ver detalle {openPanel === 'attendance' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'attendance' && <div className="mt-3 text-sm text-muted-foreground">Presentes: {attendance.present} · Tardanzas: {attendance.late} · Ausentes: {attendance.absent} · Justificados: {attendance.excused}<p className="text-xs mt-1">Asistencia = presentes + tardanzas sobre registros del periodo.</p></div>}
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center"><ClipboardList className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /></div><div><h3 className="font-semibold text-card-foreground">Bitácoras</h3><p className="text-sm text-muted-foreground">{diariesLoading ? 'Cargando…' : `${diary.covered} de ${diary.expected} (alumno × día hábil)`}</p></div><div className="ml-auto text-2xl font-bold text-emerald-600 dark:text-emerald-400" aria-busy={diariesLoading}>{diariesLoading ? '—' : `${diaryProgress}%`}</div></div>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center"><ClipboardList className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /></div><div><h3 className="font-semibold text-card-foreground">Bitácoras</h3><p className="text-sm text-muted-foreground">{diariesLoading ? 'Cargando…' : diaryNA ? 'No disponible' : `${diary.covered} de ${diary.expected} (alumno × día hábil)`}</p></div><div className="ml-auto text-2xl font-bold text-emerald-600 dark:text-emerald-400" aria-busy={diariesLoading}>{diariesLoading || diaryNA ? DASH : `${diaryProgress}%`}</div></div>
           <button className="text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-1" onClick={() => togglePanel('diary')}>Ver detalle {openPanel === 'diary' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'diary' && classrooms.map((classroom) => <div key={classroom.id} className="flex justify-between text-sm mt-2"><span>{classroom.name}</span><span>{diaries.filter((d) => d.classroom_id === classroom.id).length}</span></div>)}
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600 dark:text-rose-400" /></div><div><h3 className="font-semibold text-card-foreground">Pagos pendientes</h3><p className="text-sm text-muted-foreground">{unpaid.count} cargos</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-card-foreground">{formatMoney(totalPending)}</p><p className="text-xs text-red-600 dark:text-red-400">{unpaid.overdueCount} vencidos</p></div></div>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600 dark:text-rose-400" /></div><div><h3 className="font-semibold text-card-foreground">Pagos pendientes</h3><p className="text-sm text-muted-foreground">{unpaidNA ? 'No disponible' : `${unpaid.count} cargos`}</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-card-foreground">{unpaidNA ? DASH : formatMoney(totalPending)}</p>{!unpaidNA && <p className="text-xs text-red-600 dark:text-red-400">{unpaid.overdueCount} vencidos</p>}</div></div>
           <button className="text-sm text-rose-700 dark:text-rose-400 flex items-center gap-1" onClick={() => togglePanel('payments')}>Ver detalle {openPanel === 'payments' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'payments' && <div className="mt-3 text-sm text-muted-foreground">Por vencer: {unpaid.upcomingCount} · Vencidos: {unpaid.overdueCount} ({formatMoney(unpaid.overdueTotal)})<p className="text-xs mt-1">Saldo pendiente: lo que falta por pagar, ya descontados los abonos.</p></div>}
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Bell className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Avisos</h3><p className="text-sm text-muted-foreground">{weekNotices.length} enviados</p></div><div className="ml-auto bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300 px-3 py-1 rounded-full text-sm font-medium">{urgentNotices} urgentes</div></div>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Bell className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Avisos</h3><p className="text-sm text-muted-foreground">{noticesNA ? 'No disponible' : `${weekNotices.length} enviados`}</p></div>{noticesNA ? <div className="ml-auto text-2xl font-bold text-muted-foreground">{DASH}</div> : <div className="ml-auto bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300 px-3 py-1 rounded-full text-sm font-medium">{urgentNotices} urgentes</div>}</div>
           <button className="text-sm text-brand flex items-center gap-1" onClick={() => togglePanel('notices')}>Ver detalle {openPanel === 'notices' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           {openPanel === 'notices' && weekNotices.slice(0, 5).map((n) => <div key={n.id} className="text-sm border-t border-border pt-2 mt-2">{n.title}</div>)}
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Calendar className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Próximos eventos</h3><p className="text-sm text-muted-foreground">{upcomingEvents.length} programados</p></div></div>
+          <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center"><Calendar className="w-5 h-5 text-brand" /></div><div><h3 className="font-semibold text-card-foreground">Próximos eventos</h3><p className="text-sm text-muted-foreground">{eventsNA ? 'No disponible' : `${upcomingEvents.length} programados`}</p></div></div>
           {upcomingEvents.slice(0, 3).map((event) => <div key={event.id} className="flex items-center gap-3 py-2 border-t border-border"><div className="w-10 h-10 rounded-lg bg-muted flex flex-col items-center justify-center text-xs"><span className="font-bold">{format(parseLocalDate(event.date) || new Date(), 'd')}</span><span className="text-muted-foreground">{format(parseLocalDate(event.date) || new Date(), 'MMM', { locale: es })}</span></div><div><p className="font-medium text-card-foreground">{event.title}</p>{event.time && <p className="text-xs text-muted-foreground">{event.time}</p>}</div></div>)}
         </motion.div>
 
-        <motion.div className="grid grid-cols-2 gap-3"><div className="bg-brand rounded-2xl p-4 text-white"><Users className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{filteredStudents.length}</p><p className="text-sm opacity-80">Alumnos filtrados</p></div><div className="bg-emerald-600 rounded-2xl p-4 text-white"><BarChart3 className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{classrooms.length}</p><p className="text-sm opacity-80">Salones</p></div></motion.div>
+        <motion.div className="grid grid-cols-2 gap-3"><div className="bg-brand rounded-2xl p-4 text-white"><Users className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{unavailable(studentsQuery) ? DASH : filteredStudents.length}</p><p className="text-sm opacity-80">Alumnos filtrados</p></div><div className="bg-emerald-600 rounded-2xl p-4 text-white"><BarChart3 className="w-6 h-6 mb-2 opacity-80" /><p className="text-3xl font-bold">{unavailable(classroomsQuery) ? DASH : classrooms.length}</p><p className="text-sm opacity-80">Salones</p></div></motion.div>
       </div>
       </div>
     </div>

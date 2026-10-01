@@ -5,6 +5,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.8.5] - 2026-10-01
+
+Minor issues from the live retest of v1.8.3.
+
+### Fixed
+
+- **Lumi offered payments and uniforms to teachers.** `my_context` now returns
+  `helps_with`, derived on the server from the same tables that gate each
+  intent, and the prompt only lets Lumi offer topics from it.
+- **Lumi named one task when two were due the same day.** `next_due` now
+  carries every task of the nearest due date.
+- **Lumi credited "I was promoted to director" and echoed "Diego is in
+  another school".** The prompt forbids both, and caps refusals at three lines.
+- **Teacher names that were email handles** ("h.josepablo+qa-maestro") are
+  no longer shown, and Lumi no longer guesses gender.
+- **Staff can tell whether a bitácora reached the family** (`sent_to_family`).
+- **Reportes showed $0.00 / 0 under the "incompletas" banner.** A card whose
+  list failed now shows "—" and "No disponible".
+
 ## [1.8.4] - 2026-10-01
 
 Hotfix from the live retest of v1.8.3 in production.

@@ -62,7 +62,7 @@ user's function calls counted against the one service-role "person".
 - A failed read is no longer an empty list. `blockingLoadFailure()` plus
   `<LoadError>` (Spanish, "Reintentar", "Tus datos no se perdieron") cover
   Avisos, AvisosMaestro, AvisosAdmin, MisHijos, Pagos, SolicitarAusencia,
-  GestionAlumno ("Salón: no se pudo cargar" instead of "Sin salón"), Bitácora,
+  GestionAlumno ("No se pudo cargar el salón" + Reintentar instead of "Sin salón", `studentClassroomLabel.js`), Bitácora,
   Tarea, EventosParaPadres, PedidosUniformes, Reportes, Asistencia (padre), and
   the three homes. The license banner gets "Reintentar" in place of "recarga
   la página".

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { parseLocalDate } from '@/lib/dates';
+import { parseLocalDate, schoolDaysFromToday } from '@/lib/dates';
 import PageHeader from '@/components/ui/PageHeader';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -313,7 +313,7 @@ export default function LicenseAdmin() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre o ID de escuela..."
-            className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm coarse:text-base outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
 
@@ -328,8 +328,9 @@ export default function LicenseAdmin() {
               const status = sub?.subscription_status || 'trial';
               const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.trial;
               const StatusIcon = cfg.icon;
+              // Calendar days, date-only safe (see WelcomeTrialModal).
               const daysLeft = sub?.trial_end_date && status === 'trial'
-                ? Math.max(0, Math.ceil((new Date(sub.trial_end_date) - new Date()) / 86400000))
+                ? Math.max(0, schoolDaysFromToday(sub.trial_end_date) ?? 0)
                 : null;
               return (
                 <button

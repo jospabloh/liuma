@@ -8,7 +8,8 @@ import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import DiaryCard from '@/components/diary/DiaryCard';
 import { ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, addDays, subDays, isToday } from 'date-fns';
+import { format, addDays, subDays } from 'date-fns';
+import { isSchoolToday, schoolTodayDate } from '@/lib/dates';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
@@ -25,7 +26,7 @@ export default function Bitacora() {
   const urlParams = new URLSearchParams(window.location.search);
   const studentIdParam = urlParams.get('studentId');
   
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => schoolTodayDate());
   const [selectedEntry, setSelectedEntry] = useState(null);
   
   const { user, userProfile } = useCurrentProfile();
@@ -70,7 +71,7 @@ export default function Bitacora() {
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-6 pb-24">
       <PageHeader
         title="Bitácora"
-        subtitle={isToday(selectedDate) ? 'Hoy' : format(selectedDate, "d 'de' MMMM", { locale: es })}
+        subtitle={isSchoolToday(selectedDate) ? 'Hoy' : format(selectedDate, "d 'de' MMMM", { locale: es })}
         showBack
         backTo={createPageUrl('Home')}
       />
@@ -82,7 +83,7 @@ export default function Bitacora() {
         </Button>
         <div className="text-center">
           <p className="font-semibold text-card-foreground">
-            {isToday(selectedDate) ? 'Hoy' : format(selectedDate, "EEEE", { locale: es })}
+            {isSchoolToday(selectedDate) ? 'Hoy' : format(selectedDate, "EEEE", { locale: es })}
           </p>
           <p className="text-sm text-muted-foreground">
             {format(selectedDate, "d 'de' MMMM, yyyy", { locale: es })}
@@ -93,7 +94,7 @@ export default function Bitacora() {
           size="icon"
           aria-label="Día siguiente"
           onClick={() => navigateDate('next')}
-          disabled={isToday(selectedDate)}
+          disabled={isSchoolToday(selectedDate)}
         >
           <ChevronRight className="w-5 h-5" />
         </Button>
@@ -103,7 +104,7 @@ export default function Bitacora() {
         <EmptyState
           icon={ClipboardList}
           title="Sin bitácora registrada"
-          description={`Aún no hay bitácora para ${isToday(selectedDate) ? 'hoy' : 'este día'}.`}
+          description={`Aún no hay bitácora para ${isSchoolToday(selectedDate) ? 'hoy' : 'este día'}.`}
         />
       ) : (
         <div className="space-y-4">

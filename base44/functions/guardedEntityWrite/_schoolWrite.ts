@@ -23,9 +23,14 @@
 //      student, classroom, notice, profile, teacher, parent — must belong to
 //      the same school.
 //
-// Import-free apart from the sibling ./_policy.ts and duck-typed on
-// `sr.entities[Name]`, so tests/unit/write-path-p10b.test.js runs the real
-// thing against an in-memory database with two schools.
+// The school's review of a family request (AbsenceNotification approved or
+// rejected, a UniformOrder moving on) emails the parent who filed it, after
+// the write (./_statusNotify.ts, best-effort, never throws).
+//
+// Import-free apart from its siblings (./_policy.ts, ./_money.ts,
+// ./_statusNotify.ts, ./_templates.ts) and duck-typed on `sr.entities[Name]`,
+// so tests/unit/write-path-p10b.test.js runs the real thing against an
+// in-memory database with two schools.
 import {
   buildSchoolWrite,
   decideCreateTargets,
@@ -42,6 +47,11 @@ import {
   userReferencesToCheck,
 } from './_policy.ts';
 import type { CallerProfile, Op } from './_policy.ts';
+import { validateDiscount } from './_money.ts';
+import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
+import { NOTIFICATION_TEMPLATES } from './_templates.ts';
+
+const DISCOUNT_TERMS = ['discount_type', 'discount_value', 'valid_from', 'valid_until', 'applicable_to_concepts'];
 
 // deno-lint-ignore no-explicit-any
 export type Db = any;
@@ -286,6 +296,15 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
   if (!built.ok) return fail(400, built.code, built.message);
   const data = built.data;
 
+  // A discount of 150 %, -10 % or "valid until" before "valid from" used to
+  // be saved as typed (loose-ends pass, 2026-09-30). Checked over the stored
+  // record merged with the patch, but only when the patch touches the
+  // discount's terms — so switching off an old, malformed discount still works.
+  if (entity === 'Discount' && DISCOUNT_TERMS.some((field) => field in data)) {
+    const check = validateDiscount(operation === 'update' && existing ? { ...existing, ...data } : data);
+    if (!check.ok) return fail(400, check.code, `${check.field} is not valid`);
+  }
+
   // Every id the record carries must be of this school.
   if (typeof data.student_id === 'string' && data.student_id) {
     const student: { school_id?: string } | null = await sr.entities.Student.get(data.student_id).catch(() => null);
@@ -340,5 +359,13 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
     target_id: recordId,
     details: { fields: Object.keys(data), authorized_as: authorizedAs },
   }, now);
+  // The stored transition decides (existing → record), not the request.
+  const event = statusEventFor(entity, operation, existing, { ...existing, ...(record || data) });
+  if (event) {
+    const notified = await notifyStatusChange({
+      sr, templates: NOTIFICATION_TEMPLATES, event, schoolId, record: { ...existing, ...(record || data) }, actorId: String(user.id),
+    });
+    return { status: 200, body: { ok: true, record, notified } };
+  }
   return { status: 200, body: { ok: true, record } };
 }

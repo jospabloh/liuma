@@ -32,7 +32,7 @@ export default function SignOutButton({ variant = 'button', className = '', labe
         disabled={pending}
         aria-label={label}
         title={label}
-        className={`flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 ${className}`}
+        className={`flex h-8 w-8 coarse:h-11 coarse:w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 ${className}`}
       >
         <LogOut className="h-[18px] w-[18px]" aria-hidden="true" />
       </button>

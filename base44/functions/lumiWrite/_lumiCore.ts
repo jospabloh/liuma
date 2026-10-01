@@ -140,7 +140,7 @@ export function menuDayKey(dateStr: string): string {
 
 export const ENUM_LABELS: Record<string, Record<string, string>> = {
   attendance_status: { present: 'presente', absent: 'ausente', late: 'retardo', excused: 'falta justificada' },
-  charge_status: { PENDING: 'pendiente', PAID: 'pagado', OVERDUE: 'vencido', CANCELLED: 'cancelado' },
+  charge_status: { PENDING: 'pendiente', PARTIAL: 'pago parcial', PAID: 'pagado', OVERDUE: 'vencido', CANCELLED: 'cancelado' },
   charge_type: {
     INSCRIPCION: 'inscripción', COLEGIATURA: 'colegiatura', HORARIO_EXTENDIDO: 'horario extendido',
     EVENTO: 'evento', OTRO: 'otro',
@@ -173,6 +173,21 @@ export function formatMXN(amount: unknown): string {
   const n = Number(amount);
   if (!Number.isFinite(n)) return '';
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n);
+}
+
+// Charges that still owe money (PARTIAL = something paid, not all of it) and
+// what each still owes. MIRRORS guardedEntityWrite/_money.ts's
+// isChargeOpen/chargeBalanceCents: the balance after partial payments, never
+// the full amount again.
+export const OPEN_CHARGE_STATUSES = ['PENDING', 'PARTIAL', 'OVERDUE'];
+
+export function chargeOwed(charge: { amount?: unknown; amount_paid?: unknown; status?: unknown } | null | undefined): number {
+  if (!charge || !OPEN_CHARGE_STATUSES.includes(String(charge.status))) return 0;
+  const cents = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  };
+  return Math.max(0, cents(charge.amount) - cents(charge.amount_paid)) / 100;
 }
 
 export function fullName(person: { first_name?: unknown; last_name?: unknown } | null | undefined): string {

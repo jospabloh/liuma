@@ -10,7 +10,7 @@ import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { createPageUrl } from '@/utils';
 import { Card } from "@/components/ui/card";
-import { formatLocalDate, parseLocalDate } from '@/lib/dates';
+import { formatLocalDate, parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import { diaryCoverage } from '@/lib/diaryCoverage';
 
 // `events`: upcoming events the server already limited to the school-wide
@@ -53,7 +53,7 @@ function UpcomingEventsSection({ events }) {
 }
 
 export default function TeacherHome({ user, userProfile, subscription }) {
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = schoolToday();
 
   // One request for the teacher's classrooms AND their active students:
   // schoolRead's `context` derives both server-side from TeacherClassroom
@@ -105,7 +105,10 @@ export default function TeacherHome({ user, userProfile, subscription }) {
 
   const classStudentIds = new Set(students.map((student) => student.id));
   const todayDiaries = homeLists.diaries.filter((d) => classroomIds.includes(d.classroom_id));
-  const unreadUrgentNotices = homeLists.unreadUrgent.filter((row) => classStudentIds.has(row.student_id));
+  // Unread urgent copies among this teacher's families, plus the teacher's
+  // own (the emergency alert reaches teachers too, with no student on it).
+  const unreadUrgentNotices = homeLists.unreadUrgent.filter((row) =>
+    classStudentIds.has(row.student_id) || row.recipient_user_id === user.id);
 
   // Counted in students, not entries: two bitácoras for one child do not
   // cover a second child (see diaryCoverage.js).
@@ -116,7 +119,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   return (
     <div className="min-h-screen bg-background">
       <HomeHeader
-        eyebrow={format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+        eyebrow={format(schoolTodayDate(), "EEEE d 'de' MMMM", { locale: es })}
         title={`Hola, ${user.full_name?.split(' ')[0] || 'Maestro'}`}
       />
 

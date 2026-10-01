@@ -130,8 +130,15 @@ test('sendBulkNotification derives recipients and text from stored records, neve
   assert.match(source, /sr\.entities\.User\.filter\(\{ id: \{ \$in: unique \} \}/);
   // No templateContext is accepted from the client.
   assert.doesNotMatch(source, /body\?\.templateContext/);
-  // Once per record, and only marked when somebody was reached.
-  assert.match(source, /if \(charge\.reminder_sent\) return \{ skipped: 'already_sent' \}/);
+  // Once per record, and only marked when somebody was reached. For a charge
+  // the once-per-record rule (and the manual reminder's daily limit) lives in
+  // _fanout.ts#planChargeReminder, tested in payments-money.test.js.
+  // Since the PR #190 review the rule runs twice: once on the copy read for
+  // authorization, and again on a fresh read inside claimChargeReminder,
+  // which claims the charge BEFORE anything is sent (payments-concurrency.test.js).
+  assert.match(source, /const early = planChargeReminder\(charge, \{ manual, now \}\);/);
+  assert.match(source, /if \(!early\.send\) return \{ skipped: early\.reason \};/);
+  assert.match(source, /const claimed = await claimChargeReminder\(sr, charge\.id, \{/);
   assert.match(source, /if \(event\.reminder_sent\) return \{ skipped: 'already_sent' \}/);
   assert.match(source, /summary\.reached > 0 \|\| summary\.total === 0/);
   // Escalations: once per (ticket, tier, recipient), and requesters are rate limited.

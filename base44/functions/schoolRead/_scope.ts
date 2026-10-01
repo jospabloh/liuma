@@ -216,7 +216,14 @@ export const READ_RULES: Record<string, EntityRule> = {
     // row only when its recipient is a member of their school.
     roles: {
       ADMIN: SCHOOL_MEMBERS('recipient_user_id'),
-      TEACHER: { rows: [{ student_id: set('studentIds') }], members: ['recipient_user_id'] },
+      // A teacher reads the deliveries of their own students' families (the
+      // "urgentes sin leer" count on their home) and, since the emergency
+      // alert got per-recipient copies (2026-09-30), the ones addressed to
+      // them — their own copy of the alert, which they mark read.
+      TEACHER: {
+        rows: [{ student_id: set('studentIds') }, { recipient_user_id: set('self') }],
+        members: ['recipient_user_id'],
+      },
       PARENT: { rows: [{ recipient_user_id: set('self') }] },
     },
   },
@@ -264,7 +271,10 @@ export const READ_RULES: Record<string, EntityRule> = {
     },
   },
   ChargeItem: {
-    fields: ['amount', 'concept_id', 'concept_name', 'concept_type', 'discount_amount', 'discount_id', 'due_date', 'event_id', 'notes', 'original_amount', 'reminder_sent', 'school_id', 'status', 'student_id'],
+    // amount_paid / last_payment_date: what the family has paid, so Pagos can
+    // show a partial payment and the balance (loose-ends pass, 2026-09-30) —
+    // without opening PaymentRecord (references, who recorded it) to parents.
+    fields: ['amount', 'amount_paid', 'concept_id', 'concept_name', 'concept_type', 'discount_amount', 'discount_id', 'due_date', 'event_id', 'last_payment_date', 'last_reminder_at', 'notes', 'original_amount', 'reminder_sent', 'school_id', 'status', 'student_id'],
     roles: {
       ADMIN: SCHOOL,
       PARENT: { rows: [{ student_id: set('studentIds') }] },

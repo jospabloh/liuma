@@ -30,7 +30,8 @@ export const ATTRIBUTION_FIELDS: Record<string, { id: string; name?: string }> =
   Notice: { id: 'author_id', name: 'author_name' },
 };
 
-// Fields only notifyParents (service role) may write. Service-role writes
+// Fields only a server function (notifyParents, sendBulkNotification, the
+// payment settlement in ./_payments.ts) may write. Service-role writes
 // bypass the fields' own rls.write:false, so they are stripped by hand — on
 // CREATE as well as update: a teacher creating an Attendance with
 // parent_notified:true, or a DiaryEntry with notified_parent_emails
@@ -38,6 +39,9 @@ export const ATTRIBUTION_FIELDS: Record<string, { id: string; name?: string }> =
 export const SERVER_ONLY_FIELDS: Record<string, string[]> = {
   DiaryEntry: ['parents_notified_at', 'notified_parent_emails'],
   Attendance: ['parent_notified', 'notified_at'],
+  // What has been paid (re-derived from PaymentRecords, ./_payments.ts) and
+  // when a family was last reminded (sendBulkNotification's).
+  ChargeItem: ['amount_paid', 'last_payment_date', 'last_reminder_at', 'reminder_claim_id', 'reminder_sent'],
 };
 
 // Client-supplied references that must point at a record of the SAME school.

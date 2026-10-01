@@ -4,9 +4,10 @@ import { schoolRead } from '@/lib/data/schoolRead';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
+import ChargeAmounts from '@/components/payments/ChargeAmounts';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
-import { CreditCard, Plus, DollarSign, Receipt, Loader2, CheckCircle, AlertTriangle, Clock, User, Calendar } from 'lucide-react';
+import { CreditCard, Plus, DollarSign, Receipt, Loader2, CheckCircle, AlertTriangle, Clock, User, Calendar, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from "@/components/ui/button";
@@ -20,12 +21,29 @@ import { notificationService } from '@/lib/notifications/service';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate, guardedUpdate } from '@/lib/authorization/guardedWrite';
-import { formatLocalDate, isBeforeToday, parseLocalDate, startOfLocalDay } from '@/lib/dates';
+import { parseLocalDate, schoolToday } from '@/lib/dates';
 import {
+  CHARGE_STATUS,
   isPaymentReminderDue,
   partitionCharges,
   selectChargesToMarkOverdue,
 } from '@/lib/payments/overdue';
+import {
+  CONCEPT_TYPES,
+  CONCEPT_TYPE_LABELS,
+  centsToAmount,
+  chargeBalance,
+  chargeBalanceCents,
+  chargePaid,
+  discountApplies,
+  formatMoney,
+  manualReminderAvailableAt,
+  parseAmountCents,
+  priceCharge,
+} from '@/lib/payments/money';
+import { humanizeError } from '@/lib/errorMessages';
+import { formatDeliverySummary, hasUndelivered } from '@/lib/notifications/fanout';
+import { functionErrorCode } from '@/lib/functionResponse';
 import { useSchoolStudents } from '@/hooks/useSchoolStudents';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -52,11 +70,18 @@ export default function PagosAdmin() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [selectedCharge, setSelectedCharge] = useState(null);
   
-  const [conceptForm, setConceptForm] = useState({ name: '', default_amount: '' });
+  const [conceptForm, setConceptForm] = useState({ name: '', default_amount: '', concept_type: 'COLEGIATURA' });
   const [chargeForm, setChargeForm] = useState({ student_id: '', concept_id: '', amount: '', due_date: '' });
   const [paymentForm, setPaymentForm] = useState({ amount: '', payment_method: 'cash', reference: '' });
+  const [paymentError, setPaymentError] = useState('');
 
   const { user, userProfile } = useCurrentProfile();
+
+  const { data: discounts = [], isFetching: discountsLoading } = useQuery({
+    queryKey: ['discounts', userProfile?.school_id, 'active'],
+    queryFn: () => schoolRead('Discount', { school_id: userProfile.school_id, is_active: true }),
+    enabled: !!userProfile && showChargeForm,
+  });
 
   const { data: concepts = [] } = useQuery({
     queryKey: ['paymentConcepts', userProfile?.school_id],
@@ -75,17 +100,20 @@ export default function PagosAdmin() {
         school_id: userProfile.school_id 
       }, '-due_date');
       
-      // Persist OVERDUE for charges whose due date has passed. Best-effort: the
-      // tabs and counts come from partitionCharges(), which already treats a
-      // PENDING charge past its due date as overdue, so a failed write (e.g. a
-      // read-only license) never makes a late charge look current.
+      // Persist OVERDUE for charges whose due date has passed. The server
+      // derives the status itself (guardedEntityWrite re-sums the payments),
+      // so this is a "refresh it" request and we keep whatever it answered.
+      // Best-effort: the tabs and counts come from partitionCharges(), which
+      // already treats a PENDING/PARTIAL charge past its due date as overdue,
+      // so a failed write (e.g. a read-only license) never makes a late
+      // charge look current.
       const toMark = selectChargesToMarkOverdue(allCharges);
       const results = await Promise.allSettled(
-        toMark.map((charge) => guardedUpdate('ChargeItem', charge.id, { status: 'OVERDUE' })),
+        toMark.map((charge) => guardedUpdate('ChargeItem', charge.id, { status: CHARGE_STATUS.OVERDUE })),
       );
       results.forEach((result, index) => {
-        if (result.status === 'fulfilled') toMark[index].status = 'OVERDUE';
-        else console.error('Error updating charge status:', result.reason);
+        if (result.status === 'fulfilled' && result.value) Object.assign(toMark[index], result.value);
+        else if (result.status === 'rejected') console.error('Error updating charge status:', result.reason);
       });
 
       return allCharges;
@@ -99,9 +127,9 @@ export default function PagosAdmin() {
       queryClient.invalidateQueries({ queryKey: ['paymentConcepts'] });
       toast.success('Concepto creado');
       setShowConceptForm(false);
-      setConceptForm({ name: '', default_amount: '' });
+      setConceptForm({ name: '', default_amount: '', concept_type: 'COLEGIATURA' });
     },
-    onError: () => toast.error('No se pudo crear el concepto. Intenta de nuevo.'),
+    onError: (error) => toast.error(humanizeError(error)),
   });
 
   const createChargeMutation = useMutation({
@@ -114,7 +142,7 @@ export default function PagosAdmin() {
         entityId: charge.id,
         action: 'CHARGE_CREATED',
         reason: 'Admin payment charge creation',
-        context: { student_id: data.student_id, amount: data.amount, due_date: data.due_date }
+        context: { student_id: data.student_id, amount: charge?.amount, due_date: data.due_date, discount_id: charge?.discount_id || null }
       });
       return charge;
     },
@@ -125,12 +153,16 @@ export default function PagosAdmin() {
       setShowChargeForm(false);
       setChargeForm({ student_id: '', concept_id: '', amount: '', due_date: '' });
     },
-    onError: () => toast.error('No se pudo crear el cargo. Intenta de nuevo.'),
+    onError: (error) => toast.error(humanizeError(error)),
   });
 
+  // ONE write: the payment. The server checks it against what is still owed
+  // and re-derives the charge (PAID only when the payments cover it, PARTIAL
+  // otherwise). This used to mark the charge PAID first, whatever amount was
+  // typed — $400 on a $1,000 charge closed it — and before the payment even
+  // existed, so a failed create left a PAID charge with no payment behind it.
   const recordPaymentMutation = useMutation({
     mutationFn: async (data) => {
-      await guardedUpdate('ChargeItem', selectedCharge.id, { status: 'PAID' });
       const payment = await guardedCreate('PaymentRecord', data);
       await logAuditEvent({
         user,
@@ -143,23 +175,73 @@ export default function PagosAdmin() {
       });
       return payment;
     },
-    onSuccess: () => {
+    onSuccess: (_payment, data) => {
       queryClient.invalidateQueries({ queryKey: ['allCharges'] });
       queryClient.invalidateQueries({ queryKey: ['overdueCharges'] });
-      toast.success('Pago registrado');
+      const left = selectedCharge ? chargeBalanceCents(selectedCharge) - (parseAmountCents(data.amount).cents || 0) : 0;
+      toast.success(left > 0 ? `Abono registrado. Saldo pendiente: ${formatMoney(centsToAmount(left))}` : 'Pago registrado. El cargo quedó liquidado.');
       setShowPaymentForm(false);
       setSelectedCharge(null);
       setPaymentForm({ amount: '', payment_method: 'cash', reference: '' });
+      setPaymentError('');
     },
-    onError: () => toast.error('No se pudo registrar el pago. Revisa el cargo e intenta de nuevo.'),
+    onError: (error) => {
+      // The balance moved under us (another device recorded a payment): reload
+      // so the form shows the real one.
+      if (['OVERPAYMENT', 'CHARGE_ALREADY_PAID'].includes(functionErrorCode(error))) {
+        queryClient.invalidateQueries({ queryKey: ['allCharges'] });
+      }
+      setPaymentError(humanizeError(error));
+    },
   });
+
+  // "Enviar recordatorio": the director reminds a family by hand — the only
+  // way an OVERDUE charge is ever reminded. The server sends it to the
+  // student's ACTIVE parents, asks for the BALANCE, and allows one per charge
+  // per day (REMINDER_COOLDOWN).
+  const reminderMutation = useMutation({
+    mutationFn: (charge) => notificationService.sendBulk({ eventType: 'payment_due', chargeId: charge.id, manual: true }),
+    onSuccess: (summary) => {
+      queryClient.invalidateQueries({ queryKey: ['allCharges'] });
+      if (summary?.skipped) {
+        toast.info('Este cargo ya no tiene saldo pendiente; no se envió recordatorio.');
+        return;
+      }
+      const line = formatDeliverySummary(summary) || 'Recordatorio enviado.';
+      if (hasUndelivered(summary)) toast.warning(`${line} Revisa que la familia tenga correo registrado.`);
+      else toast.success(`Recordatorio enviado. ${line}`);
+    },
+    onError: (error) => toast.error(humanizeError(error)),
+  });
+
+  const conceptAmount = parseAmountCents(conceptForm.default_amount, { allowZero: true });
+  const chargeConcept = concepts.find((c) => c.id === chargeForm.concept_id) || null;
+
+  // The discount this charge would get — same rule the server applies
+  // (discountApplies + priceCharge, mirrored in src/lib/payments/money.js):
+  // active, in its date window, for this concept's TYPE, never more than the
+  // charge. The server re-checks it and computes the amounts itself.
+  const chargePreview = useMemo(() => {
+    const original = parseAmountCents(chargeForm.amount);
+    if (!original.ok) return { ok: false };
+    const conceptType = chargeConcept?.concept_type || 'OTRO';
+    const today = schoolToday();
+    const discount = discounts.find((d) =>
+      discountApplies(d, { conceptType, today, allowsDiscounts: chargeConcept?.allows_discounts }).ok) || null;
+    return { ok: true, discount, ...priceCharge(original.cents, discount) };
+  }, [chargeForm.amount, chargeConcept, discounts]);
 
   const handleCreateConcept = (e) => {
     e.preventDefault();
     if (!guardWrite(canWrite, blockReadOnly)) return;
+    if (!conceptAmount.ok) {
+      toast.error('Escribe un monto válido: 0 o más, con dos decimales como máximo.');
+      return;
+    }
     createConceptMutation.mutate({
-      ...conceptForm,
-      default_amount: parseFloat(conceptForm.default_amount),
+      name: conceptForm.name.trim(),
+      concept_type: conceptForm.concept_type,
+      default_amount: centsToAmount(conceptAmount.cents),
       school_id: userProfile.school_id,
       is_active: true,
     });
@@ -172,71 +254,62 @@ export default function PagosAdmin() {
       toast.error('Debes configurar al menos un concepto de pago antes de crear cargos.');
       return;
     }
-    const concept = concepts.find(c => c.id === chargeForm.concept_id);
-    
-    // Buscar descuentos aplicables
-    const discounts = await schoolRead('Discount', {
-      school_id: userProfile.school_id,
-      is_active: true
-    });
-    
-    const originalAmount = parseFloat(chargeForm.amount);
-    let discountAmount = 0;
-    let applicableDiscount = null;
-    const today = startOfLocalDay(new Date());
-
-    // Buscar descuento aplicable al concepto
-    for (const discount of discounts) {
-      if (discount.applicable_to_concepts?.includes(concept?.concept_type)) {
-        // Validar fechas de vigencia (fechas de calendario: un descuento
-        // "hasta el 30" vale durante todo el 30).
-        const validFrom = parseLocalDate(discount.valid_from);
-        if (validFrom && validFrom > today) continue;
-        if (discount.valid_until && isBeforeToday(discount.valid_until)) continue;
-        
-        // Calcular descuento
-        if (discount.discount_type === 'PERCENTAGE') {
-          discountAmount = originalAmount * (discount.discount_value / 100);
-        } else {
-          discountAmount = discount.discount_value;
-        }
-        applicableDiscount = discount;
-        break;
-      }
+    if (!chargePreview.ok) {
+      toast.error('Escribe un monto mayor que 0, con dos decimales como máximo.');
+      return;
     }
-    
+    // Only WHAT to charge: the server prices it (concept type from the
+    // stored concept, the named discount re-checked and clamped, amount =
+    // net) and sets its status. A $500 discount on a $300 charge used to be
+    // saved as amount -200.
     createChargeMutation.mutate({
-      ...chargeForm,
-      concept_name: concept?.name || '',
-      concept_type: concept?.concept_type || 'OTRO',
-      original_amount: originalAmount,
-      discount_id: applicableDiscount?.id || null,
-      discount_amount: discountAmount,
-      amount: originalAmount - discountAmount,
+      student_id: chargeForm.student_id,
+      concept_id: chargeForm.concept_id,
+      concept_name: chargeConcept?.name || '',
+      original_amount: centsToAmount(chargePreview.originalCents),
+      discount_id: chargePreview.discount?.id || null,
+      due_date: chargeForm.due_date,
       school_id: userProfile.school_id,
-      status: 'PENDING',
     });
   };
 
   const handleRecordPayment = (e) => {
     e.preventDefault();
     if (!guardWrite(canWrite, blockReadOnly)) return;
+    const amount = parseAmountCents(paymentForm.amount);
+    const balanceCents = chargeBalanceCents(selectedCharge);
+    if (!amount.ok) {
+      setPaymentError('Escribe un monto mayor que 0, con dos decimales como máximo.');
+      return;
+    }
+    if (amount.cents > balanceCents) {
+      setPaymentError(`El monto es mayor que el saldo pendiente (${formatMoney(centsToAmount(balanceCents))}).`);
+      return;
+    }
+    setPaymentError('');
     recordPaymentMutation.mutate({
       school_id: userProfile.school_id,
       charge_id: selectedCharge.id,
-      student_id: selectedCharge.student_id,
-      amount: parseFloat(paymentForm.amount),
-      payment_date: formatLocalDate(new Date()),
+      amount: centsToAmount(amount.cents),
+      // No payment_date: the server stamps today's MEXICO day. A browser in
+      // another time zone (or with a wrong clock) would otherwise send
+      // "tomorrow" and get INVALID_PAYMENT_DATE for money received today.
       payment_method: paymentForm.payment_method,
       reference: paymentForm.reference,
-      recorded_by: user.id,
     });
   };
 
   const openPaymentForm = (charge) => {
     setSelectedCharge(charge);
-    setPaymentForm({ amount: charge.amount.toString(), payment_method: 'cash', reference: '' });
+    // The default is what is still owed, not the charge's full amount.
+    setPaymentForm({ amount: centsToAmount(chargeBalanceCents(charge)).toFixed(2), payment_method: 'cash', reference: '' });
+    setPaymentError('');
     setShowPaymentForm(true);
+  };
+
+  const sendReminder = (charge) => {
+    if (!guardWrite(canWrite, blockReadOnly)) return;
+    reminderMutation.mutate(charge);
   };
 
   const getStudentName = (studentId) => {
@@ -355,6 +428,8 @@ export default function PagosAdmin() {
                   charge={charge}
                   studentName={getStudentName(charge.student_id)}
                   onRecordPayment={() => openPaymentForm(charge)}
+                  onSendReminder={() => sendReminder(charge)}
+                  reminderSending={reminderMutation.isPending && reminderMutation.variables?.id === charge.id}
                 />
               ))}
             </div>
@@ -372,6 +447,8 @@ export default function PagosAdmin() {
                   charge={charge}
                   studentName={getStudentName(charge.student_id)}
                   onRecordPayment={() => openPaymentForm(charge)}
+                  onSendReminder={() => sendReminder(charge)}
+                  reminderSending={reminderMutation.isPending && reminderMutation.variables?.id === charge.id}
                   isOverdue
                 />
               ))}
@@ -414,20 +491,44 @@ export default function PagosAdmin() {
               />
             </div>
             <div>
+              <Label>Tipo de concepto *</Label>
+              <Select
+                value={conceptForm.concept_type}
+                onValueChange={(value) => setConceptForm({ ...conceptForm, concept_type: value })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONCEPT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>{CONCEPT_TYPE_LABELS[type]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Los descuentos se aplican según este tipo.</p>
+            </div>
+            <div>
               <Label>Monto por defecto *</Label>
               <Input
                 type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
                 value={conceptForm.default_amount}
                 onChange={(e) => setConceptForm({ ...conceptForm, default_amount: e.target.value })}
                 placeholder="0.00"
                 className="mt-1"
+                aria-invalid={conceptForm.default_amount !== '' && !conceptAmount.ok}
               />
+              {conceptForm.default_amount !== '' && !conceptAmount.ok && (
+                <p className="text-xs text-destructive mt-1">Monto no válido: 0 o más, con dos decimales como máximo.</p>
+              )}
             </div>
             <div className="flex gap-3">
               <Button type="button" variant="outline" onClick={() => setShowConceptForm(false)} className="flex-1">
                 Cancelar
               </Button>
-              <Button type="submit" disabled={!conceptForm.name || !conceptForm.default_amount || createConceptMutation.isPending} className="flex-1">
+              <Button type="submit" disabled={!conceptForm.name.trim() || !conceptAmount.ok || createConceptMutation.isPending} className="flex-1">
                 {createConceptMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear'}
               </Button>
             </div>
@@ -479,7 +580,7 @@ export default function PagosAdmin() {
                 <SelectContent>
                   {concepts.map((concept) => (
                     <SelectItem key={concept.id} value={concept.id}>
-                      {concept.name} (${concept.default_amount})
+                      {concept.name} · {CONCEPT_TYPE_LABELS[concept.concept_type] || CONCEPT_TYPE_LABELS.OTRO} ({formatMoney(concept.default_amount)})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -489,11 +590,25 @@ export default function PagosAdmin() {
               <Label>Monto *</Label>
               <Input
                 type="number"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
                 value={chargeForm.amount}
                 onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })}
                 placeholder="0.00"
                 className="mt-1"
+                aria-invalid={chargeForm.amount !== '' && !chargePreview.ok}
               />
+              {chargeForm.amount !== '' && !chargePreview.ok && (
+                <p className="text-xs text-destructive mt-1">Monto no válido: mayor que 0, con dos decimales como máximo.</p>
+              )}
+              {chargePreview.ok && chargePreview.discount && (
+                <div className="mt-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground space-y-0.5">
+                  <p>Monto original: {formatMoney(centsToAmount(chargePreview.originalCents))}</p>
+                  <p>Descuento «{chargePreview.discount.name}»: −{formatMoney(centsToAmount(chargePreview.discountCents))}</p>
+                  <p className="font-semibold text-foreground">Total a pagar: {formatMoney(centsToAmount(chargePreview.amountCents))}</p>
+                </div>
+              )}
             </div>
             <div>
               <Label>Fecha de vencimiento *</Label>
@@ -510,7 +625,7 @@ export default function PagosAdmin() {
               </Button>
               <Button 
                 type="submit" 
-                disabled={!chargeForm.student_id || !chargeForm.concept_id || !chargeForm.amount || !chargeForm.due_date || createChargeMutation.isPending}
+                disabled={!chargeForm.student_id || !chargeForm.concept_id || !chargePreview.ok || !chargeForm.due_date || discountsLoading || createChargeMutation.isPending}
                 className="flex-1"
               >
                 {createChargeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear cargo'}
@@ -531,15 +646,25 @@ export default function PagosAdmin() {
               <div className="bg-muted rounded-xl p-4">
                 <p className="font-medium text-foreground">{getStudentName(selectedCharge.student_id)}</p>
                 <p className="text-sm text-muted-foreground">{selectedCharge.concept_name}</p>
+                <ChargeAmounts charge={selectedCharge} className="mt-2" />
               </div>
               <div>
                 <Label>Monto recibido *</Label>
                 <Input
                   type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
                   value={paymentForm.amount}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                  onChange={(e) => { setPaymentForm({ ...paymentForm, amount: e.target.value }); setPaymentError(''); }}
                   className="mt-1"
+                  aria-invalid={!!paymentError}
+                  aria-describedby="payment-amount-help"
                 />
+                <p id="payment-amount-help" className="text-xs text-muted-foreground mt-1">
+                  Puedes registrar un abono: el cargo queda como «Pago parcial» hasta cubrir el saldo.
+                </p>
+                {paymentError && <p role="alert" className="text-xs text-destructive mt-1">{paymentError}</p>}
               </div>
               <div>
                 <Label>Método de pago</Label>
@@ -596,7 +721,9 @@ function formatDueDate(dueDate, pattern) {
   return date ? format(date, pattern, { locale: es }) : 'Sin fecha';
 }
 
-function ChargeCard({ charge, studentName, onRecordPayment, isOverdue, isPaid }) {
+function ChargeCard({ charge, studentName, onRecordPayment, onSendReminder, reminderSending, isOverdue, isPaid }) {
+  const isPartial = !isPaid && chargePaid(charge) > 0;
+  const nextReminderAt = manualReminderAvailableAt(charge);
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -618,24 +745,42 @@ function ChargeCard({ charge, studentName, onRecordPayment, isOverdue, isPaid })
           </div>
         </div>
         <div className="text-right">
-          <p className="font-bold text-lg">${charge.amount?.toLocaleString()}</p>
+          <p className="font-bold text-lg">{formatMoney(isPaid ? charge.amount : chargeBalance(charge))}</p>
+          {isPartial && <p className="text-xs text-muted-foreground">de {formatMoney(charge.amount)}</p>}
           <Badge className={
             isPaid ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' :
             isOverdue ? 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300' :
+            isPartial ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300' :
             'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
           }>
-            {isPaid ? 'Pagado' : isOverdue ? 'Vencido' : 'Pendiente'}
+            {isPaid ? 'Pagado' : isOverdue ? (isPartial ? 'Vencido · parcial' : 'Vencido') : isPartial ? 'Pago parcial' : 'Pendiente'}
           </Badge>
         </div>
       </div>
+      <ChargeAmounts charge={charge} className="mt-3" />
       {!isPaid && (
-        <Button 
-          onClick={onRecordPayment} 
-          size="sm" 
-          className="w-full mt-3 bg-green-600 hover:bg-green-700"
-        >
-          <DollarSign className="w-4 h-4 mr-1" /> Registrar pago
-        </Button>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <Button
+            onClick={onRecordPayment}
+            size="sm"
+            className="flex-1 bg-green-600 hover:bg-green-700"
+          >
+            <DollarSign className="w-4 h-4 mr-1" /> Registrar pago
+          </Button>
+          {onSendReminder && (
+            <Button
+              onClick={onSendReminder}
+              size="sm"
+              variant="outline"
+              className="flex-1"
+              disabled={reminderSending || nextReminderAt > 0}
+              title={nextReminderAt > 0 ? 'Ya se envió un recordatorio de este cargo en las últimas 24 horas.' : 'Enviar por correo a la familia un recordatorio del saldo pendiente.'}
+            >
+              {reminderSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
+              {nextReminderAt > 0 ? 'Ya recordado' : 'Enviar recordatorio'}
+            </Button>
+          )}
+        </div>
       )}
     </motion.div>
   );

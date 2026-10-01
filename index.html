@@ -2,7 +2,12 @@
 <html lang="es-MX">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: without it env(safe-area-inset-*) is always 0, so
+         every inset below (BottomNav, ThemeSwitcher, Lumi) was a no-op and an
+         iPhone in landscape letterboxed the app. With it, the page reaches the
+         screen edges and each fixed control pads itself by the inset; normal
+         content is kept out of the notch by body's side padding (index.css). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="LIUMA · Gestión escolar: asistencia, tareas, avisos, calendario y pagos de tu escuela en un solo lugar." />
     <!-- Marca propia de LIUMA (public/). Antes apuntaba al logo de Base44 y a un
          /manifest.json que no existía, así que "Agregar a pantalla de inicio"

@@ -23,9 +23,15 @@
 // No billing read-only gate here, on purpose: an emergency contact is child
 // safety information and must stay editable whatever the subscription says.
 //
+// A new AbsenceNotification also emails the school's ADMINs and the child's
+// teachers (./_statusNotify.ts), from here, after the write — never from a
+// separate client call.
+//
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import { FAMILY_OPERATIONS, buildFamilyPayload, decideFamilyAccess } from './_policy.ts';
+import { NOTIFICATION_TEMPLATES } from './_templates.ts';
+import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
 
 type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string };
 
@@ -178,7 +184,15 @@ Deno.serve(async (req) => {
           : {}),
       },
     });
-    return Response.json({ ok: true, record, pickupRevoked: built.pickupRevoked === true });
+    // Best-effort and after the write: notifyStatusChange never throws. The
+    // stored record decides (the payload the server built, then whatever the
+    // SDK echoed back), never the request body.
+    const stored = { ...built.data, ...(record || {}) };
+    const statusEvent = statusEventFor(entity, operation, existing, stored);
+    const notified = statusEvent
+      ? await notifyStatusChange({ sr, templates: NOTIFICATION_TEMPLATES, event: statusEvent, schoolId, record: stored, actorId: String(user.id) })
+      : undefined;
+    return Response.json({ ok: true, record, pickupRevoked: built.pickupRevoked === true, ...(notified ? { notified } : {}) });
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }

@@ -60,6 +60,10 @@ export default function SideNav() {
 
   return (
     <nav
+      // Pads itself by the left safe-area inset (landscape iPhone notch); the
+      // content column's md:pl-64 is offset by the same inset through body's
+      // padding-left (src/index.css), so the two stay aligned.
+      style={{ paddingLeft: 'env(safe-area-inset-left, 0px)', width: 'calc(16rem + env(safe-area-inset-left, 0px))' }}
       className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-card/80 shadow-[1px_0_0_0_hsl(var(--border)),8px_0_24px_-20px_rgba(0,0,0,0.35)] backdrop-blur-xl md:flex"
       aria-label="Navegación principal"
     >
@@ -145,7 +149,7 @@ export default function SideNav() {
             to={pageUrl(role === 'PARENT' || role === 'TEACHER' ? 'Soporte' : 'SoporteAdmin')}
             aria-label="Soporte"
             title="Soporte"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="flex h-8 w-8 coarse:h-11 coarse:w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <LifeBuoy className="h-[18px] w-[18px]" />
           </Link>

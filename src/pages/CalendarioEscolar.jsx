@@ -15,12 +15,12 @@ import LoadingScreen from "@/components/ui/LoadingScreen";
 import EventFormDialog from "@/components/calendar/EventFormDialog";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { parseLocalDate, isOnOrAfterToday } from '@/lib/dates';
+import { parseLocalDate, isOnOrAfterToday, isSchoolToday, schoolTodayDate } from '@/lib/dates';
 import { toast } from 'sonner';
 import { guardedDelete } from '@/lib/authorization/guardedWrite';
 
 export default function CalendarioEscolar() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => schoolTodayDate());
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const queryClient = useQueryClient();
@@ -132,23 +132,23 @@ export default function CalendarioEscolar() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Calendar */}
         <div className="lg:col-span-2">
-          <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-6">
+          <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-3 sm:p-6">
             {/* Month Navigation */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 aria-label="Mes anterior"
                 onClick={() => setSelectedDate(subMonths(selectedDate, 1))}
               >
                 <span aria-hidden="true">←</span>
               </Button>
-              <h3 className="text-lg font-semibold text-foreground capitalize">
+              <h3 className="text-base sm:text-lg font-semibold text-foreground capitalize">
                 {format(selectedDate, "MMMM yyyy", { locale: es })}
               </h3>
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 aria-label="Mes siguiente"
                 onClick={() => setSelectedDate(addMonths(selectedDate, 1))}
               >
@@ -156,8 +156,12 @@ export default function CalendarioEscolar() {
               </Button>
             </div>
 
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2">
+            {/* Calendar Grid. On a phone a day cell is ~40px wide, which no
+                event title fits in (a "Festival" chip showed 12px of 123px),
+                so below `sm` each day shows one dot per event instead and the
+                selected day's events are listed in full in "Agenda del día".
+                Chips with titles come back from `sm` up. */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {/* Day Headers */}
               {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, i) => (
                 <div key={i} className="text-center text-sm font-medium text-muted-foreground py-2">
@@ -169,7 +173,7 @@ export default function CalendarioEscolar() {
               {calendarDays.map((day, i) => {
                 const dayEvents = getEventsForDate(day);
                 const isCurrentMonth = isSameMonth(day, selectedDate);
-                const isToday = isSameDay(day, new Date());
+                const isToday = isSchoolToday(day);
                 const isSelected = isSameDay(day, selectedDate);
 
                 return (
@@ -178,14 +182,14 @@ export default function CalendarioEscolar() {
                     role="button"
                     tabIndex={0}
                     aria-pressed={isSelected}
-                    aria-label={`Ver agenda del ${format(day, "d 'de' MMMM", { locale: es })}`}
+                    aria-label={`Ver agenda del ${format(day, "d 'de' MMMM", { locale: es })}${dayEvents.length ? `, ${dayEvents.length === 1 ? '1 evento' : `${dayEvents.length} eventos`}` : ''}`}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.01 }}
                     onClick={() => handleDaySelect(day)}
                     onKeyDown={(event) => handleDayKeyDown(event, day)}
                     className={`
-                      min-h-20 p-2 rounded-lg border cursor-pointer transition-all duration-200
+                      min-h-12 sm:min-h-20 p-1 sm:p-2 rounded-lg border cursor-pointer transition-all duration-200
                       hover:-translate-y-0.5 hover:border-brand/30 hover:bg-brand/10 hover:shadow-md
                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2
                       ${!isCurrentMonth ? 'bg-muted text-muted-foreground' : 'bg-card'}
@@ -193,10 +197,20 @@ export default function CalendarioEscolar() {
                       ${isSelected ? 'bg-brand/10 border-brand ring-2 ring-brand/30 shadow-md' : ''}
                     `}
                   >
-                    <div className={`text-sm font-medium mb-1 ${isToday ? 'text-brand' : ''}`}>
+                    <div className={`text-center sm:text-left text-sm font-medium mb-1 ${isToday ? 'text-brand' : ''}`}>
                       {format(day, 'd')}
                     </div>
-                    <div className="space-y-1">
+                    {dayEvents.length > 0 && (
+                      <div className="flex justify-center gap-0.5 sm:hidden" aria-hidden="true" data-event-dots="">
+                        {dayEvents.slice(0, 3).map(event => (
+                          <span
+                            key={event.id}
+                            className={`h-1.5 w-1.5 rounded-full ${event.scope === 'SCHOOL' ? 'bg-brand' : 'bg-emerald-500'}`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <div className="hidden sm:block space-y-1">
                       {dayEvents.slice(0, 2).map(event => (
                         <div
                           key={event.id}
@@ -254,7 +268,7 @@ export default function CalendarioEscolar() {
                           variant="ghost"
                           size="icon"
                           aria-label="Eliminar evento"
-                          className="h-6 w-6 text-red-500 hover:text-red-600 dark:hover:text-red-400"
+                          className="h-6 w-6 coarse:h-11 coarse:w-11 coarse:-m-2.5 shrink-0 text-red-500 hover:text-red-600 dark:hover:text-red-400"
                           onClick={(e) => handleDeleteEvent(event.id, e)}
                         >
                           <Trash2 className="w-3 h-3" />
@@ -317,7 +331,7 @@ export default function CalendarioEscolar() {
                           variant="ghost"
                           size="icon"
                           aria-label="Eliminar evento"
-                          className="h-6 w-6 text-red-500 hover:text-red-600 dark:hover:text-red-400"
+                          className="h-6 w-6 coarse:h-11 coarse:w-11 coarse:-m-2.5 shrink-0 text-red-500 hover:text-red-600 dark:hover:text-red-400"
                           onClick={(e) => handleDeleteEvent(event.id, e)}
                         >
                           <Trash2 className="w-3 h-3" />

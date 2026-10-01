@@ -11,8 +11,17 @@
 // This file is ALSO copied, byte for byte, to
 // base44/functions/sendBulkNotification/_templates.ts (server-side fan-out
 // for emergency alerts, reminders and ticket escalations — same
-// no-cross-directory-import constraint). Edit it here, then `cp` it there;
-// tests/unit/notifications-fanout.test.js fails if the two copies differ.
+// no-cross-directory-import constraint), and to guardedFamilyWrite/ and
+// guardedEntityWrite/ (the three request-status emails below). Edit it here,
+// then `cp` it to all three; tests/unit/notifications-fanout.test.js and
+// tests/unit/loose-ends-notify.test.js fail if any copy differs.
+//
+// absence_request_submitted / absence_request_reviewed / uniform_order_status
+// have NO client half in templates.js and no entry in sendNotificationEmail's
+// CALLER_ROLES, on purpose: nothing a browser sends can trigger them. They go
+// out from the write itself (guardedFamilyWrite on the parent's request,
+// guardedEntityWrite on the school's review — see _statusNotify.ts), so the
+// only way to send one is to actually file or review the record.
 //
 // escapeHtml is duplicated rather than imported for the same reason
 // src/lib/htmlEscape.js exists standalone: several interpolated fields
@@ -55,10 +64,28 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
       <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fbbf24; margin: 16px 0;">
         <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
         <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>
-        <p><strong>Monto:</strong> ${escapeHtml(amountLabel)}</p>
+        <p><strong>Saldo pendiente:</strong> ${escapeHtml(amountLabel)}</p>
         <p><strong>Fecha de vencimiento:</strong> ${escapeHtml(dueDateLabel)}</p>
       </div>
       <p>Por favor, realice su pago antes de la fecha de vencimiento para evitar recargos.</p>
+      <p>Atentamente,<br>Equipo LIUMA</p>
+    `,
+  },
+  // Same fields as payment_due; sent instead of it once the due date has
+  // passed (a "vence pronto" email about a late charge reads wrong).
+  payment_overdue: {
+    subject: ({ studentName }) => `Recordatorio: Pago vencido - ${studentName}`,
+    emailBody: ({ studentName, conceptName, amountLabel, dueDateLabel }) => `
+      <h2>Pago vencido</h2>
+      <p>Estimado padre/madre de familia:</p>
+      <p>Le recordamos que el siguiente pago ya venció y tiene saldo pendiente:</p>
+      <div style="background: #fee2e2; padding: 16px; border-radius: 8px; border: 1px solid #f87171; margin: 16px 0;">
+        <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
+        <p><strong>Concepto:</strong> ${escapeHtml(conceptName)}</p>
+        <p><strong>Saldo pendiente:</strong> ${escapeHtml(amountLabel)}</p>
+        <p><strong>Venció el:</strong> ${escapeHtml(dueDateLabel)}</p>
+      </div>
+      <p>Por favor, liquide su saldo lo antes posible o comuníquese con la dirección de la escuela.</p>
       <p>Atentamente,<br>Equipo LIUMA</p>
     `,
   },
@@ -114,6 +141,45 @@ export const NOTIFICATION_TEMPLATES: Record<string, { subject: (ctx: Ctx) => str
       </div>
       <p>${escapeHtml(replyBody || '')}</p>
       <p>Ingresa a LIUMA &gt; Soporte para ver la conversación completa.</p>
+    `,
+  },
+  absence_request_submitted: {
+    subject: ({ studentName }) => `Nueva solicitud de ausencia - ${studentName}`,
+    emailBody: ({ parentName, studentName, absenceDateLabel, reason, actionHint }) => `
+      <h2>Nueva solicitud de ausencia</h2>
+      <p><strong>${escapeHtml(parentName)}</strong> avisó que <strong>${escapeHtml(studentName)}</strong> faltará a clases.</p>
+      <div style="background: #fef3c7; padding: 16px; border-radius: 8px; border: 1px solid #fbbf24; margin: 16px 0;">
+        <p><strong>Fecha:</strong> ${escapeHtml(absenceDateLabel)}</p>
+        <p><strong>Motivo:</strong> ${escapeHtml(reason)}</p>
+      </div>
+      <p>${escapeHtml(actionHint)}</p>
+    `,
+  },
+  absence_request_reviewed: {
+    subject: ({ studentName, statusLabel }) => `Solicitud de ausencia ${statusLabel} - ${studentName}`,
+    emailBody: ({ studentName, absenceDateLabel, statusLabel, adminNotes }) => `
+      <h2>Tu solicitud de ausencia fue ${escapeHtml(statusLabel)}</h2>
+      <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; border: 1px solid #bbf7d0; margin: 16px 0;">
+        <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
+        <p><strong>Fecha de la ausencia:</strong> ${escapeHtml(absenceDateLabel)}</p>
+        <p><strong>Estado:</strong> ${escapeHtml(statusLabel)}</p>
+      </div>
+      ${adminNotes ? `<p><strong>Nota de la escuela:</strong> ${escapeHtml(adminNotes)}</p>` : ''}
+      <p>Puedes ver el detalle en LIUMA &gt; Trámites &gt; Solicitar ausencia.</p>
+    `,
+  },
+  uniform_order_status: {
+    subject: ({ studentName, statusLabel }) => `Pedido de uniforme: ${statusLabel} - ${studentName}`,
+    emailBody: ({ studentName, statusLabel, statusDetail, estimatedDeliveryLabel, adminNotes }) => `
+      <h2>Tu pedido de uniforme cambió de estado</h2>
+      <div style="background: #dbeafe; padding: 16px; border-radius: 8px; border: 1px solid #3b82f6; margin: 16px 0;">
+        <p><strong>Estudiante:</strong> ${escapeHtml(studentName)}</p>
+        <p><strong>Estado:</strong> ${escapeHtml(statusLabel)}</p>
+        ${estimatedDeliveryLabel ? `<p><strong>Entrega estimada:</strong> ${escapeHtml(estimatedDeliveryLabel)}</p>` : ''}
+      </div>
+      <p>${escapeHtml(statusDetail)}</p>
+      ${adminNotes ? `<p><strong>Nota de la escuela:</strong> ${escapeHtml(adminNotes)}</p>` : ''}
+      <p>Puedes ver el pedido en LIUMA &gt; Trámites &gt; Uniformes.</p>
     `,
   },
   support_ticket_resolved: {

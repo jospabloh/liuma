@@ -9,8 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, ArrowRight, CalendarDays } from 'lucide-react';
-import { format } from 'date-fns';
-import { parseLocalDate } from '@/lib/dates';
+import { parseLocalDate, schoolToday } from '@/lib/dates';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 
@@ -38,7 +37,7 @@ export default function OperacionDiaria() {
   const navigate = useNavigate();
   const [category, setCategory] = useState('ALL');
   const [urgency, setUrgency] = useState('ALL');
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = schoolToday();
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['dailyTimeline', today],

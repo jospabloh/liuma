@@ -1401,3 +1401,259 @@ cambió); comprobar por comportamiento: llamarla con `role: 'X'` debe dar 400
 `INVALID_ROLE`, no `unknown` ni un 200. Si dijera `unchanged` y el 400 no
 aparece, toca **Publish**. (2) `npm run deploy:site` (Login, Aprobaciones,
 PendingApproval). Sin cambios de entidad: `deploy:entities` no hace falta.
+
+## Dinero: abonos, descuentos, vencidos y recordatorios (2026-09-30)
+
+Cinco hallazgos del QA de pagos, todos verificados contra `main` (v1.8.1) antes
+de tocarlos. El más grave: **«Registrar pago» marcaba el cargo entero `PAID`**
+fuera cual fuera el monto (`PagosAdmin.jsx` escribía `status:'PAID'` y *luego*
+creaba el `PaymentRecord`), así que $400 sobre $1,000 dejaba a la familia «Al
+día» con $600 por pagar. Además: un descuento fijo de $500 sobre un cargo de
+$300 guardaba `amount: -200`; `Discount` aceptaba 150 % y -10 %; Reportes leía
+solo `PENDING` y perdía todo cargo `OVERDUE`; nunca se recordaba un cargo
+vencido; y la familia no veía abonos ni descuentos.
+
+**Las reglas viven en el servidor** — `guardedEntityWrite/_money.ts` (puras, en
+centavos enteros) y `_payments.ts` (las aplica sobre la base):
+
+- **Estado del cargo** (`deriveChargeStatus`): `PAID` solo si la suma de sus
+  `PaymentRecord` ≥ `amount` (que ya es neto del descuento); si no, `OVERDUE`
+  si `due_date` < hoy **en México** (`mexicoToday`, no `toISOString()`); si no,
+  `PARTIAL` con algún pago o `PENDING` sin pagos. `CANCELLED` solo lo pone la
+  dirección. Ningún cliente escribe `status`, `amount_paid` ni
+  `last_payment_date`: `settleCharge` los recalcula tras cada pago creado o
+  borrado, y un `update` de `ChargeItem` los re-deriva (por eso el
+  `{status:'OVERDUE'}` de `PagosAdmin` es solo «refréscalo»).
+- **Precio** (`prepareChargeCreate`): el `concept_type` sale del
+  `PaymentConcept` guardado; el descuento lo nombra el cliente pero el servidor
+  comprueba vigencia, tipo y `allows_discounts`, y lo **recorta** al monto del
+  cargo. Monto, descuento, concepto y alumno quedan fijos: se cancela y se crea
+  otro (`AMOUNT_LOCKED`). Un cargo con pagos no se borra (`CHARGE_HAS_PAYMENTS`).
+- **Pago** (`preparePaymentCreate`): positivo, en centavos, no mayor al saldo
+  (`OVERPAYMENT`; no hay saldo a favor que lo registre), contra un cargo de la
+  misma escuela que no esté pagado ni cancelado; el alumno es el del cargo;
+  fecha ≤ hoy. Monto/cargo/fecha no se editan (`PAYMENT_LOCKED`).
+- **Descuento** (`validateDiscount`, en `_schoolWrite.ts`): porcentaje en
+  (0, 100], monto fijo > 0, al menos un tipo de concepto, «hasta» ≥ «desde».
+  Solo se valida si el cambio toca esos términos, para poder **desactivar** un
+  descuento viejo mal capturado.
+
+`src/lib/payments/money.js` es su espejo para los formularios (vista previa y
+error por campo); `tests/unit/payments-money.test.js` corre las dos copias
+sobre los mismos casos y las reglas del servidor contra la base en memoria.
+
+**Recordatorios:** botón «Enviar recordatorio» en cada cargo abierto
+(`sendBulk({ …, manual: true })`), uno por cargo cada 24 h
+(`last_reminder_at`, `REMINDER_COOLDOWN`); el correo pide el **saldo**, y un
+cargo vencido recibe la plantilla nueva `payment_overdue` (en las tres copias
+de plantillas; `sendNotificationEmail` no la acepta). El recordatorio
+automático sigue igual (una vez, 0-7 días antes, al abrir Pagos) e incluye
+`PARTIAL`. **No** se añadió un recordatorio automático de vencidos: el primer
+deploy lo habría mandado de golpe a todo cargo vencido histórico. Ojo: el
+manual también marca `reminder_sent`, así que un cargo recordado a mano ya no
+recibe después el automático de 0-7 días.
+
+Revisión adversarial (mismo día): el pago ya no manda `payment_date` desde el
+navegador — el servidor pone el día de México, y un navegador en otra zona o
+con el reloj mal habría recibido `INVALID_PAYMENT_DATE` por dinero cobrado hoy.
+«Nuevo cargo» espera a que carguen los descuentos antes de dejar guardar (antes
+de eso el cargo salía sin descuento, en silencio). Y editar un descuento sin
+tocar sus términos (renombrarlo, apagarlo) ya no los reenvía: con el
+formulario reenviándolo todo, la validación bloqueaba justo el apagado de un
+descuento viejo mal capturado que la regla del servidor quería permitir.
+
+**Familias:** ven original, descuento, total, pagado y saldo por cargo
+(`ChargeAmounts.jsx`) a partir de `amount_paid`/`last_payment_date` del
+`ChargeItem` (añadidos a `READ_RULES`, tres copias de `_scope.ts`).
+`PaymentRecord` **sigue sin lectura para PARENT** — referencias y quién cobró
+no son suyos. Reportes, `ParentHome` y Lumi cuentan `PENDING|PARTIAL|OVERDUE`
+y suman saldos, no montos.
+
+**Esquema:** `ChargeItem.status` gana `PARTIAL`; nuevos `amount_paid`,
+`last_payment_date`, `last_reminder_at` (`rls.write:false`).
+
+**No verificado:** nada corrió contra Base44 en vivo (sin sesiones de QA);
+`Deno.serve` no corre en node, así que `entry.ts` se prueba por código fuente y
+`deno check`/`deno lint`. Los cargos que el flujo viejo cerró como `PAID` con
+un abono parcial **no se corrigen solos** (ninguna pantalla los toca); una
+conciliación única (sumar `PaymentRecord` por cargo) necesita datos de
+producción. Los conceptos creados antes no tienen tipo y cuentan como `OTRO`
+(no hay pantalla para editarlos; se crea uno nuevo con su tipo).
+
+**Desplegar, en este orden, o se rompe:** (1) `npm run deploy:entities` — sin
+`PARTIAL` en el enum, el servidor nuevo no puede guardar un abono; (2)
+`npm run deploy` (`guardedEntityWrite`, `sendBulkNotification`,
+`sendNotificationEmail`, `schoolRead`, `lumiQuery`, `lumiWrite`); (3)
+`npm run deploy:site` — el sitio nuevo ya no marca `PAID` él mismo, así que
+con el servidor viejo **ningún pago cerraría su cargo**. Comprobar por
+comportamiento: un pago menor al saldo debe dejar el cargo en «Pago parcial».
+
+## Avisos que faltaban: alerta en Avisos, ausencias y uniformes (2026-09-30)
+
+**La alerta de emergencia no llegaba a Avisos.** `sendBulkNotification`
+(`planEmergency`) sólo creaba el `Notice` de toda la escuela, y `Avisos.jsx`
+lista las `NoticeDelivery` del que llama unidas a su aviso: sin fila, no hay
+aviso, ni badge de no leídos, ni cuenta en «urgentes sin leer». Ahora
+`planEmergencyDeliveries` (`_fanout.ts`) escribe una copia por destinatario con
+service role: una por (padre, hijo activo de esta escuela) — la forma de
+`planNoticeDeliveries` —, una sin alumno para el padre sin vínculo y una por
+maestro. Idempotente (lee las que ya existen), escuela y destinatarios del
+servidor, y best-effort: si falla, el correo sale igual y la respuesta lo dice
+(`inAppRecipients` / `inAppFailed`, aparte de «Enviado a X de Y», que sigue
+contando correos). Para que el maestro vea **su** copia, el `READ_RULES` de
+`NoticeDelivery` para TEACHER suma la rama `recipient_user_id: self` (las tres
+copias de `_scope.ts`), y `AvisosMaestro` muestra «Recibidos de la escuela» vía
+`src/lib/notifications/readInbox.js`. `collapseInbox` muestra cada aviso una vez
+aunque haya una copia por hijo, y «Marcar como leído» marca todas.
+
+**Ausencias y uniformes no avisaban a nadie.** `_statusNotify.ts` (copia
+idéntica en `guardedFamilyWrite/` y `guardedEntityWrite/`) manda el correo
+**desde la escritura misma**, después de guardar: solicitud nueva → ADMINs
+activos + maestros activos del salón del alumno; revisión → el padre que la
+pidió; `UniformOrder` a PROCESSING/READY/DELIVERED/CANCELLED → el padre del
+pedido (sólo si sigue con vínculo ACTIVE al alumno). Decide la transición
+**almacenada** (re-guardar sin cambiar `status` no manda nada), nunca el
+cuerpo; nunca al autor; nunca lanza (un fallo deja
+`NOTIFICATION_DELIVERY_FAILED`). Las tres plantillas nuevas viven en
+`_templates.ts`, ahora con **cuatro** copias idénticas, y no están en
+`CALLER_ROLES` de `sendNotificationEmail`: ningún navegador puede dispararlas.
+Sólo correo, a propósito: el único modelo in-app es `Notice`, que es un
+comunicado de escuela y contaría en Reportes como tal.
+
+Pruebas: `tests/unit/loose-ends-notify.test.js`. Ninguna función nueva (20/40).
+**No verificado:** nada en vivo (sin sesiones ni `SendEmail` real). **Desplegar:**
+`npm run deploy` (sendBulkNotification, guardedEntityWrite, guardedFamilyWrite,
+schoolRead, lumiQuery, lumiWrite, sendNotificationEmail) y `npm run deploy:site`.
+Sin cambios de entidad.
+
+## Shell y móvil: entrada anónima, `/entrar`, "hoy" en México (2026-09-30)
+
+Hallazgos del QA móvil en vivo (Chromium con descriptores de dispositivo contra
+el bundle publicado, backend simulado). Detalle y porqué en
+`tests/unit/mobile-shell.test.js`.
+
+- **Un visitante sin sesión en `/` veía el selector de rol del onboarding**
+  (con "Cerrar sesión"): sin token, `AuthContext` ponía
+  `isAuthenticated=false` **sin** `authError`, y `App.jsx` pintaba las rutas
+  de sesión. Ahora siempre pregunta `auth.me()` y
+  `authErrorAfterFailedMe()` (`src/lib/authLinks.js`) decide: sin token,
+  cualquier fallo = iniciar sesión; con token, sólo 401/403 (un corte de red
+  no saca a una maestra a la pantalla de login).
+- **El login de LIUMA vive en `/entrar`, no en `/login`.** Base44 sirve él
+  mismo `/login` y `/reset-password` en una carga completa, en inglés
+  (comprobado en `liuma-2232ffd8.base44.app` y `liuma.acaciaco.com.mx`: esas
+  dos rutas devuelven `<html lang="en">`, `/entrar` devuelve nuestro
+  `index.html`). La ruta `/login` de la app sólo ganaba por navegación en el
+  cliente. `LOGIN_PATH` es la única fuente; el cierre de sesión vuelve a
+  `/entrar` (`loginUrl()`), y un test falla si algo del código navega a una
+  ruta de `PLATFORM_HOSTED_PATHS`.
+  **Límite, no arreglable desde el repo:** quien abra `/login` a mano (un
+  marcador viejo) sigue viendo la página hospedada en inglés, y el enlace del
+  correo de recuperación apunta a `/reset-password`, también hospedada — ahí
+  Base44 completa el cambio de contraseña. Si Base44 permite configurar el
+  idioma o la ruta de esas páginas, es en el panel, no aquí.
+- **`PageHeader` envuelve las acciones debajo del título** en vez de
+  aplastarlo (a 320px "Gestión de descuentos" quedaba en "G…"); el título
+  admite dos líneas en teléfono.
+- **Dedo, no ancho:** variantes `coarse:`/`fine:` (`pointer`) en
+  `tailwind.config.js`. Los primitivos (`Button size="sm"`, `Input`, `Select`,
+  `Tabs`, cierre de `Dialog`, `Switch`) dan 44px en táctil; los campos se quedan
+  en 16px en táctil a cualquier ancho (`md:fine:text-sm`), porque un iPhone
+  grande en horizontal pasa de 768px e iOS hace zoom en un campo de <16px.
+- **`viewport-fit=cover`**: sin él, todo `env(safe-area-inset-*)` valía 0.
+  El espaciador de `BottomNav` crece con la barra, la burbuja de Lumi y
+  `SideNav` se apartan del recorte, y `body` lleva el margen lateral.
+- **Calendario en teléfono:** puntos por evento en vez de chips ilegibles; la
+  agenda del día lista los títulos.
+- **"Hoy" es el día de la escuela** (`schoolToday()` / `schoolTodayDate()` /
+  `schoolDaysFromToday()` en `src/lib/dates.js`, America/Mexico_City), igual
+  que `mexicoToday()` en el servidor. Antes el cliente usaba el reloj del
+  dispositivo: un navegador fuera de hora de México mostraba "30 de
+  septiembre" mientras Lumi respondía por el 29. `formatLocalDate()` sin
+  argumento ya significa lo mismo. `calendarDaysUntilDue` (`overdue.js`:
+  ventana de recordatorio de cobro) también cuenta desde el día de la escuela;
+  si no, el mismo cargo era "vence hoy" para `isChargeOverdue` y "vencido hace
+  1 día" para el recordatorio.
+- **Fin de prueba con fecha sola** (`'2026-10-29'`) se pintaba un día antes
+  (`new Date()` = medianoche UTC); `WelcomeTrialModal` y `LicenseAdmin` usan
+  `parseLocalDate` + días de calendario.
+
+**Abierto, a propósito fuera de este paquete:** `resolveEffectiveLicense`
+(`licenseModel.js`) y sus dos espejos Deno (`getMySubscription`,
+`guardedEntityWrite/_policy.ts`) comparan `Date.parse(trial_end_date)`: una
+fecha sola `'2026-10-29'` vence a la medianoche **UTC** — el 28 a las 18:00 en
+México — aunque Mission Control (`set_dates`) la entiende como "vale durante el
+29". Cambiarlo toca el candado de escritura en tres lugares; va aparte.
+~~`PagosAdmin`'s `payment_date` sigue con `formatLocalDate(new Date())`~~ —
+cerrado en la integración v1.8.2: el paquete de pagos quitó `payment_date` del
+navegador y la vista previa del descuento pasó a `schoolToday()`. El `ThemeSwitcher` (38/34px) es canónico: se cambia en
+`acacia-app-standard`.
+
+**Verificado:** `lint`, `typecheck`, `build`, `test`, `test:permissions`,
+`validate:rls`, `validate:tenant-roles`, `release:gate`; y en Chromium con
+descriptores de dispositivo contra el dev server y `/api` simulado: `/`,
+`/Home` y `/GestionDescuentos?x=1` sin token terminan en `/entrar` (con el
+query); títulos completos en SE/13/Pixel 7/iPad Mini; botones y pestañas de
+PagosAdmin a 44px en táctil y 32/28px con ratón; campos de login 16px en
+táctil y 14px en escritorio; con el dispositivo en Tokio (1 de octubre) la app
+marca hoy el 30 de septiembre. **No verificado:** Safari/WebKit real (zoom al
+enfocar, recortes reales), y el deploy — esto es sólo frontend:
+`npm run deploy:site`, no `npm run deploy`.
+
+## v1.8.2 — cabos sueltos (2026-09-30)
+
+Cuatro paquetes hechos en paralelo desde `main` (`9796776`) e integrados con
+`--no-ff` en `fix/loose-ends-integration`. El detalle de cada uno está en su
+sección de arriba; director no tiene sección propia (está en sus commits).
+
+- **pay** (`fix/loose-ends-pay`): abonos parciales — el estado del cargo lo
+  deriva el servidor de sus `PaymentRecord` (`PAID`/`PARTIAL`/`OVERDUE`/
+  `PENDING`), pago ≤ saldo y fechado por el servidor, descuentos acotados y
+  recortados al cargo, recordatorio manual cada 24 h con `payment_overdue`,
+  saldos en Reportes/ParentHome/Lumi. **Cambia el esquema de `ChargeItem`.**
+- **notify** (`fix/loose-ends-notify`): la alerta de emergencia llega a Avisos
+  (`NoticeDelivery` por destinatario), el maestro lee lo suyo, ausencias y
+  uniformes avisan por correo desde la escritura, badge del padre por aviso.
+- **shell** (`fix/loose-ends-shell`): `/` anónimo → login, login en `/entrar`,
+  44px táctil, 16px en campos táctiles, safe areas, "hoy" de la escuela.
+- **director** (`fix/loose-ends-director`): editar alumno con datos médicos,
+  subida de documentos que no se atora, errores por campo en español
+  (salón, alumno, documentos, permisos, evento).
+
+**Lo que tocó la integración** (conflictos resueltos conservando las dos
+intenciones): los `_templates.ts` que notify añadió en `guardedEntityWrite/` y
+`guardedFamilyWrite/` eran de antes de `payment_overdue` (pay) — se recopiaron
+de `sendNotificationEmail/_templates.ts`, así que las **cuatro** copias siguen
+idénticas; `_schoolWrite.ts`, `_fanout.ts` y `sendBulkNotification/entry.ts`
+suman las dos cosas (validación de descuentos + aviso de estado;
+`planChargeReminder` + `planEmergencyDeliveries`); los imports de
+`ParentHome`, `Reportes`, `overdue.js`, `EventFormDialog` y
+`GestionDocumentos` conservan el saldo de pay y el `schoolToday()` de shell.
+La vista previa de descuento de `PagosAdmin` (nueva de pay) usaba el día del
+dispositivo: ahora `schoolToday()`, y `mobile-shell.test.js` ya no exenta a
+`PagosAdmin`.
+
+**Desplegar, en este orden (o se rompe):**
+
+1. `npm run deploy:entities` — `ChargeItem`: `PARTIAL` en el enum de
+   `status` y `amount_paid`, `last_payment_date`, `last_reminder_at`
+   (`rls.write:false`). Sin esto el servidor nuevo no puede guardar un abono.
+2. `npm run deploy` — `guardedEntityWrite`, `guardedFamilyWrite`,
+   `sendBulkNotification`, `sendNotificationEmail`, `schoolRead`,
+   `lumiQuery`, `lumiWrite` (y `approveProfile` de #188 si aún no se
+   desplegó). Ninguna función nueva: 20/40.
+3. `npm run deploy:site` — el sitio nuevo ya no marca `PAID` él mismo; con el
+   servidor viejo ningún pago cerraría su cargo.
+
+**Comprobar por comportamiento:** un pago menor al saldo deja el cargo en
+«Pago parcial»; apagar un descuento existente sin tocar sus términos guarda;
+la alerta de emergencia aparece en Avisos de un padre; en ventana privada
+`https://liuma.acaciaco.com.mx/` termina en `/entrar` en español y cerrar
+sesión vuelve a `/entrar`.
+
+**Sigue abierto:** los cargos que el flujo viejo cerró `PAID` con un abono
+parcial no se corrigen solos (conciliación única con datos de producción);
+conceptos anteriores sin tipo cuentan como `OTRO`; `resolveEffectiveLicense`
+y sus dos espejos Deno vencen una fecha sola a medianoche UTC; `/login` y
+`/reset-password` hospedados por Base44 siguen en inglés; nada de esto corrió
+contra Base44 en vivo.

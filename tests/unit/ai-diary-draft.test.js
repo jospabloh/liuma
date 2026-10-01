@@ -54,7 +54,8 @@ test('CrearBitacora offers Lumi\'s text as a suggestion with undo, never overwri
 
 test('CrearBitacora stores and shows the local school day, and themes its chips for dark mode', () => {
   const src = read('src/pages/CrearBitacora.jsx');
-  assert.match(src, /const today = formatLocalDate\(new Date\(\)\);/);
+  // The school's day (America/Mexico_City), not the device's — see schoolToday.
+  assert.match(src, /const today = schoolToday\(\);/);
   assert.doesNotMatch(src, /format\(new Date\(\), "d 'de' MMMM/);
   for (const light of ['from-pink-50', 'bg-amber-50', 'text-amber-600']) {
     const line = src.split('\n').find((l) => l.includes(light));

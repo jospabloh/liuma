@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ContinueAs from '@/components/auth/ContinueAs';
 import { getRememberedIdentity } from '@/lib/lastIdentity';
-import { readResetToken } from '@/lib/authLinks';
+import { readResetToken, LOGIN_PATH } from '@/lib/authLinks';
 import GuardedRoute from '@/components/GuardedRoute';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
@@ -59,12 +59,14 @@ const ScrollToTopOnNavigate = () => {
   return null;
 };
 
-// Unauthenticated visitors land on /login from any path. The query string
-// travels with them so a password-reset link (?reset_token=…) still reaches
-// the login screen's reset form. See src/lib/authLinks.js.
+// Unauthenticated visitors land on LIUMA's login (LOGIN_PATH = /entrar) from
+// any path. The query string travels with them so a password-reset link
+// (?reset_token=…) still reaches the login screen's reset form. Not /login:
+// the platform serves that path itself, in English, on every full page load —
+// see src/lib/authLinks.js.
 const RedirectToLogin = () => {
   const { search } = useLocation();
-  return <Navigate to={{ pathname: '/login', search }} replace />;
+  return <Navigate to={{ pathname: LOGIN_PATH, search }} replace />;
 };
 
 const AuthenticatedApp = () => {
@@ -86,7 +88,7 @@ const AuthenticatedApp = () => {
     } else if (authError.type === 'auth_required') {
       // Remembered user → friendly "Continuar como" card, which silently
       // re-authenticates via the Base44 session cookie through
-      // redirectToLogin(). Otherwise render our own in-app /login page instead
+      // redirectToLogin(). Otherwise render our own in-app login (/entrar) instead
       // of bouncing out to Base44's hosted login — any other path also lands
       // there, since nothing in the app is reachable while unauthenticated.
       // …except when the visitor arrived from a password-reset e-mail: that
@@ -97,7 +99,7 @@ const AuthenticatedApp = () => {
       }
       return (
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path={LOGIN_PATH} element={<Login />} />
           <Route path="*" element={<RedirectToLogin />} />
         </Routes>
       );
@@ -114,7 +116,9 @@ const AuthenticatedApp = () => {
           </RouteErrorBoundary>
         </LayoutWrapper>
       } />
-      {/* Already authenticated — /login has nothing to do, send them home. */}
+      {/* Already authenticated — the login screen has nothing to do, send them
+          home. /login only ever arrives here by client-side navigation. */}
+      <Route path={LOGIN_PATH} element={<Navigate to="/" replace />} />
       <Route path="/login" element={<Navigate to="/" replace />} />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route

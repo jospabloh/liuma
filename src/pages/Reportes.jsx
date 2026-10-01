@@ -13,12 +13,14 @@ import { Button } from '@/components/ui/button';
 import { canReadEntity } from '@/lib/authorization/policy';
 import { canExportReports, exportReportCSV, exportReportPDF } from '@/lib/report-export';
 import { attendanceSummary, diaryCoverage } from '@/lib/reports/kpis';
-import { formatLocalDate, isBeforeToday, parseLocalDate } from '@/lib/dates';
+import { parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
+import { summarizeUnpaidCharges, UNPAID_CHARGE_STATUSES } from '@/lib/payments/overdue';
+import { formatMoney } from '@/lib/payments/money';
 import { toast } from 'sonner';
 
 export default function Reportes() {
   const reportRef = useRef(null);
-  const today = formatLocalDate(new Date());
+  const today = schoolToday();
   const [filters, setFilters] = useState({ dateFrom: today, dateTo: today, classroomId: 'ALL', studentStatus: 'ACTIVE', roleScope: 'ALL' });
   const [openPanel, setOpenPanel] = useState(null);
 
@@ -63,9 +65,13 @@ export default function Reportes() {
     enabled: !!userProfile && rangeValid && canReadEntity(role, 'DiaryEntry'),
   });
 
-  const { data: pendingCharges = [] } = useQuery({
-    queryKey: ['pendingCharges', userProfile?.school_id],
-    queryFn: () => schoolRead('ChargeItem', { school_id: userProfile.school_id, status: 'PENDING' }),
+  // Every status that still owes money — PENDING alone dropped each charge
+  // PagosAdmin had already flipped to OVERDUE (and every partly paid one)
+  // out of the total and the "vencidos" count. Own cache key: ParentHome
+  // keeps ['pendingCharges', studentIds] for a different list.
+  const { data: unpaidCharges = [] } = useQuery({
+    queryKey: ['unpaidChargesReport', userProfile?.school_id],
+    queryFn: () => schoolRead('ChargeItem', { school_id: userProfile.school_id, status: { $in: [...UNPAID_CHARGE_STATUSES] } }),
     enabled: !!userProfile && canReadEntity(role, 'ChargeItem'),
   });
 
@@ -95,7 +101,7 @@ export default function Reportes() {
     () => diaryCoverage({ diaries, students: filteredStudents, dateFrom: filters.dateFrom, dateTo: filters.dateTo, today }),
     [diaries, filteredStudents, filters.dateFrom, filters.dateTo, today],
   );
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekStart = startOfWeek(schoolTodayDate(), { weekStartsOn: 1 });
   const weekNotices = notices.filter((n) => new Date(n.created_date) >= weekStart).filter((n) => filters.roleScope === 'ALL' || (n.scope || 'SCHOOL') === filters.roleScope);
 
   // While a range loads, show a placeholder rather than a 0% that reads as
@@ -103,8 +109,10 @@ export default function Reportes() {
   const kpisLoading = attendanceLoading || diariesLoading;
   const attendanceRate = attendance.rate;
   const diaryProgress = diary.percent;
-  const overdueCharges = pendingCharges.filter((c) => isBeforeToday(c.due_date));
-  const totalPending = pendingCharges.reduce((sum, c) => sum + (c.amount || 0), 0);
+  // Same "vencido" rule as Pagos and the admin home, and the total is what is
+  // still owed after partial payments (src/lib/payments/overdue.js).
+  const unpaid = useMemo(() => summarizeUnpaidCharges(unpaidCharges), [unpaidCharges]);
+  const totalPending = unpaid.total;
   const urgentNotices = weekNotices.filter((n) => n.priority === 'URGENT').length;
   const freshnessLabel = format(new Date(), "d MMM yyyy, HH:mm", { locale: es });
 
@@ -133,7 +141,7 @@ export default function Reportes() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 pb-24">
-      <PageHeader eyebrow="Administración" title="Reportes" subtitle={format(new Date(), "EEEE d 'de' MMMM", { locale: es })} showBack backTo={createPageUrl('Home')} />
+      <PageHeader eyebrow="Administración" title="Reportes" subtitle={format(schoolTodayDate(), "EEEE d 'de' MMMM", { locale: es })} showBack backTo={createPageUrl('Home')} />
 
       <div className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-4 mb-4">
         <p className="text-xs text-muted-foreground mb-2">Filtros</p>
@@ -177,9 +185,9 @@ export default function Reportes() {
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">
-          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600 dark:text-rose-400" /></div><div><h3 className="font-semibold text-card-foreground">Pagos pendientes</h3><p className="text-sm text-muted-foreground">{pendingCharges.length} cargos</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-card-foreground">${totalPending.toLocaleString()}</p><p className="text-xs text-red-600 dark:text-red-400">{overdueCharges.length} vencidos</p></div></div>
+          <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/40 flex items-center justify-center"><CreditCard className="w-5 h-5 text-rose-600 dark:text-rose-400" /></div><div><h3 className="font-semibold text-card-foreground">Pagos pendientes</h3><p className="text-sm text-muted-foreground">{unpaid.count} cargos</p></div><div className="ml-auto text-right"><p className="text-xl font-bold text-card-foreground">{formatMoney(totalPending)}</p><p className="text-xs text-red-600 dark:text-red-400">{unpaid.overdueCount} vencidos</p></div></div>
           <button className="text-sm text-rose-700 dark:text-rose-400 flex items-center gap-1" onClick={() => togglePanel('payments')}>Ver detalle {openPanel === 'payments' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
-          {openPanel === 'payments' && <div className="mt-3 text-sm text-muted-foreground">Por vencer: {pendingCharges.length - overdueCharges.length} · Vencidos: {overdueCharges.length}</div>}
+          {openPanel === 'payments' && <div className="mt-3 text-sm text-muted-foreground">Por vencer: {unpaid.upcomingCount} · Vencidos: {unpaid.overdueCount} ({formatMoney(unpaid.overdueTotal)})<p className="text-xs mt-1">Saldo pendiente: lo que falta por pagar, ya descontados los abonos.</p></div>}
         </motion.div>
 
         <motion.div className="bg-card text-card-foreground rounded-2xl p-5 shadow-sm border border-border">

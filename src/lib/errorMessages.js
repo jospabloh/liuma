@@ -33,6 +33,24 @@ const CODE_MESSAGES = {
   CLASSROOM_NOT_ASSIGNED: 'Ese salón no está asignado a ti.',
   STUDENT_NOT_IN_CLASSROOM: 'Ese alumno no está en ese salón.',
   SCHOOL_NOTICE_ADMIN_ONLY: 'Solo la dirección puede enviar avisos a toda la escuela.',
+  // Money rules (guardedEntityWrite/_money.ts, loose-ends pass 2026-09-30).
+  INVALID_AMOUNT: 'Escribe un monto mayor que 0, con dos decimales como máximo.',
+  OVERPAYMENT: 'El monto es mayor que el saldo pendiente del cargo. Revisa el saldo e inténtalo de nuevo.',
+  CHARGE_ALREADY_PAID: 'Este cargo ya está liquidado; no hay saldo por cobrar.',
+  CHARGE_CANCELLED: 'Este cargo está cancelado; no se le pueden registrar pagos.',
+  CHARGE_HAS_PAYMENTS: 'Este cargo ya tiene pagos registrados; cancélalo en lugar de borrarlo.',
+  MISSING_CHARGE: 'Falta indicar a qué cargo corresponde el pago.',
+  INVALID_DUE_DATE: 'La fecha de vencimiento no es válida.',
+  INVALID_PAYMENT_DATE: 'La fecha del pago no es válida o está en el futuro.',
+  DISCOUNT_NOT_APPLICABLE: 'Ese descuento ya no aplica a este concepto (vigencia o tipo). Recarga e inténtalo de nuevo.',
+  INVALID_DISCOUNT: 'Revisa el descuento: un porcentaje debe ser mayor que 0 y como máximo 100, un monto fijo debe ser mayor que 0, elige al menos un tipo de concepto y la vigencia debe ser coherente.',
+  AMOUNT_LOCKED: 'El monto de un cargo ya creado no se puede cambiar. Cancélalo y crea uno nuevo.',
+  PAYMENT_LOCKED: 'El monto de un pago registrado no se puede cambiar. Bórralo y regístralo de nuevo.',
+  REMINDER_COOLDOWN: 'Ya se envió un recordatorio de este cargo en las últimas 24 horas.',
+  // Concurrency (Codex review on PR #190, 2026-09-30).
+  PAYMENT_CONFLICT: 'Otro pago se registró al mismo tiempo; revisa el saldo y vuelve a intentar.',
+  PAYMENT_CONFLICT_UNRESOLVED: 'Otro pago se registró al mismo tiempo y este quedó de más. Revisa los pagos del cargo y borra el sobrante.',
+  REMINDER_IN_PROGRESS: 'Ya se está enviando un recordatorio de este cargo. Espera un momento y recarga.',
 };
 
 const STATUS_MESSAGES = {

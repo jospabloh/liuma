@@ -11,6 +11,21 @@ import { APP_VERSION, RELEASE_DATE } from '@/lib/appConfig';
 const CHANGES = [
   {
     date: '2026-09-30',
+    title: 'Versión 1.8.2: pagos parciales, avisos y uso en el teléfono',
+    items: [
+      'Corregido: registrar un pago menor al total ya no marca el cargo como pagado. Queda en «Pago parcial» y muestra cuánto falta; las familias ven el monto original, el descuento, lo pagado y el saldo.',
+      'Nuevo: botón «Enviar recordatorio» en cada cargo pendiente (como máximo uno cada 24 horas). El correo pide el saldo, y si el cargo ya venció lo dice.',
+      'Corregido: un descuento viejo se puede apagar o renombrar sin tener que corregir sus datos, y un descuento nunca deja un cargo en negativo.',
+      'Corregido: la alerta de emergencia ahora aparece en Avisos, con su marca de no leído, para familias y maestros. Si tienes dos hijos, cuenta una sola vez.',
+      'Nuevo: las solicitudes de ausencia y los pedidos de uniforme avisan por correo a quien le toca: a la dirección y al maestro cuando llega la solicitud, y a la familia cuando se responde o cambia el pedido.',
+      'Corregido: al abrir LIUMA sin sesión llegas directo a la pantalla para entrar, en español. Al cerrar sesión vuelves a ella.',
+      'Mejor en el teléfono: botones y campos más fáciles de tocar, sin zoom al escribir, y títulos completos. En el calendario, cada evento se marca con un punto.',
+      'Corregido: «hoy» es siempre el día de la escuela, aunque tu teléfono esté en otra zona horaria, y la fecha de fin de la prueba ya no aparece un día antes.',
+      'Nuevo: la dirección puede editar los datos de un alumno, incluidos alergias, notas médicas y tipo de sangre. Los formularios dicen qué dato falta o está mal, y subir un documento que falla ya no se queda atorado.',
+    ],
+  },
+  {
+    date: '2026-09-30',
     title: 'Versión 1.8.1: correcciones de la prueba en vivo',
     items: [
       'Corregido: el avance de bitácoras del inicio del maestro cuenta alumnos, no bitácoras. Si un alumno tenía dos bitácoras y otro ninguna, decía "Completo"; ya no.',

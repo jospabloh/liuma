@@ -2,8 +2,16 @@
   "name": "ChargeItem",
   "properties": {
     "amount": {
-      "description": "Monto final a pagar",
+      "description": "Monto final a pagar (original_amount - discount_amount). Lo calcula guardedEntityWrite al crear el cargo y ya no cambia.",
       "type": "number"
+    },
+    "amount_paid": {
+      "default": 0,
+      "description": "Suma de los PaymentRecord del cargo. La recalcula guardedEntityWrite (settleCharge) despu\u00e9s de cada pago o pago borrado; nunca la escribe un cliente.",
+      "type": "number",
+      "rls": {
+        "write": false
+      }
     },
     "concept_id": {
       "type": "string"
@@ -35,6 +43,29 @@
       "format": "date",
       "type": "string"
     },
+    "last_payment_date": {
+      "description": "Fecha del pago m\u00e1s reciente del cargo. La escribe guardedEntityWrite (settleCharge).",
+      "format": "date",
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "last_reminder_at": {
+      "description": "Cu\u00e1ndo se envi\u00f3 el \u00faltimo recordatorio de pago. Lo escribe sendBulkNotification; limita el recordatorio manual a uno por d\u00eda.",
+      "format": "date-time",
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
+    "reminder_claim_id": {
+      "description": "Recordatorio de pago en curso: id del env\u00edo que lo reclam\u00f3. Lo escribe y lo limpia sendBulkNotification (claimChargeReminder); vac\u00edo cuando no hay env\u00edo en curso.",
+      "type": "string",
+      "rls": {
+        "write": false
+      }
+    },
     "event_id": {
       "description": "Reference to Event si es pago de evento",
       "type": "string"
@@ -56,9 +87,10 @@
     },
     "status": {
       "default": "PENDING",
-      "description": "OVERDUE se actualiza autom\u00e1ticamente",
+      "description": "Lo deriva guardedEntityWrite de los pagos y la fecha de vencimiento: PAID cuando amount_paid >= amount; si no, OVERDUE si due_date ya pas\u00f3 (d\u00eda de M\u00e9xico); si no, PARTIAL con alg\u00fan pago o PENDING sin pagos. CANCELLED s\u00f3lo lo pone la direcci\u00f3n.",
       "enum": [
         "PENDING",
+        "PARTIAL",
         "PAID",
         "OVERDUE",
         "CANCELLED"

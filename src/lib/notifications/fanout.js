@@ -54,3 +54,20 @@ export function hasUndelivered(summary) {
   const reached = Number(summary?.reached) || 0;
   return total > 0 && reached < total;
 }
+
+/**
+ * "También quedó en Avisos de N personas." — the emergency alert's in-app
+ * half (one NoticeDelivery per recipient, sendBulkNotification). Separate
+ * from formatDeliverySummary on purpose: that line counts emails, and an
+ * Avisos row is not an email. '' when the server did not report it (an
+ * older deploy) or nobody got one.
+ */
+export function formatInAppSummary(summary) {
+  if (!summary || summary.skipped) return '';
+  if (Number(summary.inAppFailed) > 0) {
+    return 'No se pudo agregar la alerta a los Avisos de cada persona; sigue visible en la pantalla de inicio.';
+  }
+  const people = Number(summary.inAppRecipients) || 0;
+  if (people <= 0) return '';
+  return `También quedó en los Avisos de ${people} ${people === 1 ? 'persona' : 'personas'}.`;
+}

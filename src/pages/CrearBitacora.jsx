@@ -29,7 +29,7 @@ import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
-import { formatLocalDate, parseLocalDate } from '@/lib/dates';
+import { parseLocalDate, schoolToday } from '@/lib/dates';
 import { diaryCoverage, crearBitacoraStep1View } from '@/lib/diaryCoverage';
 
 // Etiquetas en español para los valores guardados (el resumen de revisión
@@ -54,7 +54,7 @@ export default function CrearBitacora() {
   const classroomId = urlClassroomId || pickedClassroomId;
   // Día local de la escuela (no toISOString: después de las 18:00 en México
   // eso ya es mañana). La misma cadena se guarda y se muestra.
-  const today = formatLocalDate(new Date());
+  const today = schoolToday();
   const todayDate = parseLocalDate(today);
   
   const [step, setStep] = useState(1); // 1: select student, 2: write, 3: review, 4: confirm

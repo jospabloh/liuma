@@ -1,20 +1,21 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, User, Paperclip } from 'lucide-react';
-import { format, isToday, isTomorrow } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
-import { parseLocalDate, isBeforeToday } from '@/lib/dates';
+import { parseLocalDate, isBeforeToday, schoolDaysFromToday } from '@/lib/dates';
 
 export default function HomeworkCard({ homework, onClick }) {
   const dueDate = parseLocalDate(homework.due_date);
   // Due today is not overdue; only a calendar day strictly before today is.
   const isOverdue = isBeforeToday(dueDate);
+  const daysUntilDue = schoolDaysFromToday(dueDate);
   
   const getDueDateLabel = () => {
     if (!dueDate) return 'Sin fecha de entrega';
-    if (isToday(dueDate)) return 'Hoy';
-    if (isTomorrow(dueDate)) return 'Mañana';
+    if (daysUntilDue === 0) return 'Hoy';
+    if (daysUntilDue === 1) return 'Mañana';
     return format(dueDate, "EEEE d 'de' MMMM", { locale: es });
   };
   
@@ -35,7 +36,7 @@ export default function HomeworkCard({ homework, onClick }) {
               {homework.subject}
             </Badge>
           )}
-          {dueDate && isToday(dueDate) && (
+          {dueDate && daysUntilDue === 0 && (
             <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">Hoy</Badge>
           )}
           {isOverdue && (

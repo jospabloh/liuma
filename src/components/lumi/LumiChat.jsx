@@ -22,6 +22,7 @@ import {
   messagesFromResponse,
   nextPollDelay,
   pendingToolLabel,
+  pollDelayWithBackoff,
   quickActionTitleFor,
   quickActionsFor,
   shouldPoll,
@@ -219,20 +220,26 @@ export default function LumiChat({ onClose, userProfile }) {
     if (!conversationId || !pendingReply) return undefined;
     let cancelled = false;
     let timer = null;
+    // Consecutive failed reads: each one doubles the next wait (capped).
+    let failures = 0;
     const schedule = () => {
-      const delay = nextPollDelay(Date.now() - pendingReply.sentAt);
-      if (delay === null) return;
+      const base = nextPollDelay(Date.now() - pendingReply.sentAt);
+      if (base === null) return;
       timer = setTimeout(async () => {
         if (cancelled) return;
-        if (shouldPoll(Date.now(), lastSocketUpdateRef.current)) {
+        // A background tab skips the read (the next visible tick catches up).
+        const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+        if (!hidden && shouldPoll(Date.now(), lastSocketUpdateRef.current)) {
           try {
             await refreshConversation(conversationId);
+            failures = 0;
           } catch (error) {
+            failures += 1;
             console.warn('Lumi: polling the conversation failed', error);
           }
         }
         if (!cancelled) schedule();
-      }, delay);
+      }, pollDelayWithBackoff(base, failures));
     };
     schedule();
     return () => {

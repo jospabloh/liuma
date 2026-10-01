@@ -193,8 +193,12 @@ Deno.serve(async (req) => {
           .map(present);
         // An empty range is not "no homework": say what comes next, so Lumi
         // can answer "la siguiente entrega es el martes 20" instead of "no hay
-        // tareas" (QA r5, LP01).
-        const after = homework.length ? null : visible.find((h) => String(h.due_date || '') > to);
+        // tareas" (QA r5, LP01). Never a past due date: an empty range of
+        // last week must not offer last Friday as "la siguiente".
+        const after = homework.length ? null : visible.find((h) => {
+          const due = String(h.due_date || '');
+          return due > to && due >= today;
+        });
         return Response.json({
           ...base,
           range: { from: spanishLongDate(from), to: spanishLongDate(to) },

@@ -43,6 +43,22 @@ export function nextPollDelay(elapsedMs) {
   return elapsed < LUMI_REPLY_TIMEOUT_MS ? LUMI_POLL_INTERVAL_MS : LUMI_POLL_SLOW_INTERVAL_MS;
 }
 
+/** Longest wait between polls while the read keeps failing. */
+export const LUMI_POLL_MAX_BACKOFF_MS = 30000;
+
+/**
+ * The delay actually used: doubled per consecutive failed poll (a 429 or an
+ * outage must not be hammered every 3s), capped, then spread ±20% so many
+ * open chats do not poll in lockstep. `random` is injectable for tests.
+ */
+export function pollDelayWithBackoff(baseMs, failures = 0, random = Math.random) {
+  const n = Math.max(0, Math.min(10, Number(failures) || 0));
+  const backed = Math.min(LUMI_POLL_MAX_BACKOFF_MS, baseMs * 2 ** n);
+  const r = Number(random());
+  const jitter = 0.8 + 0.4 * (Number.isFinite(r) ? Math.min(1, Math.max(0, r)) : 0.5);
+  return Math.round(backed * jitter);
+}
+
 /** Whether a poll is worth making now (the socket has been quiet). */
 export function shouldPoll(nowMs, lastSocketUpdateMs) {
   return !lastSocketUpdateMs || nowMs - lastSocketUpdateMs >= LUMI_SOCKET_FRESH_MS;

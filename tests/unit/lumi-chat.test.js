@@ -13,6 +13,8 @@ import {
   messagesFromResponse,
   nextPollDelay,
   pendingToolLabel,
+  pollDelayWithBackoff,
+  LUMI_POLL_MAX_BACKOFF_MS,
   shouldPoll,
   userMessageIdForTurn,
   visibleMessages,
@@ -205,4 +207,17 @@ test('LumiChat keeps the question, polls without the socket and checks before re
   assert.match(src, /unconfirmedPrompt/);
   // Reintentar looks for a late answer before asking twice.
   assert.match(src, /if \(merged && hasReplyForTurn\(merged, notice\.expectedUserTurns\)\) return;/);
+});
+
+test('polling backs off on failed reads and is jittered, never faster than ±20%', () => {
+  const mid = () => 0.5;
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 0, mid), LUMI_POLL_INTERVAL_MS);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 1, mid), LUMI_POLL_INTERVAL_MS * 2);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 50, mid), LUMI_POLL_MAX_BACKOFF_MS);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 0, () => 0), LUMI_POLL_INTERVAL_MS * 0.8);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 0, () => 1), LUMI_POLL_INTERVAL_MS * 1.2);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 0, () => NaN), LUMI_POLL_INTERVAL_MS);
+  const src = readFileSync(new URL('../../src/components/lumi/LumiChat.jsx', import.meta.url), 'utf8');
+  assert.match(src, /pollDelayWithBackoff\(base, failures\)/);
+  assert.match(src, /document\.visibilityState === 'hidden'/);
 });

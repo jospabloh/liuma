@@ -6,7 +6,8 @@ import {
   selectCurrentProfile, profileProblem, canRunIntent, canWriteKind, rowVisible, scopeRows,
   mexicoToday, addDays, spanishLongDate, isoWeek, menuDayKey, label, formatMXN,
   matchStudents, validateWrite, resolveWriteDate, confirmationCode, errorMessage,
-  describeWrite, mexicoDayOf,
+  describeWrite, mexicoDayOf, displayUserName, homeworkRange, attendanceWindow,
+  HOMEWORK_DEFAULT_DAYS, HOMEWORK_MAX_DAYS,
 } from '../../base44/functions/lumiQuery/_lumiCore.ts';
 
 function read(path) {
@@ -211,4 +212,68 @@ test('zoneless Base44 timestamps are read as UTC before taking the Mexico day', 
   assert.equal(mexicoDayOf('2026-09-30'), '2026-09-30');
   assert.equal(mexicoDayOf(''), '');
   assert.equal(mexicoDayOf('not a date'), '');
+});
+
+// --- QA r5 on v1.8.2 (2026-10-01) ---------------------------------------------
+
+test('"tareas pendientes" looks a month ahead, not a week (LP01)', () => {
+  // Asked on Thursday Oct 1; two homeworks were due Tuesday Oct 20 and the
+  // 7-day default answered "no hay tareas".
+  const range = homeworkRange('2026-10-01');
+  assert.equal(HOMEWORK_DEFAULT_DAYS >= 30, true);
+  assert.deepEqual(range, { from: '2026-10-01', to: '2026-10-31' });
+  assert.ok(range.to >= '2026-10-20');
+  // An explicit day is honoured ("¿qué tarea hay para mañana?").
+  assert.deepEqual(homeworkRange('2026-10-01', '2026-10-02', '2026-10-02'), { from: '2026-10-02', to: '2026-10-02' });
+  // A reversed or absurd range cannot widen into the whole history.
+  assert.deepEqual(homeworkRange('2026-10-01', '2026-10-10', '2026-10-05'), { from: '2026-10-10', to: '2026-10-10' });
+  assert.equal(homeworkRange('2026-10-01', '2026-10-01', '2030-01-01').to, addDays('2026-10-01', HOMEWORK_MAX_DAYS));
+  assert.deepEqual(homeworkRange('2026-10-01', 'mañana', 42), { from: '2026-10-01', to: '2026-10-31' });
+});
+
+test('lumiQuery tells Lumi what comes next when the homework range is empty', () => {
+  const src = read('base44/functions/lumiQuery/entry.ts');
+  assert.match(src, /homeworkRange\(today, body\?\.from, body\?\.to\)/);
+  assert.match(src, /next_due: after \? present\(after\) : null/);
+  assert.doesNotMatch(src, /addDays\(from, 7\)/);
+});
+
+test('a student\'s attendance history stops at today; future records come apart (LM04)', () => {
+  const rows = [
+    { id: 'future', date: '2026-10-02', status: 'excused' },
+    { id: 'today', date: '2026-10-01', status: 'present' },
+    { id: 'tue', date: '2026-09-29', status: 'absent' },
+    { id: 'old', date: '2026-09-01', status: 'absent' },
+    { id: 'far', date: '2026-10-20', status: 'excused' },
+    { id: 'bad', date: 'ayer', status: 'absent' },
+  ];
+  const { past, upcoming } = attendanceWindow(rows, '2026-10-01');
+  assert.deepEqual(past.map((r) => r.id), ['today', 'tue']);
+  assert.deepEqual(upcoming.map((r) => r.id), ['future', 'far']);
+  const src = read('base44/functions/lumiQuery/entry.ts');
+  assert.match(src, /attendanceWindow\(/);
+  assert.match(src, /upcoming: upcomingRows/);
+});
+
+test('Lumi never greets by an email handle (LP12)', () => {
+  // What Base44 stores when the person never typed a name.
+  assert.equal(displayUserName('h.josepablo+qa-padre', 'h.josepablo+qa-padre@gmail.com'), '');
+  assert.equal(displayUserName('h.josepablo+qa-padre'), '');
+  assert.equal(displayUserName('ana@example.com'), '');
+  assert.equal(displayUserName('ana.lopez', 'ana.lopez@example.com'), '');
+  assert.equal(displayUserName('maria_88'), '');
+  assert.equal(displayUserName(''), '');
+  assert.equal(displayUserName(null), '');
+  // Real names stay.
+  assert.equal(displayUserName('Jose Pablo Herrera', 'h.josepablo@gmail.com'), 'Jose Pablo Herrera');
+  assert.equal(displayUserName('Ana', 'ana@example.com'), '');
+  assert.equal(displayUserName('Ana', 'mama.ana@example.com'), 'Ana');
+  assert.equal(displayUserName('María José'), 'María José');
+  const src = read('base44/functions/lumiQuery/entry.ts');
+  assert.match(src, /user_name: displayUserName\(user\.full_name, user\.email\)/);
+});
+
+test('dirección\'s uniform list says it is open orders only (LD04)', () => {
+  const src = read('base44/functions/lumiQuery/entry.ts');
+  assert.match(src, /open_only: openOnly, delivered_count: deliveredCount/);
 });

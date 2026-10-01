@@ -7,6 +7,7 @@ import {
   conversationStorageKey,
   followUpsFor,
   getDisplayPayload,
+  canAskNewQuestion,
   hasReplyForTurn,
   mergeConversationMessages,
   mergeTimeline,
@@ -220,4 +221,21 @@ test('polling backs off on failed reads and is jittered, never faster than ±20%
   const src = readFileSync(new URL('../../src/components/lumi/LumiChat.jsx', import.meta.url), 'utf8');
   assert.match(src, /pollDelayWithBackoff\(base, failures\)/);
   assert.match(src, /document\.visibilityState === 'hidden'/);
+});
+
+// Replies are matched to questions by position. If a second question could be
+// sent while the first reply is pending, a late first answer landing after
+// question 2 satisfies hasReplyForTurn(…, 2) and polling stops before the
+// real second answer — with no socket, it would never appear.
+test('a new question waits for the pending reply; re-asking the same one does not', () => {
+  const lateFirstAnswer = [
+    { id: 'u1', role: 'user', content: 'pregunta 1' },
+    { id: 'u2', role: 'user', content: 'pregunta 2' },
+    { id: 'a1', role: 'assistant', content: 'respuesta a la 1' },
+  ];
+  assert.equal(hasReplyForTurn(lateFirstAnswer, 2), true, 'the positional match is why a second send must wait');
+  const pendingReply = { expectedUserTurns: 1, sentAt: 0 };
+  assert.equal(canAskNewQuestion({ pendingReply }), false);
+  assert.equal(canAskNewQuestion({ pendingReply, retryOfPending: true }), true);
+  assert.equal(canAskNewQuestion({ pendingReply: null }), true);
 });

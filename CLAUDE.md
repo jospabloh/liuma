@@ -1843,8 +1843,15 @@ Lo que se midió en los logs de funciones (`functions-mgmt/{fn}/logs`,
 - `guardedFamilyWrite/_policy.ts#checkAbsenceRequest`: ausencia para hoy o
   después (día de México) y una solicitud viva por alumno y día (`REJECTED`
   se puede volver a mandar): `400 ABSENCE_DATE_PAST` / `409
-  ABSENCE_DUPLICATE`. No es atómico: dos peticiones en el mismo instante
-  pueden pasar las dos.
+  ABSENCE_DUPLICATE`. La lectura previa no es atómica, así que después de
+  crear cada petición relee el día y `absenceRaceLoser` decide quién se
+  queda (la viva más antigua, luego id); la perdedora borra su propio
+  renglón y responde 409 — mismo patrón que `resolvePaymentRace`.
+- Lumi no acepta otra pregunta mientras espera una respuesta
+  (`canAskNewQuestion`): la respuesta se empareja con su pregunta por
+  posición, y una respuesta tardía a la 1 después de mandar la 2 pasaba por
+  la de la 2. «Reintentar» la misma pregunta sí se permite; al rendirse el
+  sondeo (3 min) el cuadro se libera.
 - Correos (`_templates.ts`, cuatro copias idénticas + `templates.js`, que
   ahora se comprueba renderizando los dos): «$1,350.00 MXN» sin depender de
   `Intl` (producción imprimía «$1350.00»), sin «recargos» (LIUMA no los
@@ -1929,7 +1936,6 @@ en inglés.
   mock), ni si las lecturas con token de usuario tienen presupuesto aparte (si
   no, el «after» es ~1 llamada por invocación optimista), ni los evals de
   Lumi tras el cambio, ni el chat sin socket en producción.
-- `checkAbsenceRequest` no es atómico (doble envío simultáneo).
 - `/login` y `/reset-password` hospedados por Base44 y sus correos siguen en
   inglés; el dominio de correo propio depende de la respuesta del POST.
 - Los pendientes de v1.8.2 (cargos cerrados `PAID` con abono parcial,

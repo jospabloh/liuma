@@ -92,6 +92,38 @@ export function checkAbsenceRequest(input: {
 }
 
 /**
+ * After an absence request is created: whether it lost a same-instant race.
+ * The pre-read in checkAbsenceRequest is not atomic, so two creates for the
+ * same child and day can both pass it. Every racer re-reads and applies the
+ * same rule: among live rows (not REJECTED) the oldest by created_date, then
+ * id, keeps the day; any other one is the loser and is removed by its own
+ * request. All racers agree on the keeper, so exactly one survives.
+ * `created` is added if the re-read does not show it yet.
+ */
+export function absenceRaceLoser(
+  rows: Array<Record<string, unknown>> | null | undefined,
+  created: Record<string, unknown>,
+): boolean {
+  const createdId = String(created?.id || '');
+  if (!createdId) return false;
+  const studentId = String(created.student_id || '');
+  const day = String(created.absence_date || '').slice(0, 10);
+  const live = (rows || []).filter((row) =>
+    row &&
+    String(row.student_id || '') === studentId &&
+    String(row.absence_date || '').slice(0, 10) === day &&
+    row.status !== 'REJECTED');
+  if (!live.some((row) => String(row.id) === createdId)) live.push(created);
+  live.sort((a, b) => {
+    const ta = String(a.created_date || '');
+    const tb = String(b.created_date || '');
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0;
+  });
+  return String(live[0].id) !== createdId;
+}
+
+/**
  * Who may write a family record for a student. Runs after the caller's
  * ACTIVE profile in the STUDENT's school (never a client-supplied school) has
  * been found.

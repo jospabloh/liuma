@@ -355,3 +355,13 @@ export function followUpsFor(role, lastPrompt = '') {
     .filter((chip) => chip.label.toLowerCase() !== asked)
     .slice(0, 3);
 }
+
+/**
+ * Whether a new question may be sent. Replies are matched to their question
+ * by turn position (hasReplyForTurn), so while one reply is still pending a
+ * second question would let the late first answer pass for the second one.
+ * Re-asking the pending question itself (the timeout's Reintentar) is fine.
+ */
+export function canAskNewQuestion({ pendingReply, retryOfPending = false } = {}) {
+  return !pendingReply || retryOfPending;
+}

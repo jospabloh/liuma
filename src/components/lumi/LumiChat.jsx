@@ -17,6 +17,7 @@ import {
   followUpsFor,
   getDisplayPayload,
   hasReplyForTurn,
+  canAskNewQuestion,
   mergeConversationMessages,
   mergeTimeline,
   messagesFromResponse,
@@ -224,7 +225,12 @@ export default function LumiChat({ onClose, userProfile }) {
     let failures = 0;
     const schedule = () => {
       const base = nextPollDelay(Date.now() - pendingReply.sentAt);
-      if (base === null) return;
+      if (base === null) {
+        // Polling gave up: free the composer (the timeout notice and its
+        // Reintentar stay on screen).
+        setPendingReply((current) => (current === pendingReply ? null : current));
+        return;
+      }
       timer = setTimeout(async () => {
         if (cancelled) return;
         // A background tab skips the read (the next visible tick catches up).
@@ -322,13 +328,19 @@ export default function LumiChat({ onClose, userProfile }) {
   }, [awaiting, addNotice]);
 
   const isBusy = connecting || sending || Boolean(awaiting);
+  // A new question waits until the previous one is answered (or polling
+  // gives up): the reply is matched to its turn by position, so a late
+  // answer to question 1 landing after question 2 would be taken as the
+  // answer to 2 and polling would stop before 2's real reply arrives.
+  const composerLocked = isBusy || !canAskNewQuestion({ pendingReply });
 
   // --- Sending -----------------------------------------------------------
 
-  const handleSend = async ({ intent, prompt, inputs } = {}) => {
+  const handleSend = async ({ intent, prompt, inputs, retryOfPending = false } = {}) => {
     const typed = prompt === undefined;
     const messageText = (prompt ?? input).trim();
     if (!messageText || isBusy || !conversationId) return;
+    if (!canAskNewQuestion({ pendingReply, retryOfPending })) return;
 
     const shown = visibleMessages(messages);
     const afterMessageId = shown.length ? shown[shown.length - 1].id : null;
@@ -410,7 +422,13 @@ export default function LumiChat({ onClose, userProfile }) {
         }
       }
       if (input.trim() === notice.retry.prompt) setInput('');
-      handleSend({ prompt: notice.retry.prompt, intent: notice.retry.intent });
+      // Re-asking the timed-out question itself is allowed while its reply is
+      // pending: a late answer to the first copy answers the same question.
+      handleSend({
+        prompt: notice.retry.prompt,
+        intent: notice.retry.intent,
+        retryOfPending: notice.kind === 'timeout',
+      });
     }
   };
 
@@ -685,7 +703,7 @@ export default function LumiChat({ onClose, userProfile }) {
                     key={action.intent}
                     type="button"
                     onClick={() => handleSend({ intent: action.intent, prompt: action.label })}
-                    disabled={isBusy || !conversationId}
+                    disabled={composerLocked || !conversationId}
                     className="mobile-touch-target block w-full text-left px-4 py-3 rounded-xl bg-muted hover:bg-muted/80 text-foreground text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {action.label}
@@ -788,14 +806,14 @@ export default function LumiChat({ onClose, userProfile }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleTextareaKeyDown}
-              placeholder="Escribe tu pregunta..."
+              placeholder={pendingReply && !awaiting ? 'Esperando la respuesta de Lumi…' : 'Escribe tu pregunta...'}
               enterKeyHint="send"
               className="mobile-input-no-zoom min-h-[48px] flex-1 resize-none rounded-3xl bg-muted border-0 px-4 py-3 leading-snug focus-visible:ring-2 focus-visible:ring-brand"
             />
             <Button
               type="submit"
               aria-label="Enviar mensaje"
-              disabled={!input.trim() || isBusy || !conversationId}
+              disabled={!input.trim() || composerLocked || !conversationId}
               className="mobile-touch-target shrink-0 rounded-full w-12 h-12 bg-brand text-white hover:bg-brand/90"
             >
               <Send className="w-5 h-5" />

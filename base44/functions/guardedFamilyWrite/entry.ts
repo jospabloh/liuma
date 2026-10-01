@@ -32,7 +32,7 @@
 //
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { FAMILY_OPERATIONS, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
+import { FAMILY_OPERATIONS, absenceRaceLoser, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
 
@@ -168,9 +168,10 @@ Deno.serve(async (req) => {
     }
 
     // One live absence request per child per day (checkAbsenceRequest): read
-    // what is already stored for that student and day. Not atomic — two
-    // requests in the same instant can both pass; the form disables its
-    // button while one is in flight, which is the case that happens.
+    // what is already stored for that student and day. The read is not
+    // atomic, so two requests in the same instant can both pass it; each one
+    // re-checks after its create (absenceRaceLoser) and the loser removes
+    // its own row.
     // Only for a day that can pass the date rules: a malformed or past day is
     // refused below without spending a read on it.
     const today = mexicoToday();
@@ -199,6 +200,23 @@ Deno.serve(async (req) => {
     const record = operation === 'create'
       ? await sr.entities[entity].create(built.data)
       : await sr.entities[entity].update(String(existing!.id), built.data);
+
+    if (entity === 'AbsenceNotification' && operation === 'create' && record?.id) {
+      const after = await sr.entities.AbsenceNotification.filter(
+        { student_id: studentId, absence_date: String(record.absence_date || built.data.absence_date || '').slice(0, 10) },
+        'created_date',
+        20,
+      );
+      if (absenceRaceLoser(after, { ...built.data, ...record })) {
+        try {
+          await sr.entities.AbsenceNotification.delete(String(record.id));
+        } catch (e) {
+          console.error('guardedFamilyWrite: duplicate absence could not be removed', record.id, (e as Error)?.message);
+          return bad(500, 'ABSENCE_CONFLICT_UNRESOLVED', `absence ${record.id} duplicates another request and could not be removed`);
+        }
+        return bad(409, 'ABSENCE_DUPLICATE', 'there is already a request for that day');
+      }
+    }
 
     await writeAudit(sr, {
       ...auditBase,

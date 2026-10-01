@@ -93,3 +93,24 @@ test('a PENDING profile reads and writes nothing, and sees the waiting screen', 
   assert.match(home, /userProfile\.status === 'PENDING'\) \{\s*return <PendingApproval \/>/);
   assert.match(read('src/components/ui/PendingApproval.jsx'), /Solicitud enviada/);
 });
+
+// Por qué importa: el QA en vivo (2026-10-01) vio que el admin aprobaba como
+// Maestro y el perfil se quedaba Padre (el rol que PIDIÓ el solicitante). La
+// causa fue una copia desplegada atrasada de approveProfile, no el código de
+// main; este test fija el contrato para que el rol elegido nunca vuelva a
+// perderse: el rol final sale de `body.role` ANTES que del rol pedido, se
+// escribe en UserProfile.app_role y la respuesta lo devuelve (`appRole`), que
+// es lo que el QA en vivo compara contra la llamada.
+test('the role the approving admin chose is the one written and returned', () => {
+  const src = read('base44/functions/approveProfile/entry.ts');
+  assert.match(src, /const finalRole = decision\.status === 'ACTIVE' && rawRole \? String\(rawRole\) : String\(target\.app_role \|\| ''\);/);
+  assert.match(src, /patch\.app_role = finalRole/);
+  assert.match(src, /UserProfile\.update\(target\.id, patch\)/);
+  assert.match(src, /appRole: decision\.status === 'ACTIVE' \? finalRole : target\.app_role/);
+});
+
+test('a PENDING or SUSPENDED profile gets no navigation rail (no FAMILIA menu beside the waiting screen)', () => {
+  const nav = read('src/components/nav/NavContext.jsx');
+  assert.match(nav, /profile\?\.status === 'PENDING' \|\| profile\?\.status === 'SUSPENDED'/);
+  assert.match(nav, /const role = inactive \? null : profile\?\.app_role \|\| null;/);
+});

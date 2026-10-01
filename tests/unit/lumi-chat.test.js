@@ -8,9 +8,21 @@ import {
   followUpsFor,
   getDisplayPayload,
   hasReplyForTurn,
+  mergeConversationMessages,
   mergeTimeline,
+  messagesFromResponse,
+  nextPollDelay,
   pendingToolLabel,
+  pollDelayWithBackoff,
+  LUMI_POLL_MAX_BACKOFF_MS,
+  shouldPoll,
+  userMessageIdForTurn,
   visibleMessages,
+  LUMI_POLL_GIVE_UP_MS,
+  LUMI_POLL_INTERVAL_MS,
+  LUMI_POLL_SLOW_INTERVAL_MS,
+  LUMI_REPLY_TIMEOUT_MS,
+  LUMI_SOCKET_FRESH_MS,
 } from '../../src/lib/lumi/chat.js';
 import { buildCapabilityRequest, evaluateCapabilityAccess } from '../../src/lib/lumi/capabilities.js';
 
@@ -120,4 +132,92 @@ test('the corner ThemeSwitcher sits above the Lumi bubble on phones and desktop'
   assert.ok(desktopVar >= desktopBottom + desktopHeight + 0.5, `desktop: switcher ${desktopVar}rem vs Lumi top ${desktopBottom + desktopHeight}rem`);
   assert.match(css, /html\[data-lumi-open\] \[data-theme-switcher\]\s*\{\s*visibility:\s*hidden/);
   assert.match(bubble, /'data-lumi-bubble'/, 'GlobalLumiBubble must set the attribute the CSS keys off');
+});
+
+// --- QA r5 on v1.8.2: the socket never connected ------------------------------
+// The user sent a question, nothing came back over the socket, and 30s later
+// the question was gone behind "Lumi está tardando…" — while GET conversation
+// already held the full answer.
+
+test('while a reply is owed the chat polls, faster before the timeout, then gives up', () => {
+  assert.equal(nextPollDelay(0), LUMI_POLL_INTERVAL_MS);
+  assert.ok(LUMI_POLL_INTERVAL_MS < LUMI_REPLY_TIMEOUT_MS / 5, 'several polls before the timeout notice');
+  assert.equal(nextPollDelay(LUMI_REPLY_TIMEOUT_MS + 1), LUMI_POLL_SLOW_INTERVAL_MS);
+  assert.equal(nextPollDelay(LUMI_POLL_GIVE_UP_MS), null);
+  // A live socket makes polling unnecessary; a quiet one does not.
+  assert.equal(shouldPoll(10_000, 0), true);
+  assert.equal(shouldPoll(10_000, 10_000 - 1000), false);
+  assert.equal(shouldPoll(10_000, 10_000 - LUMI_SOCKET_FRESH_MS), true);
+});
+
+test('a polled conversation puts the question and the reply on screen', () => {
+  const before = [user('u1', 'Hola'), assistant('a1', '¡Hola!')];
+  const polled = [...before, user('u2', '¿Qué tarea hay?'), assistant('a2', 'Hay 2 tareas.')];
+  const merged = mergeConversationMessages(before, messagesFromResponse({ id: 'conv', messages: polled }));
+  assert.deepEqual(merged.map((m) => m.id), ['u1', 'a1', 'u2', 'a2']);
+  assert.equal(hasReplyForTurn(merged, 2), true);
+});
+
+test('a stale socket snapshot never removes what a poll already showed', () => {
+  // The SDK's socket keeps its own copy from when it subscribed: after a poll
+  // added u2/a2, its next update can arrive without u2.
+  const onScreen = [user('u1', 'Hola'), assistant('a1', '¡Hola!'), user('u2', '¿Tareas?'), assistant('a2', 'Hay 2')];
+  const socket = [user('u1', 'Hola'), assistant('a1', '¡Hola!'), assistant('a2', 'Hay 2 tareas.')];
+  const merged = mergeConversationMessages(onScreen, socket);
+  assert.deepEqual(merged.map((m) => m.id), ['u1', 'a1', 'u2', 'a2']);
+  assert.equal(merged[3].content, 'Hay 2 tareas.');
+});
+
+test('a poll never rewinds a reply the socket is streaming', () => {
+  const streaming = [user('u1', 'x'), assistant('a1', 'Hay 2 tareas para el martes')];
+  const olderPoll = [user('u1', 'x'), assistant('a1', 'Hay 2 tar')];
+  assert.equal(mergeConversationMessages(streaming, olderPoll), streaming, 'unchanged list, no re-render');
+  const edited = [user('u1', 'x'), assistant('a1', 'Corregido')];
+  assert.equal(mergeConversationMessages(streaming, edited)[1].content, 'Corregido');
+});
+
+test('the addMessage response is merged whether it is a message or a conversation', () => {
+  assert.deepEqual(messagesFromResponse(user('u9', 'hola')).map((m) => m.id), ['u9']);
+  assert.equal(messagesFromResponse({ id: 'conv', messages: [] }).length, 0);
+  assert.equal(messagesFromResponse(undefined), null);
+  assert.equal(messagesFromResponse({ ok: true }), null);
+  const merged = mergeConversationMessages([user('u1', 'a'), assistant('a1', 'b')], [user('u2', 'c')]);
+  assert.deepEqual(merged.map((m) => m.id), ['u1', 'a1', 'u2']);
+  assert.deepEqual(mergeConversationMessages([], [user('u1', 'a')]).map((m) => m.id), ['u1']);
+  assert.deepEqual(mergeConversationMessages([user('u1', 'a')], null).map((m) => m.id), ['u1']);
+});
+
+test('the timeout notice is anchored under the question once the server has it', () => {
+  const messages = [user('u1', 'a'), assistant('a1', 'b'), user('u2', 'c')];
+  assert.equal(userMessageIdForTurn(messages, 2), 'u2');
+  assert.equal(userMessageIdForTurn(messages, 3), null);
+});
+
+test('LumiChat keeps the question, polls without the socket and checks before re-asking', () => {
+  const src = readFileSync(new URL('../../src/components/lumi/LumiChat.jsx', import.meta.url), 'utf8');
+  // Polling while a reply is owed, through the SDK's HTTPS read.
+  assert.match(src, /base44\.agents\.getConversation\(id\)/);
+  assert.match(src, /nextPollDelay\(Date\.now\(\) - pendingReply\.sentAt\)/);
+  assert.match(src, /shouldPoll\(Date\.now\(\), lastSocketUpdateRef\.current\)/);
+  // Socket updates merge; they no longer replace the list.
+  assert.doesNotMatch(src, /setMessages\(data\?\.messages \|\| \[\]\)/);
+  assert.match(src, /mergeConversationMessages\(prev, data\?\.messages\)/);
+  // The timeout notice carries the question and renders it until the echo.
+  assert.match(src, /prompt: awaiting\.prompt,\n\s+text: 'Lumi está tardando/);
+  assert.match(src, /unconfirmedPrompt/);
+  // Reintentar looks for a late answer before asking twice.
+  assert.match(src, /if \(merged && hasReplyForTurn\(merged, notice\.expectedUserTurns\)\) return;/);
+});
+
+test('polling backs off on failed reads and is jittered, never faster than ±20%', () => {
+  const mid = () => 0.5;
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 0, mid), LUMI_POLL_INTERVAL_MS);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 1, mid), LUMI_POLL_INTERVAL_MS * 2);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 50, mid), LUMI_POLL_MAX_BACKOFF_MS);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 0, () => 0), LUMI_POLL_INTERVAL_MS * 0.8);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 0, () => 1), LUMI_POLL_INTERVAL_MS * 1.2);
+  assert.equal(pollDelayWithBackoff(LUMI_POLL_INTERVAL_MS, 0, () => NaN), LUMI_POLL_INTERVAL_MS);
+  const src = readFileSync(new URL('../../src/components/lumi/LumiChat.jsx', import.meta.url), 'utf8');
+  assert.match(src, /pollDelayWithBackoff\(base, failures\)/);
+  assert.match(src, /document\.visibilityState === 'hidden'/);
 });

@@ -195,6 +195,56 @@ export function fullName(person: { first_name?: unknown; last_name?: unknown } |
   return [person.first_name, person.last_name].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
 }
 
+// The name Lumi may greet someone by. Base44 fills User.full_name with the
+// email's local part when the person never typed a name ("h.josepablo+qa-padre"),
+// and Lumi turned that into "Hola, José Pablo" (QA r5, LP12). A handle is not
+// a name: return '' and let the prompt greet without one.
+export function displayUserName(fullName: unknown, email?: unknown): string {
+  const name = String(fullName ?? '').trim();
+  if (!name || name.includes('@')) return '';
+  const local = String(email ?? '').split('@')[0].trim().toLowerCase();
+  if (local && name.toLowerCase() === local) return '';
+  // One token carrying handle characters (dots, plus, underscore, digits).
+  if (!/\s/.test(name) && /[.+_\d]/.test(name)) return '';
+  return name;
+}
+
+// --- Date windows the model must not have to guess --------------------------
+
+// "¿Qué tareas tiene pendientes?" has no end date. With a 7-day default the
+// answer was "no hay tareas" while two were due in 19 days (QA r5, LP01) —
+// and Lumi invented a sync delay to explain the empty list. The default now
+// covers a month, and an explicit `to` is still honoured.
+export const HOMEWORK_DEFAULT_DAYS = 30;
+export const HOMEWORK_MAX_DAYS = 120;
+
+export function homeworkRange(today: string, from?: unknown, to?: unknown): { from: string; to: string } {
+  const start = isDateOnly(from) ? String(from) : today;
+  let end = isDateOnly(to) ? String(to) : addDays(start, HOMEWORK_DEFAULT_DAYS);
+  if (end < start) end = start;
+  const cap = addDays(start, HOMEWORK_MAX_DAYS);
+  return { from: start, to: end > cap ? cap : end };
+}
+
+// A student's attendance history ("¿cuántas faltas lleva?") is the past
+// `days` days UP TO TODAY. An approved absence request writes a future
+// 'excused' row; before v1.8.3 it was counted among the past ones and Lumi
+// said "faltó el viernes" on Thursday (QA r5, LM04). Future rows are returned
+// apart, as what is scheduled.
+export function attendanceWindow<T extends { date?: unknown }>(rows: T[] = [], today: string, days = 14): { past: T[]; upcoming: T[] } {
+  const since = addDays(today, -days);
+  const past: T[] = [];
+  const upcoming: T[] = [];
+  for (const row of rows || []) {
+    const date = String(row?.date || '');
+    if (!isDateOnly(date)) continue;
+    if (date > today) upcoming.push(row);
+    else if (date >= since) past.push(row);
+  }
+  upcoming.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return { past, upcoming };
+}
+
 // --- Student name resolution ---------------------------------------------------
 
 export function normalizeName(value: unknown): string {

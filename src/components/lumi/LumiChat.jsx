@@ -17,10 +17,16 @@ import {
   followUpsFor,
   getDisplayPayload,
   hasReplyForTurn,
+  mergeConversationMessages,
   mergeTimeline,
+  messagesFromResponse,
+  nextPollDelay,
   pendingToolLabel,
+  pollDelayWithBackoff,
   quickActionTitleFor,
   quickActionsFor,
+  shouldPoll,
+  userMessageIdForTurn,
   visibleMessages,
 } from '@/lib/lumi/chat';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
@@ -85,8 +91,12 @@ export default function LumiChat({ onClose, userProfile }) {
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState(null);
   const [connecting, setConnecting] = useState(true);
-  // { expectedUserTurns, prompt } while a reply is owed, else null.
+  // { expectedUserTurns, prompt } while the typing indicator is up (until
+  // the reply or the 30s timeout), else null.
   const [awaiting, setAwaiting] = useState(null);
+  // { expectedUserTurns, sentAt } from a successful send until its reply is
+  // on screen — it outlives the timeout: the chat keeps polling for it.
+  const [pendingReply, setPendingReply] = useState(null);
   const [sending, setSending] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
 
@@ -97,6 +107,12 @@ export default function LumiChat({ onClose, userProfile }) {
   // Latest server messages, for the reply-timeout callback (which must not
   // restart its 30s clock on every streamed update).
   const messagesRef = useRef([]);
+  // When the socket last delivered anything (0 = never): polling only runs
+  // while it is quiet, so a working socket costs no extra requests.
+  const lastSocketUpdateRef = useRef(0);
+  // The conversation a late poll belongs to; a reply for a conversation the
+  // user already replaced must not land in the new one.
+  const conversationIdRef = useRef(null);
   const titleId = useId();
 
   const addNotice = useCallback((notice) => {
@@ -163,18 +179,81 @@ export default function LumiChat({ onClose, userProfile }) {
   }, []);
 
   useEffect(() => {
+    conversationIdRef.current = conversationId;
     if (!conversationId) return undefined;
-    const unsubscribe = base44.agents.subscribeToConversation(conversationId, (data) => {
-      setMessages(data?.messages || []);
-    });
-    return () => unsubscribe();
+    lastSocketUpdateRef.current = 0;
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = base44.agents.subscribeToConversation(conversationId, (data) => {
+        lastSocketUpdateRef.current = Date.now();
+        // Merge, never replace: the SDK's copy predates what polling added.
+        setMessages((prev) => mergeConversationMessages(prev, data?.messages));
+      });
+    } catch (error) {
+      // No socket at all: polling (below) carries the replies.
+      console.warn('Lumi: live updates unavailable, polling instead', error);
+    }
+    return () => {
+      try {
+        unsubscribe?.();
+      } catch {
+        // A socket that never connected may also fail to unsubscribe.
+      }
+    };
   }, [conversationId]);
+
+  // Fetch the conversation over HTTPS while a reply is owed and the socket is
+  // quiet (QA r5: the socket never connected and the answer, already on the
+  // server, never reached the screen).
+  const refreshConversation = useCallback(async (id) => {
+    if (!id) return null;
+    const conversation = await base44.agents.getConversation(id);
+    const incoming = messagesFromResponse(conversation);
+    if (!incoming || conversationIdRef.current !== id) return null;
+    setMessages((prev) => mergeConversationMessages(prev, incoming));
+    // What the screen will hold, for a caller deciding whether to re-ask
+    // (the state updater itself may run later).
+    return mergeConversationMessages(messagesRef.current, incoming);
+  }, []);
+
+  useEffect(() => {
+    if (!conversationId || !pendingReply) return undefined;
+    let cancelled = false;
+    let timer = null;
+    // Consecutive failed reads: each one doubles the next wait (capped).
+    let failures = 0;
+    const schedule = () => {
+      const base = nextPollDelay(Date.now() - pendingReply.sentAt);
+      if (base === null) return;
+      timer = setTimeout(async () => {
+        if (cancelled) return;
+        // A background tab skips the read (the next visible tick catches up).
+        const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+        if (!hidden && shouldPoll(Date.now(), lastSocketUpdateRef.current)) {
+          try {
+            await refreshConversation(conversationId);
+            failures = 0;
+          } catch (error) {
+            failures += 1;
+            console.warn('Lumi: polling the conversation failed', error);
+          }
+        }
+        if (!cancelled) schedule();
+      }, pollDelayWithBackoff(base, failures));
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [conversationId, pendingReply, refreshConversation]);
 
   const startNewConversation = () => {
     writeStoredConversationId(storageKey, null);
     setMessages([]);
     setNotices([]);
     setAwaiting(null);
+    setPendingReply(null);
     setConversationId(null);
     startConversation({ fresh: true });
   };
@@ -188,26 +267,54 @@ export default function LumiChat({ onClose, userProfile }) {
     if (awaiting && hasReplyForTurn(messages, awaiting.expectedUserTurns)) {
       setAwaiting(null);
     }
-    // A reply that lands after the timeout notice makes the notice (and its
-    // Reintentar, which would re-ask the same question) wrong: drop it.
+    if (pendingReply && hasReplyForTurn(messages, pendingReply.expectedUserTurns)) {
+      setPendingReply(null);
+    }
     setNotices((prev) => {
-      const stale = (notice) => notice.kind === 'timeout' && hasReplyForTurn(messages, notice.expectedUserTurns);
-      return prev.some(stale) ? prev.filter((notice) => !stale(notice)) : prev;
+      let changed = false;
+      const next = [];
+      for (const notice of prev) {
+        if (notice.kind !== 'timeout') {
+          next.push(notice);
+          continue;
+        }
+        // A reply that lands after the timeout notice makes the notice (and
+        // its Reintentar, which would re-ask the same question) wrong: drop it.
+        if (hasReplyForTurn(messages, notice.expectedUserTurns)) {
+          changed = true;
+          continue;
+        }
+        // The server's copy of the question arrived: show the notice under
+        // it rather than above it.
+        const anchor = userMessageIdForTurn(messages, notice.expectedUserTurns);
+        if (anchor && anchor !== notice.afterMessageId) {
+          next.push({ ...notice, afterMessageId: anchor });
+          changed = true;
+          continue;
+        }
+        next.push(notice);
+      }
+      return changed ? next : prev;
     });
-  }, [messages, awaiting]);
+  }, [messages, awaiting, pendingReply]);
 
   useEffect(() => {
     if (!awaiting) return undefined;
     const timer = setTimeout(() => {
       setAwaiting(null);
-      const shown = visibleMessages(messagesRef.current);
+      const current = messagesRef.current;
+      const shown = visibleMessages(current);
       addNotice({
         kind: 'timeout',
-        // After the last thing on screen (normally the user's own question),
-        // not at the top of a long conversation where nobody would see it.
-        afterMessageId: shown.length ? shown[shown.length - 1].id : null,
+        // Under the user's own question once the server has it; otherwise
+        // after the last thing on screen, never at the top of a long chat.
+        afterMessageId: userMessageIdForTurn(current, awaiting.expectedUserTurns)
+          || (shown.length ? shown[shown.length - 1].id : null),
         expectedUserTurns: awaiting.expectedUserTurns,
-        text: 'Lumi está tardando más de lo normal. Si la respuesta no aparece, intenta de nuevo.',
+        // The question itself: shown with the notice until the server's copy
+        // arrives, so a slow reply never erases what the user asked.
+        prompt: awaiting.prompt,
+        text: 'Lumi está tardando más de lo normal. Seguimos esperando su respuesta; si no aparece, intenta de nuevo.',
         retry: { type: 'send', prompt: awaiting.prompt, intent: awaiting.intent },
       });
     }, LUMI_REPLY_TIMEOUT_MS);
@@ -247,17 +354,26 @@ export default function LumiChat({ onClose, userProfile }) {
     if (typed) setInput('');
     setSending(true);
 
+    // A question still waiting for its reply counts too: the server has it
+    // even if its echo never reached this screen.
+    const expectedUserTurns = Math.max(countUserTurns(messages), pendingReply?.expectedUserTurns || 0) + 1;
     // Set before the request so the user's words show immediately (see the
     // optimistic bubble below) even if the socket echo is slow.
-    setAwaiting({ expectedUserTurns: countUserTurns(messages) + 1, prompt: messageText, intent });
+    setAwaiting({ expectedUserTurns, prompt: messageText, intent });
 
     try {
       logAiDecision(userProfile, conversationId, capabilityRequest, 'allow', 'Capability policy allowed');
       // addMessage only needs the id — no extra getConversation round trip.
-      await base44.agents.addMessage({ id: conversationId }, {
+      const sent = await base44.agents.addMessage({ id: conversationId }, {
         role: 'user',
         content: JSON.stringify(capabilityRequest),
       });
+      // Whatever the server echoed back goes on screen now, socket or not.
+      const echoed = messagesFromResponse(sent);
+      if (echoed && conversationIdRef.current === conversationId) {
+        setMessages((prev) => mergeConversationMessages(prev, echoed));
+      }
+      setPendingReply({ expectedUserTurns, sentAt: Date.now() });
     } catch (error) {
       console.error('Error sending message:', error);
       setAwaiting(null);
@@ -274,7 +390,7 @@ export default function LumiChat({ onClose, userProfile }) {
     }
   };
 
-  const handleRetry = (notice) => {
+  const handleRetry = async (notice) => {
     setNotices((prev) => prev.filter((item) => item.id !== notice.id));
     // The button that had focus is about to unmount with its notice.
     textareaRef.current?.focus({ preventScroll: true });
@@ -283,6 +399,16 @@ export default function LumiChat({ onClose, userProfile }) {
       return;
     }
     if (notice.retry?.type === 'send') {
+      // A timed-out question already reached the server: look before asking
+      // it twice — the answer may be there.
+      if (notice.kind === 'timeout') {
+        try {
+          const merged = await refreshConversation(conversationId);
+          if (merged && hasReplyForTurn(merged, notice.expectedUserTurns)) return;
+        } catch (error) {
+          console.warn('Lumi: could not check for a late reply', error);
+        }
+      }
       if (input.trim() === notice.retry.prompt) setInput('');
       handleSend({ prompt: notice.retry.prompt, intent: notice.retry.intent });
     }
@@ -398,10 +524,27 @@ export default function LumiChat({ onClose, userProfile }) {
   const followUps = showFollowUps ? followUpsFor(role, lastPromptRef.current) : [];
   // Starter prompts stay until there is a real exchange, so a connection
   // error or a denied chip does not leave the user with nothing to tap.
-  const isEmpty = shownMessages.length === 0 && !awaiting;
+  // A timed-out question is an exchange too: it stays on screen (with its
+  // notice) instead of the starter list.
+  const isEmpty = shownMessages.length === 0 && !awaiting && !notices.some((notice) => notice.kind === 'timeout');
   const optimisticPrompt = awaiting && countUserTurns(messages) < awaiting.expectedUserTurns ? awaiting.prompt : null;
 
   const renderNotice = (notice) => {
+    // The question of a timed-out turn, until the server's copy is on screen.
+    const unconfirmedPrompt = notice.kind === 'timeout' && notice.prompt
+      && countUserTurns(messages) < notice.expectedUserTurns ? notice.prompt : null;
+    if (unconfirmedPrompt) {
+      return (
+        <div className="space-y-2">
+          <div className="flex justify-end">
+            <div className="max-w-[85%] rounded-2xl bg-brand px-4 py-3 text-white">
+              <p className="whitespace-pre-wrap break-words text-sm">{unconfirmedPrompt}</p>
+            </div>
+          </div>
+          {renderNotice({ ...notice, prompt: null })}
+        </div>
+      );
+    }
     if (notice.kind === 'denied') {
       return (
         <div className="space-y-2">

@@ -14,6 +14,133 @@ import { LUMI_INTENTS } from './capabilities.js';
 /** How long we wait for a non-empty assistant reply before telling the user. */
 export const LUMI_REPLY_TIMEOUT_MS = 30000;
 
+// --- Not depending on the socket (QA r5 on v1.8.2) -----------------------------
+//
+// Replies stream over the SDK's socket (subscribeToConversation). When that
+// socket never connects — a proxy that blocks wss, a phone switching networks
+// — no update ever arrives: the chat showed "Lumi está tardando…" after 30s
+// and the user's question vanished, although the server had answered (GET
+// conversation held the full reply). Now, while a reply is owed and the
+// socket has been quiet, the chat polls the conversation over plain HTTPS,
+// and the question stays on screen until the server's copy replaces it.
+
+/** First poll and cadence while the reply is still expected soon. */
+export const LUMI_POLL_INTERVAL_MS = 3000;
+/** Cadence once the timeout notice is up: the reply may still land. */
+export const LUMI_POLL_SLOW_INTERVAL_MS = 8000;
+/** After this long without a reply, stop polling (Reintentar stays). */
+export const LUMI_POLL_GIVE_UP_MS = 180000;
+/** A socket update this recent means streaming works: skip that poll. */
+export const LUMI_SOCKET_FRESH_MS = 5000;
+
+/**
+ * Delay before the next poll, given how long ago the question was sent, or
+ * null to stop polling.
+ */
+export function nextPollDelay(elapsedMs) {
+  const elapsed = Math.max(0, Number(elapsedMs) || 0);
+  if (elapsed >= LUMI_POLL_GIVE_UP_MS) return null;
+  return elapsed < LUMI_REPLY_TIMEOUT_MS ? LUMI_POLL_INTERVAL_MS : LUMI_POLL_SLOW_INTERVAL_MS;
+}
+
+/** Longest wait between polls while the read keeps failing. */
+export const LUMI_POLL_MAX_BACKOFF_MS = 30000;
+
+/**
+ * The delay actually used: doubled per consecutive failed poll (a 429 or an
+ * outage must not be hammered every 3s), capped, then spread ±20% so many
+ * open chats do not poll in lockstep. `random` is injectable for tests.
+ */
+export function pollDelayWithBackoff(baseMs, failures = 0, random = Math.random) {
+  const n = Math.max(0, Math.min(10, Number(failures) || 0));
+  const backed = Math.min(LUMI_POLL_MAX_BACKOFF_MS, baseMs * 2 ** n);
+  const r = Number(random());
+  const jitter = 0.8 + 0.4 * (Number.isFinite(r) ? Math.min(1, Math.max(0, r)) : 0.5);
+  return Math.round(backed * jitter);
+}
+
+/** Whether a poll is worth making now (the socket has been quiet). */
+export function shouldPoll(nowMs, lastSocketUpdateMs) {
+  return !lastSocketUpdateMs || nowMs - lastSocketUpdateMs >= LUMI_SOCKET_FRESH_MS;
+}
+
+/**
+ * The message list in an SDK response: a conversation ({ messages }) or a
+ * single message ({ id, role }). Null when it is neither.
+ */
+export function messagesFromResponse(response) {
+  if (Array.isArray(response?.messages)) return response.messages;
+  if (response && typeof response === 'object' && response.id && response.role) return [response];
+  return null;
+}
+
+function rawText(message) {
+  const content = message?.content;
+  return typeof content === 'string' ? content : '';
+}
+
+// Of two copies of the same message, the one to keep. The incoming copy wins
+// unless it is an older snapshot of a reply still streaming (its text is a
+// strict prefix of what is already on screen) — a poll must not rewind text
+// the socket already delivered.
+function fresher(current, incoming) {
+  const a = rawText(current);
+  const b = rawText(incoming);
+  if (a.length > b.length && a.startsWith(b)) return current;
+  // Same message, same state: keep the object on screen (no re-render).
+  if (a === b && JSON.stringify(current) === JSON.stringify(incoming)) return current;
+  return incoming;
+}
+
+/**
+ * Merge a server snapshot (socket update, poll or addMessage response) into
+ * what is on screen, never losing a message. The SDK's socket keeps its own
+ * copy of the conversation from when it subscribed, so once a poll has added
+ * messages, a later socket update can arrive WITHOUT them; replacing the list
+ * would make the user's question disappear again. Known messages are updated
+ * in place; new ones go right after the message that precedes them in the
+ * snapshot (or at the end).
+ */
+export function mergeConversationMessages(current = [], incoming) {
+  if (!Array.isArray(incoming)) return current;
+  const base = Array.isArray(current) ? current : [];
+  if (base.length === 0) return incoming;
+  if (incoming.length === 0) return base;
+  if (![...base, ...incoming].every((message) => message?.id)) {
+    return incoming.length >= base.length ? incoming : base;
+  }
+  const result = [...base];
+  const indexOf = (id) => result.findIndex((message) => message.id === id);
+  let changed = false;
+  incoming.forEach((message, i) => {
+    const at = indexOf(message.id);
+    if (at !== -1) {
+      const kept = fresher(result[at], message);
+      if (kept !== result[at]) {
+        result[at] = kept;
+        changed = true;
+      }
+      return;
+    }
+    const prev = i > 0 ? indexOf(incoming[i - 1].id) : -1;
+    if (prev !== -1) result.splice(prev + 1, 0, message);
+    else result.push(message);
+    changed = true;
+  });
+  return changed ? result : base;
+}
+
+/** Id of the n-th (1-based) user message, or null. */
+export function userMessageIdForTurn(messages = [], turn = 0) {
+  let seen = 0;
+  for (const message of messages) {
+    if (message?.role !== 'user') continue;
+    seen += 1;
+    if (seen === turn) return message.id || null;
+  }
+  return null;
+}
+
 /** sessionStorage key for the current conversation, one per signed-in user. */
 export function conversationStorageKey(userKey) {
   return `liuma.lumi.conversation.${userKey || 'anon'}`;

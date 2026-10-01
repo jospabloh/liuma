@@ -203,9 +203,10 @@ html, body, #root {
   }
   /* 16px unless the screen is wide AND driven by a mouse — exactly Input's
      `text-base md:fine:text-sm`. Below 16px iOS Safari zooms the page when the
-     field is focused, and an iPad with a trackpad reports pointer: fine, so
-     "14px except on coarse" (the rule until v1.8.3) still zoomed there; live
-     QA measured the edit-student blood-type select at 14px. */
+     field is focused. The rule until v1.8.3 was "14px except on coarse", which
+     trusted the pointer query alone: a phone-width viewport that reports
+     pointer: fine (live QA measured the edit-student blood-type select at 14px
+     at 390px) got the zooming size. Now width decides too, like Input. */
   @media (min-width: 768px) and (pointer: fine) {
     .ui-field {
       font-size: 0.875rem;

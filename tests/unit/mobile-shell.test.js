@@ -139,7 +139,8 @@ test('text fields keep 16px on touch screens at every width', () => {
   }
   // .ui-field (native <select>s) follows Input's rule exactly: 16px, and 14px
   // only when the screen is wide AND mouse-driven. "14px except on coarse"
-  // still zoomed an iPad with a trackpad (pointer: fine) — v1.8.3.
+  // gave a phone-width viewport reporting pointer: fine the zooming size
+  // (live QA, blood-type select at 390px) — v1.8.3.
   const css = read('src/index.css');
   const base = css.match(/\.ui-field \{[^}]*\}/)?.[0] ?? '';
   assert.match(base, /font-size: 1rem;/, '.ui-field must default to 16px');

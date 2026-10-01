@@ -19,7 +19,7 @@ import {
 } from '../../base44/functions/guardedFamilyWrite/_policy.ts';
 import { mexicoToday as moneyToday } from '../../base44/functions/guardedEntityWrite/_money.ts';
 import { collapseInbox, unreadNoticeCount } from '../../src/lib/notifications/inbox.js';
-import { pluralEs } from '../../src/lib/pluralEs.js';
+import { countLabel } from '../../src/lib/spanishText.js';
 import { studentClassroomLabel } from '../../src/lib/studentClassroomLabel.js';
 import { humanizeError } from '../../src/lib/errorMessages.js';
 
@@ -92,11 +92,13 @@ test('the teacher inbox says when it failed to load instead of looking empty', (
 // --- 2. small copy: "3 salónes", blank alert author, "Sin salón" --------------
 
 test('Spanish plurals are spelled out, never "salón" + "es"', () => {
-  assert.equal(pluralEs(1, 'salón', 'salones'), '1 salón');
-  assert.equal(pluralEs(3, 'salón', 'salones'), '3 salones');
-  assert.equal(pluralEs(0, 'salón', 'salones'), '0 salones');
+  // The existing helper (spanishText.countLabel), not a second copy of it.
+  assert.equal(countLabel(1, 'salón', 'salones'), '1 salón');
+  assert.equal(countLabel(3, 'salón', 'salones'), '3 salones');
+  assert.equal(countLabel(0, 'salón', 'salones'), '0 salones');
   const teacher = read('src/components/home/TeacherHome.jsx');
-  assert.match(teacher, /pluralEs\(classrooms\.length, 'salón', 'salones'\)/);
+  assert.match(teacher, /countLabel\(classrooms\.length, 'salón', 'salones'\)/);
+  assert.match(teacher, /countLabel\(unreadUrgentCount, 'urgente sin leer', 'urgentes sin leer'\)/);
   assert.doesNotMatch(teacher, /salón\$\{/);
 });
 
@@ -153,7 +155,9 @@ test('one live request per child per day; a rejected one may be filed again', ()
 test('the function reads the stored same-day requests and uses the school\'s today', () => {
   const entry = read('base44/functions/guardedFamilyWrite/entry.ts');
   assert.match(entry, /sr\.entities\.AbsenceNotification\.filter\(\{ student_id: studentId, absence_date: day \}/);
-  assert.match(entry, /today: mexicoToday\(\),\s*sameDayAbsences,/);
+  assert.match(entry, /const today = mexicoToday\(\);/);
+  assert.match(entry, /isCalendarDate\(day\) && day >= today\s*\?\s*await sr\.entities\.AbsenceNotification\.filter/);
+  assert.match(entry, /\btoday,\s*sameDayAbsences,/);
   assert.match(entry, /built\.code === 'ABSENCE_DUPLICATE' \? 409 : 400/);
   // Same Mexico day as the payments code, even at 20:00 local (02:00 UTC).
   const evening = new Date('2026-10-02T02:00:00.000Z');

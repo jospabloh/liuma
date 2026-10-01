@@ -13,7 +13,7 @@ import { Card } from "@/components/ui/card";
 import { formatLocalDate, parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import { diaryCoverage } from '@/lib/diaryCoverage';
 import { unreadNoticeCount } from '@/lib/notifications/inbox';
-import { pluralEs } from '@/lib/pluralEs';
+import { countLabel } from '@/lib/spanishText';
 
 // `events`: upcoming events the server already limited to the school-wide
 // ones and this teacher's classrooms (read with the rest of the home lists).
@@ -161,7 +161,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             <BigTile
               icon={ClipboardList}
               title="Bitácoras de hoy"
-              subtitle={pluralEs(classrooms.length, 'salón', 'salones')}
+              subtitle={countLabel(classrooms.length, 'salón', 'salones')}
               badge={studentsMissingDiary.length}
               badgeColor="bg-amber-500"
               href={createPageUrl('BitacorasMaestro')}
@@ -194,7 +194,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             <BigTile
               icon={Bell}
               title="Avisos"
-              subtitle={unreadUrgentCount > 0 ? pluralEs(unreadUrgentCount, 'urgente sin leer', 'urgentes sin leer') : 'Enviar comunicado'}
+              subtitle={unreadUrgentCount > 0 ? countLabel(unreadUrgentCount, 'urgente sin leer', 'urgentes sin leer') : 'Enviar comunicado'}
               href={createPageUrl('AvisosMaestro')}
               badge={unreadUrgentCount}
               delay={0.05}

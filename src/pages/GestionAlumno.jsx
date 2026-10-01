@@ -68,7 +68,10 @@ export default function GestionAlumno() {
     queryKey: ['classroom', student?.classroom_id],
     queryFn: async () => {
       const classrooms = await schoolRead('Classroom', { id: student.classroom_id });
-      return classrooms[0];
+      // null, not undefined: React Query treats an undefined result as an
+      // error, which would show "No se pudo cargar el salón" (and a toast) for
+      // a classroom that is simply gone — that is 'Salón no disponible'.
+      return classrooms[0] ?? null;
     },
     enabled: !!student?.classroom_id,
   });

@@ -32,7 +32,7 @@
 //
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { FAMILY_OPERATIONS, buildFamilyPayload, decideFamilyAccess, mexicoToday } from './_policy.ts';
+import { FAMILY_OPERATIONS, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
 
@@ -163,10 +163,13 @@ Deno.serve(async (req) => {
     // what is already stored for that student and day. Not atomic — two
     // requests in the same instant can both pass; the form disables its
     // button while one is in flight, which is the case that happens.
+    // Only for a day that can pass the date rules: a malformed or past day is
+    // refused below without spending a read on it.
+    const today = mexicoToday();
     let sameDayAbsences: Array<Record<string, unknown>> | null = null;
     if (entity === 'AbsenceNotification' && operation === 'create') {
       const day = typeof input.absence_date === 'string' ? input.absence_date.trim().slice(0, 10) : '';
-      sameDayAbsences = day
+      sameDayAbsences = isCalendarDate(day) && day >= today
         ? await sr.entities.AbsenceNotification.filter({ student_id: studentId, absence_date: day }, '-created_date', 20)
         : [];
     }
@@ -180,7 +183,7 @@ Deno.serve(async (req) => {
       existing,
       event,
       chargeId,
-      today: mexicoToday(),
+      today,
       sameDayAbsences,
     });
     if (!built.ok) return bad(built.code === 'ABSENCE_DUPLICATE' ? 409 : 400, built.code, built.message);

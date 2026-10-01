@@ -142,3 +142,22 @@ test('Reportes reads statuses from the shared module and filters by date on the 
   assert.doesNotMatch(page, /Attendance\.filter\(\{ school_id: userProfile\.school_id \}\)/);
   assert.doesNotMatch(page, /DiaryEntry\.filter\(\{ school_id: userProfile\.school_id \}\)/);
 });
+
+// Live QA of v1.8.3: under the "las cifras pueden estar incompletas" banner the
+// cards still read "$0.00 · 0 cargos · 0 vencidos" and "0 enviados" while the
+// truth was $950 and 4 avisos. A failed list with nothing cached shows "—".
+test('Reportes shows a dash, not zeros, for a card whose list failed to load', () => {
+  const src = fs.readFileSync(new URL('../../src/pages/Reportes.jsx', import.meta.url), 'utf8');
+  assert.match(src, /const unavailable = \(\.\.\.queries\) => queries\.some\(\(q\) => q\.isError && q\.data === undefined\)/);
+  for (const flag of ['attendanceNA', 'diaryNA', 'unpaidNA', 'noticesNA', 'eventsNA']) {
+    assert.match(src, new RegExp(`${flag} \\?`), flag);
+  }
+  assert.match(src, /unpaidNA \? DASH : formatMoney\(totalPending\)/);
+  // Codex review on #194: the "Ver detalle" panels still showed 0s.
+  for (const [panel, flag] of [['attendance', 'attendanceNA'], ['payments', 'unpaidNA']]) {
+    assert.match(src, new RegExp(`openPanel === '${panel}' && \\(${flag} \\?`), panel);
+  }
+  for (const [panel, flag] of [['diary', 'diaryNA'], ['notices', 'noticesNA']]) {
+    assert.match(src, new RegExp(`openPanel === '${panel}' && !${flag} &&`), panel);
+  }
+});

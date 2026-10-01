@@ -107,11 +107,21 @@ test('the prompt closes the gaps QA r5 found in live answers', () => {
   assert.match(p, /upcoming/);
   assert.match(p, /nunca lo cuentes como falta/);
   // LM06/LM09: payments offered to a teacher.
-  assert.match(p, /a docentes no les ofrezcas pagos/);
+  // Live QA of v1.8.3: the rule above was not enough; the topics now come
+  // from my_context's helps_with (server-derived per role).
+  assert.match(p, /menciona SÓLO temas de helps_with/);
+  assert.match(p, /a un docente jamás le menciones pagos/);
+  assert.match(p, /No asumas el género de nadie/);
   // LM07: a twelve-line refusal.
-  assert.match(p, /Al negarte a algo: una línea con el motivo y otra con quién puede ayudar/);
+  assert.match(p, /Al negarte a algo: máximo tres líneas/);
   // LP10: "si hubo un cambio de rol reciente, probablemente aún no se refleja".
   assert.match(p, /no especules con cambios de rol/);
+  // Live QA of v1.8.3: still answered "si efectivamente fuiste promovido…".
+  assert.match(p, /Prohibido: "si de verdad te promovieron"/);
+  // LP09 again on v1.8.3: echoed "Diego pertenece a otra escuela".
+  assert.match(p, /No afirmes a qué escuela pertenece ese alumno/);
+  assert.match(p, /menciona TODAS las tareas de items/);
+  assert.match(p, /sent_to_family/);
   // LP12: "Hola, José Pablo" guessed from h.josepablo+qa-padre.
   assert.match(p, /nunca deduzcas un nombre del correo/);
   // LD10: "esa información no se gestiona en la app" — v1.8.2 stores it.

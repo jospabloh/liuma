@@ -33,7 +33,7 @@ import {
   selectCurrentProfile, profileProblem, canRunIntent, QUERY_INTENTS, scopeRows,
   mexicoToday, mexicoDayOf, addDays, isDateOnly, spanishLongDate, isoWeek, menuDayKey,
   label, formatMXN, fullName, matchStudents, errorMessage, chargeOwed, OPEN_CHARGE_STATUSES,
-  displayUserName, homeworkRange, attendanceWindow,
+  displayUserName, displayPersonName, helpsWith, writableKinds, licenseIsReadOnly, nextDueGroup, homeworkRange, attendanceWindow,
 } from './_lumiCore.ts';
 
 const MAX_ROWS = 200;
@@ -119,12 +119,30 @@ Deno.serve(async (req) => {
     switch (intent) {
       case 'my_context': {
         const students = scope.role === 'ADMIN' ? [] : await schoolStudents(sr, scope);
+        // Offer a write only if guardedEntityWrite would take it: the
+        // caller's own write overrides and the license, read here with the
+        // service role. Any failure offers no write (fails closed).
+        let writable: Record<string, boolean> = {};
+        if (scope.role !== 'PARENT' && scope.profileId) {
+          try {
+            const [overrides, subs] = await Promise.all([
+              sr.entities.PermissionOverride.filter({ school_id: scope.schoolId, user_profile_id: scope.profileId, action: 'write' }),
+              sr.entities.SchoolSubscription.filter({ school_id: scope.schoolId }, '-created_date', 1),
+            ]);
+            writable = writableKinds({ role: scope.role, overrides, licenseReadOnly: licenseIsReadOnly(subs[0] || null, new Date()) });
+          } catch (e) {
+            console.warn('lumiQuery my_context: write gate unavailable', (e as Error)?.message);
+          }
+        }
         const rooms = await classroomNames(sr, scope.schoolId);
         return Response.json({
           ...base,
           // '' when full_name is only the email handle: Lumi must not guess a
           // name out of it (QA r5, LP12).
           user_name: displayUserName(user.full_name, user.email),
+          // What to offer, from the server's own intent table (not recalled
+          // by the model): a docente is never offered pagos or uniformes.
+          helps_with: helpsWith(scope.role, writable),
           classrooms: scope.classroomIds.map((id) => rooms.get(id)).filter(Boolean),
           students: students.map((s) => ({ student_ref: s.id, name: fullName(s), classroom: rooms.get(String(s.classroom_id)) || '' })),
         });
@@ -186,7 +204,7 @@ Deno.serve(async (req) => {
         const present = (h: Row) => ({
           title: h.title, subject: h.subject || '', description: h.description || '',
           due: spanishLongDate(String(h.due_date)), classroom: rooms.get(String(h.classroom_id)) || '',
-          teacher: h.teacher_name || '',
+          teacher: displayPersonName(h.teacher_name),
         });
         const homework = visible
           .filter((h) => String(h.due_date || '') >= from && String(h.due_date || '') <= to)
@@ -195,15 +213,13 @@ Deno.serve(async (req) => {
         // can answer "la siguiente entrega es el martes 20" instead of "no hay
         // tareas" (QA r5, LP01). Never a past due date: an empty range of
         // last week must not offer last Friday as "la siguiente".
-        const after = homework.length ? null : visible.find((h) => {
-          const due = String(h.due_date || '');
-          return due > to && due >= today;
-        });
+        // Every task due that day, not only the first (live QA of v1.8.3).
+        const next = homework.length ? [] : nextDueGroup(visible, to, today);
         return Response.json({
           ...base,
           range: { from: spanishLongDate(from), to: spanishLongDate(to) },
           homework,
-          next_due: after ? present(after) : null,
+          next_due: next.length ? { due: spanishLongDate(String(next[0].due_date)), items: next.map(present) } : null,
         });
       }
 
@@ -264,7 +280,10 @@ Deno.serve(async (req) => {
             learning: label('learning', d.learning),
             nap: d.sleep_hours != null || d.sleep_minutes != null ? `${Number(d.sleep_hours || 0)} h ${Number(d.sleep_minutes || 0)} min` : (d.naps || ''),
             incidents: d.incidents || '',
-            teacher: d.teacher_name || '',
+            teacher: displayPersonName(d.teacher_name),
+            // Staff see whether the family got it; a parent only ever gets
+            // sent entries (_scope.ts), so the flag would say nothing there.
+            ...(scope.role === 'PARENT' ? {} : { sent_to_family: d.sent_to_parents === true }),
           }));
         return Response.json({ ...base, entries });
       }

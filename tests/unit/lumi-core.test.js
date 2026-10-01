@@ -7,6 +7,7 @@ import {
   mexicoToday, addDays, spanishLongDate, isoWeek, menuDayKey, label, formatMXN,
   matchStudents, validateWrite, resolveWriteDate, confirmationCode, errorMessage,
   describeWrite, mexicoDayOf, displayUserName, homeworkRange, attendanceWindow,
+  displayPersonName, helpsWith, nextDueGroup, writableKinds, licenseIsReadOnly,
   HOMEWORK_DEFAULT_DAYS, HOMEWORK_MAX_DAYS,
 } from '../../base44/functions/lumiQuery/_lumiCore.ts';
 
@@ -234,7 +235,7 @@ test('"tareas pendientes" looks a month ahead, not a week (LP01)', () => {
 test('lumiQuery tells Lumi what comes next when the homework range is empty', () => {
   const src = read('base44/functions/lumiQuery/entry.ts');
   assert.match(src, /homeworkRange\(today, body\?\.from, body\?\.to\)/);
-  assert.match(src, /next_due: after \? present\(after\) : null/);
+  assert.match(src, /nextDueGroup\(visible, to, today\)/);
   assert.doesNotMatch(src, /addDays\(from, 7\)/);
 });
 
@@ -276,4 +277,82 @@ test('Lumi never greets by an email handle (LP12)', () => {
 test('dirección\'s uniform list says it is open orders only (LD04)', () => {
   const src = read('base44/functions/lumiQuery/entry.ts');
   assert.match(src, /open_only: openOnly, delivered_count: deliveredCount/);
+});
+
+// Live QA of v1.8.3: two tasks were due on the 20th and Lumi named one,
+// because next_due held the first match only.
+test('next_due carries every task of the nearest due date, never a past one', () => {
+  const rows = [
+    { id: 'past', due_date: '2026-09-25' },
+    { id: 'api', due_date: '2026-10-20' },
+    { id: 'ui', due_date: '2026-10-20' },
+    { id: 'later', due_date: '2026-10-27' },
+  ];
+  assert.deepEqual(nextDueGroup(rows, '2026-10-04', '2026-10-01').map((r) => r.id), ['api', 'ui']);
+  // An empty past range never offers a past date as "the next one".
+  assert.deepEqual(nextDueGroup(rows, '2026-09-20', '2026-10-01').map((r) => r.id), ['api', 'ui']);
+  assert.deepEqual(nextDueGroup(rows, '2026-10-30', '2026-10-01'), []);
+});
+
+// Live QA of v1.8.3 (LM06/LM09): Lumi offered "pagos, uniformes" to a docente
+// although those intents answer 403 for that role. The list it may offer now
+// comes from the same tables that gate the intents.
+test('helps_with never offers a role something its intents refuse', () => {
+  const teacher = helpsWith('TEACHER', { attendance: true, diary: true });
+  assert.ok(!teacher.some((t) => /pago|uniforme|configuraci/.test(t)), teacher.join(', '));
+  assert.ok(teacher.includes('registrar asistencia'));
+  const parent = helpsWith('PARENT');
+  assert.ok(parent.includes('pagos pendientes') && parent.includes('pedidos de uniforme'));
+  assert.ok(!parent.some((t) => /^registrar/.test(t)), parent.join(', '));
+  assert.ok(helpsWith('ADMIN').includes('configuración inicial'));
+  // No write offered unless the write gate says so (unknown = not offered).
+  assert.ok(!helpsWith('TEACHER').some((t) => /^registrar/.test(t)));
+});
+
+test('a stored handle is not shown as a teacher name', () => {
+  assert.equal(displayPersonName('h.josepablo+qa-maestro'), '');
+  assert.equal(displayPersonName('Laura Méndez'), 'Laura Méndez');
+  assert.equal(displayPersonName(null), '');
+});
+
+test('diary_recent tells staff whether each entry reached the family', () => {
+  const src = read('base44/functions/lumiQuery/entry.ts');
+  assert.match(src, /scope\.role === 'PARENT' \? \{\} : \{ sent_to_family: d\.sent_to_parents === true \}/);
+  assert.match(src, /helps_with: helpsWith\(scope\.role, writable\)/);
+});
+
+// Codex review on #194: helps_with offered "registrar asistencia" to a teacher
+// with a deny override or a read-only license, which guardedEntityWrite then
+// refuses. writableKinds mirrors its precedence.
+test('writes are offered only when guardedEntityWrite would accept them', () => {
+  const base = { role: 'TEACHER', overrides: [], licenseReadOnly: false };
+  assert.deepEqual(writableKinds(base), { attendance: true, diary: true });
+  assert.deepEqual(writableKinds({ ...base, licenseReadOnly: true }), { attendance: false, diary: false });
+  const denyDiary = [{ resource: 'DiaryEntry', action: 'write', effect: 'deny' }];
+  assert.deepEqual(writableKinds({ ...base, overrides: denyDiary }), { attendance: true, diary: false });
+  // A deny beats an allow, as in guardedEntityWrite.
+  const both = [...denyDiary, { resource: 'DiaryEntry', action: 'write', effect: 'allow' }];
+  assert.equal(writableKinds({ ...base, overrides: both }).diary, false);
+  // A parent never gets a Lumi write, whatever an override says.
+  const allow = [{ resource: 'Attendance', action: 'write', effect: 'allow' }];
+  assert.deepEqual(writableKinds({ role: 'PARENT', overrides: allow, licenseReadOnly: false }), { attendance: false, diary: false });
+});
+
+test('the license copy in _lumiCore agrees with guardedEntityWrite', async () => {
+  const { effectiveLicenseIsReadOnly } = await import('../../base44/functions/guardedEntityWrite/_policy.ts');
+  const now = new Date('2026-10-01T12:00:00Z');
+  const cases = [
+    null,
+    { subscription_status: 'active' },
+    { subscription_status: 'view_only' },
+    { subscription_status: 'suspended' },
+    { subscription_status: 'canceled' },
+    { subscription_status: 'inactive' },
+    { subscription_status: 'trial', trial_end_date: '2026-10-29' },
+    { subscription_status: 'trial', trial_end_date: '2026-09-01' },
+    { subscription_status: 'trial' },
+    { subscription_status: 'trial', license_tier: 'founder' },
+    { subscription_status: 'view_only', license_tier: 'founder' },
+  ];
+  for (const c of cases) assert.equal(licenseIsReadOnly(c, now), effectiveLicenseIsReadOnly(c, now), JSON.stringify(c));
 });

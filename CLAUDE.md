@@ -1973,3 +1973,26 @@ del maestro, ausencias) y encontró dos fallas de cliente:
   orden del servidor cuando la instantánea contiene todo lo que hay en pantalla.
 
 Sólo frontend: `npm run deploy:site`.
+
+## v1.8.5 — detalles menores de Lumi y Reportes (2026-10-01)
+
+- **Lo que Lumi puede ofrecer sale del servidor, no de la memoria del modelo.**
+  `helpsWith(role)` (`_lumiCore.ts`) se deriva de `QUERY_INTENTS`/`WRITE_KINDS`
+  y viaja en `my_context.helps_with`; el prompt sólo deja ofrecer temas de esa
+  lista. La regla escrita sola («a docentes no les ofrezcas pagos») no bastó en
+  vivo. Agregar un intent o una escritura obliga a revisar `HELP_LABELS`.
+  Las escrituras («registrar asistencia/bitácoras») sólo se ofrecen si
+  `writableKinds` —misma precedencia que `guardedEntityWrite`: deny gana,
+  allow concede, si no el rol, y nada con licencia en solo lectura— dice que
+  pasarían; si no se pudo leer, no se ofrecen. `licenseIsReadOnly` es copia de
+  `effectiveLicenseIsReadOnly` y un test corre las dos sobre los mismos casos.
+- `next_due` es `{ due, items }` con **todas** las tareas de la fecha más
+  cercana (`nextDueGroup`).
+- `displayPersonName` vacía nombres de docente que son un handle de correo.
+- `diary_recent` trae `sent_to_family` sólo para docentes y dirección.
+- Reportes: una tarjeta cuya lista falló sin nada en caché muestra «—» y «No
+  disponible» (`unavailable(...)`), nunca un $0.00 que parezca real — tampoco
+  en su panel «Ver detalle».
+
+Deploy: `npm run deploy` (lumiQuery, lumiWrite) → `npx base44 agents push` →
+`npm run deploy:site`.

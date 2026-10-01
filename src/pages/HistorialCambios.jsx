@@ -11,6 +11,17 @@ import { APP_VERSION, RELEASE_DATE } from '@/lib/appConfig';
 const CHANGES = [
   {
     date: '2026-10-01',
+    title: 'Versión 1.8.5: Lumi más preciso y Reportes más claro',
+    items: [
+      'Lumi sólo te ofrece lo que tu rol puede consultar: a docentes ya no les ofrece pagos ni uniformes.',
+      'Si dos tareas se entregan el mismo día, Lumi te dice las dos.',
+      'Lumi responde las negativas en pocas líneas y no da por hecho cambios de rol ni a qué escuela pertenece un alumno.',
+      'Docentes y dirección ven en Lumi si una bitácora se envió o no a la familia.',
+      'En Reportes, si una parte no se pudo cargar, verás «—» en lugar de ceros.',
+    ],
+  },
+  {
+    date: '2026-10-01',
     title: 'Versión 1.8.4: correcciones al volver al inicio y en Lumi',
     items: [
       'Corregido: al regresar a Inicio desde otra pantalla, maestros y familias veían «Esta pantalla tuvo un problema». Ya no pasa.',

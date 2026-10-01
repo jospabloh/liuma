@@ -209,6 +209,103 @@ export function displayUserName(fullName: unknown, email?: unknown): string {
   return name;
 }
 
+// A staff name to show (teacher_name on homework and bitácoras). Same rule as
+// displayUserName without an email to compare: a stored handle such as
+// "h.josepablo+qa-maestro" is not a name, so Lumi got '' and said "su
+// maestra" out of it (live QA of v1.8.3).
+export function displayPersonName(name: unknown): string {
+  return displayUserName(name);
+}
+
+// What Lumi may offer to help with, per role, derived from QUERY_INTENTS and
+// WRITE_KINDS on the server. The prompt alone did not stop Lumi offering
+// pagos and uniformes to a docente (live QA of v1.8.3, LM06/LM09): it now
+// reads this list from my_context instead of recalling it.
+const HELP_LABELS: Array<{ label: string; intent?: string; write?: string }> = [
+  { label: 'el resumen de hoy de tus hijos', intent: 'my_children_summary' },
+  { label: 'tareas', intent: 'homework' },
+  { label: 'asistencia', intent: 'attendance' },
+  { label: 'registrar asistencia', write: 'attendance' },
+  { label: 'bitácoras', intent: 'diary_recent' },
+  { label: 'registrar bitácoras', write: 'diary' },
+  { label: 'pagos pendientes', intent: 'pending_charges' },
+  { label: 'avisos', intent: 'notices' },
+  { label: 'eventos', intent: 'upcoming_events' },
+  { label: 'menú', intent: 'current_menu' },
+  { label: 'documentos de la escuela', intent: 'official_documents' },
+  { label: 'pedidos de uniforme', intent: 'uniform_status' },
+  { label: 'configuración inicial', intent: 'setup_pending' },
+  { label: 'cómo usar la app', intent: 'my_context' },
+];
+
+// `writable` is what the write path would actually allow this caller (role,
+// PermissionOverride and license; see writableKinds). A write is offered only
+// when it says so: offering "registrar asistencia" to someone guardedEntityWrite
+// then refuses is the same offer-then-refusal this list exists to stop.
+export function helpsWith(role: string, writable: Record<string, boolean> = {}): string[] {
+  return HELP_LABELS
+    .filter((h) => (h.intent
+      ? canRunIntent(role, h.intent)
+      : canWriteKind(role, String(h.write)) && writable[String(h.write)] === true))
+    .map((h) => h.label);
+}
+
+// Entity each Lumi write lands on (lumiWrite commits through guardedEntityWrite).
+export const WRITE_ENTITIES: Record<string, string> = { attendance: 'Attendance', diary: 'DiaryEntry' };
+
+// Copy of guardedEntityWrite/_policy.ts READ_ONLY_STATUSES and
+// effectiveLicenseIsReadOnly (Deno functions cannot import across
+// directories). tests/unit/lumi-core.test.js runs both on the same cases, so
+// they cannot drift apart silently.
+export const LICENSE_READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];
+
+export function licenseIsReadOnly(
+  sub: { subscription_status?: string; license_tier?: string; trial_end_date?: string } | null,
+  now: Date,
+): boolean {
+  if (!sub) return true;
+  const status = String(sub.subscription_status || 'trial');
+  if (LICENSE_READ_ONLY_STATUSES.includes(status)) return true;
+  if (sub.license_tier === 'founder') return false;
+  if (status === 'trial') {
+    const end = Date.parse(String(sub.trial_end_date || ''));
+    return Number.isNaN(end) || end <= now.getTime();
+  }
+  return false;
+}
+
+// Which Lumi writes guardedEntityWrite would let this caller commit: same
+// precedence as there — a deny override wins, an allow grants, else the role
+// default — and nothing while the license is read-only.
+export function writableKinds(input: {
+  role: string;
+  overrides: Array<{ resource?: unknown; action?: unknown; effect?: unknown }>;
+  licenseReadOnly: boolean;
+}): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const [kind, entity] of Object.entries(WRITE_ENTITIES)) {
+    const mine = input.overrides.filter((o) => o?.resource === entity && o?.action === 'write');
+    const deny = mine.some((o) => o.effect === 'deny');
+    const allow = mine.some((o) => o.effect === 'allow');
+    const roleOk = canWriteKind(input.role, kind);
+    out[kind] = !input.licenseReadOnly && roleOk && (deny ? false : allow || roleOk);
+  }
+  return out;
+}
+
+// Homework due on the nearest date after an empty range: ALL of them, not
+// the first one (live QA of v1.8.3: two tasks due on the 20th, Lumi named
+// one). Never a past date. `rows` must be sorted by due_date ascending.
+export function nextDueGroup<T extends { due_date?: unknown }>(rows: T[] = [], to: string, today: string): T[] {
+  const first = rows.find((h) => {
+    const due = String(h.due_date || '');
+    return due > to && due >= today;
+  });
+  if (!first) return [];
+  const day = String(first.due_date);
+  return rows.filter((h) => String(h.due_date || '') === day);
+}
+
 // --- Date windows the model must not have to guess --------------------------
 
 // "¿Qué tareas tiene pendientes?" has no end date. With a 7-day default the

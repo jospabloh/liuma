@@ -316,6 +316,33 @@ test('one refused read in a batch does not take its siblings down', async () => 
   assert.equal(calls.length, 3, 'the batch, then each read on its own');
 });
 
+test('a refusal about the CALLER (no key) is not split into one request per read', async () => {
+  const { call, calls } = recordingCall(() => { throw axiosError(403, { code: 'INACTIVE_PROFILE' }); });
+  const reader = makeSchoolReader(call, { batch: true, schedule: immediate });
+  const results = await Promise.allSettled([reader.read('Notice', {}), reader.read('Event', {}), reader.read('Student', {})]);
+  assert.deepEqual(results.map((r) => r.status), ['rejected', 'rejected', 'rejected']);
+  assert.equal(calls.length, 1, 'one refused request, not 1 + 3');
+});
+
+test('a context answer already in flight when a write lands is not cached as current', async () => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const { call, calls } = recordingCall(async (payload) => { await gate; return echo(payload); });
+  const reader = makeSchoolReader(call, { batch: true, contextTtlMs: 30000, now: () => 0, schedule: immediate });
+  const before = reader.context();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  reader.reset(); // a write landed while the context was being read
+  release();
+  await before;
+  await reader.context();
+  assert.equal(calls.length, 2, 'the next context() asks again');
+});
+
+test('getMySubscription never caches a rate-limited School read as "no school"', () => {
+  const fn = read('base44/functions/getMySubscription/entry.ts');
+  assert.match(fn, /School\.get\(schoolId\)\.catch\(\(e: unknown\) => \{\s*if \(isRateLimitError\(e\)\) throw e;/);
+});
+
 test('a rate-limited batch fails every read in it (each screen then shows its error)', async () => {
   const reader = makeSchoolReader(async () => { throw axiosError(429, { code: 'RATE_LIMITED' }); }, { batch: true, schedule: immediate });
   const results = await Promise.allSettled([reader.read('Notice', {}), reader.read('Event', {})]);

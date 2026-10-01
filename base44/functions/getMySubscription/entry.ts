@@ -139,7 +139,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    const schoolRecord = await sr.entities.School.get(schoolId).catch(() => null);
+    // A missing school reads as null, but the rate limit must not: an answer
+    // with `school: null` would be kept for the whole session (the client
+    // caches this call for 5 minutes, v1.8.3) and hide the school's name,
+    // logo and join code. Let it reach the 429 below and be retried.
+    const schoolRecord = await sr.entities.School.get(schoolId).catch((e: unknown) => {
+      if (isRateLimitError(e)) throw e;
+      return null;
+    });
     const school = schoolRecord
       ? {
           id: schoolRecord.id,

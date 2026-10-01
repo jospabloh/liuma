@@ -73,10 +73,24 @@ function errorStatusOf(error) {
   return typeof status === 'number' ? status : undefined;
 }
 
-/** A batch the server refused as a whole because of its shape or one read in it. */
+function errorBodyOf(error) {
+  const body = error?.response?.data ?? error?.data;
+  return body && typeof body === 'object' ? body : null;
+}
+
+/**
+ * A batch the server refused because of ONE read in it (the refusal names its
+ * `key`) or because of the batch's shape. Only then is it worth asking each
+ * read on its own. A refusal about the CALLER — NO_PROFILE, INACTIVE_PROFILE,
+ * NO_SCHOOL, INVALID_ROLE — carries no key and would come back once per read:
+ * splitting it would turn one refused request into up to twelve.
+ */
 function isBatchRefusal(error) {
   const status = errorStatusOf(error);
-  return status !== undefined && status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+  if (status === undefined || status < 400 || status >= 500 || status === 401 || status === 408 || status === 429) return false;
+  const body = errorBodyOf(error);
+  if (!body) return true;
+  return (typeof body.key === 'string' && body.key !== '') || body.code === 'INVALID_BATCH' || body.code === 'TOO_MANY_SCANS';
 }
 
 /** Split pending reads into server-acceptable batches, in order. */
@@ -289,6 +303,9 @@ export function makeSchoolReader(call, {
   // --- context -------------------------------------------------------------
   let contextCache = null; // { value, at }
   let contextInFlight = null;
+  // Bumped by reset(): an answer that was already in flight when a write
+  // landed must not be cached as if it came after it.
+  let contextGeneration = 0;
 
   async function fetchContext() {
     const body = await fetchContextBody();
@@ -309,19 +326,25 @@ export function makeSchoolReader(call, {
     if (contextTtlMs <= 0) return fetchContext();
     if (contextCache && now() - contextCache.at < contextTtlMs) return copyContext(contextCache.value);
     if (!contextInFlight) {
-      contextInFlight = fetchContext()
+      const generation = contextGeneration;
+      const request = fetchContext()
         .then((value) => {
-          contextCache = { value, at: now() };
+          if (generation === contextGeneration) contextCache = { value, at: now() };
           return value;
         })
-        .finally(() => { contextInFlight = null; });
+        .finally(() => { if (contextInFlight === request) contextInFlight = null; });
+      contextInFlight = request;
     }
     return copyContext(await contextInFlight);
   }
 
   /** Forget the shared context (sign-out, or a change to the caller's own links). */
   function reset() {
+    contextGeneration += 1;
     contextCache = null;
+    // A request already in flight answers its own callers, but the next
+    // context() asks again instead of joining an answer from before the write.
+    contextInFlight = null;
   }
 
   return { read, readMany, context, reset };

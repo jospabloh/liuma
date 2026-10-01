@@ -1686,6 +1686,10 @@ Reglas que deja:
   `blockingLoadFailure(...queries)` + `<LoadError>` antes de su `EmptyState`.
 - `staleTime` es 30 s, y tras cualquier escritura todo queda *stale* sin
   refetch. Si una pantalla necesita datos al segundo, invalida su clave.
+  **Dos `useQuery` con la misma clave deben pedir exactamente lo mismo**: con
+  30 s de caché, la segunda pantalla muestra la lista de la primera sin
+  preguntar. `Reportes` compartía `['notices', escuela]` con `Avisos` (100
+  contra 50 avisos) y por eso ahora lleva `'report'` al final.
 - `getMySubscription` se lee una vez por sesión (5 min, `sessionStorage` por
   usuario y escuela). Si cambias la licencia desde la app, invalida
   `MY_SUBSCRIPTION_QUERY_KEY`.

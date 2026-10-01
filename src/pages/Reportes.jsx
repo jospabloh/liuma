@@ -83,7 +83,10 @@ export default function Reportes() {
   const { data: unpaidCharges = [] } = unpaidQuery;
 
   const noticesQuery = useQuery({
-    queryKey: ['notices', userProfile?.school_id],
+    // Own key: Avisos caches ['notices', school] with 50 rows, and with a 30 s
+    // staleTime (v1.8.3) the report would count that shorter list. The
+    // prefix still matches every invalidateQueries(['notices']).
+    queryKey: ['notices', userProfile?.school_id, 'report'],
     queryFn: () => schoolRead('Notice', { school_id: userProfile.school_id }, '-created_date', 100),
     enabled: !!userProfile && canReadEntity(role, 'Notice'),
   });

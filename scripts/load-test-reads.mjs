@@ -16,8 +16,10 @@
 // The mock platform enforces what production showed on 2026-10-01: one
 // app-wide budget for SERVICE-ROLE entity calls, ~150 per rolling minute, and
 // "Rate limit exceeded" past it. A read made with the caller's own token (the
-// UserProfile lookup since v1.8.3) is counted separately, as the per-user
-// budget Base44 documents for its own users.
+// UserProfile lookup since v1.8.3) is counted separately, ASSUMING it draws
+// on a per-user budget. Nothing Base44 publishes confirms that (see "Not
+// verified" in docs/rate-limit-v1.8.3.md); if it counts against the app
+// budget, each "after" figure is about one call per invocation optimistic.
 //
 // WHAT A "SCREEN" IS. The queries each screen fires when it mounts, copied
 // from the page source (keys, filters, limits, and which query waits for
@@ -348,7 +350,7 @@ function screens({ q, read, readMany, context, user, chained, school = 'A' }) {
         q.use(['attendanceReport', school], () => read('Attendance', range, 'date', SCHOOL_READ_ALL)),
         q.use(['diariesReport', school], () => read('DiaryEntry', range, 'date', SCHOOL_READ_ALL)),
         q.use(['unpaidChargesReport', school], () => read('ChargeItem', { school_id: school, status: { $in: UNPAID } })),
-        q.use(['notices', school], () => read('Notice', { school_id: school }, '-created_date', 100)),
+        q.use(['notices', school, 'report'], () => read('Notice', { school_id: school }, '-created_date', 100)),
         q.use(['upcomingEvents', school], () => read('Event', { school_id: school, date: { $gte: TODAY } }, 'date', 10)),
       ]);
     },

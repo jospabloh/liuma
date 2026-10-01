@@ -111,6 +111,9 @@ test('the prompt closes the gaps QA r5 found in live answers', () => {
   // from my_context's helps_with (server-derived per role).
   assert.match(p, /menciona SÓLO temas de helps_with/);
   assert.match(p, /a un docente jamás le menciones pagos/);
+  // Live check of v1.8.5 (LM09): a refusal made without any tool call has no
+  // helps_with, and Lumi listed "pagos" to a docente anyway.
+  assert.match(p, /Si aun así no lo tienes .*no enumeres temas/);
   assert.match(p, /No asumas el género de nadie/);
   // LM07: a twelve-line refusal.
   assert.match(p, /Al negarte a algo: máximo tres líneas/);

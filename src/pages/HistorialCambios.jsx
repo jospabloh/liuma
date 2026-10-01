@@ -11,6 +11,14 @@ import { APP_VERSION, RELEASE_DATE } from '@/lib/appConfig';
 const CHANGES = [
   {
     date: '2026-10-01',
+    title: 'Versión 1.8.4: correcciones al volver al inicio y en Lumi',
+    items: [
+      'Corregido: al regresar a Inicio desde otra pantalla, maestros y familias veían «Esta pantalla tuvo un problema». Ya no pasa.',
+      'Corregido: Lumi a veces mostraba la respuesta arriba de tu pregunta y dejaba el chat bloqueado unos minutos. Ahora la conversación sale en orden y puedes seguir preguntando.',
+    ],
+  },
+  {
+    date: '2026-10-01',
     title: 'Versión 1.8.3: más confiable con varias personas a la vez, y Lumi',
     items: [
       'Corregido: cuando varias personas usaban LIUMA al mismo tiempo, algunas pantallas decían «Sin avisos» o «Sin hijos vinculados» aunque sí había datos. La app ahora pide menos cosas a la vez, reintenta sola y, si aun así no puede cargar, te lo dice con un botón «Reintentar» en lugar de mostrar la pantalla vacía.',

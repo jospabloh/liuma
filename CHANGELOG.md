@@ -5,6 +5,21 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.8.4] - 2026-10-01
+
+Hotfix from the live retest of v1.8.3 in production.
+
+### Fixed
+
+- **Home crashed for teachers and parents on every in-app return to Inicio.**
+  `user` was set inside the profiles queryFn, which React Query skips when it
+  serves cached profiles; TeacherHome/ParentHome then read `user.id` of null.
+  Home now reads the user from its own `['currentUser']` query.
+- **Lumi showed the answer above the question and locked the chat for 3
+  minutes.** `addMessage` can return the final answer alone; the next poll was
+  anchored around it and placed the question after it. A snapshot that holds
+  everything on screen now sets the order.
+
 ## [1.8.3] - 2026-10-01
 
 Fixes from the live QA of v1.8.2 (2026-10-01, three concurrent sessions + 36

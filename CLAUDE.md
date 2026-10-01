@@ -1940,3 +1940,22 @@ en inglés.
   inglés; el dominio de correo propio depende de la respuesta del POST.
 - Los pendientes de v1.8.2 (cargos cerrados `PAID` con abono parcial,
   conceptos sin tipo, vencimiento a medianoche UTC) siguen igual.
+
+## v1.8.4 — hotfix tras el retest en vivo de v1.8.3 (2026-10-01)
+
+El retest con sesiones reales confirmó los arreglos de 1.8.3 (cero 500 bajo
+tres usuarios concurrentes —sólo 429 reintentados—, bitácoras privadas, insignia
+del maestro, ausencias) y encontró dos fallas de cliente:
+
+- **Inicio caía al error boundary para maestro y familia en cada regreso desde
+  otra pantalla.** `Home.jsx` guardaba `user` en estado local fijado *dentro*
+  del queryFn de perfiles; al volver, React Query sirve los perfiles del caché
+  sin correr el queryFn y `user` quedaba `null`. Regla: **ningún dato de
+  render sale de un efecto secundario dentro de un queryFn** — sale de su
+  propia query (`['currentUser']`, la misma de GuardedRoute/NavContext).
+- **Lumi ponía la respuesta encima de la pregunta y bloqueaba el chat 3 min.**
+  `addMessage` puede devolver sólo el mensaje final del asistente; el siguiente
+  sondeo se anclaba alrededor de él. `mergeConversationMessages` toma ahora el
+  orden del servidor cuando la instantánea contiene todo lo que hay en pantalla.
+
+Sólo frontend: `npm run deploy:site`.

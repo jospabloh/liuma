@@ -16,21 +16,29 @@ import SignOutButton from '@/components/auth/SignOutButton';
 import { Ban } from 'lucide-react';
 
 export default function Home() {
-  const [user, setUser] = useState(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const queryClient = useQueryClient();
 
   // TODOS los perfiles del usuario: `selectCurrentUserProfile` los ordena y
   // elige uno de forma determinista. Antes había además un selector de
   // escuela; se retiró el 2026-09-10 (una cuenta, una escuela).
-  const { data: profiles = [], isLoading: profilesLoading, refetch: refetchProfiles } = useQuery({
-    queryKey: ['userProfiles'],
-    queryFn: async () => {
-      const currentUser = await base44.auth.me();
-      setUser(currentUser);
-      return base44.entities.UserProfile.filter({ user_id: currentUser.id }, '-created_date');
-    },
+  // The user comes from its own query, never from a side effect inside the
+  // profiles queryFn: on an in-app return to Inicio React Query serves the
+  // cached profiles WITHOUT running that queryFn, so a `setUser` there left
+  // `user` null and TeacherHome/ParentHome crashed on `user.id` (live QA of
+  // v1.8.3). Same ['currentUser'] query as GuardedRoute/NavContext.
+  const { data: user = null, isPending: userPending } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => base44.auth.me(),
   });
+  const { data: profiles = [], isPending: profilesPending, refetch: refetchProfiles } = useQuery({
+    // Prefix ['userProfiles'] so existing invalidations still match; the
+    // array differs from NavContext's ['userProfiles', id] (one profile).
+    queryKey: ['userProfiles', 'all', user?.id],
+    queryFn: () => base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date'),
+    enabled: Boolean(user?.id),
+  });
+  const profilesLoading = userPending || (Boolean(user?.id) && profilesPending);
 
   const userProfile = selectCurrentUserProfile(profiles);
 

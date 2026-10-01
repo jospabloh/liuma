@@ -27,7 +27,7 @@ const DIRECT_READ_EXCEPTIONS = {
   'src/components/nav/NavContext.jsx': { UserProfile: /user_id: user\.id/ },
   'src/hooks/useCurrentProfile.js': { UserProfile: /user_id: user\.id/ },
   'src/hooks/useSubscription.js': { UserProfile: /user_id: user\.id/ },
-  'src/pages/Home.jsx': { UserProfile: /user_id: currentUser\.id/ },
+  'src/pages/Home.jsx': { UserProfile: /user_id: user\.id/ },
   // Platform-owner branches only (cross-school support inbox): the owner-only
   // RLS is theirs. The school-user branch next to each goes through schoolRead.
   'src/lib/support/tickets.js': {

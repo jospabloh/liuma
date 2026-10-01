@@ -239,3 +239,24 @@ test('a new question waits for the pending reply; re-asking the same one does no
   assert.equal(canAskNewQuestion({ pendingReply, retryOfPending: true }), true);
   assert.equal(canAskNewQuestion({ pendingReply: null }), true);
 });
+
+// Live QA of v1.8.3: addMessage answered with the FINAL assistant message
+// alone, so the screen held [final]; the next poll [user, a1, a2, final]
+// was anchored around it and the question landed after its own answer.
+// hasReplyForTurn then found no reply, the chat showed "tardando…" and the
+// composer stayed locked for 3 minutes.
+test('a poll after addMessage returned the final answer keeps the question before it', () => {
+  const onScreen = [assistant('final', 'Respuesta')];
+  const polled = [user('u1', 'pregunta'), { id: 'a1', role: 'assistant', content: '' }, assistant('final', 'Respuesta')];
+  const merged = mergeConversationMessages(onScreen, polled);
+  assert.deepEqual(merged.map((m) => m.id), ['u1', 'a1', 'final']);
+  assert.equal(hasReplyForTurn(merged, 1), true);
+});
+
+test('an unknown message with no known predecessor goes before the next known one', () => {
+  const onScreen = [user('u0', 'antes'), assistant('a0', 'r0'), assistant('final', 'Respuesta')];
+  // A socket snapshot missing u0/a0 (stale copy) plus the new question.
+  const socket = [user('u1', 'pregunta'), assistant('final', 'Respuesta')];
+  const merged = mergeConversationMessages(onScreen, socket);
+  assert.deepEqual(merged.map((m) => m.id), ['u0', 'a0', 'u1', 'final']);
+});

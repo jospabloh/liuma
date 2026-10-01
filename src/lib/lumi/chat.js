@@ -109,6 +109,23 @@ export function mergeConversationMessages(current = [], incoming) {
   if (![...base, ...incoming].every((message) => message?.id)) {
     return incoming.length >= base.length ? incoming : base;
   }
+  // A snapshot that holds everything on screen is the server's order: take
+  // it, keeping the fresher copy of each message. addMessage can answer with
+  // the FINAL assistant message alone; anchoring the next poll's messages
+  // around it put the user's question after its own answer (live QA of
+  // v1.8.3), and hasReplyForTurn then saw no reply and the chat locked.
+  const incomingIds = new Set(incoming.map((message) => message.id));
+  if (base.every((message) => incomingIds.has(message.id))) {
+    const byId = new Map(base.map((message) => [message.id, message]));
+    let changed = incoming.length !== base.length;
+    const ordered = incoming.map((message, i) => {
+      const known = byId.get(message.id);
+      const kept = known ? fresher(known, message) : message;
+      if (kept !== base[i]) changed = true;
+      return kept;
+    });
+    return changed ? ordered : base;
+  }
   const result = [...base];
   const indexOf = (id) => result.findIndex((message) => message.id === id);
   let changed = false;
@@ -123,8 +140,15 @@ export function mergeConversationMessages(current = [], incoming) {
       return;
     }
     const prev = i > 0 ? indexOf(incoming[i - 1].id) : -1;
-    if (prev !== -1) result.splice(prev + 1, 0, message);
-    else result.push(message);
+    if (prev !== -1) {
+      result.splice(prev + 1, 0, message);
+    } else {
+      // No known predecessor: go before the first later snapshot message
+      // already on screen, so it never lands after a reply that follows it.
+      const next = incoming.slice(i + 1).map((m) => indexOf(m.id)).find((idx) => idx !== -1);
+      if (next !== undefined) result.splice(next, 0, message);
+      else result.push(message);
+    }
     changed = true;
   });
   return changed ? result : base;

@@ -38,7 +38,9 @@ test('SchoolSubscription read is platform-only; tenants read through getMySubscr
 
   const fn = read('base44/functions/getMySubscription/entry.ts');
   assert.match(fn, /asServiceRole/);
-  assert.match(fn, /UserProfile\.filter\(\{ user_id: user\.id \}\)/, 'school comes from the caller\'s own profiles');
+  // v1.8.3: read with the caller's OWN token (UserProfile.read is own-row
+  // under RLS) — off the rate-limited service-role budget, same rows.
+  assert.match(fn, /base44\.entities\.UserProfile\.filter\(\{ user_id: user\.id \}/, 'school comes from the caller\'s own profiles');
   assert.doesNotMatch(fn, /req\.json\(\)/, 'the request body is never read — nothing in it can pick the school');
   assert.match(fn, /profile\.status !== 'ACTIVE'/, 'only an ACTIVE profile reads its school license');
 

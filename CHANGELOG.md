@@ -5,6 +5,68 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.8.3] - 2026-10-01
+
+Fixes from the live QA of v1.8.2 (2026-10-01, three concurrent sessions + 36
+Lumi questions + mobile). Four fix packages (reliability, lumi, notify-copy,
+platform-auth) integrated on one branch. Detail in CLAUDE.md → "v1.8.3 —
+confiabilidad y Lumi (2026-10-01)" and `docs/rate-limit-v1.8.3.md`.
+
+### Fixed
+
+- **Base44's rate limit showed up as empty screens.** With three people in the
+  app, `schoolRead`/`getMySubscription` returned hundreds of `500 INTERNAL`
+  ("Rate limit exceeded" from service-role entity calls; one app-wide budget
+  of about 150 calls a minute) and screens rendered them as "Sin avisos",
+  "Sin hijos vinculados", "Sin salón" and zero counts. Reads issued in the
+  same tick now travel as one batched `schoolRead` request (with the caller's
+  context riding along), React Query keeps data 30 s, `getMySubscription` is
+  read once per session, and the caller's own `UserProfile` is read with
+  their token. The limit is answered as `429 RATE_LIMITED` + `Retry-After`
+  by `schoolRead`, `getMySubscription`, `listSchoolMembers`,
+  `guardedEntityWrite` and `guardedFamilyWrite`; the client retries reads
+  only (bounded backoff, jitter, shared cooldown), never writes. A failed read
+  renders `<LoadError>` with "Reintentar" instead of an empty state. Mock load
+  test (`npm run test:load`): service-role calls per cold screen visit 167 →
+  93 (−44%), invocations 54 → 26; three people browsing in-app at QA pace:
+  failed queries ~130 → 0.
+- **Reportes showed Avisos' 50-notice list** (shared query key); it has its
+  own key now.
+- **Lumi:** parents could read bitácoras saved with "Enviar a la familia" off
+  (Bitácora screen and Lumi) — the PARENT `DiaryEntry` scope now requires
+  `sent_to_parents: true`; "tareas pendientes" looks 30 days ahead (was 7) and
+  offers the next due date; an approved absence for tomorrow is no longer
+  reported as past; Lumi no longer greets people by their e-mail handle;
+  prompt gaps closed (no school selector, no other school's data, no sync
+  excuses, role-appropriate capabilities, medical data guidance). The chat no
+  longer loses the question when the socket never connects: it polls the
+  conversation over HTTPS (with backoff and jitter) while a reply is owed.
+- **Teacher home counted "4 urgentes sin leer" for one alert** (families'
+  copies + the teacher's own); it counts the teacher's own unread notices,
+  one per notice, matching AvisosMaestro. The teacher inbox is one request
+  and says when it failed to load.
+- **Absence requests** must be for the school's today or later and one live
+  request per child per day (`400 ABSENCE_DATE_PAST`, `409
+  ABSENCE_DUPLICATE`, Spanish messages).
+- **E-mails:** amounts as "$1,350.00 MXN" without runtime `Intl`; the
+  payment reminder no longer threatens late fees; every e-mail links to
+  `https://liuma.acaciaco.com.mx/`; long Spanish dates with year; the
+  emergency notice carries an author name.
+- **Copy and mobile:** "3 salones", "Sin salón" only when the student has
+  none, 44px toast close / show-password / inline links, icon actions with
+  `aria-label`, calendar days ≥44px, 16px fields unless md+ with a fine
+  pointer.
+- **Login:** Base44's verification-code and password-reset e-mails arrive in
+  English; the screen now says so in Spanish (real subject, button and
+  expiry) where each one is sent.
+
+### Deploy
+
+No entity change. `npm run deploy` (functions) and `npm run deploy:site`, in
+either order; push `base44/agents/lumi.jsonc` to the backend. Not deployed.
+
+---
+
 ## [1.8.2] - 2026-09-30
 
 Loose-ends pass: four fix packages (pay, notify, shell, director) integrated

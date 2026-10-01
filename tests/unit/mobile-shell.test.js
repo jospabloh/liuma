@@ -137,7 +137,15 @@ test('text fields keep 16px on touch screens at every width', () => {
     assert.match(src, /md:fine:text-sm/, file);
     assert.doesNotMatch(src, /(?<!:)md:text-sm/, `${file}: a bare md:text-sm zooms landscape iPhones`);
   }
-  assert.match(read('src/index.css'), /@media \(pointer: coarse\) \{\s*\.ui-field \{\s*font-size: 1rem;/);
+  // .ui-field (native <select>s) follows Input's rule exactly: 16px, and 14px
+  // only when the screen is wide AND mouse-driven. "14px except on coarse"
+  // gave a phone-width viewport reporting pointer: fine the zooming size
+  // (live QA, blood-type select at 390px) — v1.8.3.
+  const css = read('src/index.css');
+  const base = css.match(/\.ui-field \{[^}]*\}/)?.[0] ?? '';
+  assert.match(base, /font-size: 1rem;/, '.ui-field must default to 16px');
+  assert.match(css, /@media \(min-width: 768px\) and \(pointer: fine\) \{\s*\.ui-field \{\s*font-size: 0\.875rem;/);
+  assert.match(css, /@media \(pointer: coarse\) \{\s*\.ui-field \{\s*min-height: 2\.75rem;/);
   assert.match(read('src/Layout.jsx'), /@media \(max-width: 767px\), \(pointer: coarse\)/);
 });
 

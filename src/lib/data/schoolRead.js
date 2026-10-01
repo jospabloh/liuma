@@ -9,12 +9,23 @@
 // Platform-owner-only screens (LicenseAdmin, the cross-school support queue)
 // keep reading the entities directly: the owner-only RLS is theirs.
 import { base44 } from '@/api/base44Client';
-import { invokeFunction } from '@/lib/functionResponse';
-import { makeSchoolReader } from './schoolReadCore';
+//
+// v1.8.3: single reads made in the same tick are batched into one request,
+// the caller's context is shared for 30 s, and every request is retried with
+// backoff on Base44's rate limit (schoolReadCore.js, functionRetry.js).
+import { invokeFunction, onFunctionWrite } from '@/lib/functionResponse';
+import { makeSchoolReader, SCHOOL_READ_CONTEXT_TTL_MS } from './schoolReadCore';
 
 export { SCHOOL_READ_ALL } from './schoolReadCore';
 
-const reader = makeSchoolReader((payload) => invokeFunction(base44, 'schoolRead', payload));
+const reader = makeSchoolReader((payload) => invokeFunction(base44, 'schoolRead', payload), {
+  batch: true,
+  contextTtlMs: SCHOOL_READ_CONTEXT_TTL_MS,
+});
+
+// A write can change who the caller is linked to (a teacher's own salón, a
+// parent accepting a link): never answer the next context from before it.
+onFunctionWrite(() => reader.reset());
 
 export const schoolRead = reader.read;
 export const schoolReadMany = reader.readMany;

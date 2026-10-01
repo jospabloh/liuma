@@ -23,13 +23,16 @@
 // No billing read-only gate here, on purpose: an emergency contact is child
 // safety information and must stay editable whatever the subscription says.
 //
+// An AbsenceNotification is for today or a later day, one live request per
+// child per day (checkAbsenceRequest in ./_policy.ts).
+//
 // A new AbsenceNotification also emails the school's ADMINs and the child's
 // teachers (./_statusNotify.ts), from here, after the write — never from a
 // separate client call.
 //
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { FAMILY_OPERATIONS, buildFamilyPayload, decideFamilyAccess } from './_policy.ts';
+import { FAMILY_OPERATIONS, absenceRaceLoser, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
 
@@ -53,6 +56,14 @@ const AUDIT_ACTION: Record<string, string> = {
   update: 'RECORD_UPDATED',
   delete: 'RECORD_DELETED',
 };
+
+// Same test as schoolRead/_answer.ts#isRateLimitError (functions cannot
+// import across directories; tests/unit/rate-limit-resilience.test.js keeps
+// the copies in step).
+function isRateLimitError(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return err?.status === 429 || /rate limit/i.test(String(err?.message ?? ''));
+}
 
 Deno.serve(async (req) => {
   try {
@@ -156,6 +167,22 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true });
     }
 
+    // One live absence request per child per day (checkAbsenceRequest): read
+    // what is already stored for that student and day. The read is not
+    // atomic, so two requests in the same instant can both pass it; each one
+    // re-checks after its create (absenceRaceLoser) and the loser removes
+    // its own row.
+    // Only for a day that can pass the date rules: a malformed or past day is
+    // refused below without spending a read on it.
+    const today = mexicoToday();
+    let sameDayAbsences: Array<Record<string, unknown>> | null = null;
+    if (entity === 'AbsenceNotification' && operation === 'create') {
+      const day = typeof input.absence_date === 'string' ? input.absence_date.trim().slice(0, 10) : '';
+      sameDayAbsences = isCalendarDate(day) && day >= today
+        ? await sr.entities.AbsenceNotification.filter({ student_id: studentId, absence_date: day }, '-created_date', 20)
+        : [];
+    }
+
     const built = buildFamilyPayload(entity, operation, input, {
       isAdmin,
       userId: String(user.id),
@@ -165,12 +192,31 @@ Deno.serve(async (req) => {
       existing,
       event,
       chargeId,
+      today,
+      sameDayAbsences,
     });
-    if (!built.ok) return bad(400, built.code, built.message);
+    if (!built.ok) return bad(built.code === 'ABSENCE_DUPLICATE' ? 409 : 400, built.code, built.message);
 
     const record = operation === 'create'
       ? await sr.entities[entity].create(built.data)
       : await sr.entities[entity].update(String(existing!.id), built.data);
+
+    if (entity === 'AbsenceNotification' && operation === 'create' && record?.id) {
+      const after = await sr.entities.AbsenceNotification.filter(
+        { student_id: studentId, absence_date: String(record.absence_date || built.data.absence_date || '').slice(0, 10) },
+        'created_date',
+        20,
+      );
+      if (absenceRaceLoser(after, { ...built.data, ...record })) {
+        try {
+          await sr.entities.AbsenceNotification.delete(String(record.id));
+        } catch (e) {
+          console.error('guardedFamilyWrite: duplicate absence could not be removed', record.id, (e as Error)?.message);
+          return bad(500, 'ABSENCE_CONFLICT_UNRESOLVED', `absence ${record.id} duplicates another request and could not be removed`);
+        }
+        return bad(409, 'ABSENCE_DUPLICATE', 'there is already a request for that day');
+      }
+    }
 
     await writeAudit(sr, {
       ...auditBase,
@@ -194,6 +240,16 @@ Deno.serve(async (req) => {
       : undefined;
     return Response.json({ ok: true, record, pickupRevoked: built.pickupRevoked === true, ...(notified ? { notified } : {}) });
   } catch (e) {
+    // Base44's rate limit is a 429, not a 500 (v1.8.3). A write is NOT
+    // retried by the client: the person sees "Hay mucha actividad…" and
+    // decides; a read is retried with backoff (src/lib/functionRetry.js).
+    if (isRateLimitError(e)) {
+      console.warn('guardedFamilyWrite rate limited');
+      return Response.json(
+        { ok: false, code: 'RATE_LIMITED', error: 'RATE_LIMITED' },
+        { status: 429, headers: { 'Retry-After': '3' } },
+      );
+    }
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
 });

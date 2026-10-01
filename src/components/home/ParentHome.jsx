@@ -13,20 +13,24 @@ import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { formatLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import { selectOverdueCharges, UNPAID_CHARGE_STATUSES } from '@/lib/payments/overdue';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
+import { unreadNoticeCount } from '@/lib/notifications/inbox';
 
 export default function ParentHome({ user, userProfile, subscription }) {
   const today = schoolToday();
 
   // Get linked students
-  const { data: linkedStudents = { students: [], studentIds: [] } } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['linkedStudents', user.id],
     queryFn: () => getLinkedStudents(user),
   });
+  const { data: linkedStudents = { students: [], studentIds: [] } } = linkedQuery;
 
   const studentIds = linkedStudents.studentIds;
 
   // Get urgent notices
-  const { data: notices = [] } = useQuery({
+  const noticesQuery = useQuery({
     queryKey: ['urgentNotices', userProfile.school_id],
     queryFn: async () => {
       const allNotices = await schoolRead('Notice', { 
@@ -37,12 +41,13 @@ export default function ParentHome({ user, userProfile, subscription }) {
       ).slice(0, 3);
     },
   });
+  const { data: notices = [] } = noticesQuery;
 
 
   // The caller's unread deliveries, joined to the urgent notices at render
   // time: joining inside the queryFn read `notices` from a stale closure (it
   // usually ran before the notices had loaded) and cached an empty badge.
-  const { data: unreadDeliveries = [] } = useQuery({
+  const deliveriesQuery = useQuery({
     queryKey: ['unreadUrgentDeliveries', user.id, userProfile.school_id],
     queryFn: () => schoolRead('NoticeDelivery', {
       school_id: userProfile.school_id,
@@ -50,16 +55,15 @@ export default function ParentHome({ user, userProfile, subscription }) {
       status: 'SENT',
     }, '-created_date', 50),
   });
-  const urgentNoticeIds = new Set(notices.filter((n) => n.priority === 'URGENT').map((n) => n.id));
+  const { data: unreadDeliveries = [] } = deliveriesQuery;
   // Counted in notices, not copies: a parent with two children gets one copy
   // per child of the same notice (and of the emergency alert), and Avisos
   // shows it once (collapseInbox) — the badge must agree with that list.
-  const unreadUrgentCount = new Set(
-    unreadDeliveries.filter((row) => urgentNoticeIds.has(row.notice_id)).map((row) => row.notice_id),
-  ).size;
+  // Same rule as the teacher's home (unreadNoticeCount).
+  const unreadUrgentCount = unreadNoticeCount(unreadDeliveries, notices, { userId: user.id });
 
   // Get upcoming events
-  const { data: events = [] } = useQuery({
+  const eventsQuery = useQuery({
     queryKey: ['upcomingEvents', userProfile.school_id],
     queryFn: async () => {
       // Ask the server for today-onward (YYYY-MM-DD compares as text), or the
@@ -70,9 +74,10 @@ export default function ParentHome({ user, userProfile, subscription }) {
       }, 'date', 5);
     },
   });
+  const { data: events = [] } = eventsQuery;
 
   // Get pending charges count
-  const { data: pendingCharges = [] } = useQuery({
+  const chargesQuery = useQuery({
     queryKey: ['pendingCharges', studentIds],
     queryFn: async () => {
       if (studentIds.length === 0) return [];
@@ -87,6 +92,9 @@ export default function ParentHome({ user, userProfile, subscription }) {
     },
     enabled: studentIds.length > 0,
   });
+  const { data: pendingCharges = [] } = chargesQuery;
+  // A failed read is not "0 vinculados" or a missing badge (v1.8.3).
+  const loadFailure = blockingLoadFailure(linkedQuery, noticesQuery, deliveriesQuery, eventsQuery, chargesQuery);
 
   const overdueCharges = selectOverdueCharges(pendingCharges);
 
@@ -99,6 +107,9 @@ export default function ParentHome({ user, userProfile, subscription }) {
 
       {/* Main Content */}
       <div className="relative z-10 mx-auto max-w-2xl px-6 -mt-6 pb-24">
+        {loadFailure && (
+          <LoadError compact failure={loadFailure} title="No se pudo cargar todo tu resumen" className="mb-4" />
+        )}
         <div className="space-y-7">
           <HomeSection label="Día a día">
             <BigTile

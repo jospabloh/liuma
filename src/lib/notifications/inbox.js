@@ -43,3 +43,32 @@ export function collapseInbox(deliveries, noticesById) {
 export function unreadCopies(entry) {
   return (entry?.copies || []).filter((d) => d.status === 'SENT');
 }
+
+/**
+ * The "N urgentes sin leer" badge on a home screen, counted exactly the way
+ * the inbox it leads to shows them: the viewer's OWN copies only, one per
+ * notice, unread while any of their copies is unread.
+ *
+ * Live QA of v1.8.2: one emergency alert showed on a teacher's home as
+ * "4 urgentes sin leer". The teacher's home counted every unread copy it could
+ * read — the three per-child copies the families got, plus the teacher's own
+ * — so the number was neither "notices" nor "mine", and three of the four
+ * were copies the teacher can never mark read, so the badge could not clear.
+ *
+ * @param {Array<object>} deliveries NoticeDelivery rows (others' are ignored)
+ * @param {Array<object>} notices the notices the viewer can read
+ * @param {{ userId: string, priority?: string }} opts
+ */
+export function unreadNoticeCount(deliveries, notices, { userId, priority = 'URGENT' } = {}) {
+  if (!userId) return 0;
+  const wanted = new Set((Array.isArray(notices) ? notices : [])
+    .filter((notice) => notice && notice.priority === priority)
+    .map((notice) => notice.id));
+  const unread = new Set();
+  for (const row of Array.isArray(deliveries) ? deliveries : []) {
+    if (row && row.recipient_user_id === userId && row.status === 'SENT' && wanted.has(row.notice_id)) {
+      unread.add(row.notice_id);
+    }
+  }
+  return unread.size;
+}

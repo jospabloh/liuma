@@ -36,6 +36,9 @@ import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { invalidateSchoolStudents } from '@/hooks/useSchoolStudents';
 import StudentFormDialog from '@/components/school/StudentFormDialog';
 import { studentUpdatePatch } from '@/lib/forms/directorForms';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
+import { studentClassroomLabel } from '@/lib/studentClassroomLabel';
 
 export default function GestionAlumno() {
   const queryClient = useQueryClient();
@@ -49,7 +52,7 @@ export default function GestionAlumno() {
 
   const { userProfile } = useCurrentProfile();
 
-  const { data: student, isLoading } = useQuery({
+  const studentQuery = useQuery({
     queryKey: ['student', studentId],
     queryFn: async () => {
       const students = await schoolRead('Student', { id: studentId });
@@ -57,21 +60,35 @@ export default function GestionAlumno() {
     },
     enabled: !!studentId,
   });
+  const { data: student, isLoading } = studentQuery;
 
-  const { data: classroom } = useQuery({
+  const classroomQuery = useQuery({
     queryKey: ['classroom', student?.classroom_id],
     queryFn: async () => {
       const classrooms = await schoolRead('Classroom', { id: student.classroom_id });
-      return classrooms[0];
+      // null, not undefined: React Query treats an undefined result as an
+      // error, which would show "No se pudo cargar el salón" (and a toast) for
+      // a classroom that is simply gone — that is 'Salón no disponible'.
+      return classrooms[0] ?? null;
     },
     enabled: !!student?.classroom_id,
   });
+  const {
+    data: classroom,
+    isLoading: classroomLoading,
+    isError: classroomFailed,
+    refetch: refetchClassroom,
+  } = classroomQuery;
 
-  const { data: parentLinks = [] } = useQuery({
+  const parentLinksQuery = useQuery({
     queryKey: ['studentParentLinks', studentId],
     queryFn: () => schoolRead('ParentStudent', { student_id: studentId }),
     enabled: !!studentId,
   });
+  const { data: parentLinks = [] } = parentLinksQuery;
+  // A failed read is not "Sin salón" / "Sin padres vinculados" (v1.8.3).
+  const studentFailure = blockingLoadFailure(studentQuery);
+  const linksFailure = blockingLoadFailure(parentLinksQuery);
 
   const { data: parentProfiles = [] } = useQuery({
     queryKey: ['parentProfiles', userProfile?.school_id],
@@ -121,6 +138,13 @@ export default function GestionAlumno() {
     onError: (error) => {
       toast.error(`No se pudieron guardar los cambios. ${humanizeError(error)}`);
     },
+  });
+
+  const classroomLabel = studentClassroomLabel({
+    classroomId: student?.classroom_id,
+    classroom,
+    isLoading: classroomLoading,
+    isError: classroomFailed,
   });
 
   const blockReadOnly = () => toast.error('Tu licencia está en modo solo lectura. Reactívala para hacer cambios.');
@@ -221,6 +245,8 @@ export default function GestionAlumno() {
         backTo={createPageUrl(userProfile?.app_role === 'ADMIN' ? 'GestionEscuela' : 'Home')}
       />
 
+      {studentFailure && <LoadError failure={studentFailure} title="No se pudo cargar al alumno" />}
+
       {student && (
         <div className="space-y-6">
           {/* Student Info */}
@@ -237,9 +263,14 @@ export default function GestionAlumno() {
                 <h2 className="text-xl font-bold text-card-foreground">
                   {student.first_name} {student.last_name}
                 </h2>
-                <Badge variant="secondary" className="mt-1">
-                  {classroom?.name || 'Sin salón'}
-                </Badge>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">{classroomLabel.text}</Badge>
+                  {classroomLabel.state === 'error' && (
+                    <Button variant="ghost" size="sm" onClick={() => refetchClassroom()}>
+                      Reintentar
+                    </Button>
+                  )}
+                </div>
                 {parseLocalDate(student.birth_date) && (
                   <p className="text-sm text-muted-foreground mt-1">
                     {format(parseLocalDate(student.birth_date), "d 'de' MMMM, yyyy", { locale: es })}
@@ -297,7 +328,9 @@ export default function GestionAlumno() {
               )}
             </div>
 
-            {parentLinks.filter(l => l.status === 'ACTIVE').length === 0 ? (
+            {linksFailure ? (
+              <LoadError compact failure={linksFailure} title="No se pudieron cargar los padres vinculados" />
+            ) : parentLinks.filter(l => l.status === 'ACTIVE').length === 0 ? (
               <div className="text-center py-6 text-muted-foreground">
                 <Link className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p>Sin padres vinculados</p>

@@ -19,6 +19,8 @@ import { getLinkedClassrooms } from '@/lib/relations/getLinkedClassrooms';
 import { guardedCreate, guardedUpdate, publishNoticeDeliveries } from '@/lib/authorization/guardedWrite';
 import { unreadCopies } from '@/lib/notifications/inbox';
 import { readNoticeInbox } from '@/lib/notifications/readInbox';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 import {
   Dialog,
   DialogContent,
@@ -56,23 +58,33 @@ export default function AvisosMaestro() {
   const classroomIds = linkedClassrooms.classroomIds;
   const classrooms = linkedClassrooms.classrooms;
 
-  const { data: notices = [], isLoading } = useQuery({
+  const noticesQuery = useQuery({
     queryKey: ['teacherNotices', user?.id],
     queryFn: () => schoolRead('Notice', { 
       author_id: user.id 
     }, '-created_date', 20),
     enabled: !!user,
   });
+  const { data: notices = [], isLoading } = noticesQuery;
 
   // What the school sent TO this teacher — today, the emergency alert, which
   // sendBulkNotification delivers to every active teacher as well as to the
   // families. This page used to list only the teacher's own notices, so a
   // teacher had no in-app copy of the alert at all.
-  const { data: received = [] } = useQuery({
+  //
+  // A failed read must not look like "nothing received": the home's
+  // "N urgentes sin leer" leads here, so an empty page after a failed load
+  // reads as "the badge lied" (live QA of v1.8.2, under the rate limit).
+  const receivedQuery = useQuery({
     queryKey: ['noticeDeliveries', 'teacherInbox', user?.id, userProfile?.school_id],
     queryFn: () => readNoticeInbox({ schoolId: userProfile.school_id, userId: user.id }),
     enabled: !!user?.id && !!userProfile?.school_id,
   });
+  const { data: received = [] } = receivedQuery;
+  // A failed read is not "Sin avisos" (v1.8.3) — live QA saw exactly that
+  // with the school's emergency alert sitting unread in this inbox.
+  const receivedFailure = blockingLoadFailure(receivedQuery);
+  const noticesFailure = blockingLoadFailure(noticesQuery);
 
   const markReceivedAsRead = useMutation({
     mutationFn: (entry) => Promise.all(
@@ -154,6 +166,10 @@ export default function AvisosMaestro() {
         }
       />
 
+      {receivedFailure && (
+        <LoadError compact failure={receivedFailure} title="No se pudieron cargar los avisos que te envió la escuela" className="mb-6" />
+      )}
+
       {received.length > 0 && (
         <section className="mb-8" aria-labelledby="avisos-recibidos">
           <h2 id="avisos-recibidos" className="text-sm font-semibold text-muted-foreground mb-3">
@@ -181,7 +197,9 @@ export default function AvisosMaestro() {
         </section>
       )}
 
-      {notices.length === 0 ? (
+      {noticesFailure ? (
+        <LoadError failure={noticesFailure} title="No se pudieron cargar tus avisos" />
+      ) : notices.length === 0 ? (
         <EmptyState
           icon={Bell}
           title="Sin avisos"

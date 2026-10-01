@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { decideFamilyAccess, buildFamilyPayload } from '../../base44/functions/guardedFamilyWrite/_policy.ts';
+import { absenceRaceLoser, decideFamilyAccess, buildFamilyPayload } from '../../base44/functions/guardedFamilyWrite/_policy.ts';
 
 function read(path) {
   return fs.readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
@@ -104,7 +104,7 @@ test('an absence request is always filed as PENDING, by the caller', () => {
     'AbsenceNotification',
     'create',
     { absence_date: '2026-10-02', reason: 'Cita médica', status: 'APPROVED', parent_id: 'someone-else', reviewed_by: 'x' },
-    ctx,
+    { ...ctx, today: '2026-10-01' },
   );
   assert.equal(built.ok, true);
   assert.equal(built.data.status, 'PENDING');
@@ -149,4 +149,36 @@ test('guardedFamilyWrite takes the school from the student record and re-checks 
   assert.match(source, /const schoolId = String\(student\.school_id \|\| ''\);/);
   assert.match(source, /existing && String\(existing\.school_id \|\| ''\) !== schoolId/);
   assert.match(source, /sr\.entities\.ParentStudent\.filter\(\{\s*parent_id: user\.id,\s*student_id: studentId,\s*status: 'ACTIVE',/);
+});
+
+// The pre-create duplicate read is not atomic: two requests for the same child
+// and day can both pass it. Each racer re-reads after creating and applies the
+// same rule, so they agree on one keeper and exactly one row survives.
+test('absence race: both racers agree on one keeper (oldest live, then id)', () => {
+  const a = { id: 'b2', student_id: 's1', absence_date: '2026-10-05', status: 'PENDING', created_date: '2026-10-01T10:00:00.000Z' };
+  const b = { id: 'a9', student_id: 's1', absence_date: '2026-10-05', status: 'PENDING', created_date: '2026-10-01T10:00:00.000Z' };
+  const rows = [a, b];
+  // Same instant: the lower id keeps the day.
+  assert.equal(absenceRaceLoser(rows, b), false);
+  assert.equal(absenceRaceLoser(rows, a), true);
+  // The re-read may not show our own row yet: it still counts.
+  assert.equal(absenceRaceLoser([b], a), true);
+  assert.equal(absenceRaceLoser([], b), false);
+});
+
+test('absence race: a REJECTED row or another day/child never makes the new one lose', () => {
+  const mine = { id: 'z1', student_id: 's1', absence_date: '2026-10-05', status: 'PENDING', created_date: '2026-10-01T10:00:05.000Z' };
+  const rows = [
+    { id: 'a1', student_id: 's1', absence_date: '2026-10-05', status: 'REJECTED', created_date: '2026-10-01T09:00:00.000Z' },
+    { id: 'a2', student_id: 's1', absence_date: '2026-10-06', status: 'PENDING', created_date: '2026-10-01T09:00:00.000Z' },
+    { id: 'a3', student_id: 's2', absence_date: '2026-10-05', status: 'PENDING', created_date: '2026-10-01T09:00:00.000Z' },
+    mine,
+  ];
+  assert.equal(absenceRaceLoser(rows, mine), false);
+});
+
+test('guardedFamilyWrite removes its own row when it loses the absence race', () => {
+  const src = read('base44/functions/guardedFamilyWrite/entry.ts');
+  assert.match(src, /absenceRaceLoser\(after,/);
+  assert.match(src, /AbsenceNotification\.delete\(String\(record\.id\)\)/);
 });

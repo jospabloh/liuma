@@ -114,11 +114,49 @@ export function spanishDate(value: string | undefined | null, withYear = true): 
   return withYear ? `${d} de ${month}, ${y}` : `${d} de ${month}`;
 }
 
-/** "$1,250.00" — the amount label the payment reminder has always shown. */
+/**
+ * "$1,350.00 MXN" — the amount every payment email shows (es-MX: comma for
+ * thousands, point for cents, currency named).
+ *
+ * Built by hand, not with toLocaleString: live QA of v1.8.2 received
+ * "$1350.00" from the deployed function, i.e. the runtime's Intl did not group
+ * thousands for es-MX (CLDR's Spanish "minimum grouping digits" of 2, or a
+ * runtime without full locale data — either way, not ours to depend on). A
+ * money label must read the same on every runtime.
+ */
 export function moneyLabel(amount: unknown): string {
   const n = Number(amount);
   if (!Number.isFinite(n)) return '';
-  return `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const cents = Math.round(Math.abs(n) * 100);
+  const whole = String(Math.floor(cents / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const frac = String(cents % 100).padStart(2, '0');
+  return `${n < 0 && cents > 0 ? '-' : ''}$${whole}.${frac} MXN`;
+}
+
+/**
+ * The breakdown a payment email shows next to the balance: the charge's total
+ * and what is already paid — only when something IS paid. Empty strings
+ * otherwise, which the templates skip.
+ */
+export function paymentLabels(charge: Record<string, unknown> | null | undefined): { totalLabel: string; paidLabel: string } {
+  const cents = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  };
+  const paid = cents(charge?.amount_paid);
+  if (paid <= 0) return { totalLabel: '', paidLabel: '' };
+  return { totalLabel: moneyLabel(cents(charge?.amount) / 100), paidLabel: moneyLabel(paid / 100) };
+}
+
+/**
+ * The author line of the emergency alert's Notice. The planner used to set
+ * only author_id, so the director's AvisosAdmin showed a blank author; every
+ * other notice carries the author's name. A director with no name on their
+ * account still gets a meaningful line, never an email local part.
+ */
+export function emergencyAuthorName(user: { full_name?: unknown } | null | undefined): string {
+  const name = typeof user?.full_name === 'string' ? user.full_name.trim() : '';
+  return (name && !name.includes('@') ? name : 'Dirección de la escuela').slice(0, 200);
 }
 
 /**

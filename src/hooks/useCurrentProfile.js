@@ -45,6 +45,9 @@ export function useCurrentProfile() {
   return {
     user,
     userProfile: profileQuery.data,
+    // The raw query, so a screen can tell "no profile" from "the read
+    // failed" (blockingLoadFailure, v1.8.3).
+    profileQuery,
     // True until we know the user and (if there is one) their profile.
     isLoading: userLoading || (!!user && profileQuery.isLoading),
   };

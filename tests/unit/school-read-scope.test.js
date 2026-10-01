@@ -35,9 +35,12 @@ test('Lumi answers from the same rules: lumiQuery scopes rows with _scope.ts', (
 
 test('the function never takes the school from the request body', () => {
   const entry = read('base44/functions/schoolRead/entry.ts');
-  assert.doesNotMatch(entry, /body\??\.(school_id|schoolId)/);
-  assert.match(entry, /UserProfile\.filter\(\{ user_id: user\.id \}/);
-  assert.match(entry, /selectCurrentProfile\(profiles\)/);
+  const answer = read('base44/functions/schoolRead/_answer.ts');
+  for (const source of [entry, answer]) assert.doesNotMatch(source, /body\??\.(school_id|schoolId)/);
+  // The caller's own rows, with their own token (v1.8.3), pinned to user.id.
+  assert.match(entry, /base44\.entities\.UserProfile\.filter\(\{ user_id: user\.id \}/);
+  assert.match(entry, /answerSchoolRead\(base44\.asServiceRole, String\(user\.id\), profiles, body\)/);
+  assert.match(answer, /selectCurrentProfile\(profiles\)/);
 });
 
 test('the current profile is the same deterministic pick as the front end', () => {
@@ -120,7 +123,7 @@ function world(extra = {}) {
       { ...t('nSchoolB', '2026-09-21T10:00:00Z'), school_id: 'B', scope: 'SCHOOL', title: 'Escuela B', author_id: 'adminB' },
     ],
     DiaryEntry: [
-      { ...t('d1'), school_id: 'A', classroom_id: 'cA1', student_id: 'sA1', date: '2026-09-29', notified_parent_emails: ['parent1@example.com'], teacher_id: 'teacherA' },
+      { ...t('d1'), school_id: 'A', classroom_id: 'cA1', student_id: 'sA1', date: '2026-09-29', notified_parent_emails: ['parent1@example.com'], teacher_id: 'teacherA', sent_to_parents: true },
       { ...t('d2'), school_id: 'A', classroom_id: 'cA1', student_id: 'sA2', date: '2026-09-29', teacher_id: 'teacherA' },
       { ...t('d3'), school_id: 'A', classroom_id: 'cA2', student_id: 'sA3', date: '2026-09-29', teacher_id: 'other' },
     ],
@@ -239,6 +242,33 @@ test('a PARENT reads family records of their own children only', async () => {
   // Their children's emergency contacts — including one the school added.
   assert.deepEqual(ids(await rowsOf(db, 'parentA1', { entity: 'EmergencyContact' })), ['ec1', 'ec2']);
   assert.deepEqual(await rowsOf(db, 'parentA1', { entity: 'EmergencyContact', filter: { student_id: 'sA3' } }), []);
+});
+
+test('a PARENT reads only the bitácoras the teacher sent to the family', async () => {
+  // QA r5 (v1.8.2): a diary saved with "Enviar a la familia" off reached the
+  // parent through Bitácora and through Lumi's diary_recent. Same child, same
+  // classroom — only the switch differs.
+  const db = world({
+    DiaryEntry: [
+      { ...t('dUnsent'), school_id: 'A', classroom_id: 'cA1', student_id: 'sA1', date: '2026-09-30', notes_text: 'nota interna', sent_to_parents: false, teacher_id: 'teacherA' },
+      { ...t('dNoFlag'), school_id: 'A', classroom_id: 'cA1', student_id: 'sA1', date: '2026-09-28', notes_text: 'sin marca', teacher_id: 'teacherA' },
+    ],
+  });
+  assert.deepEqual(ids(await rowsOf(db, 'parentA1', { entity: 'DiaryEntry' })), ['d1']);
+  // Asking for it by id, by date or by the flag itself finds nothing.
+  assert.deepEqual(await rowsOf(db, 'parentA1', { entity: 'DiaryEntry', filter: { id: 'dUnsent' } }), []);
+  assert.deepEqual(await rowsOf(db, 'parentA1', { entity: 'DiaryEntry', filter: { date: '2026-09-30' } }), []);
+  assert.deepEqual(await rowsOf(db, 'parentA1', { entity: 'DiaryEntry', filter: { sent_to_parents: false } }), []);
+  assert.deepEqual(await rowsOf(db, 'parentA1', { entity: 'DiaryEntry', filter: { sent_to_parents: { $ne: true } } }), []);
+  // The condition is pushed into the query, so limit/skip count sent entries only.
+  const { scope } = await scopeFor(db, 'parentA1');
+  assert.equal(needsScan('PARENT', 'DiaryEntry'), false);
+  assert.equal(rowVisible(scope, 'DiaryEntry', { school_id: 'A', student_id: 'sA1', sent_to_parents: false }), false);
+  assert.equal(rowVisible(scope, 'DiaryEntry', { school_id: 'A', student_id: 'sA1' }), false);
+  assert.equal(rowVisible(scope, 'DiaryEntry', { school_id: 'A', student_id: 'sA1', sent_to_parents: true }), true);
+  // The school keeps every entry: the teacher who wrote it and the director.
+  assert.deepEqual(ids(await rowsOf(db, 'teacherA', { entity: 'DiaryEntry', filter: { student_id: 'sA1' } })), ['d1', 'dNoFlag', 'dUnsent']);
+  assert.deepEqual(ids(await rowsOf(db, 'adminA', { entity: 'DiaryEntry', filter: { student_id: 'sA1' } })), ['d1', 'dNoFlag', 'dUnsent']);
 });
 
 test('a stray link to a student of another school grants nothing', async () => {
@@ -494,9 +524,11 @@ test('scan-mode rules are the ones the batch cap counts', () => {
   assert.equal(needsScan('PARENT', 'Attendance'), false);
   assert.equal(needsScan('TEACHER', 'UserProfile'), false);
   assert.ok(MAX_SCANS_PER_BATCH >= 2, 'OperacionDiaria/TeacherHome batch two scan reads');
-  const entry = read('base44/functions/schoolRead/entry.ts');
-  assert.match(entry, /needsScan\(scope\.role/);
-  assert.match(entry, /TOO_MANY_SCANS/);
+  const answer = read('base44/functions/schoolRead/_answer.ts');
+  assert.match(answer, /needsScan\(scope\.role/);
+  assert.match(answer, /TOO_MANY_SCANS/);
   // A 500 never echoes the raw error.
-  assert.doesNotMatch(entry, /error: \(e as Error\)\.message/);
+  for (const file of ['entry.ts', '_answer.ts']) {
+    assert.doesNotMatch(read(`base44/functions/schoolRead/${file}`), /error: \(e as Error\)\.message/);
+  }
 });

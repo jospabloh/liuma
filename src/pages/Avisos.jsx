@@ -6,6 +6,8 @@ import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import LoadingScreen from '@/components/ui/LoadingScreen';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 import NoticeCard from '@/components/notices/NoticeCard';
 import { Bell, Check, Filter } from 'lucide-react';
 import { format } from 'date-fns';
@@ -38,7 +40,7 @@ export default function Avisos() {
   
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: notices = [], isLoading } = useQuery({
+  const noticesQuery = useQuery({
     queryKey: ['notices', userProfile?.school_id],
     queryFn: async () => {
       if (!canReadEntity(userProfile?.app_role, 'Notice')) return [];
@@ -51,10 +53,9 @@ export default function Avisos() {
     },
     enabled: !!userProfile,
   });
+  const { data: notices = [], isLoading } = noticesQuery;
 
-
-
-  const { data: deliveries = [] } = useQuery({
+  const deliveriesQuery = useQuery({
     queryKey: ['noticeDeliveries', user?.id, userProfile?.school_id],
     queryFn: async () => {
       const rows = await schoolRead('NoticeDelivery', {
@@ -76,6 +77,9 @@ export default function Avisos() {
     },
     enabled: !!user && !!userProfile,
   });
+  const { data: deliveries = [] } = deliveriesQuery;
+  // A failed read is not "Sin avisos" (v1.8.3).
+  const loadFailure = blockingLoadFailure(noticesQuery, deliveriesQuery);
 
   const markAsReadMutation = useMutation({
     // read_at is stamped by the server the first time (P10b). One notice can
@@ -148,7 +152,9 @@ export default function Avisos() {
         </motion.div>
       )}
 
-      {filteredNotices.length === 0 ? (
+      {loadFailure ? (
+        <LoadError failure={loadFailure} title="No se pudieron cargar tus avisos" />
+      ) : filteredNotices.length === 0 ? (
         <EmptyState
           icon={Bell}
           title="Sin avisos"

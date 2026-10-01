@@ -9,6 +9,7 @@ import { AuthError, AuthNotice, EmailField, PasswordField, SubmitButton } from "
 import { getRememberedIdentity, clearRememberedIdentity } from "@/lib/lastIdentity";
 import { describeLoginError, describeOtpError, describeResetRequestError, describeSignupError, errorStatus, humanizeError, isNetworkError, NETWORK_ERROR_MESSAGE } from "@/lib/errorMessages";
 import { LOGIN_PATH, MIN_PASSWORD_LENGTH, readResetToken } from "@/lib/authLinks";
+import { resetRequestedNotice, verifyEmailHint } from "@/lib/platformEmails";
 
 // Pantalla de inicio de sesión propia de LIUMA, en lugar de la página genérica
 // hospedada por Base44. Usa los métodos de correo+contraseña del SDK
@@ -47,7 +48,9 @@ function LinkButton({ onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+      // A finger needs 44px; the text line is 20. coarse: only, so a mouse
+      // keeps the compact row.
+      className="inline-flex items-center text-sm font-medium text-primary underline-offset-4 hover:underline coarse:min-h-11"
     >
       {children}
     </button>
@@ -134,7 +137,8 @@ export default function Login() {
         }
       }
       go("login", { keepNotice: true });
-      setNotice(`Si hay una cuenta con ${email.trim()}, te llegará un correo con el enlace para crear una contraseña nueva. Revisa también tu carpeta de spam.`);
+      // Base44 sends this e-mail, in English; say so (platformEmails.js).
+      setNotice(resetRequestedNotice(email.trim()));
     });
   };
 
@@ -257,7 +261,7 @@ export default function Login() {
             <button
               type="button"
               onClick={useOtherAccount}
-              className="mt-4 w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="mt-4 w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground coarse:min-h-11"
             >
               Usar otra cuenta
             </button>
@@ -324,6 +328,8 @@ export default function Login() {
           <p className="text-center text-sm text-muted-foreground">
             Escribe el código que enviamos a <strong className="text-foreground">{email.trim()}</strong>.
           </p>
+          {/* Base44 sends the code, in English: tell them what to look for. */}
+          <p className="text-center text-xs text-muted-foreground">{verifyEmailHint()}</p>
           <div className="space-y-2">
             <Label htmlFor="otp">Código</Label>
             <Input

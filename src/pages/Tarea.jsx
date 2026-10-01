@@ -17,6 +17,8 @@ import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity } from '@/lib/authorization/policy';
 import { loadHomeworkByClassroomIds, normalizedIdQueryKey } from '@/lib/data-loaders/batchedEntityLoaders';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 import {
   Dialog,
   DialogContent,
@@ -31,11 +33,12 @@ export default function Tarea() {
   
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
     enabled: !!user && canReadEntity(userProfile?.app_role, 'Homework'),
   });
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = linkedQuery;
 
   const students = linkedStudents.students;
   const studentIds = linkedStudents.studentIds;
@@ -44,11 +47,14 @@ export default function Tarea() {
   const activeStudent = students.find((student) => student.id === activeStudentId) || null;
   const activeClassroomIds = activeStudent ? [activeStudent.classroom_id].filter(Boolean) : classroomIds;
 
-  const { data: homework = [], isLoading } = useQuery({
+  const homeworkQuery = useQuery({
     queryKey: normalizedIdQueryKey('homework', activeClassroomIds),
     queryFn: async () => (await loadHomeworkByClassroomIds(activeClassroomIds)).items,
     enabled: activeClassroomIds.length > 0,
   });
+  const { data: homework = [], isLoading } = homeworkQuery;
+  // A failed read is not "Sin tarea" (v1.8.3).
+  const loadFailure = blockingLoadFailure(linkedQuery, homeworkQuery);
 
   const today = startOfLocalDay();
   const todayStr = format(today, 'yyyy-MM-dd');
@@ -61,7 +67,7 @@ export default function Tarea() {
     return !!dueDate && dueDate >= today && dueDate <= weekEnd;
   });
 
-  if (isLoading) return <LoadingScreen message="Cargando tareas..." />;
+  if (isLoading || linkedQuery.isLoading) return <LoadingScreen message="Cargando tareas..." />;
 
   return (
     <div className="min-h-screen bg-background">
@@ -89,6 +95,9 @@ export default function Tarea() {
         </div>
       )}
 
+      {loadFailure ? (
+        <LoadError failure={loadFailure} title="No se pudieron cargar las tareas" />
+      ) : (
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full mb-6">
           <TabsTrigger value="hoy" className="flex-1">Hoy</TabsTrigger>
@@ -147,6 +156,7 @@ export default function Tarea() {
           )}
         </TabsContent>
       </Tabs>
+      )}
 
       {/* Homework Detail Modal */}
       <Dialog open={!!selectedHomework} onOpenChange={() => setSelectedHomework(null)}>

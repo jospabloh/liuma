@@ -33,6 +33,7 @@ import {
   selectCurrentProfile, profileProblem, canRunIntent, QUERY_INTENTS, scopeRows,
   mexicoToday, mexicoDayOf, addDays, isDateOnly, spanishLongDate, isoWeek, menuDayKey,
   label, formatMXN, fullName, matchStudents, errorMessage, chargeOwed, OPEN_CHARGE_STATUSES,
+  displayUserName, homeworkRange, attendanceWindow,
 } from './_lumiCore.ts';
 
 const MAX_ROWS = 200;
@@ -121,7 +122,9 @@ Deno.serve(async (req) => {
         const rooms = await classroomNames(sr, scope.schoolId);
         return Response.json({
           ...base,
-          user_name: String(user.full_name || ''),
+          // '' when full_name is only the email handle: Lumi must not guess a
+          // name out of it (QA r5, LP12).
+          user_name: displayUserName(user.full_name, user.email),
           classrooms: scope.classroomIds.map((id) => rooms.get(id)).filter(Boolean),
           students: students.map((s) => ({ student_ref: s.id, name: fullName(s), classroom: rooms.get(String(s.classroom_id)) || '' })),
         });
@@ -167,8 +170,7 @@ Deno.serve(async (req) => {
       }
 
       case 'homework': {
-        const from = isDateOnly(body?.from) ? String(body.from) : today;
-        const to = isDateOnly(body?.to) ? String(body.to) : addDays(from, 7);
+        const { from, to } = homeworkRange(today, body?.from, body?.to);
         let classroomIds = scope.classroomIds;
         if (picked.studentId) {
           const s = await sr.entities.Student.get(picked.studentId).catch(() => null);
@@ -179,15 +181,30 @@ Deno.serve(async (req) => {
           : (await Promise.all(classroomIds.map((cid) =>
             sr.entities.Homework.filter({ school_id: scope.schoolId, classroom_id: cid }, '-due_date', MAX_ROWS)))).flat();
         const rooms = await classroomNames(sr, scope.schoolId);
-        const homework = scopeRows(scope, 'Homework', rows)
+        const visible = scopeRows(scope, 'Homework', rows)
+          .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
+        const present = (h: Row) => ({
+          title: h.title, subject: h.subject || '', description: h.description || '',
+          due: spanishLongDate(String(h.due_date)), classroom: rooms.get(String(h.classroom_id)) || '',
+          teacher: h.teacher_name || '',
+        });
+        const homework = visible
           .filter((h) => String(h.due_date || '') >= from && String(h.due_date || '') <= to)
-          .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
-          .map((h) => ({
-            title: h.title, subject: h.subject || '', description: h.description || '',
-            due: spanishLongDate(String(h.due_date)), classroom: rooms.get(String(h.classroom_id)) || '',
-            teacher: h.teacher_name || '',
-          }));
-        return Response.json({ ...base, range: { from: spanishLongDate(from), to: spanishLongDate(to) }, homework });
+          .map(present);
+        // An empty range is not "no homework": say what comes next, so Lumi
+        // can answer "la siguiente entrega es el martes 20" instead of "no hay
+        // tareas" (QA r5, LP01). Never a past due date: an empty range of
+        // last week must not offer last Friday as "la siguiente".
+        const after = homework.length ? null : visible.find((h) => {
+          const due = String(h.due_date || '');
+          return due > to && due >= today;
+        });
+        return Response.json({
+          ...base,
+          range: { from: spanishLongDate(from), to: spanishLongDate(to) },
+          homework,
+          next_due: after ? present(after) : null,
+        });
       }
 
       case 'attendance': {
@@ -195,29 +212,39 @@ Deno.serve(async (req) => {
         const students = await schoolStudents(sr, scope);
         const names = new Map(students.map((s) => [String(s.id), fullName(s)]));
         let rows: Row[];
+        let upcomingRows: Row[] = [];
         if (picked.studentId) {
-          const since = addDays(today, -14);
-          rows = (await sr.entities.Attendance.filter({ school_id: scope.schoolId, student_id: picked.studentId }, '-date', 60))
-            .filter((r: Row) => String(r.date || '') >= since);
+          // Past 14 days UP TO TODAY; a future row (an approved absence
+          // request) is what is scheduled, not an absence that happened
+          // (QA r5, LM04).
+          const split = attendanceWindow(scopeRows(scope, 'Attendance',
+            await sr.entities.Attendance.filter({ school_id: scope.schoolId, student_id: picked.studentId }, '-date', 60)), today);
+          rows = split.past;
+          upcomingRows = split.upcoming;
         } else {
           rows = await sr.entities.Attendance.filter({ school_id: scope.schoolId, date }, '-date', 1000);
         }
-        const visible = scopeRows(scope, 'Attendance', rows);
-        const records = visible.map((r) => ({
+        // The per-student rows were scoped (and projected) above already.
+        const visible = picked.studentId ? rows : scopeRows(scope, 'Attendance', rows);
+        const present = (r: Row) => ({
           student: names.get(String(r.student_id)) || 'alumno',
           date: spanishLongDate(String(r.date)),
           status: label('attendance_status', r.status),
           reason: r.reason || '',
-        }));
+        });
+        const records = visible.map(present);
         const counts: Record<string, number> = {};
         for (const r of visible) counts[label('attendance_status', r.status)] = (counts[label('attendance_status', r.status)] || 0) + 1;
         const recorded = new Set(visible.map((r) => String(r.student_id)));
         const without = picked.studentId ? [] : students.filter((s) => !recorded.has(String(s.id))).map((s) => fullName(s));
         return Response.json({
           ...base,
-          date_label: picked.studentId ? 'últimos 14 días' : spanishLongDate(date),
+          date_label: picked.studentId ? `últimos 14 días, hasta hoy ${spanishLongDate(today)}` : spanishLongDate(date),
           counts,
           records: records.slice(0, MAX_ROWS),
+          // Per student only: future records (e.g. "falta justificada"
+          // already approved for tomorrow). Not counted above.
+          upcoming: upcomingRows.slice(0, 20).map(present),
           students_without_record: without.slice(0, 100),
         });
       }
@@ -360,18 +387,24 @@ Deno.serve(async (req) => {
       case 'uniform_status': {
         const students = await schoolStudents(sr, scope);
         const names = new Map(students.map((s) => [String(s.id), fullName(s)]));
-        const rows: Row[] = scope.role === 'PARENT'
+        // Dirección sees OPEN orders only, and is told so (open_only +
+        // delivered_count): "no hay pedidos" must not read as "never had any"
+        // (QA r5, LD04).
+        const all: Row[] = scope.role === 'PARENT'
           ? await sr.entities.UniformOrder.filter({ school_id: scope.schoolId, parent_id: user.id }, '-created_date', 50)
-          : (await sr.entities.UniformOrder.filter({ school_id: scope.schoolId }, '-created_date', 300))
-            .filter((o: Row) => ['PENDING', 'PROCESSING', 'READY'].includes(String(o.status)));
-        const orders = scopeRows(scope, 'UniformOrder', rows).slice(0, 30).map((o) => ({
+          : await sr.entities.UniformOrder.filter({ school_id: scope.schoolId }, '-created_date', 300);
+        const openOnly = scope.role !== 'PARENT';
+        const scoped = scopeRows(scope, 'UniformOrder', all);
+        const rows = openOnly ? scoped.filter((o) => ['PENDING', 'PROCESSING', 'READY'].includes(String(o.status))) : scoped;
+        const deliveredCount = scoped.filter((o) => String(o.status) === 'DELIVERED').length;
+        const orders = rows.slice(0, 30).map((o) => ({
           student: names.get(String(o.student_id)) || '',
           status: label('uniform_status', o.status),
           items: Array.isArray(o.items) ? o.items.length : 0,
           estimated_delivery: o.estimated_delivery ? spanishLongDate(String(o.estimated_delivery)) : '',
           ordered: spanishLongDate(mexicoDayOf(o.created_date)),
         }));
-        return Response.json({ ...base, orders });
+        return Response.json({ ...base, open_only: openOnly, delivered_count: deliveredCount, orders });
       }
     }
 

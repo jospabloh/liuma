@@ -42,15 +42,11 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
-// record.date is a plain 'YYYY-MM-DD' string (Base44 `format: "date"`); both
-// renderers below are pure string ops on that, no date-fns / Date parsing
-// (avoids timezone-shift bugs from `new Date('YYYY-MM-DD')`).
-function ddmmyyyy(dateStr: string): string {
-  const [y, m, d] = String(dateStr || '').split('-');
-  if (!y || !m || !d) return '';
-  return `${d}/${m}/${y}`;
-}
-
+// record.date is a plain 'YYYY-MM-DD' string (Base44 `format: "date"`); the
+// renderer below is a pure string op on that, no date-fns / Date parsing
+// (avoids timezone-shift bugs from `new Date('YYYY-MM-DD')`). Every date in a
+// LIUMA email body reads "29 de septiembre, 2026" — the absence email used to
+// say "29/09/2026", the only one that did (live QA of v1.8.2).
 function spanishDate(dateStr: string, withYear: boolean): string {
   const parts = String(dateStr || '').split('-').map(Number);
   const [y, m, d] = parts;
@@ -72,6 +68,16 @@ async function resolveParentEmails(sr: any, studentId: string): Promise<string[]
 }
 
 const DIARY_NOTIFY_WINDOW_MS = 10 * 60 * 1000;
+
+// Same link, same look as the shared _templates.ts appButton() (this function
+// has its own two bodies and cannot import across function directories;
+// tests/unit/notify-copy-v183.test.js keeps the two identical).
+const APP_URL = 'https://liuma.acaciaco.com.mx/';
+function appButton(): string {
+  return `
+      <p style="margin: 24px 0 8px;"><a href="${APP_URL}" style="display: inline-block; background: #4f46e5; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Abrir LIUMA</a></p>
+      <p style="margin: 0 0 16px; color: #64748b; font-size: 12px;">O entra a liuma.acaciaco.com.mx</p>`;
+}
 
 Deno.serve(async (req) => {
   try {
@@ -130,7 +136,7 @@ Deno.serve(async (req) => {
 
       const firstName = escapeHtml(student?.first_name);
       const lastName = escapeHtml(student?.last_name);
-      const dateLabel = escapeHtml(ddmmyyyy(String(record.date || '')));
+      const dateLabel = escapeHtml(spanishDate(String(record.date || ''), true));
       const reason = record.reason ? String(record.reason) : '';
 
       const subject = `Ausencia de ${student?.first_name || ''} ${student?.last_name || ''}`.trim();
@@ -140,6 +146,7 @@ Deno.serve(async (req) => {
         <p>Le informamos que <strong>${firstName} ${lastName}</strong> no asistió a clases el día <strong>${dateLabel}</strong>.</p>
         ${reason ? `<p><strong>Motivo registrado:</strong> ${escapeHtml(reason)}</p>` : ''}
         <p>Si tiene alguna pregunta, por favor contacte a la escuela.</p>
+        ${appButton()}
         <p>Atentamente,<br>Equipo LIUMA</p>
       `;
 
@@ -208,6 +215,7 @@ Deno.serve(async (req) => {
       ` : ''}
 
       <p style="margin-top: 16px;">Registrado por: ${escapeHtml(record.teacher_name)}</p>
+      ${appButton()}
       <p style="color: #64748b; font-size: 12px; margin-top: 8px;">Este es un mensaje automático de LIUMA.</p>
     `;
 

@@ -17,6 +17,8 @@ import { parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import { summarizeUnpaidCharges, UNPAID_CHARGE_STATUSES } from '@/lib/payments/overdue';
 import { formatMoney } from '@/lib/payments/money';
 import { toast } from 'sonner';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 export default function Reportes() {
   const reportRef = useRef(null);
@@ -27,17 +29,19 @@ export default function Reportes() {
   const { user, userProfile } = useCurrentProfile();
   const role = userProfile?.app_role || 'PARENT';
 
-  const { data: students = [] } = useQuery({
+  const studentsQuery = useQuery({
     queryKey: ['allStudents', userProfile?.school_id],
     queryFn: () => schoolRead('Student', { school_id: userProfile.school_id }),
     enabled: !!userProfile,
   });
+  const { data: students = [] } = studentsQuery;
 
-  const { data: classrooms = [] } = useQuery({
+  const classroomsQuery = useQuery({
     queryKey: ['allClassrooms', userProfile?.school_id],
     queryFn: () => schoolRead('Classroom', { school_id: userProfile.school_id, is_active: true }),
     enabled: !!userProfile,
   });
+  const { data: classrooms = [] } = classroomsQuery;
 
   // Date range and salón are applied by the server (same shape as
   // ResumenAsistencia), and every page is read: the page used to pull the
@@ -53,41 +57,56 @@ export default function Reportes() {
     ...(filters.classroomId !== 'ALL' && { classroom_id: filters.classroomId }),
   });
 
-  const { data: attendances = [], isError: attendanceError, isLoading: attendanceLoading } = useQuery({
+  const attendanceQuery = useQuery({
     queryKey: ['attendanceReport', userProfile?.school_id, filters.dateFrom, filters.dateTo, filters.classroomId],
     queryFn: () => schoolRead('Attendance', rangeQuery(userProfile.school_id), 'date', SCHOOL_READ_ALL),
     enabled: !!userProfile && rangeValid && canReadEntity(role, 'Attendance'),
   });
+  const { data: attendances = [], isError: attendanceError, isLoading: attendanceLoading } = attendanceQuery;
 
-  const { data: diaries = [], isError: diariesError, isLoading: diariesLoading } = useQuery({
+  const diariesQuery = useQuery({
     queryKey: ['diariesReport', userProfile?.school_id, filters.dateFrom, filters.dateTo, filters.classroomId],
     queryFn: () => schoolRead('DiaryEntry', rangeQuery(userProfile.school_id), 'date', SCHOOL_READ_ALL),
     enabled: !!userProfile && rangeValid && canReadEntity(role, 'DiaryEntry'),
   });
+  const { data: diaries = [], isError: diariesError, isLoading: diariesLoading } = diariesQuery;
 
   // Every status that still owes money — PENDING alone dropped each charge
   // PagosAdmin had already flipped to OVERDUE (and every partly paid one)
   // out of the total and the "vencidos" count. Own cache key: ParentHome
   // keeps ['pendingCharges', studentIds] for a different list.
-  const { data: unpaidCharges = [] } = useQuery({
+  const unpaidQuery = useQuery({
     queryKey: ['unpaidChargesReport', userProfile?.school_id],
     queryFn: () => schoolRead('ChargeItem', { school_id: userProfile.school_id, status: { $in: [...UNPAID_CHARGE_STATUSES] } }),
     enabled: !!userProfile && canReadEntity(role, 'ChargeItem'),
   });
+  const { data: unpaidCharges = [] } = unpaidQuery;
 
-  const { data: notices = [] } = useQuery({
-    queryKey: ['notices', userProfile?.school_id],
+  const noticesQuery = useQuery({
+    // Own key: Avisos caches ['notices', school] with 50 rows, and with a 30 s
+    // staleTime (v1.8.3) the report would count that shorter list. The
+    // prefix still matches every invalidateQueries(['notices']).
+    queryKey: ['notices', userProfile?.school_id, 'report'],
     queryFn: () => schoolRead('Notice', { school_id: userProfile.school_id }, '-created_date', 100),
     enabled: !!userProfile && canReadEntity(role, 'Notice'),
   });
+  const { data: notices = [] } = noticesQuery;
 
-  const { data: upcomingEvents = [], isLoading } = useQuery({
+  const eventsQuery = useQuery({
     queryKey: ['upcomingEvents', userProfile?.school_id],
     // Upcoming = dated today or later, filtered by the server. Taking the first
     // 10 by date and filtering here returned nothing once a school had 10 past events.
     queryFn: () => schoolRead('Event', { school_id: userProfile.school_id, date: { $gte: today } }, 'date', 10),
     enabled: !!userProfile,
   });
+  const { data: upcomingEvents = [], isLoading } = eventsQuery;
+  // Any list that failed to load makes the figures wrong, not zero. Live QA
+  // (2026-10-01) saw a first load with every figure at 0 and only a red
+  // line of text; now the report says which part failed and offers a retry,
+  // and exporting waits until everything loaded (v1.8.3).
+  const loadFailure = blockingLoadFailure(
+    studentsQuery, classroomsQuery, attendanceQuery, diariesQuery, unpaidQuery, noticesQuery, eventsQuery,
+  );
 
   const filteredStudents = useMemo(() => students.filter((s) => {
     if (filters.classroomId !== 'ALL' && s.classroom_id !== filters.classroomId) return false;
@@ -161,14 +180,21 @@ export default function Reportes() {
             <option value="ALL">Alcance: todos</option><option value="SCHOOL">Escuela</option><option value="CLASSROOM">Salón</option><option value="STUDENT">Alumno</option>
           </select>
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" disabled={!canExport || kpisLoading || attendanceError || diariesError} onClick={() => canExport && exportReportCSV({ fileName: `reportes-${today}.csv`, rows: exportRows })}><Download className="w-4 h-4 mr-2" />CSV</Button>
-            <Button variant="outline" disabled={!canExport || kpisLoading || attendanceError || diariesError} onClick={handleExportPDF}><Download className="w-4 h-4 mr-2" />PDF</Button>
+            <Button variant="outline" disabled={!canExport || kpisLoading || attendanceError || diariesError || !!loadFailure} onClick={() => canExport && exportReportCSV({ fileName: `reportes-${today}.csv`, rows: exportRows })}><Download className="w-4 h-4 mr-2" />CSV</Button>
+            <Button variant="outline" disabled={!canExport || kpisLoading || attendanceError || diariesError || !!loadFailure} onClick={handleExportPDF}><Download className="w-4 h-4 mr-2" />PDF</Button>
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-3">Datos actualizados: {freshnessLabel}</p>
         {!canExport && <p className="text-xs text-red-600 dark:text-red-400 mt-1">No tienes permisos para exportar reportes.</p>}
         {!rangeValid && <p className="text-xs text-red-600 dark:text-red-400 mt-1">La fecha inicial debe ser anterior o igual a la final.</p>}
-        {(attendanceError || diariesError) && <p className="text-xs text-red-600 dark:text-red-400 mt-1">No se pudieron cargar todos los datos del periodo; las cifras pueden estar incompletas.</p>}
+        {(loadFailure || attendanceError || diariesError) && (
+          <LoadError
+            compact
+            className="mt-3"
+            failure={loadFailure || blockingLoadFailure(attendanceQuery, diariesQuery) || { message: 'Algunos datos no se pudieron actualizar.', retry: () => Promise.all([attendanceQuery.refetch(), diariesQuery.refetch()]) }}
+            title="No se pudieron cargar todos los datos del periodo; las cifras pueden estar incompletas"
+          />
+        )}
       </div>
 
       <div className="space-y-4" ref={reportRef}>

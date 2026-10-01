@@ -1657,3 +1657,286 @@ conceptos anteriores sin tipo cuentan como `OTRO`; `resolveEffectiveLicense`
 y sus dos espejos Deno vencen una fecha sola a medianoche UTC; `/login` y
 `/reset-password` hospedados por Base44 siguen en inglés; nada de esto corrió
 contra Base44 en vivo.
+
+## Límite de Base44: menos lecturas, reintentos y errores que parecen errores (v1.8.3, 2026-10-01)
+
+QA en vivo con tres sesiones a la vez: cientos de `500 INTERNAL` en
+`schoolRead`/`getMySubscription` y pantallas que mostraban el fallo como datos
+vacíos. Detalle, evidencia y números en `docs/rate-limit-v1.8.3.md`.
+
+**El límite es de la app, no del usuario ni de la función.** Los logs dicen
+`schoolRead failed Rate limit exceeded`: lo lanza una llamada a entidades con
+**service role** dentro de la función, y `getMySubscription` falla en los
+mismos segundos para otros usuarios. Son unas 150 llamadas por minuto (lo que
+reporta soporte de Base44 y lo que cuadra con los logs), compartidas por todas
+las invocaciones de todos los usuarios. Lo que cuesta es el **número de
+llamadas service-role por pantalla**, no el número de usuarios.
+
+Reglas que deja:
+
+- **No añadas un `schoolRead` suelto pensando que cuesta uno.** Cada invocación
+  re-deriva el scope (2 llamadas para padre/maestro). Las lecturas del mismo
+  tick ya se agrupan solas (`schoolReadCore.js`: lote ≤12, ≤3 scan,
+  `context: true` en el mismo request). No encadenes con `enabled:` una
+  lectura que el servidor ya acota: perderías el lote.
+- **Solo se reintentan lecturas** (`IDEMPOTENT_READ_FUNCTIONS` en
+  `functionRetry.js`). Una escritura sale una vez; agregarla a esa lista exige
+  que repetirla sea inofensivo.
+- **Un fallo no es una lista vacía.** Una pantalla nueva usa
+  `blockingLoadFailure(...queries)` + `<LoadError>` antes de su `EmptyState`.
+- `staleTime` es 30 s, y tras cualquier escritura todo queda *stale* sin
+  refetch. Si una pantalla necesita datos al segundo, invalida su clave.
+  **Dos `useQuery` con la misma clave deben pedir exactamente lo mismo**: con
+  30 s de caché, la segunda pantalla muestra la lista de la primera sin
+  preguntar. `Reportes` compartía `['notices', escuela]` con `Avisos` (100
+  contra 50 avisos) y por eso ahora lleva `'report'` al final.
+- `getMySubscription` se lee una vez por sesión (5 min, `sessionStorage` por
+  usuario y escuela). Si cambias la licencia desde la app, invalida
+  `MY_SUBSCRIPTION_QUERY_KEY`.
+- `npm run test:load` mide llamadas por pantalla antes/después contra un mock
+  del límite. `rate-limit-resilience.test.js` lo usa como compuerta.
+
+Desplegar: `npm run deploy` (`schoolRead`, `getMySubscription`,
+`listSchoolMembers`, `guardedEntityWrite`, `guardedFamilyWrite`) y
+`npm run deploy:site`, en cualquier orden. **No verificado:** carga real contra
+producción; si las lecturas con token de usuario tienen presupuesto aparte.
+
+## Correos y login de Base44 en inglés: qué se puede y qué no (2026-10-01)
+
+QA en vivo de v1.8.2: el correo de código («Verify your email for LIUMA»), el
+de recuperación («Reset your password for LIUMA») y la invitación («…with the
+role of user») llegan **en inglés**, desde `no-reply@base44-apps.com`; y una
+carga directa de `/login` (o `/reset-password`) sirve la página hospedada de
+Base44, también en inglés. Ninguno es código de este repo.
+
+**Se revisó la API de plataforma (solo lectura) y no hay perilla de idioma.**
+`PUT /api/apps/{app_id}` acepta `name`, `user_description`, `public_settings`,
+`auth_config`, `is_remixable`, `hide_entity_created_by` y
+`dev_environment_enabled` — nada de idioma. No existe endpoint de plantillas
+de correo de autenticación. `register` / `resendOtp` / `resetPasswordRequest`
+/ `inviteUser` del SDK (0.8.52) no reciben locale. `sso/settings` es sólo el
+proveedor OAuth. El `login_path` de la config MCP sólo gobierna el
+consentimiento OAuth del servidor MCP y `PATCH …/mcp/config` ni siquiera lo
+acepta.
+
+**Redirigir `/login` → `/entrar` con `url-redirects` no sirve, por dos
+razones.** El contrato de `POST /api/apps/{app_id}/url-redirects` rechaza
+como origen «the app's auth paths»; y aunque lo aceptara, sería un 301
+(cacheado por el navegador) sobre la ruta que `redirectToLogin` usa a
+propósito para el «Continuar como» silencioso por cookie (`ContinueAs.jsx`,
+`AuthContext.navigateToLogin`) y que `OAuthConsent.jsx` usa de respaldo. Hoy
+no hay ninguna regla (`GET …/url-redirects` → `[]`). Lo de `/login` ya está
+acotado en cliente: nada enlaza ahí, el `start_url` del PWA es `/`, y una
+navegación interna a `/login` cae en `/` (`App.jsx`), que sin sesión manda a
+`/entrar` (`LOGIN_PATH` en `authLinks.js`).
+
+**Lo que sí se hizo, en el repo:** `src/lib/platformEmails.js` guarda el
+asunto, el botón y la vigencia **reales** de los dos correos (leídos de los
+correos de QA, no adivinados), y `Login.jsx` los dice en español justo donde
+se manda cada uno: bajo el campo del código («llega en inglés, con el asunto
+«Verify your email for LIUMA»… 6 dígitos; vence en 10 minutos») y en el aviso
+tras pedir recuperación (asunto, botón «Reset password», 1 hora, página en
+inglés). El aviso de recuperación conserva el «Si hay una cuenta con…» para no
+enumerar cuentas. El remitente **no** se cita a propósito: activar un dominio
+de correo propio lo cambiaría. `tests/unit/platform-auth-emails.test.js` lo fija.
+
+**La invitación de Base44 no la recibe ningún usuario real**: LIUMA entra por
+registro propio + código de escuela. Sólo la manda quien invita desde el panel
+de Base44 o el sembrado de datos de prueba (`seedTestData`, dueño). No la uses
+para dar de alta escuelas.
+
+**Pendiente, en la plataforma (no lo hace este repo):** dominio de correo
+propio, para que el remitente diga «LIUMA» y no `base44-apps.com` (también
+arregla «el remitente no tiene nombre» de los correos propios). Requiere
+publicar los registros DNS que devuelva en `acaciaco.com.mx`:
+
+    POST /api/apps/696e967c430ceb6a2232ffd8/custom-email-domains
+    { "domain": "liuma.acaciaco.com.mx",
+      "sender_name": "LIUMA · Gestión escolar",
+      "from_email": "no-reply@liuma.acaciaco.com.mx" }
+
+y sondear `GET …/custom-email-domains` hasta `configuration_status: "active"`.
+Ojo antes de publicar: `liuma.acaciaco.com.mx` es un CNAME a
+`liuma-2232ffd8.base44.app` (el sitio; leído por DNS-over-HTTPS el 2026-10-01), y un CNAME no puede convivir con otro registro en el mismo nombre. Si
+algún registro de `dns_records` (un MX o TXT) cae exactamente en
+`liuma.acaciaco.com.mx` y no en un subnombre (`em….`, `…._domainkey.…`), no se
+puede publicar sin romper el sitio: en ese caso se desactiva el dominio de
+correo y se busca otra forma, no se toca el CNAME. Esto no se comprobó: hace
+falta la respuesta del POST para saberlo. El dominio de correo cambia también
+el «De:» de los correos propios de LIUMA (una app manda desde un solo
+dominio).
+El cuerpo de los correos de Base44 sigue en inglés aun así: sólo cambia el
+«De:». Traducirlo de verdad pide a Base44 una opción de idioma, o sacar el
+registro/recuperación a funciones propias — que no puede emitir tokens de
+sesión, así que no es un cambio menor.
+
+## v1.8.3 — confiabilidad y Lumi (2026-10-01)
+
+QA en vivo de v1.8.2 el mismo día (tres sesiones a la vez, 36 preguntas a
+Lumi, móvil). Cuatro paquetes hechos en paralelo desde `main` (`dba9abe`) e
+integrados con `--no-ff` en `fix/v183-integration`. Dos tienen sección propia
+justo arriba (límite de Base44; correos de Base44 en inglés); lumi y
+notify-copy sólo aquí y en sus commits.
+
+- **reliability** (`fix/v183-reliability`): sobrevivir al límite de Base44 —
+  lotes de lecturas, reintento sólo de lecturas, `429 RATE_LIMITED`,
+  `<LoadError>` en vez de listas vacías. Ver la sección del límite.
+- **lumi** (`fix/v183-lumi`): bitácoras no enviadas, ventanas de fechas,
+  huecos del prompt, chat sin socket.
+- **notify-copy** (`fix/v183-notify-copy`): conteo de urgentes del maestro,
+  copia de correos, validación de ausencias, objetivos táctiles.
+- **platform-auth** (`fix/v183-platform-auth`): aviso en español de que los
+  correos de código y recuperación de Base44 llegan en inglés.
+
+### El límite, medido
+
+Lo que se midió en los logs de funciones (`functions-mgmt/{fn}/logs`,
+2026-10-01 08:54–09:02 UTC), no lo que se supone:
+
+- El error es `schoolRead failed Rate limit exceeded` → `POST → 500`: lo lanza
+  una llamada a entidades con **service role** dentro de la función, no
+  `auth.me()` (ese ya respondía 401).
+- `getMySubscription` falló **en los mismos segundos** (08:55:22–23, :30,
+  :48–49) para otros usuarios: un solo presupuesto para todas las funciones y
+  todos los usuarios de la app.
+- En el minuto previo al primer fallo pasaron ~25 `schoolRead` + 6
+  `getMySubscription`, a 3–5 llamadas service-role cada una: **~130–150
+  llamadas/minuto**. Cuadra con los «150 por minuto» que soporte de Base44 ha
+  dado a otros builders; Base44 no publica el número. Tras saturar, los
+  éxitos volvían 5–10 s después (de ahí `Retry-After: 3`, inferido).
+- `npm run test:load` (mock de 150/min con el código real de cliente y
+  servidor): llamadas service-role por visita en frío **167 → 93 (−44 %)**,
+  invocaciones **54 → 26**; tres personas navegando dentro de la app a ritmo
+  de QA: consultas fallidas en pantalla **~130 → 0**. Recargas completas cada
+  1.5 s por persona siguen fallando (≈46): piden más de 150/min y ningún
+  reintento cabe; la pantalla lo dice y ofrece «Reintentar».
+
+### Lumi (`fix/v183-lumi`)
+
+- `_scope.ts` (copia idéntica en `schoolRead/`, `lumiQuery/`, `lumiWrite/`):
+  un PARENT sólo lee `DiaryEntry` con `sent_to_parents: true`, empujado a la
+  consulta; una fila sin el campo cuenta como no enviada. Maestro y dirección
+  siguen viendo todo. **Cambia lo que ve un padre en la pantalla Bitácora**,
+  no sólo en Lumi.
+- `_lumiCore.ts` (idéntico en `lumiQuery/` y `lumiWrite/`): tareas a 30 días
+  por defecto (tope 120) con `next_due` cuando el rango sale vacío (nunca una
+  fecha pasada); `attendanceWindow` separa lo futuro (`upcoming`) de lo
+  pasado; `displayUserName` devuelve `''` para un `full_name` que es el
+  usuario del correo.
+- `lumi.jsonc`: no hay selector de escuela (módulo 18); nunca repetir ni
+  confirmar datos de otra escuela; no culpar a «sincronización»; sólo las
+  capacidades del rol; datos médicos sí existen (dónde los ve cada rol), sin
+  dosis ni consejo de crisis; Pedidos es su propia pantalla.
+- `LumiChat.jsx` + `src/lib/lumi/chat.js`: si el socket no entrega, sondea la
+  conversación por HTTPS mientras se debe una respuesta (backoff que se
+  duplica hasta 30 s, ±20 % de jitter, nada con la pestaña oculta), fusiona
+  instantáneas, conserva la pregunta bajo el aviso de demora y busca una
+  respuesta tardía antes de que «Reintentar» vuelva a preguntar.
+
+### Avisos y copia (`fix/v183-notify-copy`)
+
+- Inicio del maestro: cuenta **sus** copias no leídas, una por aviso
+  (`unreadNoticeCount` en `inbox.js`, la misma regla que el inicio del padre);
+  la consulta pide `recipient_user_id: user.id`. Una alerta ya no es «4
+  urgentes sin leer».
+- `readNoticeInbox` es un solo `schoolReadMany`.
+- `guardedFamilyWrite/_policy.ts#checkAbsenceRequest`: ausencia para hoy o
+  después (día de México) y una solicitud viva por alumno y día (`REJECTED`
+  se puede volver a mandar): `400 ABSENCE_DATE_PAST` / `409
+  ABSENCE_DUPLICATE`. La lectura previa no es atómica, así que después de
+  crear cada petición relee el día y `absenceRaceLoser` decide quién se
+  queda (la viva más antigua, luego id); la perdedora borra su propio
+  renglón y responde 409 — mismo patrón que `resolvePaymentRace`.
+- Lumi no acepta otra pregunta mientras espera una respuesta
+  (`canAskNewQuestion`): la respuesta se empareja con su pregunta por
+  posición, y una respuesta tardía a la 1 después de mandar la 2 pasaba por
+  la de la 2. «Reintentar» la misma pregunta sí se permite; al rendirse el
+  sondeo (3 min) el cuadro se libera.
+- Correos (`_templates.ts`, cuatro copias idénticas + `templates.js`, que
+  ahora se comprueba renderizando los dos): «$1,350.00 MXN» sin depender de
+  `Intl` (producción imprimía «$1350.00»), sin «recargos» (LIUMA no los
+  cobra), enlace a `https://liuma.acaciaco.com.mx/` en todos, fechas largas
+  con año. La `Notice` de emergencia lleva `author_name` (nunca un correo).
+- `studentClassroomLabel.js`: «Sin salón» sólo si el alumno no tiene
+  `classroom_id`; un salón que no cargó dice «No se pudo cargar el salón»
+  con «Reintentar».
+
+### Lo que tocó la integración
+
+Conflictos resueltos conservando las dos intenciones (reliability y
+notify-copy arreglaron «un fallo parece lista vacía» en las mismas pantallas):
+
+- `TeacherHome`: el `listsQuery` sin encadenar + `<LoadError>` de reliability
+  con el filtro `recipient_user_id`, `unreadNoticeCount` y `countLabel` de
+  notify-copy. `ParentHome`: las dos cosas.
+- `AvisosMaestro`: el `blockingLoadFailure` + `<LoadError>` compartido en
+  lugar del bloque de error propio de notify-copy;
+  `notify-copy-v183.test.js` afirma ahora esa forma (misma regla: falló y no
+  hay nada que mostrar → «Reintentar»; «Sin avisos» nunca para un fallo).
+- `GestionAlumno`: `studentClassroomLabel` (con su «Reintentar» y el `?? null`)
+  sustituye la etiqueta en línea de reliability; los `<LoadError>` de alumno
+  y de padres vinculados se quedan.
+- `scripts/load-test-reads.mjs` refleja, en modo «after», el filtro nuevo de
+  `TeacherHome` y el `readNoticeInbox` de una sola petición.
+- `CLAUDE.md`: las dos secciones nuevas de arriba, una tras otra.
+- `HistorialCambios`: la `key` de cada tarjeta es el título (1.8.1 y 1.8.2
+  comparten fecha).
+
+Copias idénticas comprobadas tras integrar: `_scope.ts` ×3, `_lumiCore.ts` ×2,
+`_templates.ts` ×4, `_acaciaSign.ts` ×2.
+
+### Desplegar
+
+**Ningún cambio de entidades**: `deploy:entities` no hace falta.
+
+1. `npm run deploy` — `schoolRead` (`_answer.ts` nuevo, `_scope.ts`),
+   `getMySubscription`, `listSchoolMembers`, `guardedEntityWrite`,
+   `guardedFamilyWrite`, `lumiQuery`, `lumiWrite`, `sendBulkNotification`,
+   `sendNotificationEmail`, `notifyParents`. Ninguna función nueva: 20/40.
+2. `npx base44 agents push` (`base44/agents/lumi.jsonc`) desde la raíz del
+   repo, **después** de las funciones.
+3. `npm run deploy:site`. Sin restricción de orden con el paso 1: el cliente
+   nuevo funciona con las funciones de v1.8.2 (el lote ya existía; si el
+   servidor ignora `context: true` el cliente lo pide aparte) y al revés.
+
+**Comprobar por comportamiento:** con tres sesiones abiertas los logs dicen
+`schoolRead rate limited` (warn) donde antes decían `schoolRead failed Rate
+limit exceeded` (error), y ninguna pantalla dice «Sin avisos» o «Sin hijos
+vinculados» habiendo datos; un padre no ve en Bitácora una entrada guardada
+sin «Enviar a la familia»; una ausencia para ayer da el mensaje en español;
+el inicio del maestro con una alerta dice «1 urgente sin leer»; volver a
+correr los evals r5 de Lumi (LD08, LP01, LP09, LP10, LP12, LM04,
+LM06/07/09, LD10, LD04) y el chat en una sesión real con y sin socket.
+
+### Plataforma (no lo hace este repo)
+
+Lo que se encontró en la API de Base44 (sólo lectura) está en la sección de
+correos de arriba: no hay idioma de app, ni plantillas de correo de
+autenticación, ni locale en el SDK, y `url-redirects` no acepta las rutas de
+auth. Lo único accionable es el dominio de correo propio, y tiene una trampa:
+
+    POST /api/apps/696e967c430ceb6a2232ffd8/custom-email-domains
+    { "domain": "liuma.acaciaco.com.mx",
+      "sender_name": "LIUMA · Gestión escolar",
+      "from_email": "no-reply@liuma.acaciaco.com.mx" }
+    GET  /api/apps/696e967c430ceb6a2232ffd8/custom-email-domains   # hasta configuration_status: "active"
+
+**Antes de publicar un solo registro**, leer `dns_records` de la respuesta:
+`liuma.acaciaco.com.mx` es un CNAME a `liuma-2232ffd8.base44.app` (el sitio)
+y un CNAME no admite otro registro en el mismo nombre. Si un MX/TXT cae en
+`liuma.acaciaco.com.mx` exacto (y no en un subnombre), no se publica: se
+desactiva el dominio de correo y se busca otra forma (p. ej. un subdominio de
+envío propio), **nunca** se toca el CNAME. Aun activo, sólo cambia el «De:»
+(de los correos de Base44 y de los propios); el cuerpo de los de Base44 sigue
+en inglés.
+
+### Sigue abierto
+
+- Nada de esto corrió contra Base44 en vivo: ni carga real (los números son del
+  mock), ni si las lecturas con token de usuario tienen presupuesto aparte (si
+  no, el «after» es ~1 llamada por invocación optimista), ni los evals de
+  Lumi tras el cambio, ni el chat sin socket en producción.
+- `/login` y `/reset-password` hospedados por Base44 y sus correos siguen en
+  inglés; el dominio de correo propio depende de la respuesta del POST.
+- Los pendientes de v1.8.2 (cargos cerrados `PAID` con abono parcial,
+  conceptos sin tipo, vencimiento a medianoche UTC) siguen igual.

@@ -259,7 +259,13 @@ export const READ_RULES: Record<string, EntityRule> = {
       // notified_parent_emails is the parents' addresses (notifyParents'
       // bookkeeping): the director's business, nobody else's.
       TEACHER: { rows: [{ classroom_id: set('classroomIds'), student_id: set('studentIds') }], hide: ['notified_parent_emails'] },
-      PARENT: { rows: [{ student_id: set('studentIds') }], hide: ['notified_parent_emails'] },
+      // Only what the teacher SENT. "Enviar a la familia" is a choice on every
+      // bitácora (CrearBitacora's switch, lumiWrite's send_to_parents); an
+      // entry saved with it off stays with the school. Before v1.8.3 this rule
+      // was student_id alone, so the family read unsent entries on Bitácora
+      // and Lumi relayed them (QA r5, DiaryEntry 6abc3b02…, sent_to_parents
+      // false). A row without the field counts as not sent (schema default).
+      PARENT: { rows: [{ student_id: set('studentIds'), sent_to_parents: oneOf(true) }], hide: ['notified_parent_emails'] },
     },
   },
   Homework: {

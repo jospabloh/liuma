@@ -10,6 +10,20 @@ import { APP_VERSION, RELEASE_DATE } from '@/lib/appConfig';
 // ChangeLog pages.
 const CHANGES = [
   {
+    date: '2026-10-01',
+    title: 'Versión 1.8.3: más confiable con varias personas a la vez, y Lumi',
+    items: [
+      'Corregido: cuando varias personas usaban LIUMA al mismo tiempo, algunas pantallas decían «Sin avisos» o «Sin hijos vinculados» aunque sí había datos. La app ahora pide menos cosas a la vez, reintenta sola y, si aun así no puede cargar, te lo dice con un botón «Reintentar» en lugar de mostrar la pantalla vacía.',
+      'Corregido: las familias ya sólo ven las bitácoras que el maestro decidió enviarles, también al preguntarle a Lumi.',
+      'Lumi responde mejor: busca las tareas pendientes del próximo mes, no confunde una ausencia de mañana con una pasada, ya no te llama por tu correo y explica mejor qué puede hacer según tu rol. Si la conexión en tiempo real falla, la respuesta llega de todos modos y tu pregunta no se pierde.',
+      'Corregido: en el inicio del maestro, una sola alerta urgente ya no aparece como «4 urgentes sin leer»; cuenta sólo los avisos que te llegaron a ti.',
+      'Corregido: una solicitud de ausencia tiene que ser para hoy o un día futuro, y no se puede mandar dos veces para el mismo alumno y día.',
+      'Correos más claros: montos como «$1,350.00 MXN», fechas completas en español, un enlace a LIUMA en cada correo, y el recordatorio de pago ya no menciona recargos.',
+      'Mejor en el teléfono: botones más fáciles de tocar en avisos, inicio de sesión, documentos, descuentos y calendario.',
+      'Al crear tu cuenta o recuperar tu contraseña te avisamos que el correo con el código o el enlace llega en inglés, y qué asunto buscar.',
+    ],
+  },
+  {
     date: '2026-09-30',
     title: 'Versión 1.8.2: pagos parciales, avisos y uso en el teléfono',
     items: [
@@ -70,7 +84,7 @@ export default function HistorialCambios() {
       <PageHeader title="Historial de cambios" subtitle="Actualizaciones y mejoras recientes en LIUMA" showBack backTo="/Home" />
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-10 space-y-4">
         {CHANGES.map((c) => (
-          <Card key={c.date} className="p-5">
+          <Card key={c.title} className="p-5">
             <p className="text-xs text-muted-foreground mb-1">{c.date}</p>
             <p className="font-semibold text-foreground mb-2">{c.title}</p>
             <ul className="list-disc list-inside space-y-1">

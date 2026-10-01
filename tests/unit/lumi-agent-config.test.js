@@ -88,3 +88,42 @@ test('function count stays well under maxFunctions', () => {
     .filter((d) => d.isDirectory());
   assert.ok(dirs.length <= max, `${dirs.length} functions > ${max}`);
 });
+
+// QA r5 on v1.8.2 (2026-10-01): 36 live questions, 0 leaks, but the model
+// filled gaps the prompt left open. Each rule below answers one transcript.
+test('the prompt closes the gaps QA r5 found in live answers', () => {
+  const p = agent.instructions;
+  // LD08: invented the school selector retired in module 18 and promised
+  // another school's data; LP09 repeated the other school's name.
+  assert.match(p, /no existe selector ni cambio de escuela/i);
+  assert.match(p, /Nunca sugieras cambiar de escuela/);
+  assert.match(p, /status "none" → di sólo que ese nombre no aparece/);
+  assert.doesNotMatch(p, /selector de escuela\)/);
+  // LP01: "no hay tareas" from a one-week window, excused by a "sync delay".
+  assert.match(p, /de hoy a 30 días/);
+  assert.match(p, /next_due/);
+  assert.match(p, /Nunca expliques una lista vacía con retrasos de sincronización/);
+  // LM04: a future approved absence counted as one that happened.
+  assert.match(p, /upcoming/);
+  assert.match(p, /nunca lo cuentes como falta/);
+  // LM06/LM09: payments offered to a teacher.
+  assert.match(p, /a docentes no les ofrezcas pagos/);
+  // LM07: a twelve-line refusal.
+  assert.match(p, /Al negarte a algo: una línea con el motivo y otra con quién puede ayudar/);
+  // LP10: "si hubo un cambio de rol reciente, probablemente aún no se refleja".
+  assert.match(p, /no especules con cambios de rol/);
+  // LP12: "Hola, José Pablo" guessed from h.josepablo+qa-padre.
+  assert.match(p, /nunca deduzcas un nombre del correo/);
+  // LD10: "esa información no se gestiona en la app" — v1.8.2 stores it.
+  assert.match(p, /la app sí los guarda: tipo de sangre, alergias y notas médicas/);
+  assert.match(p, /Nunca indiques medicinas, dosis/);
+  // LD04: Pedidos placed inside Gestión de escuela.
+  assert.match(p, /no está dentro de Gestión de escuela/);
+});
+
+test('the tool description matches what lumiQuery now returns', () => {
+  const query = agent.tool_configs.find((t) => t.function_name === 'lumiQuery').description;
+  assert.match(query, /30 días/);
+  assert.match(query, /upcoming/);
+  assert.match(query, /sólo pedidos abiertos/);
+});

@@ -15,10 +15,13 @@ import { Calendar, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { familyCreate } from '@/lib/authorization/familyWrite';
+import { humanizeError } from '@/lib/errorMessages';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { parseLocalDate, isBeforeToday, formatLocalDate } from '@/lib/dates';
 import { Badge } from '@/components/ui/badge';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 export default function SolicitarAusencia() {
   const [selectedStudent, setSelectedStudent] = useState('');
@@ -29,19 +32,24 @@ export default function SolicitarAusencia() {
 
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
     enabled: !!user,
   });
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = linkedQuery;
 
   const students = linkedStudents.students;
 
-  const { data: notifications, isLoading } = useQuery({
+  const notificationsQuery = useQuery({
     queryKey: ['absenceNotifications', user?.id],
     queryFn: () => schoolRead('AbsenceNotification', { parent_id: user.id }, '-created_date'),
     enabled: !!user?.id,
   });
+  const { data: notifications, isLoading } = notificationsQuery;
+  // A failed read is neither "no children" nor "no requests" (v1.8.3).
+  const studentsFailure = blockingLoadFailure(linkedQuery);
+  const notificationsFailure = blockingLoadFailure(notificationsQuery);
 
   const createNotificationMutation = useMutation({
     // guardedFamilyWrite comprueba el vínculo con el alumno y fija escuela,
@@ -54,8 +62,10 @@ export default function SolicitarAusencia() {
       setAbsenceDate('');
       setReason('');
     },
-    onError: () => {
-      toast.error('Error al enviar solicitud');
+    // The server says why (a past day, a second request for the same day —
+    // guardedFamilyWrite/_policy.ts#checkAbsenceRequest): say it too.
+    onError: (error) => {
+      toast.error(`No se pudo enviar la solicitud. ${humanizeError(error)}`);
     },
   });
 
@@ -71,6 +81,16 @@ export default function SolicitarAusencia() {
     // new Date('YYYY-MM-DD') la fecha de hoy se leía como ayer y se rechazaba).
     if (!parseLocalDate(absenceDate) || isBeforeToday(absenceDate)) {
       toast.error('La fecha debe ser hoy o futura');
+      return;
+    }
+
+    // The server refuses a second live request for the same child and day
+    // (another parent's included); this catches the common case — your own —
+    // before the round trip.
+    const alreadyFiled = (notifications || []).some((n) =>
+      n.student_id === selectedStudent && n.absence_date === absenceDate && n.status !== 'REJECTED');
+    if (alreadyFiled) {
+      toast.error('Ya enviaste una solicitud para ese día.');
       return;
     }
 
@@ -92,7 +112,7 @@ export default function SolicitarAusencia() {
     REJECTED: { label: 'Rechazada', color: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300', icon: XCircle },
   };
 
-  if (isLoading) {
+  if (isLoading || linkedQuery.isLoading) {
     return <LoadingScreen message="Cargando solicitudes..." />;
   }
 
@@ -111,6 +131,9 @@ export default function SolicitarAusencia() {
             <CardDescription>Completa el formulario para notificar una ausencia</CardDescription>
           </CardHeader>
           <CardContent>
+            {studentsFailure && (
+              <LoadError compact failure={studentsFailure} title="No se pudo cargar la lista de tus hijos" className="mb-4" />
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label>Estudiante</Label>
@@ -170,7 +193,9 @@ export default function SolicitarAusencia() {
 
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">Solicitudes enviadas</h2>
-          {notifications?.length === 0 ? (
+          {notificationsFailure ? (
+            <LoadError compact failure={notificationsFailure} title="No se pudieron cargar tus solicitudes" />
+          ) : notifications?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />

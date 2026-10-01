@@ -1402,6 +1402,20 @@ cambió); comprobar por comportamiento: llamarla con `role: 'X'` debe dar 400
 aparece, toca **Publish**. (2) `npm run deploy:site` (Login, Aprobaciones,
 PendingApproval). Sin cambios de entidad: `deploy:entities` no hace falta.
 
+## Rol elegido al aprobar: era un despliegue atrasado, no el código (2026-10-01)
+
+El QA en vivo vio que `approveProfile` devolvía `{"ok":true,"status":"ACTIVE"}`
+y el perfil se quedaba con el rol **pedido** (Padre pedido + Maestro elegido ->
+Padre). `main` ya hacía lo correcto (`finalRole` sale de `body.role`, lista
+blanca, se escribe en `app_role` y vuelve como `appRole`): la copia desplegada en
+Base44 estaba atrasada. `github/sync` + `deploy` la alinearon; se verificó en
+vivo en las dos direcciones. Para detectar el desfase: la respuesta correcta
+trae `appRole`; la vieja no. También: el inicio de sesión propio de LIUMA está
+en `/entrar` (español, con paso de código y reenvío); `/login` lo sirve la
+plataforma en inglés y no se puede cambiar desde el repo (ver `authLinks.js`).
+Menor: un perfil PENDING/SUSPENDED ya no recibe la barra lateral de su rol
+(`NavContext.jsx`).
+
 ## Dinero: abonos, descuentos, vencidos y recordatorios (2026-09-30)
 
 Cinco hallazgos del QA de pagos, todos verificados contra `main` (v1.8.1) antes

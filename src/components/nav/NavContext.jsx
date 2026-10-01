@@ -33,7 +33,11 @@ export function NavProvider({ children }) {
     },
     enabled: !!user,
   });
-  const role = profile?.app_role || null;
+  // Un perfil PENDING o SUSPENDED no tiene menú: Home le pinta la pantalla de
+  // espera / suspensión, y un rail de «Familia» al lado prometía secciones a las
+  // que ese perfil no entra (schoolRead lo rechaza con INACTIVE_PROFILE).
+  const inactive = profile?.status === 'PENDING' || profile?.status === 'SUSPENDED';
+  const role = inactive ? null : profile?.app_role || null;
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const closePalette = useCallback(() => setPaletteOpen(false), []);

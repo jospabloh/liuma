@@ -19,6 +19,8 @@ import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate, publishNoticeDeliveries } from '@/lib/authorization/guardedWrite';
 import { useSchoolStudents } from '@/hooks/useSchoolStudents';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 import {
   Dialog,
   DialogContent,
@@ -60,13 +62,16 @@ export default function AvisosAdmin() {
 
   const { data: students = [] } = useSchoolStudents(userProfile?.school_id);
 
-  const { data: notices = [], isLoading } = useQuery({
+  const noticesQuery = useQuery({
     queryKey: ['adminNotices', userProfile?.school_id],
     queryFn: () => schoolRead('Notice', { 
       school_id: userProfile.school_id 
     }, '-created_date', 30),
     enabled: !!userProfile,
   });
+  const { data: notices = [], isLoading } = noticesQuery;
+  // A failed read is not "Sin avisos" (v1.8.3).
+  const loadFailure = blockingLoadFailure(noticesQuery);
 
   const createNoticeMutation = useMutation({
     mutationFn: async (data) => {
@@ -156,7 +161,9 @@ export default function AvisosAdmin() {
 
       <ReadOnlyBanner />
 
-      {notices.length === 0 ? (
+      {loadFailure ? (
+        <LoadError failure={loadFailure} title="No se pudieron cargar los avisos" />
+      ) : notices.length === 0 ? (
         <EmptyState
           icon={Bell}
           title="Sin avisos"

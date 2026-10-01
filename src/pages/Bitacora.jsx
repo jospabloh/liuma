@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity } from '@/lib/authorization/policy';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 import {
   Dialog,
   DialogContent,
@@ -31,18 +33,19 @@ export default function Bitacora() {
   
   const { user, userProfile } = useCurrentProfile();
 
-  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
     enabled: !!user && canReadEntity(userProfile?.app_role, 'DiaryEntry'),
   });
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = linkedQuery;
 
   const students = linkedStudents.students;
   const studentIds = studentIdParam ? [studentIdParam].filter((id) => linkedStudents.studentIds.includes(id)) : linkedStudents.studentIds;
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-  const { data: diaryEntries = [], isLoading } = useQuery({
+  const diaryQuery = useQuery({
     queryKey: ['diaryEntries', studentIds, dateStr],
     queryFn: async () => {
       if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'DiaryEntry')) return [];
@@ -54,6 +57,9 @@ export default function Bitacora() {
     },
     enabled: studentIds.length > 0 && !!userProfile,
   });
+  const { data: diaryEntries = [], isLoading } = diaryQuery;
+  // A failed read is not "Sin bitácora registrada" (v1.8.3).
+  const loadFailure = blockingLoadFailure(linkedQuery, diaryQuery);
 
   const getStudentName = (studentId) => {
     const student = students.find(s => s.id === studentId);
@@ -64,7 +70,7 @@ export default function Bitacora() {
     setSelectedDate(direction === 'prev' ? subDays(selectedDate, 1) : addDays(selectedDate, 1));
   };
 
-  if (isLoading) return <LoadingScreen message="Cargando bitácora..." />;
+  if (isLoading || linkedQuery.isLoading) return <LoadingScreen message="Cargando bitácora..." />;
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,7 +106,9 @@ export default function Bitacora() {
         </Button>
       </div>
 
-      {diaryEntries.length === 0 ? (
+      {loadFailure ? (
+        <LoadError failure={loadFailure} title="No se pudo cargar la bitácora" />
+      ) : diaryEntries.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
           title="Sin bitácora registrada"

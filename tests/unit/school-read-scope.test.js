@@ -35,9 +35,12 @@ test('Lumi answers from the same rules: lumiQuery scopes rows with _scope.ts', (
 
 test('the function never takes the school from the request body', () => {
   const entry = read('base44/functions/schoolRead/entry.ts');
-  assert.doesNotMatch(entry, /body\??\.(school_id|schoolId)/);
-  assert.match(entry, /UserProfile\.filter\(\{ user_id: user\.id \}/);
-  assert.match(entry, /selectCurrentProfile\(profiles\)/);
+  const answer = read('base44/functions/schoolRead/_answer.ts');
+  for (const source of [entry, answer]) assert.doesNotMatch(source, /body\??\.(school_id|schoolId)/);
+  // The caller's own rows, with their own token (v1.8.3), pinned to user.id.
+  assert.match(entry, /base44\.entities\.UserProfile\.filter\(\{ user_id: user\.id \}/);
+  assert.match(entry, /answerSchoolRead\(base44\.asServiceRole, String\(user\.id\), profiles, body\)/);
+  assert.match(answer, /selectCurrentProfile\(profiles\)/);
 });
 
 test('the current profile is the same deterministic pick as the front end', () => {
@@ -494,9 +497,11 @@ test('scan-mode rules are the ones the batch cap counts', () => {
   assert.equal(needsScan('PARENT', 'Attendance'), false);
   assert.equal(needsScan('TEACHER', 'UserProfile'), false);
   assert.ok(MAX_SCANS_PER_BATCH >= 2, 'OperacionDiaria/TeacherHome batch two scan reads');
-  const entry = read('base44/functions/schoolRead/entry.ts');
-  assert.match(entry, /needsScan\(scope\.role/);
-  assert.match(entry, /TOO_MANY_SCANS/);
+  const answer = read('base44/functions/schoolRead/_answer.ts');
+  assert.match(answer, /needsScan\(scope\.role/);
+  assert.match(answer, /TOO_MANY_SCANS/);
   // A 500 never echoes the raw error.
-  assert.doesNotMatch(entry, /error: \(e as Error\)\.message/);
+  for (const file of ['entry.ts', '_answer.ts']) {
+    assert.doesNotMatch(read(`base44/functions/schoolRead/${file}`), /error: \(e as Error\)\.message/);
+  }
 });

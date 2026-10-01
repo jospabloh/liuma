@@ -22,8 +22,14 @@
 // helper; this module replaces all of them.
 //
 // Rule: every `functions.invoke` in src/ goes through `invokeFunction`
-// (tests/unit/function-response.test.js fails otherwise). Import-free so
-// `node --test` loads it.
+// (tests/unit/function-response.test.js fails otherwise). Its only import is
+// import-free, so `node --test` loads it.
+//
+// v1.8.3: a READ function (IDEMPOTENT_READ_FUNCTIONS in functionRetry.js) is
+// retried here on Base44's rate limit, a gateway 5xx, a 500 INTERNAL or no
+// answer — with a jittered exponential backoff and a shared pause while the
+// server says to wait. Writes go out once, always.
+import { IDEMPOTENT_READ_FUNCTIONS, makeCooldown, withReadRetry } from './functionRetry.js';
 
 /** A function's JSON body from what `functions.invoke` resolved to. Accepts a
  * bare body too, so a test double or a future SDK that unwraps keeps working;
@@ -73,6 +79,20 @@ export function normalizeFunctionError(error) {
   return error;
 }
 
+// One pause for the whole tab: Base44's budget is app-wide, so a rate limit
+// seen by one read applies to the next one too.
+const readCooldown = makeCooldown();
+
+async function invokeOnce(client, name, payload) {
+  let response;
+  try {
+    response = await client.functions.invoke(name, payload);
+  } catch (error) {
+    throw normalizeFunctionError(error);
+  }
+  return unwrapFunctionResponse(response);
+}
+
 /**
  * Call a backend function and resolve to its JSON body. Rejects with the
  * original error, normalized (see normalizeFunctionError).
@@ -81,13 +101,28 @@ export function normalizeFunctionError(error) {
  *   the Base44 client (`base44` from '@/api/base44Client')
  * @param {string} name
  * @param {object} [payload]
+ * @param {{ idempotent?: boolean, retry?: object }} [options]
+ *   `idempotent` overrides the read list (true: retry a call that is safe to
+ *   repeat; false: never retry). `retry` is passed to withReadRetry (tests).
  */
-export async function invokeFunction(client, name, payload = {}) {
-  let response;
-  try {
-    response = await client.functions.invoke(name, payload);
-  } catch (error) {
-    throw normalizeFunctionError(error);
+// Listeners told after a non-read function call succeeded (query-client.js
+// marks every cached list stale, so the next screen reads fresh data).
+const writeListeners = new Set();
+
+/** Register `fn(name)` to run after any successful non-read call. Returns an unsubscribe. */
+export function onFunctionWrite(fn) {
+  writeListeners.add(fn);
+  return () => writeListeners.delete(fn);
+}
+
+export async function invokeFunction(client, name, payload = {}, options = {}) {
+  const idempotent = options.idempotent ?? IDEMPOTENT_READ_FUNCTIONS.has(name);
+  if (!idempotent) {
+    const body = await invokeOnce(client, name, payload);
+    for (const fn of writeListeners) {
+      try { fn(name); } catch { /* a listener never fails the write */ }
+    }
+    return body;
   }
-  return unwrapFunctionResponse(response);
+  return withReadRetry(() => invokeOnce(client, name, payload), { cooldown: readCooldown, ...(options.retry || {}) });
 }

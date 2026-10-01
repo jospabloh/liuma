@@ -20,6 +20,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
 import { familyCreate, familyUpdate } from '@/lib/authorization/familyWrite';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 export default function EventosParaPadres() {
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -31,15 +33,16 @@ export default function EventosParaPadres() {
 
   const { user, userProfile, isLoading: profileLoading } = useCurrentProfile();
 
-  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
     enabled: !!user,
   });
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = linkedQuery;
 
   const students = linkedStudents.students;
 
-  const { data: events, isLoading } = useQuery({
+  const eventsQuery = useQuery({
     queryKey: ['eventsRequiringConfirmation', userProfile?.school_id],
     queryFn: async () => {
       const allEvents = await schoolRead('Event', {
@@ -52,12 +55,17 @@ export default function EventosParaPadres() {
     },
     enabled: !!userProfile?.school_id,
   });
+  const { data: events, isLoading } = eventsQuery;
 
-  const { data: responses = [] } = useQuery({
+  const responsesQuery = useQuery({
     queryKey: ['eventResponses', user?.id],
     queryFn: () => schoolRead('EventResponse', { parent_id: user.id }),
     enabled: !!user?.id,
   });
+  const { data: responses = [] } = responsesQuery;
+  // A failed read must not look like "no events" — nor like "not answered
+  // yet", which would invite a second answer to the same event (v1.8.3).
+  const loadFailure = blockingLoadFailure(linkedQuery, eventsQuery, responsesQuery);
 
   const respondMutation = useMutation({
     mutationFn: async (data) => {
@@ -143,7 +151,7 @@ export default function EventosParaPadres() {
     PENDING: { label: 'Pendiente', color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300', icon: AlertCircle },
   };
 
-  if (profileLoading || isLoading) {
+  if (profileLoading || isLoading || linkedQuery.isLoading || responsesQuery.isLoading) {
     return <LoadingScreen message="Cargando eventos..." />;
   }
 
@@ -157,7 +165,9 @@ export default function EventosParaPadres() {
         />
 
         <div className="space-y-4">
-          {events?.length === 0 ? (
+          {loadFailure ? (
+            <LoadError failure={loadFailure} title="No se pudieron cargar los eventos" />
+          ) : events?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />

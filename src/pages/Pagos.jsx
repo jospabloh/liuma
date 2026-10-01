@@ -19,6 +19,8 @@ import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { canReadEntity, buildScopedFilter } from '@/lib/authorization/policy';
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 import {
   Dialog,
   DialogContent,
@@ -30,19 +32,20 @@ export default function Pagos() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [activeStudentId, setActiveStudentId] = useState('all');
   
-  const { user, userProfile } = useCurrentProfile();
+  const { user, userProfile, profileQuery } = useCurrentProfile();
 
-  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
     enabled: !!user && canReadEntity(userProfile?.app_role, 'ChargeItem'),
   });
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = linkedQuery;
 
   const students = linkedStudents.students;
   const studentIds = linkedStudents.studentIds;
   const activeStudents = activeStudentId === 'all' ? students : students.filter((student) => student.id === activeStudentId);
 
-  const { data: charges = [], isLoading } = useQuery({
+  const chargesQuery = useQuery({
     queryKey: ['charges', studentIds],
     queryFn: async () => {
       if (studentIds.length === 0 || !canReadEntity(userProfile?.app_role, 'ChargeItem')) return [];
@@ -56,6 +59,9 @@ export default function Pagos() {
     },
     enabled: studentIds.length > 0 && !!userProfile,
   });
+  const { data: charges = [], isLoading } = chargesQuery;
+  // A failed read is not "no children linked" (v1.8.3).
+  const loadFailure = blockingLoadFailure(profileQuery, linkedQuery, chargesQuery);
 
   // What a family still owes is the BALANCE of each open charge — after
   // partial payments (amount_paid, re-derived by the server) — never the
@@ -96,7 +102,7 @@ export default function Pagos() {
     return charges.filter(c => c.student_id === studentId);
   };
 
-  if (isLoading) return <LoadingScreen message="Cargando pagos..." />;
+  if (isLoading || linkedQuery.isLoading) return <LoadingScreen message="Cargando pagos..." />;
 
   return (
     <div className="min-h-screen bg-background">
@@ -107,7 +113,9 @@ export default function Pagos() {
         backTo={createPageUrl('Home')}
       />
 
-      {students.length === 0 ? (
+      {loadFailure ? (
+        <LoadError failure={loadFailure} title="No se pudo cargar la información de pagos" />
+      ) : students.length === 0 ? (
         <EmptyState
           icon={CreditCard}
           title="Sin información de pagos"

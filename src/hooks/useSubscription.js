@@ -4,6 +4,9 @@ import { selectCurrentUserProfile } from '@/lib/tenantSelection';
 import { isPlatformOwner } from '@/lib/support/owner';
 import { normalizeSubscription } from '@/lib/license/licenseModel';
 import { invokeFunction } from '@/lib/functionResponse';
+import {
+  MY_SUBSCRIPTION_QUERY_KEY, SUBSCRIPTION_FRESH_MS, readSessionSubscription, writeSessionSubscription,
+} from '@/lib/license/subscriptionSession';
 
 /**
  * useSubscription — the current user's school license, normalized for the UI
@@ -20,7 +23,7 @@ import { invokeFunction } from '@/lib/functionResponse';
  * trial, or a failed read → isReadOnly. `effective` from the server wins over
  * the client's own computation so both sides agree on the same clock.
  */
-export const MY_SUBSCRIPTION_QUERY_KEY = 'mySubscription';
+export { MY_SUBSCRIPTION_QUERY_KEY };
 
 export function useSubscription() {
   const { data: user, isLoading: userLoading } = useQuery({
@@ -39,13 +42,25 @@ export function useSubscription() {
   });
 
   const canQuery = !!userProfile?.school_id && userProfile?.status === 'ACTIVE';
+  const sessionKey = { userId: user?.id, schoolId: userProfile?.school_id };
+  // One request per session (subscriptionSession.js): a fresh answer from
+  // this tab's sessionStorage seeds the cache, so a reload does not ask again.
+  const stored = canQuery ? readSessionSubscription(sessionKey) : undefined;
   const { data: result, isLoading: subLoading, isError, refetch } = useQuery({
     queryKey: [MY_SUBSCRIPTION_QUERY_KEY, user?.id, userProfile?.school_id],
-    // invokeFunction unwraps the axios response to the function's body.
-    queryFn: () => invokeFunction(base44, 'getMySubscription', {}),
+    // invokeFunction unwraps the axios response to the function's body, and
+    // retries it with backoff on Base44's rate limit (it is a read).
+    queryFn: async () => {
+      const body = await invokeFunction(base44, 'getMySubscription', {});
+      writeSessionSubscription({ ...sessionKey, data: body });
+      return body;
+    },
     enabled: canQuery,
-    staleTime: 2 * 60 * 1000,
-    retry: 1,
+    initialData: stored?.data,
+    initialDataUpdatedAt: stored?.updatedAt,
+    staleTime: SUBSCRIPTION_FRESH_MS,
+    // invokeFunction already retried it; React Query's default policy
+    // (query-client.js) does not stack more retries on top.
   });
 
   const subscription = result?.subscription || null;

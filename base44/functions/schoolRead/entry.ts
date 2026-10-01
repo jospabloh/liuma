@@ -29,70 +29,51 @@
 //           link_student_ids, students, classrooms }
 //   { entity, filter?, sort?, limit? (≤1000), skip? }
 //       → { ok, rows, has_more, truncated? }
-//   { queries: [{ key, entity, filter?, sort?, limit?, skip? }, …] }  (≤12,
-//     of which ≤MAX_SCANS_PER_BATCH scan-mode reads — see needsScan)
-//       → { ok, results: { [key]: rows }, has_more: { [key]: bool } }
+//   { queries: [{ key, entity, filter?, sort?, limit?, skip? }, …],  (≤12,
+//     context?: true }   of which ≤MAX_SCANS_PER_BATCH scan-mode reads — see
+//                        needsScan)
+//       → { ok, results: { [key]: rows }, has_more: { [key]: bool },
+//           context? (same shape as action:'context', when asked) }
 //     One call, one scope derivation, several reads — how the home screens
-//     avoid a round-trip per list.
+//     avoid a round-trip per list. Since v1.8.3 the client batches on its own:
+//     single schoolRead() calls made in the same tick travel as one of these
+//     (src/lib/data/schoolReadCore.js).
+//
+// The request handling itself lives in ./_answer.ts (import-free, so the
+// tests and scripts/load-test-reads.mjs run it against a fake DB).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import {
-  type Profile, type ReadRequest, type Refusal, type ReadResult,
-  selectCurrentProfile, profileProblem, buildScope, describeScope, readFor, needsScan,
-  MAX_BATCH, MAX_SCANS_PER_BATCH,
-} from './_scope.ts';
-
-function fail(status: number, code: string, extra: Record<string, unknown> = {}): Response {
-  return Response.json({ ok: false, code, error: code, ...extra }, { status });
-}
-
-function isRefusal(r: ReadResult | Refusal): r is Refusal {
-  return (r as Refusal).ok === false;
-}
+import type { Profile } from './_scope.ts';
+import { answerSchoolRead, isRateLimitError, RATE_LIMIT_RETRY_AFTER_S } from './_answer.ts';
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return fail(401, 'UNAUTHENTICATED');
+    if (!user) return Response.json({ ok: false, code: 'UNAUTHENTICATED', error: 'UNAUTHENTICATED' }, { status: 401 });
 
     // deno-lint-ignore no-explicit-any
     const body: any = await req.json().catch(() => ({}));
-    const sr = base44.asServiceRole;
 
-    const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id }, '-created_date', 50);
-    const profile = selectCurrentProfile(profiles);
-    const problem = profileProblem(profile);
-    if (problem) return fail(403, problem);
+    // The caller's OWN profile rows, read with THEIR token (UserProfile.read
+    // is own-row under RLS — the same read useCurrentProfile makes in the
+    // browser). With the service role this was one more call per invocation
+    // against the app-wide budget that three concurrent users exhausted
+    // (v1.8.3, see _answer.ts). The filter is still pinned to user.id.
+    const profiles: Profile[] = await base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date', 50);
 
-    const bundle = await buildScope(sr, String(user.id), profile!, { withClassrooms: body?.action === 'context' });
-    const { scope } = bundle;
-
-    if (body?.action === 'context') {
-      return Response.json({ ok: true, ...describeScope(bundle) });
-    }
-
-    if (Array.isArray(body?.queries)) {
-      if (body.queries.length === 0 || body.queries.length > MAX_BATCH) return fail(400, 'INVALID_BATCH');
-      // deno-lint-ignore no-explicit-any
-      const scans = body.queries.filter((q: any) => needsScan(scope.role, String(q?.entity ?? ''))).length;
-      if (scans > MAX_SCANS_PER_BATCH) return fail(400, 'TOO_MANY_SCANS');
-      const results: Record<string, unknown> = {};
-      const hasMore: Record<string, boolean> = {};
-      for (const q of body.queries) {
-        const key = typeof q?.key === 'string' && q.key ? q.key : '';
-        if (!key || key in results) return fail(400, 'INVALID_BATCH');
-        const out = await readFor(sr, scope, q as ReadRequest);
-        if (isRefusal(out)) return fail(out.status, out.code, { key, field: out.field });
-        results[key] = out.rows;
-        hasMore[key] = out.has_more;
-      }
-      return Response.json({ ok: true, results, has_more: hasMore });
-    }
-
-    const out = await readFor(sr, scope, body as ReadRequest);
-    if (isRefusal(out)) return fail(out.status, out.code, out.field ? { field: out.field } : {});
-    return Response.json(out);
+    const answer = await answerSchoolRead(base44.asServiceRole, String(user.id), profiles, body);
+    return Response.json(answer.body, { status: answer.status });
   } catch (e) {
+    // Base44's rate limit is a 429 with a pause, not a crash: the client
+    // retries a read on it (src/lib/functionRetry.js). Before v1.8.3 it came
+    // back as 500 INTERNAL, indistinguishable from a bug.
+    if (isRateLimitError(e)) {
+      console.warn('schoolRead rate limited');
+      return Response.json(
+        { ok: false, code: 'RATE_LIMITED', error: 'RATE_LIMITED' },
+        { status: 429, headers: { 'Retry-After': String(RATE_LIMIT_RETRY_AFTER_S) } },
+      );
+    }
     // The detail goes to the function log, not to the caller: a raw SDK error
     // can name entities, queries or ids.
     console.error('schoolRead failed', (e as Error)?.message);

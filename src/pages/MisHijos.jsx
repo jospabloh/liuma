@@ -14,17 +14,22 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 export default function MisHijos() {
   const navigate = useNavigate();
   
   const { user } = useCurrentUser();
 
-  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] }, isLoading } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
     enabled: !!user,
   });
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] }, isLoading } = linkedQuery;
+  // A failed read is not "Sin hijos vinculados" (v1.8.3).
+  const loadFailure = blockingLoadFailure(linkedQuery);
 
   const students = linkedStudents.students;
   const studentIds = linkedStudents.studentIds;
@@ -54,7 +59,9 @@ export default function MisHijos() {
         backTo={createPageUrl('Home')}
       />
 
-      {students.length === 0 ? (
+      {loadFailure ? (
+        <LoadError failure={loadFailure} title="No se pudo cargar la información de tus hijos" />
+      ) : students.length === 0 ? (
         <EmptyState
           icon={Users}
           title="Sin hijos vinculados"

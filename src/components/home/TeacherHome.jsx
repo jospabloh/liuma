@@ -12,6 +12,8 @@ import { createPageUrl } from '@/utils';
 import { Card } from "@/components/ui/card";
 import { formatLocalDate, parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import { diaryCoverage } from '@/lib/diaryCoverage';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 // `events`: upcoming events the server already limited to the school-wide
 // ones and this teacher's classrooms (read with the rest of the home lists).
@@ -60,7 +62,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   // (P10 — this used to be a TeacherClassroom read, a Classroom read and a
   // Student read, and the student list was fetched a second time for the
   // urgent-notice badge).
-  const { data: teacherScope = { classrooms: [], classroomIds: [], students: [] }, isSuccess: scopeLoaded } = useQuery({
+  const scopeQuery = useQuery({
     queryKey: ['teacherScope', user.id],
     queryFn: async () => {
       const context = await schoolReadContext();
@@ -72,6 +74,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
       };
     },
   });
+  const { data: teacherScope = { classrooms: [], classroomIds: [], students: [] } } = scopeQuery;
 
   const classroomIds = teacherScope.classroomIds;
   const classrooms = teacherScope.classrooms;
@@ -82,7 +85,10 @@ export default function TeacherHome({ user, userProfile, subscription }) {
   // events, and the unread urgent notices among this teacher's families. The
   // server already limits every list to this teacher's classrooms/students.
   // Key starts with 'todayDiaries' so CrearBitacora's invalidation reaches it.
-  const { data: homeLists = { diaries: [], events: [], unreadUrgent: [] } } = useQuery({
+  // It does not wait for the scope above (v1.8.3): the server scopes these
+  // lists itself, so both leave at mount and travel as ONE schoolRead request
+  // (schoolReadCore.js batches them), one scope derivation instead of two.
+  const listsQuery = useQuery({
     queryKey: ['todayDiaries', 'teacherHome', today, user.id, userProfile.school_id],
     queryFn: async () => {
       const school_id = userProfile.school_id;
@@ -100,8 +106,11 @@ export default function TeacherHome({ user, userProfile, subscription }) {
         unreadUrgent: deliveries.filter((row) => urgentIds.has(row.notice_id)),
       };
     },
-    enabled: scopeLoaded,
   });
+  const { data: homeLists = { diaries: [], events: [], unreadUrgent: [] } } = listsQuery;
+  // A failed read is not "0 pendientes" (v1.8.3): say so, with a retry,
+  // instead of a home whose counts are silently zero.
+  const loadFailure = blockingLoadFailure(scopeQuery, listsQuery);
 
   const classStudentIds = new Set(students.map((student) => student.id));
   const todayDiaries = homeLists.diaries.filter((d) => classroomIds.includes(d.classroom_id));
@@ -125,6 +134,9 @@ export default function TeacherHome({ user, userProfile, subscription }) {
 
       {/* Diary Progress */}
       <div className="relative z-10 mx-auto max-w-2xl px-6 -mt-6">
+        {loadFailure && (
+          <LoadError compact failure={loadFailure} title="No se pudieron cargar tus salones y pendientes" className="mb-4" />
+        )}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

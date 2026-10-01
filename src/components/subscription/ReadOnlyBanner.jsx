@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Lock, ExternalLink } from 'lucide-react';
+import { Lock, ExternalLink, RefreshCw } from 'lucide-react';
 import { useCanWrite } from '@/hooks/useCanWrite';
 import { useSubscription } from '@/hooks/useSubscription';
 import { licenseNotice } from '@/lib/license/licenseModel';
@@ -16,13 +16,14 @@ import { licensePaymentAction } from '@/lib/license/billingContact';
  */
 export default function ReadOnlyBanner({ className = '' }) {
   const { isReadOnly } = useCanWrite();
-  const { subscription, loadFailed, isSchoolAdmin, school } = useSubscription();
+  const { subscription, loadFailed, isSchoolAdmin, school, refetchSubscription } = useSubscription();
+  const [retrying, setRetrying] = React.useState(false);
   if (!isReadOnly) return null;
 
   const copy = loadFailed
     ? {
         title: 'No pudimos verificar tu licencia',
-        body: 'Mientras tanto no se pueden guardar cambios. Recarga la página en un momento; si continúa, escríbenos a soporte@acaciaco.com.mx.',
+        body: 'Mientras tanto no se pueden guardar cambios. Reintenta en un momento; si continúa, escríbenos a soporte@acaciaco.com.mx.',
         showPay: false,
       }
     : licenseNoticeCopy(licenseNotice(subscription), { isAdmin: isSchoolAdmin }) || {
@@ -45,6 +46,22 @@ export default function ReadOnlyBanner({ className = '' }) {
           <p className="font-semibold text-amber-900 dark:text-amber-100 mb-0.5">{copy.title}</p>
           <p className="text-sm text-amber-900/80 dark:text-amber-100/80">{copy.body}</p>
         </div>
+        {loadFailed && (
+          // v1.8.3: a failed license check (usually Base44's rate limit) is
+          // retried in place instead of asking for a full reload.
+          <button
+            type="button"
+            disabled={retrying}
+            onClick={async () => {
+              setRetrying(true);
+              try { await refetchSubscription(); } finally { setRetrying(false); }
+            }}
+            className="flex-shrink-0 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-amber-900 dark:text-amber-100 underline disabled:opacity-60"
+          >
+            <RefreshCw className={`w-3 h-3 ${retrying ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {retrying ? 'Reintentando…' : 'Reintentar'}
+          </button>
+        )}
         {pay && (
           <a
             href={pay.href}

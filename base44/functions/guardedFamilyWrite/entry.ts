@@ -54,6 +54,14 @@ const AUDIT_ACTION: Record<string, string> = {
   delete: 'RECORD_DELETED',
 };
 
+// Same test as schoolRead/_answer.ts#isRateLimitError (functions cannot
+// import across directories; tests/unit/rate-limit-resilience.test.js keeps
+// the copies in step).
+function isRateLimitError(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return err?.status === 429 || /rate limit/i.test(String(err?.message ?? ''));
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -194,6 +202,16 @@ Deno.serve(async (req) => {
       : undefined;
     return Response.json({ ok: true, record, pickupRevoked: built.pickupRevoked === true, ...(notified ? { notified } : {}) });
   } catch (e) {
+    // Base44's rate limit is a 429, not a 500 (v1.8.3). A write is NOT
+    // retried by the client: the person sees "Hay mucha actividad…" and
+    // decides; a read is retried with backoff (src/lib/functionRetry.js).
+    if (isRateLimitError(e)) {
+      console.warn('guardedFamilyWrite rate limited');
+      return Response.json(
+        { ok: false, code: 'RATE_LIMITED', error: 'RATE_LIMITED' },
+        { status: 429, headers: { 'Retry-After': '3' } },
+      );
+    }
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
 });

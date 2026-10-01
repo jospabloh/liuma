@@ -2,6 +2,39 @@
 // Kept apart from query-client.js — which imports sonner and the `@` alias —
 // so `node --test` can load it.
 import { errorStatus, humanizeError } from './errorMessages.js';
+import { backoffDelay, isRetryableReadError } from './functionRetry.js';
+
+/**
+ * How long a loaded list stays fresh (v1.8.3). Was 0: every mount of every
+ * screen refetched everything it showed — going Home → Avisos → Home asked the
+ * server for Home's lists twice. A write still refreshes what it touched
+ * (each mutation invalidates its own query keys), so this only removes
+ * repeats, never hides a change the person just made.
+ */
+export const QUERY_STALE_TIME_MS = 30 * 1000;
+
+/** React Query's own retries, on top of invokeFunction's. */
+export const QUERY_MAX_RETRIES = 2;
+
+/**
+ * Whether React Query should try a failed query again. Never when
+ * invokeFunction already spent its retries on it (retriesExhausted) — that
+ * would multiply the calls exactly when the server asked for fewer — nor for
+ * a 4xx refusal or the "no row" undefined-data error. Otherwise a transient
+ * failure (rate limit, 5xx, no answer) of a direct SDK read gets two more
+ * tries with backoff.
+ */
+export function shouldRetryQuery(failureCount, error) {
+  if (failureCount >= QUERY_MAX_RETRIES) return false;
+  if (!error || error.retriesExhausted) return false;
+  if (isUndefinedDataError(error)) return false;
+  return isRetryableReadError(error, { online: typeof navigator === 'undefined' || navigator.onLine !== false });
+}
+
+/** Delay before React Query's retry number `attempt` (0-based). */
+export function queryRetryDelay(attempt) {
+  return backoffDelay(attempt + 1);
+}
 
 /**
  * Toast for a failed read, or null for none.

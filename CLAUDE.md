@@ -1657,3 +1657,43 @@ conceptos anteriores sin tipo cuentan como `OTRO`; `resolveEffectiveLicense`
 y sus dos espejos Deno vencen una fecha sola a medianoche UTC; `/login` y
 `/reset-password` hospedados por Base44 siguen en inglés; nada de esto corrió
 contra Base44 en vivo.
+
+## Límite de Base44: menos lecturas, reintentos y errores que parecen errores (v1.8.3, 2026-10-01)
+
+QA en vivo con tres sesiones a la vez: cientos de `500 INTERNAL` en
+`schoolRead`/`getMySubscription` y pantallas que mostraban el fallo como datos
+vacíos. Detalle, evidencia y números en `docs/rate-limit-v1.8.3.md`.
+
+**El límite es de la app, no del usuario ni de la función.** Los logs dicen
+`schoolRead failed Rate limit exceeded`: lo lanza una llamada a entidades con
+**service role** dentro de la función, y `getMySubscription` falla en los
+mismos segundos para otros usuarios. Son unas 150 llamadas por minuto (lo que
+reporta soporte de Base44 y lo que cuadra con los logs), compartidas por todas
+las invocaciones de todos los usuarios. Lo que cuesta es el **número de
+llamadas service-role por pantalla**, no el número de usuarios.
+
+Reglas que deja:
+
+- **No añadas un `schoolRead` suelto pensando que cuesta uno.** Cada invocación
+  re-deriva el scope (2 llamadas para padre/maestro). Las lecturas del mismo
+  tick ya se agrupan solas (`schoolReadCore.js`: lote ≤12, ≤3 scan,
+  `context: true` en el mismo request). No encadenes con `enabled:` una
+  lectura que el servidor ya acota: perderías el lote.
+- **Solo se reintentan lecturas** (`IDEMPOTENT_READ_FUNCTIONS` en
+  `functionRetry.js`). Una escritura sale una vez; agregarla a esa lista exige
+  que repetirla sea inofensivo.
+- **Un fallo no es una lista vacía.** Una pantalla nueva usa
+  `blockingLoadFailure(...queries)` + `<LoadError>` antes de su `EmptyState`.
+- `staleTime` es 30 s, y tras cualquier escritura todo queda *stale* sin
+  refetch. Si una pantalla necesita datos al segundo, invalida su clave.
+- `getMySubscription` se lee una vez por sesión (5 min, `sessionStorage` por
+  usuario y escuela). Si cambias la licencia desde la app, invalida
+  `MY_SUBSCRIPTION_QUERY_KEY`.
+- `npm run test:load` mide llamadas por pantalla antes/después contra un mock
+  del límite. `rate-limit-resilience.test.js` lo usa como compuerta.
+
+Desplegar: `npm run deploy` (`schoolRead`, `getMySubscription`,
+`listSchoolMembers`, `guardedEntityWrite`, `guardedFamilyWrite`) y
+`npm run deploy:site`, en cualquier orden. **No verificado:** carga real contra
+producción; si las lecturas con token de usuario tienen presupuesto aparte.
+

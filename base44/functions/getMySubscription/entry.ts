@@ -40,6 +40,14 @@ const MEMBER_FIELDS = ['subscription_status', 'license_tier', 'trial_end_date'];
 type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string; onboarding_completed?: boolean; created_date?: string };
 type Sub = Record<string, unknown> & { subscription_status?: string; license_tier?: string; trial_end_date?: string; license_expires_at?: string };
 
+// Same test as schoolRead/_answer.ts#isRateLimitError (functions cannot
+// import across directories; tests/unit/rate-limit-resilience.test.js keeps
+// the copies in step).
+function isRateLimitError(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return err?.status === 429 || /rate limit/i.test(String(err?.message ?? ''));
+}
+
 function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
@@ -100,7 +108,10 @@ Deno.serve(async (req) => {
     if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
 
     const sr = base44.asServiceRole;
-    const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id });
+    // The caller's OWN rows, with THEIR token (UserProfile.read is own-row
+    // under RLS): one call fewer against the app-wide service-role budget
+    // that Base44 rate-limits (v1.8.3; see schoolRead/_answer.ts).
+    const profiles: Profile[] = await base44.entities.UserProfile.filter({ user_id: user.id }, '-created_date', 50);
     const profile = selectCurrentProfile(profiles);
     const isPlatformOwner = user.role === 'admin';
 
@@ -149,6 +160,18 @@ Deno.serve(async (req) => {
       school,
     });
   } catch (e) {
-    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+    // Base44's rate limit ("Rate limit exceeded", status 429) is a pause, not
+    // a crash: answer 429 so the client backs off and retries (v1.8.3). It
+    // used to leave as a 500 carrying the raw SDK message.
+    if (isRateLimitError(e)) {
+      console.warn('getMySubscription rate limited');
+      return Response.json(
+        { ok: false, code: 'RATE_LIMITED', error: 'RATE_LIMITED' },
+        { status: 429, headers: { 'Retry-After': '3' } },
+      );
+    }
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('getMySubscription failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
 });

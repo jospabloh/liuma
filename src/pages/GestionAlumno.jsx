@@ -36,6 +36,8 @@ import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { invalidateSchoolStudents } from '@/hooks/useSchoolStudents';
 import StudentFormDialog from '@/components/school/StudentFormDialog';
 import { studentUpdatePatch } from '@/lib/forms/directorForms';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 export default function GestionAlumno() {
   const queryClient = useQueryClient();
@@ -49,7 +51,7 @@ export default function GestionAlumno() {
 
   const { userProfile } = useCurrentProfile();
 
-  const { data: student, isLoading } = useQuery({
+  const studentQuery = useQuery({
     queryKey: ['student', studentId],
     queryFn: async () => {
       const students = await schoolRead('Student', { id: studentId });
@@ -57,8 +59,9 @@ export default function GestionAlumno() {
     },
     enabled: !!studentId,
   });
+  const { data: student, isLoading } = studentQuery;
 
-  const { data: classroom } = useQuery({
+  const classroomQuery = useQuery({
     queryKey: ['classroom', student?.classroom_id],
     queryFn: async () => {
       const classrooms = await schoolRead('Classroom', { id: student.classroom_id });
@@ -66,12 +69,20 @@ export default function GestionAlumno() {
     },
     enabled: !!student?.classroom_id,
   });
+  const { data: classroom } = classroomQuery;
 
-  const { data: parentLinks = [] } = useQuery({
+  const parentLinksQuery = useQuery({
     queryKey: ['studentParentLinks', studentId],
     queryFn: () => schoolRead('ParentStudent', { student_id: studentId }),
     enabled: !!studentId,
   });
+  const { data: parentLinks = [] } = parentLinksQuery;
+  // A failed read is not "Sin salón" / "Sin padres vinculados" (v1.8.3).
+  const studentFailure = blockingLoadFailure(studentQuery);
+  const linksFailure = blockingLoadFailure(parentLinksQuery);
+  const classroomLabel = classroomQuery.isError && !classroom
+    ? 'Salón: no se pudo cargar'
+    : classroom?.name || (student?.classroom_id ? (classroomQuery.isLoading ? 'Cargando salón…' : 'Salón no disponible') : 'Sin salón');
 
   const { data: parentProfiles = [] } = useQuery({
     queryKey: ['parentProfiles', userProfile?.school_id],
@@ -221,6 +232,8 @@ export default function GestionAlumno() {
         backTo={createPageUrl(userProfile?.app_role === 'ADMIN' ? 'GestionEscuela' : 'Home')}
       />
 
+      {studentFailure && <LoadError failure={studentFailure} title="No se pudo cargar al alumno" />}
+
       {student && (
         <div className="space-y-6">
           {/* Student Info */}
@@ -238,7 +251,7 @@ export default function GestionAlumno() {
                   {student.first_name} {student.last_name}
                 </h2>
                 <Badge variant="secondary" className="mt-1">
-                  {classroom?.name || 'Sin salón'}
+                  {classroomLabel}
                 </Badge>
                 {parseLocalDate(student.birth_date) && (
                   <p className="text-sm text-muted-foreground mt-1">
@@ -297,7 +310,9 @@ export default function GestionAlumno() {
               )}
             </div>
 
-            {parentLinks.filter(l => l.status === 'ACTIVE').length === 0 ? (
+            {linksFailure ? (
+              <LoadError compact failure={linksFailure} title="No se pudieron cargar los padres vinculados" />
+            ) : parentLinks.filter(l => l.status === 'ACTIVE').length === 0 ? (
               <div className="text-center py-6 text-muted-foreground">
                 <Link className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p>Sin padres vinculados</p>

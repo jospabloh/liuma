@@ -18,6 +18,8 @@ import { selectOverdueCharges, UNPAID_CHARGE_STATUSES } from '@/lib/payments/ove
 import { countLabel } from '@/lib/spanishText';
 import { percentOfStudentsCovered } from '@/lib/schoolStudents';
 import { useSubscription } from '@/hooks/useSubscription';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 export default function AdminHome({ user, userProfile, subscription }) {
   const navigate = useNavigate();
@@ -89,15 +91,20 @@ export default function AdminHome({ user, userProfile, subscription }) {
     ),
   });
 
-  const { data: unreadUrgentNotices = [] } = useQuery({
+  const urgentQuery = useQuery({
     queryKey: ['adminUnreadUrgentNotices', userProfile.school_id],
     queryFn: async () => {
-      const urgentNotices = await schoolRead('Notice', { school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50);
+      // Both at once, so they join the home screen's batched request
+      // (v1.8.3) instead of a second round-trip after the first.
+      const [urgentNotices, pending] = await Promise.all([
+        schoolRead('Notice', { school_id: userProfile.school_id, priority: 'URGENT' }, '-created_date', 50),
+        schoolRead('NoticeDelivery', { school_id: userProfile.school_id, status: 'SENT' }, '-created_date', 200),
+      ]);
       const urgentIds = new Set(urgentNotices.map((notice) => notice.id));
-      const pending = await schoolRead('NoticeDelivery', { school_id: userProfile.school_id, status: 'SENT' }, '-created_date', 200);
       return pending.filter((row) => urgentIds.has(row.notice_id));
     },
   });
+  const { data: unreadUrgentNotices = [] } = urgentQuery;
 
   const pendingUsers = pendingUsersQuery.data ?? [];
   const allProfiles = allProfilesQuery.data ?? [];
@@ -114,6 +121,11 @@ export default function AdminHome({ user, userProfile, subscription }) {
   // or after it errored, reads as good news that nobody checked).
   const unknown = (...queries) => queries.some((q) => q.isPending || q.isError);
   const statValue = (value, ...queries) => (unknown(...queries) ? '—' : value);
+  // "—" alone does not say the load failed or offer a way out (v1.8.3).
+  const loadFailure = blockingLoadFailure(
+    pendingUsersQuery, allProfilesQuery, classroomsQuery, studentsQuery, overdueChargesQuery,
+    setupStepsQuery, teacherAssignmentsQuery, parentLinksQuery, emergencyContactsQuery, urgentQuery,
+  );
 
   const handleEmergencyAlert = () => {
     navigate(createPageUrl('AlertaEmergencia'));
@@ -171,6 +183,9 @@ export default function AdminHome({ user, userProfile, subscription }) {
             Enviar alerta de EMERGENCIA
           </Button>
         </motion.div>
+        {loadFailure && (
+          <LoadError compact failure={loadFailure} title="No se pudieron cargar todas las cifras" className="mt-4" />
+        )}
       </div>
 
       {/* Main Content */}

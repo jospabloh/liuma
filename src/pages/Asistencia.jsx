@@ -25,6 +25,8 @@ import { ATTENDANCE_STATUS, ATTENDANCE_STATUSES, ATTENDANCE_STATUS_LABELS } from
 import { formatLocalDate, parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 // Visual treatment per status. The values and Spanish copy come from
 // src/lib/attendance/status.js (the schema's lowercase enum); only the
@@ -222,15 +224,16 @@ function ParentAttendanceView({ user, userProfile }) {
   const [startDate, setStartDate] = useState(() => formatLocalDate(subDays(schoolTodayDate(), 30)));
   const [endDate, setEndDate] = useState(() => schoolToday());
 
-  const { data: linkedStudents = { students: [] }, isLoading: loadingLinkedStudents } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['attendance-linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
     enabled: !!user && userProfile?.app_role === 'PARENT'
   });
+  const { data: linkedStudents = { students: [] }, isLoading: loadingLinkedStudents } = linkedQuery;
 
   const studentIds = linkedStudents.students.map(s => s.id);
 
-  const { data: attendanceRecords = [], isLoading: loadingAttendance, isError: hasAttendanceError } = useQuery({
+  const parentAttendanceQuery = useQuery({
     queryKey: ['attendance-parent', studentIds, startDate, endDate],
     queryFn: async () => {
       if (studentIds.length === 0) return [];
@@ -241,9 +244,16 @@ function ParentAttendanceView({ user, userProfile }) {
     },
     enabled: studentIds.length > 0 && !!startDate && !!endDate
   });
+  const { data: attendanceRecords = [], isLoading: loadingAttendance, isError: hasAttendanceError } = parentAttendanceQuery;
+  // A failed read is not "Sin alumnos vinculados" (v1.8.3).
+  const loadFailure = blockingLoadFailure(linkedQuery, parentAttendanceQuery);
 
   if (loadingLinkedStudents || loadingAttendance) {
     return <LoadingScreen message="Cargando asistencia..." />;
+  }
+
+  if (loadFailure) {
+    return <LoadError failure={loadFailure} title="No se pudo cargar la asistencia" />;
   }
 
   if (linkedStudents.students.length === 0) {

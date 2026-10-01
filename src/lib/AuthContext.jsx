@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 import { rememberIdentity, clearRememberedIdentity } from '@/lib/lastIdentity';
+import { clearSessionSubscription } from '@/lib/license/subscriptionSession';
 import { authErrorAfterFailedMe, loginUrl } from '@/lib/authLinks';
 
 const AuthContext = createContext();
@@ -115,6 +116,8 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     // Forget the remembered identity on explicit logout.
     clearRememberedIdentity();
+    // And this tab's cached license (it is keyed by user anyway; v1.8.3).
+    clearSessionSubscription();
 
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect.

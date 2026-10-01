@@ -17,6 +17,8 @@ import { familyCreate } from '@/lib/authorization/familyWrite';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import LoadError from '@/components/ui/LoadError';
+import { blockingLoadFailure } from '@/lib/loadFailure';
 
 export default function PedidosUniformes() {
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -35,11 +37,12 @@ export default function PedidosUniformes() {
 
   const { user, userProfile, isLoading: profileLoading } = useCurrentProfile();
 
-  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = useQuery({
+  const linkedQuery = useQuery({
     queryKey: ['linkedStudents', user?.id],
     queryFn: () => getLinkedStudents(user),
     enabled: !!user,
   });
+  const { data: linkedStudents = { students: [], studentIds: [], orphanedLinkIds: [] } } = linkedQuery;
 
   const students = linkedStudents.students;
 
@@ -56,11 +59,14 @@ export default function PedidosUniformes() {
     enabled: !!userProfile?.school_id,
   });
 
-  const { data: orders, isLoading } = useQuery({
+  const ordersQuery = useQuery({
     queryKey: ['uniformOrders', user?.id],
     queryFn: () => schoolRead('UniformOrder', { parent_id: user.id }, '-created_date'),
     enabled: !!user?.id,
   });
+  const { data: orders, isLoading } = ordersQuery;
+  // A failed read is not "no orders" / "no children" (v1.8.3).
+  const loadFailure = blockingLoadFailure(linkedQuery, ordersQuery);
 
   const createOrderMutation = useMutation({
     // guardedFamilyWrite comprueba el vínculo con el alumno y fija escuela,
@@ -131,7 +137,7 @@ export default function PedidosUniformes() {
     CANCELLED: { label: 'Cancelado', color: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300' },
   };
 
-  if (profileLoading || isLoading) {
+  if (profileLoading || isLoading || linkedQuery.isLoading) {
     return <LoadingScreen message="Cargando pedidos..." />;
   }
 
@@ -307,7 +313,9 @@ export default function PedidosUniformes() {
         </div>
 
         <div className="space-y-4">
-          {orders?.length === 0 ? (
+          {loadFailure ? (
+            <LoadError failure={loadFailure} title="No se pudieron cargar tus pedidos" />
+          ) : orders?.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <ShoppingBag className="w-12 h-12 mx-auto text-muted-foreground mb-4" />

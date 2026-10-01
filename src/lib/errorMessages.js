@@ -10,6 +10,7 @@
 // Pure so `node --test` can load it (its one import is import-free too).
 
 import { functionErrorCode } from './functionResponse.js';
+import { isRateLimitError } from './functionRetry.js';
 
 /** Error codes our backend functions return in their error body's `code`. */
 const CODE_MESSAGES = {
@@ -51,6 +52,9 @@ const CODE_MESSAGES = {
   PAYMENT_CONFLICT: 'Otro pago se registró al mismo tiempo; revisa el saldo y vuelve a intentar.',
   PAYMENT_CONFLICT_UNRESOLVED: 'Otro pago se registró al mismo tiempo y este quedó de más. Revisa los pagos del cargo y borra el sobrante.',
   REMINDER_IN_PROGRESS: 'Ya se está enviando un recordatorio de este cargo. Espera un momento y recarga.',
+  // Base44's app-wide rate limit (v1.8.3). Reads were already retried by the
+  // time anyone sees this; a write never is.
+  RATE_LIMITED: 'Hay mucha actividad en este momento. Espera unos segundos e inténtalo de nuevo.',
 };
 
 const STATUS_MESSAGES = {
@@ -110,6 +114,8 @@ export function humanizeError(error) {
   // `.response.data` (functions.invoke rejects with the raw axios error).
   const code = functionErrorCode(error);
   if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code];
+  // A function deployed before v1.8.3 still answers the limit as a 500.
+  if (isRateLimitError(error)) return CODE_MESSAGES.RATE_LIMITED;
   if (isNetworkError(error)) return NETWORK_ERROR_MESSAGE;
   const status = errorStatus(error);
   if (status && STATUS_MESSAGES[status]) return STATUS_MESSAGES[status];

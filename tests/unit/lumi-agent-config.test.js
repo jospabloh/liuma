@@ -117,6 +117,15 @@ test('the prompt closes the gaps QA r5 found in live answers', () => {
   assert.match(p, /No asumas el género de nadie/);
   // LM07: a twelve-line refusal.
   assert.match(p, /Al negarte a algo: máximo tres líneas/);
+  // Live check after #195: the conditional rule did not stop "pagos" in a
+  // docente's refusal (3/3 runs); refusals now never name topics at all.
+  assert.match(p, /Al negarte NUNCA enumeres lo que puedes hacer/);
+  // Codex on #196: the rule must not contradict the specific redirects that
+  // sections 7 and 8 prescribe (a family asking to record attendance is sent
+  // to "Solicitar ausencia"); it names them as the allowed exception.
+  assert.match(p, /Lo único que sí puedes nombrar es la pantalla o la persona que resuelve exactamente lo que pidieron/);
+  assert.match(p, /puede usar "Solicitar ausencia"/);
+  assert.doesNotMatch(p, /Al negarte NUNCA menciones temas/);
   // LP10: "si hubo un cambio de rol reciente, probablemente aún no se refleja".
   assert.match(p, /no especules con cambios de rol/);
   // Live QA of v1.8.3: still answered "si efectivamente fuiste promovido…".

@@ -1684,7 +1684,8 @@ propósito para el «Continuar como» silencioso por cookie (`ContinueAs.jsx`,
 `AuthContext.navigateToLogin`) y que `OAuthConsent.jsx` usa de respaldo. Hoy
 no hay ninguna regla (`GET …/url-redirects` → `[]`). Lo de `/login` ya está
 acotado en cliente: nada enlaza ahí, el `start_url` del PWA es `/`, y una
-navegación interna a `/login` cae en `/entrar` (`authLinks.js`).
+navegación interna a `/login` cae en `/` (`App.jsx`), que sin sesión manda a
+`/entrar` (`LOGIN_PATH` en `authLinks.js`).
 
 **Lo que sí se hizo, en el repo:** `src/lib/platformEmails.js` guarda el
 asunto, el botón y la vigencia **reales** de los dos correos (leídos de los
@@ -1712,6 +1713,15 @@ publicar los registros DNS que devuelva en `acaciaco.com.mx`:
       "from_email": "no-reply@liuma.acaciaco.com.mx" }
 
 y sondear `GET …/custom-email-domains` hasta `configuration_status: "active"`.
+Ojo antes de publicar: `liuma.acaciaco.com.mx` es un CNAME a
+`liuma-2232ffd8.base44.app` (el sitio; leído por DNS-over-HTTPS el 2026-10-01), y un CNAME no puede convivir con otro registro en el mismo nombre. Si
+algún registro de `dns_records` (un MX o TXT) cae exactamente en
+`liuma.acaciaco.com.mx` y no en un subnombre (`em….`, `…._domainkey.…`), no se
+puede publicar sin romper el sitio: en ese caso se desactiva el dominio de
+correo y se busca otra forma, no se toca el CNAME. Esto no se comprobó: hace
+falta la respuesta del POST para saberlo. El dominio de correo cambia también
+el «De:» de los correos propios de LIUMA (una app manda desde un solo
+dominio).
 El cuerpo de los correos de Base44 sigue en inglés aun así: sólo cambia el
 «De:». Traducirlo de verdad pide a Base44 una opción de idioma, o sacar el
 registro/recuperación a funciones propias — que no puede emitir tokens de

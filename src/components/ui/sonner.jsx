@@ -18,7 +18,12 @@ const Toaster = (props) => {
       richColors
       closeButton
       expand={false}
-      toastOptions={{ style: { borderRadius: "12px" } }}
+      // Sonner draws its close button 20x20. The ::after widens what a finger
+      // can hit to 44x44 without changing how it looks (same trick as Switch).
+      toastOptions={{
+        style: { borderRadius: "12px" },
+        classNames: { closeButton: "after:absolute after:-inset-3" },
+      }}
       {...props}
     />
   )

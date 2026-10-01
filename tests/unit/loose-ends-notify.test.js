@@ -155,7 +155,9 @@ test('Avisos and AvisosMaestro list the inbox one entry per notice', () => {
   assert.match(avisos, /unreadCopies\(entry\)/);
   const maestro = read('src/pages/AvisosMaestro.jsx');
   assert.match(maestro, /readNoticeInbox\(\{ schoolId: userProfile\.school_id, userId: user\.id \}\)/);
-  assert.match(read('src/components/home/TeacherHome.jsx'), /row\.recipient_user_id === user\.id/);
+  // The teacher's badge counts the teacher's own copies, one per notice
+  // (unreadNoticeCount — v1.8.3, tests/unit/notify-copy-v183.test.js).
+  assert.match(read('src/components/home/TeacherHome.jsx'), /unreadNoticeCount\(homeLists\.deliveries, homeLists\.urgent, \{ userId: user\.id \}\)/);
 });
 
 // schoolRead: a teacher reads their own copy of the alert (no student on it)

@@ -56,7 +56,7 @@ export default function AvisosMaestro() {
   const classroomIds = linkedClassrooms.classroomIds;
   const classrooms = linkedClassrooms.classrooms;
 
-  const { data: notices = [], isLoading } = useQuery({
+  const { data: notices = [], isLoading, isError: noticesFailed, refetch: refetchNotices } = useQuery({
     queryKey: ['teacherNotices', user?.id],
     queryFn: () => schoolRead('Notice', { 
       author_id: user.id 
@@ -68,7 +68,11 @@ export default function AvisosMaestro() {
   // sendBulkNotification delivers to every active teacher as well as to the
   // families. This page used to list only the teacher's own notices, so a
   // teacher had no in-app copy of the alert at all.
-  const { data: received = [] } = useQuery({
+  //
+  // A failed read must not look like "nothing received": the home's
+  // "N urgentes sin leer" leads here, so an empty page after a failed load
+  // reads as "the badge lied" (live QA of v1.8.2, under the rate limit).
+  const { data: received = [], isError: receivedFailed, refetch: refetchReceived, isFetching: receivedFetching } = useQuery({
     queryKey: ['noticeDeliveries', 'teacherInbox', user?.id, userProfile?.school_id],
     queryFn: () => readNoticeInbox({ schoolId: userProfile.school_id, userId: user.id }),
     enabled: !!user?.id && !!userProfile?.school_id,
@@ -154,6 +158,27 @@ export default function AvisosMaestro() {
         }
       />
 
+      {receivedFailed && received.length === 0 && (
+        <section className="mb-8" aria-labelledby="avisos-recibidos">
+          <h2 id="avisos-recibidos" className="text-sm font-semibold text-muted-foreground mb-3">
+            Recibidos de la escuela
+          </h2>
+          <div role="alert" className="rounded-xl border border-border bg-card p-4 text-sm text-card-foreground">
+            <p>No pudimos cargar los avisos que te envió la escuela.</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              disabled={receivedFetching}
+              onClick={() => refetchReceived()}
+            >
+              Reintentar
+            </Button>
+          </div>
+          <h2 className="text-sm font-semibold text-muted-foreground mt-8">Tus avisos</h2>
+        </section>
+      )}
+
       {received.length > 0 && (
         <section className="mb-8" aria-labelledby="avisos-recibidos">
           <h2 id="avisos-recibidos" className="text-sm font-semibold text-muted-foreground mb-3">
@@ -181,7 +206,16 @@ export default function AvisosMaestro() {
         </section>
       )}
 
-      {notices.length === 0 ? (
+      {noticesFailed && notices.length === 0 ? (
+        <EmptyState
+          icon={Bell}
+          title="No pudimos cargar tus avisos"
+          description="Revisa tu conexión e inténtalo de nuevo."
+          action={
+            <Button onClick={() => refetchNotices()}>Reintentar</Button>
+          }
+        />
+      ) : notices.length === 0 ? (
         <EmptyState
           icon={Bell}
           title="Sin avisos"

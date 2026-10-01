@@ -364,15 +364,17 @@ export default function GestionDocumentos() {
                       </div>
                       <div className="flex gap-2">
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="outline"
+                          aria-label="Descargar documento"
                           onClick={() => window.open(doc.file_url, '_blank')}
                         >
                           <Download className="w-4 h-4" />
                         </Button>
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="outline"
+                          aria-label="Eliminar documento"
                           onClick={() => deleteMutation.mutate(doc.id)}
                         >
                           <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />

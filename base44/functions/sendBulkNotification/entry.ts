@@ -49,10 +49,12 @@ import {
   claimChargeReminder,
   countWithinWindow,
   distinctRecipients,
+  emergencyAuthorName,
   escalationKey,
   isChannelEnabled,
   mapWithConcurrency,
   moneyLabel,
+  paymentLabels,
   planChargeReminder,
   planEmergencyDeliveries,
   releaseChargeReminder,
@@ -173,6 +175,7 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
     priority: 'URGENT',
     is_emergency: true,
     author_id: user.id,
+    author_name: emergencyAuthorName(user),
     sent_at: sentAt.toISOString(),
   });
 
@@ -323,6 +326,9 @@ async function planPaymentDue(sr: Any, user: Any, body: Any): Promise<Plan | { s
       // payment the family is asked only for the rest.
       amountLabel: moneyLabel(reminder.balance),
       dueDateLabel: spanishDate(claim.charge.due_date),
+      // A partial payment shows its breakdown (total, already paid); a charge
+      // nobody has paid into shows the balance alone (paymentLabels).
+      ...paymentLabels(claim.charge),
     };
     const recipients = student ? await parentRecipientsForStudent(sr, charge.school_id, student.id, ctx) : [];
     return {
@@ -386,7 +392,8 @@ async function planEventReminder(sr: Any, user: Any, body: Any): Promise<Plan | 
     dateLabel: spanishDate(event.date),
     timeLabel: String(event.time || ''),
     locationLabel: String(event.location || ''),
-    deadlineLabel: spanishDate(event.confirmation_deadline, false),
+    // With the year, like every other date in LIUMA's emails (v1.8.3).
+    deadlineLabel: spanishDate(event.confirmation_deadline),
   };
   const recipients: Recipient[] = pending.map((pair) => {
     const u = users.get(pair.parentId);

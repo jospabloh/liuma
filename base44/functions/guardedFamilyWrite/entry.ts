@@ -23,13 +23,16 @@
 // No billing read-only gate here, on purpose: an emergency contact is child
 // safety information and must stay editable whatever the subscription says.
 //
+// An AbsenceNotification is for today or a later day, one live request per
+// child per day (checkAbsenceRequest in ./_policy.ts).
+//
 // A new AbsenceNotification also emails the school's ADMINs and the child's
 // teachers (./_statusNotify.ts), from here, after the write — never from a
 // separate client call.
 //
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { FAMILY_OPERATIONS, buildFamilyPayload, decideFamilyAccess } from './_policy.ts';
+import { FAMILY_OPERATIONS, buildFamilyPayload, decideFamilyAccess, mexicoToday } from './_policy.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
 
@@ -156,6 +159,18 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true });
     }
 
+    // One live absence request per child per day (checkAbsenceRequest): read
+    // what is already stored for that student and day. Not atomic — two
+    // requests in the same instant can both pass; the form disables its
+    // button while one is in flight, which is the case that happens.
+    let sameDayAbsences: Array<Record<string, unknown>> | null = null;
+    if (entity === 'AbsenceNotification' && operation === 'create') {
+      const day = typeof input.absence_date === 'string' ? input.absence_date.trim().slice(0, 10) : '';
+      sameDayAbsences = day
+        ? await sr.entities.AbsenceNotification.filter({ student_id: studentId, absence_date: day }, '-created_date', 20)
+        : [];
+    }
+
     const built = buildFamilyPayload(entity, operation, input, {
       isAdmin,
       userId: String(user.id),
@@ -165,8 +180,10 @@ Deno.serve(async (req) => {
       existing,
       event,
       chargeId,
+      today: mexicoToday(),
+      sameDayAbsences,
     });
-    if (!built.ok) return bad(400, built.code, built.message);
+    if (!built.ok) return bad(built.code === 'ABSENCE_DUPLICATE' ? 409 : 400, built.code, built.message);
 
     const record = operation === 'create'
       ? await sr.entities[entity].create(built.data)

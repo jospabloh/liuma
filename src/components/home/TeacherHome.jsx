@@ -12,6 +12,8 @@ import { createPageUrl } from '@/utils';
 import { Card } from "@/components/ui/card";
 import { formatLocalDate, parseLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import { diaryCoverage } from '@/lib/diaryCoverage';
+import { unreadNoticeCount } from '@/lib/notifications/inbox';
+import { pluralEs } from '@/lib/pluralEs';
 
 // `events`: upcoming events the server already limited to the school-wide
 // ones and this teacher's classrooms (read with the rest of the home lists).
@@ -79,36 +81,32 @@ export default function TeacherHome({ user, userProfile, subscription }) {
 
   // Everything else on the home screen in ONE request (one scope derivation
   // on the server instead of one per list): today's diary entries, upcoming
-  // events, and the unread urgent notices among this teacher's families. The
-  // server already limits every list to this teacher's classrooms/students.
+  // events, and this teacher's OWN unread urgent notices (the same copies
+  // AvisosMaestro's "Recibidos de la escuela" lists — see unreadNoticeCount).
+  // The server already limits every list to this teacher's classrooms/students.
   // Key starts with 'todayDiaries' so CrearBitacora's invalidation reaches it.
-  const { data: homeLists = { diaries: [], events: [], unreadUrgent: [] } } = useQuery({
+  const { data: homeLists = { diaries: [], events: [], deliveries: [], urgent: [] } } = useQuery({
     queryKey: ['todayDiaries', 'teacherHome', today, user.id, userProfile.school_id],
     queryFn: async () => {
       const school_id = userProfile.school_id;
-      const { diaries, events, deliveries, urgent } = await schoolReadMany({
+      return schoolReadMany({
         diaries: ['DiaryEntry', { school_id, date: today }],
         // Today onward (YYYY-MM-DD compares as text).
         events: ['Event', { school_id, date: { $gte: formatLocalDate() } }, 'date', 3],
-        deliveries: ['NoticeDelivery', { school_id, status: 'SENT' }, '-created_date', 100],
+        // Only the copies addressed to this teacher. schoolRead would also
+        // return their families' copies, which is how one alert read as
+        // "4 urgentes sin leer" — and those a teacher can never mark read.
+        deliveries: ['NoticeDelivery', { school_id, recipient_user_id: user.id, status: 'SENT' }, '-created_date', 100],
         urgent: ['Notice', { school_id, priority: 'URGENT' }, '-created_date', 50],
       });
-      const urgentIds = new Set(urgent.map((notice) => notice.id));
-      return {
-        diaries,
-        events,
-        unreadUrgent: deliveries.filter((row) => urgentIds.has(row.notice_id)),
-      };
     },
     enabled: scopeLoaded,
   });
 
-  const classStudentIds = new Set(students.map((student) => student.id));
   const todayDiaries = homeLists.diaries.filter((d) => classroomIds.includes(d.classroom_id));
-  // Unread urgent copies among this teacher's families, plus the teacher's
-  // own (the emergency alert reaches teachers too, with no student on it).
-  const unreadUrgentNotices = homeLists.unreadUrgent.filter((row) =>
-    classStudentIds.has(row.student_id) || row.recipient_user_id === user.id);
+  // Notices, not copies, and only the teacher's own: the badge has to match
+  // what tapping it shows (AvisosMaestro → "Recibidos de la escuela").
+  const unreadUrgentCount = unreadNoticeCount(homeLists.deliveries, homeLists.urgent, { userId: user.id });
 
   // Counted in students, not entries: two bitácoras for one child do not
   // cover a second child (see diaryCoverage.js).
@@ -163,7 +161,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             <BigTile
               icon={ClipboardList}
               title="Bitácoras de hoy"
-              subtitle={`${classrooms.length} salón${classrooms.length !== 1 ? 'es' : ''}`}
+              subtitle={pluralEs(classrooms.length, 'salón', 'salones')}
               badge={studentsMissingDiary.length}
               badgeColor="bg-amber-500"
               href={createPageUrl('BitacorasMaestro')}
@@ -196,9 +194,9 @@ export default function TeacherHome({ user, userProfile, subscription }) {
             <BigTile
               icon={Bell}
               title="Avisos"
-              subtitle={unreadUrgentNotices.length > 0 ? `${unreadUrgentNotices.length} urgentes sin leer` : 'Enviar comunicado'}
+              subtitle={unreadUrgentCount > 0 ? pluralEs(unreadUrgentCount, 'urgente sin leer', 'urgentes sin leer') : 'Enviar comunicado'}
               href={createPageUrl('AvisosMaestro')}
-              badge={unreadUrgentNotices.length}
+              badge={unreadUrgentCount}
               delay={0.05}
             />
             <BigTile

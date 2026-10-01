@@ -15,6 +15,7 @@ import { Calendar, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { familyCreate } from '@/lib/authorization/familyWrite';
+import { humanizeError } from '@/lib/errorMessages';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { parseLocalDate, isBeforeToday, formatLocalDate } from '@/lib/dates';
@@ -54,8 +55,10 @@ export default function SolicitarAusencia() {
       setAbsenceDate('');
       setReason('');
     },
-    onError: () => {
-      toast.error('Error al enviar solicitud');
+    // The server says why (a past day, a second request for the same day —
+    // guardedFamilyWrite/_policy.ts#checkAbsenceRequest): say it too.
+    onError: (error) => {
+      toast.error(`No se pudo enviar la solicitud. ${humanizeError(error)}`);
     },
   });
 
@@ -71,6 +74,16 @@ export default function SolicitarAusencia() {
     // new Date('YYYY-MM-DD') la fecha de hoy se leía como ayer y se rechazaba).
     if (!parseLocalDate(absenceDate) || isBeforeToday(absenceDate)) {
       toast.error('La fecha debe ser hoy o futura');
+      return;
+    }
+
+    // The server refuses a second live request for the same child and day
+    // (another parent's included); this catches the common case — your own —
+    // before the round trip.
+    const alreadyFiled = (notifications || []).some((n) =>
+      n.student_id === selectedStudent && n.absence_date === absenceDate && n.status !== 'REJECTED');
+    if (alreadyFiled) {
+      toast.error('Ya enviaste una solicitud para ese día.');
       return;
     }
 

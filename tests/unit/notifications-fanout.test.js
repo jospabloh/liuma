@@ -98,7 +98,7 @@ test('spanishDate never shifts a date-only value to the previous day', () => {
   assert.equal(spanishDate('2027-03-05T00:00:00.000Z', false), '5 de marzo');
   assert.equal(spanishDate(''), '');
   assert.equal(spanishDate('2027-13-01'), '');
-  assert.equal(moneyLabel(1250), '$1,250.00');
+  assert.equal(moneyLabel(1250), '$1,250.00 MXN');
   assert.equal(moneyLabel('x'), '');
 });
 

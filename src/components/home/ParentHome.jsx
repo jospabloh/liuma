@@ -13,6 +13,7 @@ import { createPageUrl } from '@/utils';
 import { getLinkedStudents } from '@/lib/relations/getLinkedStudents';
 import { formatLocalDate, schoolToday, schoolTodayDate } from '@/lib/dates';
 import { selectOverdueCharges, UNPAID_CHARGE_STATUSES } from '@/lib/payments/overdue';
+import { unreadNoticeCount } from '@/lib/notifications/inbox';
 
 export default function ParentHome({ user, userProfile, subscription }) {
   const today = schoolToday();
@@ -50,13 +51,11 @@ export default function ParentHome({ user, userProfile, subscription }) {
       status: 'SENT',
     }, '-created_date', 50),
   });
-  const urgentNoticeIds = new Set(notices.filter((n) => n.priority === 'URGENT').map((n) => n.id));
   // Counted in notices, not copies: a parent with two children gets one copy
   // per child of the same notice (and of the emergency alert), and Avisos
   // shows it once (collapseInbox) — the badge must agree with that list.
-  const unreadUrgentCount = new Set(
-    unreadDeliveries.filter((row) => urgentNoticeIds.has(row.notice_id)).map((row) => row.notice_id),
-  ).size;
+  // Same rule as the teacher's home (unreadNoticeCount).
+  const unreadUrgentCount = unreadNoticeCount(unreadDeliveries, notices, { userId: user.id });
 
   // Get upcoming events
   const { data: events = [] } = useQuery({

@@ -33,7 +33,7 @@ import {
   selectCurrentProfile, profileProblem, canRunIntent, QUERY_INTENTS, scopeRows,
   mexicoToday, mexicoDayOf, addDays, isDateOnly, spanishLongDate, isoWeek, menuDayKey,
   label, formatMXN, fullName, matchStudents, errorMessage, chargeOwed, OPEN_CHARGE_STATUSES,
-  displayUserName, displayPersonName, helpsWith, nextDueGroup, homeworkRange, attendanceWindow,
+  displayUserName, displayPersonName, helpsWith, writableKinds, licenseIsReadOnly, nextDueGroup, homeworkRange, attendanceWindow,
 } from './_lumiCore.ts';
 
 const MAX_ROWS = 200;
@@ -119,6 +119,21 @@ Deno.serve(async (req) => {
     switch (intent) {
       case 'my_context': {
         const students = scope.role === 'ADMIN' ? [] : await schoolStudents(sr, scope);
+        // Offer a write only if guardedEntityWrite would take it: the
+        // caller's own write overrides and the license, read here with the
+        // service role. Any failure offers no write (fails closed).
+        let writable: Record<string, boolean> = {};
+        if (scope.role !== 'PARENT' && scope.profileId) {
+          try {
+            const [overrides, subs] = await Promise.all([
+              sr.entities.PermissionOverride.filter({ school_id: scope.schoolId, user_profile_id: scope.profileId, action: 'write' }),
+              sr.entities.SchoolSubscription.filter({ school_id: scope.schoolId }, '-created_date', 1),
+            ]);
+            writable = writableKinds({ role: scope.role, overrides, licenseReadOnly: licenseIsReadOnly(subs[0] || null, new Date()) });
+          } catch (e) {
+            console.warn('lumiQuery my_context: write gate unavailable', (e as Error)?.message);
+          }
+        }
         const rooms = await classroomNames(sr, scope.schoolId);
         return Response.json({
           ...base,
@@ -127,7 +142,7 @@ Deno.serve(async (req) => {
           user_name: displayUserName(user.full_name, user.email),
           // What to offer, from the server's own intent table (not recalled
           // by the model): a docente is never offered pagos or uniformes.
-          helps_with: helpsWith(scope.role),
+          helps_with: helpsWith(scope.role, writable),
           classrooms: scope.classroomIds.map((id) => rooms.get(id)).filter(Boolean),
           students: students.map((s) => ({ student_ref: s.id, name: fullName(s), classroom: rooms.get(String(s.classroom_id)) || '' })),
         });

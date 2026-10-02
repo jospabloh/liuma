@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
 import { humanizeError } from '@/lib/errorMessages';
+import { functionErrorCode } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -123,6 +124,14 @@ export default function GestionEscuela() {
     },
     onError: (error) => {
       toast.error(`Error al agregar alumno. ${humanizeError(error)}`);
+      // The server holds the plan's student cap (v1.9.0). If it refused — the
+      // count moved while the form was open, or this tab's count was stale —
+      // show the same upgrade path the pre-check shows, with a fresh count.
+      if (functionErrorCode(error) === 'STUDENT_QUOTA') {
+        queryClient.invalidateQueries({ queryKey: ['activeStudentCount'] });
+        setShowStudentForm(false);
+        setShowUpgrade(true);
+      }
     }
   });
 

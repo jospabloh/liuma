@@ -2209,9 +2209,119 @@ sin sesión ya no muestra BORRADOR.
 **Sigue abierto:**
 
 - El paquete de consentimiento (re-aceptación + borrado de cuenta).
-- Los cuatro pendientes de server-minor:
-  - el cupo de alumnos por plan sólo se aplica en la UI;
-  - `schoolRead` no tiene límite por usuario;
-  - `Core.UploadFile` se sigue llamando desde el navegador;
-  - un código de confirmación de `lumiWrite` se puede reutilizar.
+- ~~Los cuatro pendientes de server-minor~~ — cerrados: ver «v1.9.0 ·
+  server-minor» abajo (cupo en el servidor, límite por usuario en
+  `schoolRead`, `uploadSchoolFile`, códigos de un solo uso).
 - Nada de esto corrió contra Base44 en vivo.
+
+## v1.9.0 · server-minor — cuatro cabos del servidor (2026-10-02)
+
+Los cuatro «detalles menores abiertos» de la sección de arriba, cerrados en el
+servidor. Ninguno cambia una entidad; hay **una función nueva** (21/40).
+
+**1. Cupo de alumnos por plan, en el servidor.** Antes sólo lo revisaba
+`useStudentQuota` en `GestionEscuela`: cualquier token de ADMIN creaba alumnos
+sin límite. Ahora `runSchoolWrite` (`_schoolWrite.ts`) lo aplica en todo
+`Student` **create** y en toda **reactivación** (`is_active` false → true):
+`403 STUDENT_QUOTA` con `limit`, `hard_limit` y `used`. La regla vive en
+`_policy.ts` (`STUDENT_PLAN_LIMITS`, `studentHardLimit`, `addsActiveStudent`) y
+es copia de `licenseModel.js` (Start 150, Growth 400, Plus/Fundador sin
+límite, prueba sin límite, +10 % de margen); `student-quota-server.test.js`
+corre las dos sobre la misma rejilla. Decisiones:
+
+- **Sin bandera.** `VITE_PAYWALL_GATING_ENABLED` es del bundle del navegador; un
+  cupo que una variable de build apaga es el mismo hueco. El servidor siempre
+  lo aplica (el dueño de plataforma lo salta, igual que en el cliente) y
+  `useStudentQuota` dejó de leer la bandera (`STUDENT_QUOTA_ALWAYS_GATED`), para
+  que el aviso coincida con lo que el servidor hará. La bandera sigue
+  gobernando sólo los gates de página (`useFeatureGate`, hoy vacíos).
+- **Por `license_tier`, no por `licensed_student_limit`:** el `set_plan` de
+  Mission Control sólo escribe el tier, así que ese campo queda viejo en cada
+  cambio de plan (el cliente ya lo ignoraba).
+- **Carrera por el último lugar:** después de escribir se vuelve a contar; si
+  la escuela quedó por encima, quien lo ve deshace **su** escritura (borra el
+  alumno creado, o restaura los campos del parche) y responde `STUDENT_QUOTA`.
+  En el peor caso los dos deshacen y un reintento entra; nunca queda por encima.
+- `GestionEscuela` abre el mismo diálogo de mejora cuando el rechazo viene del
+  servidor.
+
+**2. Límite por usuario en `schoolRead`.** Un cubo de fichas por usuario
+(`schoolRead/_userLimit.ts`), gastado en `entry.ts` **antes** de cualquier
+llamada a entidades: `429 RATE_LIMITED` con `limit: 'user'` y `Retry-After`, la
+misma forma que el límite de Base44, así que el reintento de lecturas del
+cliente ya lo maneja. 24 fichas, 0.2/s (12 por minuto). Tamaño **medido** con
+`npm run test:load`, que ahora corre este mismo cubo: el máximo de una persona
+en un minuto fue 9 navegando dentro de la app, 17 recargando cada 5 s y 30 en
+el bucle de 1.5 s; ningún escenario humano, ágil o dentro de la app recibe un
+solo rechazo. Un escenario nuevo («runaway»: una sesión llamando `schoolRead`
+cada 250 ms sin pausa mientras una maestra y un padre navegan) baja de 446 a 23
+rechazos del límite global y de 29 a 10 consultas fallidas de **los otros dos**.
+
+**Vive en memoria, por isolate**, y es una decisión documentada, no un
+descuido: Base44 no documenta Deno KV para sus funciones (las referencias de
+`base44-cli`/`base44-sdk` no lo mencionan) y Deno aún lo esconde tras
+`--unstable-kv` fuera de Deno Deploy; un contador en entidades gastaría el
+presupuesto que esto protege. Con N isolates calientes, un usuario puede gastar
+hasta N cubos: acota la parte de uno, no es un número exacto.
+
+**3. Subidas por el servidor: `uploadSchoolFile`.** Las tres llamadas a
+`Core.UploadFile` desde el navegador (logo del onboarding, `GestionDocumentos`,
+`ConfiguracionInicial`) pasan por `src/lib/uploads/uploadSchoolFile.js` →
+función `uploadSchoolFile` (multipart: `purpose` + `file`). Reglas en
+`uploadSchoolFile/_upload.ts`:
+
+| `purpose` | quién | tipos | máx. |
+|---|---|---|---|
+| `school_logo` | quien no tiene ningún `UserProfile` (fundando), o ADMIN activo | PNG, JPG, WEBP, GIF | 5 MB |
+| `official_document` | ADMIN activo, licencia con escritura | PDF | 10 MB |
+| `setup_document` | ADMIN activo, licencia con escritura | PDF, DOC, DOCX, JPG, PNG | 10 MB |
+
+Extensión **y** bytes mágicos tienen que nombrar el mismo tipo (un `.docx` es un
+ZIP que contiene `word/document.xml`; SVG no se acepta porque puede llevar
+script). Se guarda con nombre limpio (sin espacios, acentos ni ruta) y con el
+MIME de lo que el archivo **es**. Tope de 60 subidas por usuario por día de
+México, contado en `AuditLog` (`target_type: 'uploadSchoolFile'`, que además
+deja quién subió qué). `src/lib/uploads/uploadRules.js` es el espejo del
+cliente para avisar antes (con prueba de igualdad); el formulario de
+documentos ya avisa de un PDF de más de 10 MB y el onboarding de un logo que no
+es imagen, con botón «Quitar logo». Un logo rechazado no crea nada y dice por
+qué. `upload-school-file.test.js` falla si `src/` vuelve a llamar a cualquier
+`integrations.Core.*`.
+
+**4. Códigos de confirmación de `lumiWrite`: un solo uso, 10 minutos.** El
+código era un digest de (quién, qué, alumno, día): repetir el commit el mismo
+día lo reaplicaba — y repetir un «Juan ausente» después de que la maestra lo
+corrigiera a «presente» en Asistencia deshacía la corrección. Ahora el código
+lleva su hora de emisión (`<segundos base36>-<10 hex>`, el digest la cubre),
+caduca a los 10 minutos (`410 CODE_EXPIRED`) y se usa una vez (`409
+CODE_USED`): antes de escribir se crea un reclamo en `AuditLog`
+(`target_type: 'lumiWrite:code'`, `target_id` = el código) y se relee; gana el
+más antiguo, así que dos commits con el mismo código no pasan los dos. Si la
+escritura falla, el reclamo se borra y el código sirve para reintentar. Los
+mensajes en español viven en `ERROR_MESSAGES` de `_lumiCore.ts` (copia idéntica
+en `lumiQuery/` y `lumiWrite/`) y `lumi.jsonc` dice que el código sirve una vez
+y caduca. Pruebas: `lumi-confirmation-code.test.js`.
+
+**Desplegar, en este orden:**
+
+1. `npm run deploy` — `guardedEntityWrite` (cupo), `schoolRead` (límite),
+   `lumiWrite` y `lumiQuery` (`_lumiCore.ts`), y la nueva `uploadSchoolFile`.
+   Sin cambios de entidad: `deploy:entities` no hace falta.
+2. `npx base44 agents push` (`lumi.jsonc`), después de las funciones.
+3. `npm run deploy:site` **después** del paso 1: el sitio nuevo sube archivos
+   por `uploadSchoolFile`, y sin la función cada subida falla.
+
+**Comprobar por comportamiento:** una escuela Start con 165 alumnos activos
+recibe «llegó al máximo de alumnos» al crear el 166; subir un `.html`
+renombrado a `.pdf` en Documentos responde que el contenido no corresponde; un
+logo de 6 MB en el onboarding se rechaza antes de crear la escuela; repetir un
+commit de Lumi con el mismo código responde `CODE_USED`, y uno de hace más de
+10 minutos `CODE_EXPIRED`; el log de `schoolRead` dice `schoolRead user rate
+limited` sólo ante un bucle.
+
+**No verificado:** nada corrió contra Base44 en vivo. En particular, que
+`Core.UploadFile` con service role acepte desde una función el `File`
+re-envuelto (el SDK usa el mismo camino `FormData` que en el navegador; si
+falla, la pantalla dice «No se pudo guardar el archivo» y no se guarda nada a
+medias), cuántos isolates corre Base44 por función, y el chat de Lumi
+relayando `CODE_USED`/`CODE_EXPIRED`.

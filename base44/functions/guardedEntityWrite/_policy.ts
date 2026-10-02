@@ -951,3 +951,90 @@ export function effectiveLicenseIsReadOnly(
   // grace period and writes view_only when it ends.
   return false;
 }
+
+// --- Student quota per plan (v1.9.0, server-minor) ---------------------------
+//
+// WHY. The licensed student cap (Start 150, Growth 400, Plus/Fundador sin
+// límite, +10 % de margen) was only ever checked by GestionEscuela.jsx through
+// useStudentQuota — a browser check. Any ADMIN token could POST
+// guardedEntityWrite {entity:'Student', operation:'create'} past it, and a
+// cached or edited client never saw it at all. The cap is now decided here,
+// on every Student create and every re-activation (is_active false → true),
+// and the browser's copy only warns ahead of time.
+//
+// MIRRORS src/lib/license/licenseModel.js — PLAN_LIMITS, GRACE_BUFFER_RATIO,
+// effectiveStudentLimit, hardStudentLimit and evaluateStudentQuota().exceeded
+// (with gating on). tests/unit/student-quota-server.test.js runs both over the
+// same grid and fails if they part ways.
+//
+// The tier comes from license_tier, NOT licensed_student_limit: Mission
+// Control's set_plan writes only license_tier (planField in its
+// licenseControl.js), so licensed_student_limit goes stale on every plan
+// change — and the client already ignores it for the same reason.
+//
+// No flag. VITE_PAYWALL_GATING_ENABLED is a build variable of the browser
+// bundle; a cap that a build flag could switch off would be the same gap again.
+// The ACACIA platform owner (User.role 'admin') bypasses it, as in the client.
+export const STUDENT_PLAN_LIMITS: Record<string, number | null> = {
+  start: 150,
+  growth: 400,
+  plus: null,
+  founder: null,
+};
+export const STUDENT_GRACE_RATIO = 0.10;
+
+/**
+ * The licensed student cap for this subscription row, or null when the plan
+ * has none (trial previews the largest plan; founder and plus are unlimited).
+ */
+export function studentPlanLimit(
+  sub: { subscription_status?: string; license_tier?: string } | null,
+): number | null {
+  const status = String(sub?.subscription_status || 'trial');
+  const tier = String(sub?.license_tier || 'start');
+  if (status === 'trial') return null;
+  if (tier === 'founder') return null;
+  return Object.prototype.hasOwnProperty.call(STUDENT_PLAN_LIMITS, tier) ? STUDENT_PLAN_LIMITS[tier] : null;
+}
+
+/**
+ * Active students at or past which a NEW active student is refused: the cap
+ * plus the grace margin, or null when there is no cap.
+ */
+export function studentHardLimit(
+  sub: { subscription_status?: string; license_tier?: string } | null,
+): number | null {
+  const limit = studentPlanLimit(sub);
+  if (limit == null) return null;
+  // Same epsilon as the client: 400 * 1.1 is 440.00000000000006.
+  return Math.ceil(limit * (1 + STUDENT_GRACE_RATIO) - 1e-9);
+}
+
+/**
+ * Whether this Student write adds one to the school's ACTIVE count: a create
+ * (is_active defaults to true) unless it is explicitly inactive, or an update
+ * that switches a stored inactive (or never-set) student to active. Editing an
+ * already-active student, or retiring one, never counts.
+ */
+export function addsActiveStudent(
+  operation: string,
+  data: Record<string, unknown>,
+  existing: Record<string, unknown> | null,
+): boolean {
+  if (operation === 'create') return data.is_active !== false;
+  if (operation === 'update') return data.is_active === true && existing?.is_active !== true;
+  return false;
+}
+
+/** The refusal body for a write past the cap (Spanish text lives client-side, errorMessages.js). */
+export function studentQuotaRefusal(
+  limit: number | null, hardLimit: number, used: number,
+): { status: number; body: Record<string, unknown> } {
+  return {
+    status: 403,
+    body: {
+      ok: false, code: 'STUDENT_QUOTA', error: 'The school reached its plan\'s student limit',
+      limit, hard_limit: hardLimit, used,
+    },
+  };
+}

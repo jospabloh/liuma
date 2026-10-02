@@ -55,6 +55,17 @@ const CODE_MESSAGES = {
   PAYMENT_CONFLICT: 'Otro pago se registró al mismo tiempo; revisa el saldo y vuelve a intentar.',
   PAYMENT_CONFLICT_UNRESOLVED: 'Otro pago se registró al mismo tiempo y este quedó de más. Revisa los pagos del cargo y borra el sobrante.',
   REMINDER_IN_PROGRESS: 'Ya se está enviando un recordatorio de este cargo. Espera un momento y recarga.',
+  // guardedEntityWrite: the plan's student cap, enforced server-side (v1.9.0).
+  STUDENT_QUOTA: 'Tu escuela llegó al máximo de alumnos activos de su plan (con el margen incluido). Da de baja a los alumnos que ya no asisten o mejora tu licencia para agregar más.',
+  // uploadSchoolFile (v1.9.0): every file goes through the server.
+  UPLOAD_PURPOSE_INVALID: 'No se reconoce el tipo de archivo que intentas subir. Recarga la página.',
+  FILE_MISSING: 'No llegó ningún archivo. Elígelo de nuevo.',
+  FILE_TOO_LARGE: 'El archivo es demasiado grande. Elige uno más ligero.',
+  FILE_TYPE_NOT_ALLOWED: 'Ese tipo de archivo no se puede subir aquí.',
+  FILE_CONTENT_MISMATCH: 'El contenido del archivo no corresponde a su extensión. Ábrelo y guárdalo de nuevo en el formato correcto.',
+  UPLOAD_DAILY_LIMIT: 'Llegaste al límite de archivos que se pueden subir hoy. Inténtalo mañana.',
+  UPLOAD_FAILED: 'No se pudo guardar el archivo. Inténtalo de nuevo en un momento.',
+  NOT_ONBOARDING: 'Tu cuenta ya pertenece a una escuela; el logo lo cambia la dirección.',
   // Base44's app-wide rate limit (v1.8.3). Reads were already retried by the
   // time anyone sees this; a write never is.
   RATE_LIMITED: 'Hay mucha actividad en este momento. Espera unos segundos e inténtalo de nuevo.',
@@ -113,6 +124,9 @@ export function needsEmailVerification(error) {
 /** One user-facing Spanish sentence for any thrown error. */
 export function humanizeError(error) {
   if (!error) return GENERIC_ERROR_MESSAGE;
+  // A refusal the browser decided itself, already worded for a person
+  // (src/lib/uploads/uploadSchoolFile.js#UploadRejectedError).
+  if (typeof error.userMessage === 'string' && error.userMessage) return error.userMessage;
   // A function's refusal body: Base44Error `.data`, or AxiosError
   // `.response.data` (functions.invoke rejects with the raw axios error).
   const code = functionErrorCode(error);

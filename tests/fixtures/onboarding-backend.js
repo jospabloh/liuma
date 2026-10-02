@@ -72,7 +72,9 @@ export function createOnboardingBackend(seed = {}, actingUser, { now = new Date(
   };
   const invokeCalls = [];
   const client = {
-    integrations: { Core: { UploadFile: async () => ({ file_url: 'https://cdn.test/logo.png' }) } },
+    // v1.9.0: the browser never calls Core.UploadFile; the logo goes through
+    // the uploadSchoolFile function (answered below).
+    integrations: { Core: { UploadFile: async () => { throw new Error('browser must not call Core.UploadFile'); } } },
     entities: {
       School: rlsDenied('School'),
       SchoolSubscription: rlsDenied('SchoolSubscription'),
@@ -84,6 +86,9 @@ export function createOnboardingBackend(seed = {}, actingUser, { now = new Date(
     functions: {
       async invoke(name, body) {
         invokeCalls.push({ name, body });
+        if (name === 'uploadSchoolFile') {
+          return { data: { ok: true, file_url: 'https://cdn.test/logo.png', content_type: 'image/png', size: 10 }, status: 200, headers: {} };
+        }
         if (name !== 'provisionOnboardingProfile') throw new Error(`unexpected function ${name}`);
         // Same shapes as the real SDK: its functions client does NOT unwrap
         // responses (interceptResponses: false), so success resolves to the

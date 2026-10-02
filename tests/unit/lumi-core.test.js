@@ -173,17 +173,18 @@ test('write dates cannot be in the future or too far back', () => {
   assert.deepEqual(resolveWriteDate('2026-09-01', today), { date: '2026-09-01' });
 });
 
-test('the confirmation code binds who, what, which student and which day', async () => {
-  const base = { userId: 'u2', kind: 'attendance', studentId: 's1', data: { status: 'absent', date: '2026-09-29' }, day: '2026-09-29' };
+test('the confirmation code binds who, what, which student and when the preview was made', async () => {
+  const base = { userId: 'u2', kind: 'attendance', studentId: 's1', data: { status: 'absent', date: '2026-09-29' }, issuedAt: 1790000000 };
   const code = await confirmationCode(base);
-  assert.match(code, /^[0-9a-f]{10}$/);
+  assert.match(code, /^[0-9a-z]+-[0-9a-f]{10}$/);
+  assert.equal(code.split('-')[0], (1790000000).toString(36), 'the code carries its issue time');
   // Key order does not matter (the model may reorder the JSON)…
   assert.equal(await confirmationCode({ ...base, data: { date: '2026-09-29', status: 'absent' } }), code);
-  // …but any change to what is written, for whom, by whom or on which day does.
+  // …but any change to what is written, for whom, by whom or when it was previewed does.
   assert.notEqual(await confirmationCode({ ...base, studentId: 's2' }), code);
   assert.notEqual(await confirmationCode({ ...base, data: { ...base.data, status: 'present' } }), code);
   assert.notEqual(await confirmationCode({ ...base, userId: 'u9' }), code);
-  assert.notEqual(await confirmationCode({ ...base, day: '2026-09-30' }), code);
+  assert.notEqual(await confirmationCode({ ...base, issuedAt: base.issuedAt + 1 }), code);
 });
 
 test('denials explain themselves; they must not read like an empty result', () => {

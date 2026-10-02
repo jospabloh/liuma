@@ -212,7 +212,7 @@ test('classroom and document validation name the field, in Spanish', () => {
   assert.deepEqual(validateClassroomForm({ name: ' ', grade: '' }), { name: 'Escribe el nombre del salón.' });
   assert.deepEqual(validateClassroomForm({ name: '1-A', grade: '1°' }), {});
 
-  const pdf = { name: 'Menú semanal.PDF', type: '' };
+  const pdf = { name: 'Menú semanal.PDF', type: '', size: 2048 };
   assert.equal(isPdfFile(pdf), true);
   assert.equal(isPdfFile({ name: 'foto.jpg', type: 'image/jpeg' }), false);
   const base = { title: 'Menú', valid_from: '2026-10-01', valid_until: '' };
@@ -223,6 +223,10 @@ test('classroom and document validation name the field, in Spanish', () => {
   assert.equal(firstErrorField(missing, DOCUMENT_FIELD_ORDER), 'title');
   assert.equal(validateDocumentForm(base, { name: 'x.docx', type: '' }).file, 'El archivo debe ser un PDF.');
   assert.match(validateDocumentForm({ ...base, valid_until: '2026-09-01' }, pdf).valid_until, /posterior a «Válido desde»/);
+  // The server's upload rule (uploadSchoolFile, v1.9.0), surfaced on the field.
+  assert.match(validateDocumentForm(base, { ...pdf, size: 11 * 1024 * 1024 }).file, /más de 10 MB/);
+  assert.match(validateDocumentForm(base, { ...pdf, size: 0 }).file, /vacío/);
+  assert.equal(validateDocumentForm(base, { name: 'menu', type: 'application/pdf', size: 10 }).file, 'El archivo debe ser PDF.');
 });
 
 test('the director forms no longer rely on a disabled button or the browser\'s own tooltip', () => {

@@ -7,7 +7,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [1.9.0] - 2026-10-02
 
-Lumi reply filter, final legal texts, real names and 44px touch targets.
+Mandatory consent and account deletion, final legal texts, the four open
+server items (student cap, per-user read limit, server uploads, single-use
+Lumi codes), Lumi reply filter, real names and 44px touch targets.
 
 ### Added
 
@@ -58,9 +60,34 @@ Lumi reply filter, final legal texts, real names and 44px touch targets.
   `accepted_at` is no longer required. `User.account_deleted_at`,
   `AuditLog` actions `PRIVACY_CONSENT_WITHDRAWN` and `ACCOUNT_DELETED`.
 
-### Not included
+### Added (server-minor package)
 
-- The server-minor package was not built.
+- **Student cap enforced on the server.** `guardedEntityWrite` refuses a
+  `Student` create or reactivation past the plan's hard limit (Start 150,
+  Growth 400, +10 %; Plus/Founder/trial unlimited) with `403 STUDENT_QUOTA`,
+  re-counting after the write so two creates cannot both take the last
+  seat. No build flag can turn it off; `GestionEscuela` shows the limit the
+  server named.
+- **Per-user limit on `schoolRead`:** a token bucket per user (24, refilled
+  at 12/min, per isolate) answers `429 RATE_LIMITED` with `Retry-After`
+  before any entity call, so one runaway session cannot spend the app-wide
+  Base44 budget of everyone else.
+- **Uploads go through the server.** New function `uploadSchoolFile`
+  (school logo, official documents, setup documents): who may upload, file
+  type by extension **and** magic bytes, size caps, a clean stored name and
+  60 uploads per user per day. No `integrations.Core.*` call is left in the
+  browser.
+- **Lumi confirmation codes are single-use and expire in 10 minutes**
+  (`409 CODE_USED`, `410 CODE_EXPIRED`): repeating a commit no longer
+  re-applies a change that was corrected in the meantime.
+
+### Integration
+
+- `uploadSchoolFile` follows the consent gate: a director without the
+  current acceptance gets `CONSENT_REQUIRED` (its `profileProblem` mirrors
+  `schoolRead`'s, under test), and a deleted account that the platform did
+  not remove gets `410 ACCOUNT_DELETED` instead of the founder's logo slot.
+- Functions: 23 of 40.
 
 ## [1.8.5] - 2026-10-01
 

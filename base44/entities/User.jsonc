@@ -2,9 +2,37 @@
   "name": "User",
   "type": "object",
   "properties": {
+    "display_name": {
+      "type": "string",
+      "description": "El nombre que la persona eligió en LIUMA («¿Cómo te llamas?», src/components/account/DisplayNameDialog.jsx). Existe porque auth.updateMe() no puede escribir full_name (contrato del SDK) y full_name suele ser el usuario del correo. Lo escribe el propio usuario con updateMe — por eso NO lleva rls.write: false —, y ninguna regla de RLS lo lee: no da acceso a nada, sólo es el nombre que se muestra y que las funciones sellan como autor. Máximo 60 caracteres, validado en src/lib/userDisplayName.js y recortado en el servidor."
+    },
     "school_id": {
       "type": "string",
       "description": "Escuela del usuario, leída por RLS como {{user.data.school_id}} (SchoolSubscription.read). Nadie la escribe hoy: la escuela vigente vive en UserProfile. write:false para que nadie pueda apuntarse a otra escuela con updateMe (módulo 24 del estándar). Si algún día se llena, que sea desde una función con service role.",
+      "rls": {
+        "write": false
+      }
+    },
+    "account_deleted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "La persona eliminó su cuenta («Eliminar mi cuenta y mis datos», deleteMyAccount, v1.9.0). La función la marca ANTES de intentar quitar al usuario de la app; si Base44 no lo quita, esta marca hace que la app muestre «Cuenta eliminada» y que provisionOnboardingProfile/myConsent respondan ACCOUNT_DELETED hasta que ACACIA lo quite en el panel. write:false: sólo el service role la escribe.",
+      "rls": {
+        "write": false
+      }
+    },
+    "account_deletion_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "La persona confirmó «Eliminar mi cuenta y mis datos» y deleteMyAccount empezó (v1.9.0). Se escribe ANTES de cualquier otro cambio: mientras esté puesta, myConsent no vuelve a sellar el consentimiento (y borra el sello que escribiera en paralelo), toda función que exige consentimiento rechaza a la persona y la app muestra la página de eliminación para terminarla. write:false: sólo el service role la escribe.",
+      "rls": {
+        "write": false
+      }
+    },
+    "account_deletion_reserved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "deleteMyAccount pasó la comprobación de dirección (otra persona activa de la dirección se queda en la escuela) y reservó la baja. Sólo esta marca deja que un reintento se salte esa comprobación; la de inicio (account_deletion_started_at) no basta, porque dos directoras que empiezan a la vez la tienen las dos. write:false: sólo el service role la escribe.",
       "rls": {
         "write": false
       }

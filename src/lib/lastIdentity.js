@@ -6,13 +6,16 @@
 // remembered identity does NOT mean the user is authenticated — it only lets us
 // paint a friendlier button than the generic login. Cleared on logout and on
 // "usar otra cuenta".
+import { isHandleLikeName, userDisplayName } from '@/lib/userDisplayName';
+
 const KEY = 'acacia_last_identity_v1';
 
 export function rememberIdentity(user) {
   if (typeof window === 'undefined' || !user) return;
   try {
     const identity = {
-      name: user.full_name || user.name || null,
+      // Never an email handle as a name: "Hola de nuevo, h.josepablo+qa".
+      name: userDisplayName(user) || null,
       email: user.email || null,
       avatar: user.avatar_url || user.picture || user.photo_url || null,
     };
@@ -27,7 +30,10 @@ export function getRememberedIdentity() {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return null;
     const id = JSON.parse(raw);
-    return id && (id.name || id.email) ? id : null;
+    if (!id) return null;
+    // A copy saved by an older build may still hold the handle as `name`.
+    const name = id.name && !isHandleLikeName(id.name, id.email) ? id.name : null;
+    return name || id.email ? { ...id, name } : null;
   } catch { return null; }
 }
 

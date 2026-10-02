@@ -44,12 +44,33 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import type { Profile } from './_scope.ts';
 import { answerSchoolRead, isRateLimitError, RATE_LIMIT_RETRY_AFTER_S } from './_answer.ts';
+import { makeUserRateLimiter } from './_userLimit.ts';
+
+// One bucket per user, per isolate (./_userLimit.ts says why it is not shared
+// storage). Module scope, so it outlives a single request in a warm isolate.
+const userLimiter = makeUserRateLimiter();
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ ok: false, code: 'UNAUTHENTICATED', error: 'UNAUTHENTICATED' }, { status: 401 });
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
+
+    // Before ANY entity call: a user past their share answers 429 without
+    // spending the app-wide budget (v1.9.0). Same shape as the platform's own
+    // limit below, so the client's read retry (functionRetry.js) honours it.
+    const allowed = userLimiter.take(String(user.id));
+    if (!allowed.ok) {
+      console.warn('schoolRead user rate limited');
+      return Response.json(
+        { ok: false, code: 'RATE_LIMITED', error: 'RATE_LIMITED', limit: 'user' },
+        { status: 429, headers: { 'Retry-After': String(allowed.retryAfterS) } },
+      );
+    }
 
     // deno-lint-ignore no-explicit-any
     const body: any = await req.json().catch(() => ({}));
@@ -80,3 +101,17 @@ Deno.serve(async (req) => {
     return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
 });
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

@@ -49,7 +49,10 @@ test('an unusable profile is a denial, including for the platform owner', () => 
   assert.equal(profileProblem({ status: 'PENDING', school_id: 'A', app_role: 'ADMIN' }), 'INACTIVE_PROFILE');
   assert.equal(profileProblem({ status: 'ACTIVE', app_role: 'ADMIN' }), 'NO_SCHOOL');
   assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'admin' }), 'INVALID_ROLE');
-  assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'PARENT' }), null);
+  // v1.9.0: a usable profile also carries the CURRENT consent stamp.
+  assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'PARENT' }), 'CONSENT_REQUIRED');
+  assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'PARENT', consent_notice_version: '2026-09-29-borrador', consent_terms_version: '2026-09-29-borrador' }), 'CONSENT_REQUIRED');
+  assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'PARENT', consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02' }), null);
 });
 
 test('parents can never write through Lumi; teachers cannot see charges or setup', () => {
@@ -173,17 +176,18 @@ test('write dates cannot be in the future or too far back', () => {
   assert.deepEqual(resolveWriteDate('2026-09-01', today), { date: '2026-09-01' });
 });
 
-test('the confirmation code binds who, what, which student and which day', async () => {
-  const base = { userId: 'u2', kind: 'attendance', studentId: 's1', data: { status: 'absent', date: '2026-09-29' }, day: '2026-09-29' };
+test('the confirmation code binds who, what, which student and when the preview was made', async () => {
+  const base = { userId: 'u2', kind: 'attendance', studentId: 's1', data: { status: 'absent', date: '2026-09-29' }, issuedAt: 1790000000 };
   const code = await confirmationCode(base);
-  assert.match(code, /^[0-9a-f]{10}$/);
+  assert.match(code, /^[0-9a-z]+-[0-9a-f]{10}$/);
+  assert.equal(code.split('-')[0], (1790000000).toString(36), 'the code carries its issue time');
   // Key order does not matter (the model may reorder the JSON)…
   assert.equal(await confirmationCode({ ...base, data: { date: '2026-09-29', status: 'absent' } }), code);
-  // …but any change to what is written, for whom, by whom or on which day does.
+  // …but any change to what is written, for whom, by whom or when it was previewed does.
   assert.notEqual(await confirmationCode({ ...base, studentId: 's2' }), code);
   assert.notEqual(await confirmationCode({ ...base, data: { ...base.data, status: 'present' } }), code);
   assert.notEqual(await confirmationCode({ ...base, userId: 'u9' }), code);
-  assert.notEqual(await confirmationCode({ ...base, day: '2026-09-30' }), code);
+  assert.notEqual(await confirmationCode({ ...base, issuedAt: base.issuedAt + 1 }), code);
 });
 
 test('denials explain themselves; they must not read like an empty result', () => {
@@ -271,7 +275,9 @@ test('Lumi never greets by an email handle (LP12)', () => {
   assert.equal(displayUserName('Ana', 'mama.ana@example.com'), 'Ana');
   assert.equal(displayUserName('María José'), 'María José');
   const src = read('base44/functions/lumiQuery/entry.ts');
-  assert.match(src, /user_name: displayUserName\(user\.full_name, user\.email\)/);
+  // v1.9.0: the name the user chose in LIUMA (User.display_name) first; the
+  // handle rule still applies to whatever is left.
+  assert.match(src, /user_name: displayUserName\(user\.display_name \|\| user\.data\?\.display_name, user\.email\) \|\| displayUserName\(user\.full_name, user\.email\)/);
 });
 
 test('dirección\'s uniform list says it is open orders only (LD04)', () => {

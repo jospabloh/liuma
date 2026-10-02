@@ -476,18 +476,110 @@ export function stableStringify(value: unknown): string {
 }
 
 // A write only commits with the code its own preview returned. The code is a
-// digest of exactly what will be written, by whom, today — so the model
-// cannot skip the preview (it cannot compute SHA-256), a preview for Juan
-// cannot commit a write for Pedro, and yesterday's code is dead. Whether the
-// HUMAN said "sí" in between is the prompt's job; this guarantees that what
-// they were shown is what gets written.
+// digest of exactly what will be written, by whom, and WHEN THE PREVIEW WAS
+// MADE — so the model cannot skip the preview (it cannot compute SHA-256), a
+// preview for Juan cannot commit a write for Pedro, and a commit can be
+// checked against the preview's age. Whether the HUMAN said "sí" in between
+// is the prompt's job; this guarantees that what they were shown is what gets
+// written.
+//
+// v1.9.0 (server-minor): a code is also SINGLE-USE and EXPIRES. Before, the
+// digest was of (who, what, which day) only, so repeating the same commit the
+// same day re-applied it — and replaying an old "Juan ausente" after the
+// teacher had corrected Juan to "presente" in Asistencia silently reverted the
+// correction. Now:
+//   - the code carries its issue time (base-36 seconds) and the digest covers
+//     it, so editing the time breaks the digest;
+//   - older than CONFIRMATION_TTL_SECONDS → 410 CODE_EXPIRED;
+//   - already committed once → 409 CODE_USED. The proof is a claim row in
+//     AuditLog (target_type CONFIRMATION_AUDIT_TARGET, target_id = the code),
+//     written BEFORE the write and re-read after, so two commits racing with
+//     the same code cannot both pass (claimConfirmationCode). A commit whose
+//     write then fails releases its claim, so the person can retry while the
+//     code is alive.
+export const CONFIRMATION_TTL_SECONDS = 10 * 60;
+export const CONFIRMATION_AUDIT_TARGET = 'lumiWrite:code';
+
+const CODE_SHAPE = /^([0-9a-z]{1,10})-([0-9a-f]{10})$/;
+
 export async function confirmationCode(parts: {
-  userId: string; kind: string; studentId: string; data: Record<string, unknown>; day: string;
+  userId: string; kind: string; studentId: string; data: Record<string, unknown>; issuedAt: number;
 }): Promise<string> {
-  const bytes = new TextEncoder().encode(`lumi.write.v1|${stableStringify(parts)}`);
+  const issuedAt = Math.floor(parts.issuedAt);
+  const payload = { userId: parts.userId, kind: parts.kind, studentId: parts.studentId, data: parts.data, issuedAt };
+  const bytes = new TextEncoder().encode(`lumi.write.v2|${stableStringify(payload)}`);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest)).slice(0, 5)
+  const hex = Array.from(new Uint8Array(digest)).slice(0, 5)
     .map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `${issuedAt.toString(36)}-${hex}`;
+}
+
+/**
+ * Is `code` the one a preview of exactly this write produced, and still alive?
+ *   'ok' | 'NEEDS_CONFIRMATION' (not this write's code, or no code) |
+ *   'CODE_EXPIRED' (this write's code, older than the TTL).
+ * Whether it was already USED is claimConfirmationCode's job (it needs the db).
+ */
+export async function checkConfirmationCode(
+  code: unknown,
+  parts: { userId: string; kind: string; studentId: string; data: Record<string, unknown> },
+  nowSeconds: number,
+): Promise<'ok' | 'NEEDS_CONFIRMATION' | 'CODE_EXPIRED'> {
+  const match = CODE_SHAPE.exec(String(code || ''));
+  if (!match) return 'NEEDS_CONFIRMATION';
+  const issuedAt = parseInt(match[1], 36);
+  if (!Number.isFinite(issuedAt)) return 'NEEDS_CONFIRMATION';
+  if (await confirmationCode({ ...parts, issuedAt }) !== code) return 'NEEDS_CONFIRMATION';
+  // A clock that moved backwards a little is tolerated; a code "from the future" is not ours.
+  if (issuedAt > nowSeconds + 60) return 'NEEDS_CONFIRMATION';
+  if (nowSeconds - issuedAt > CONFIRMATION_TTL_SECONDS) return 'CODE_EXPIRED';
+  return 'ok';
+}
+
+type ClaimRow = { id?: string; created_date?: string };
+// The service-role client (sr), duck-typed on sr.entities.AuditLog so the
+// in-memory test db fits too.
+// deno-lint-ignore no-explicit-any
+type ClaimDb = any;
+
+function earliest(rows: ClaimRow[]): ClaimRow | null {
+  return [...rows].sort((a, b) =>
+    String(a.created_date || '').localeCompare(String(b.created_date || ''))
+    || String(a.id || '').localeCompare(String(b.id || '')))[0] || null;
+}
+
+/**
+ * Claim `code` for one commit. Returns the claim's id, or null when the code
+ * was already used (an earlier claim exists, or a parallel commit with the
+ * same code claimed it first — earliest claim wins, ties by id).
+ */
+export async function claimConfirmationCode(sr: ClaimDb, args: {
+  code: string; userId: string; userEmail?: string; schoolId: string; kind: string; studentId: string;
+}): Promise<string | null> {
+  const query = { user_id: args.userId, target_type: CONFIRMATION_AUDIT_TARGET, target_id: args.code };
+  const prior: ClaimRow[] = await sr.entities.AuditLog.filter(query, 'created_date', 20);
+  if ((prior || []).length) return null;
+  const mine: ClaimRow = await sr.entities.AuditLog.create({
+    school_id: args.schoolId,
+    user_id: args.userId,
+    user_email: args.userEmail || '',
+    action: 'AI_REQUEST_ALLOWED',
+    target_type: CONFIRMATION_AUDIT_TARGET,
+    target_id: args.code,
+    details: { tool: 'lumiWrite', kind: args.kind, student_id: args.studentId },
+  });
+  const all: ClaimRow[] = await sr.entities.AuditLog.filter(query, 'created_date', 20);
+  const winner = earliest(all || []);
+  if (!mine?.id || !winner || String(winner.id) !== String(mine.id)) {
+    if (mine?.id) await sr.entities.AuditLog.delete(String(mine.id)).catch(() => null);
+    return null;
+  }
+  return String(mine.id);
+}
+
+/** Undo a claim whose write did not happen, so the same code can be retried. */
+export async function releaseConfirmationCode(sr: ClaimDb, claimId: string): Promise<void> {
+  await sr.entities.AuditLog.delete(claimId).catch(() => null);
 }
 
 // Human summary of a pending write, in the words the teacher will confirm.
@@ -525,16 +617,20 @@ export const ERROR_MESSAGES: Record<string, string> = {
   INACTIVE_PROFILE: 'Tu perfil en la escuela todavía no está activo; la dirección debe aprobarlo.',
   NO_SCHOOL: 'Tu perfil no está ligado a una escuela.',
   INVALID_ROLE: 'Tu perfil no tiene un rol válido.',
+  CONSENT_REQUIRED: 'Antes de seguir, acepta la versión vigente del Aviso de Privacidad y los Términos: cierra este chat y recarga LIUMA.',
   NOT_ALLOWED_FOR_ROLE: 'Esa consulta no está disponible para tu rol.',
   UNKNOWN_INTENT: 'No conozco esa consulta.',
   UNKNOWN_KIND: 'Sólo puedo registrar asistencia o bitácoras.',
   INTERNAL: 'Ocurrió un error inesperado. Intenta de nuevo o crea un ticket en Soporte.',
   STUDENT_NOT_VISIBLE: 'Ese alumno no está entre los que puedes ver o registrar.',
   NEEDS_CONFIRMATION: 'Primero muestra el resumen y pide confirmación; luego repite con el código de confirmación.',
+  CODE_USED: 'Ese cambio ya se registró con esta confirmación y no lo repetí. Si hay que registrarlo otra vez o corregirlo, muestra un resumen nuevo y vuelve a pedir confirmación.',
+  CODE_EXPIRED: 'La confirmación caducó (dura 10 minutos) y no registré nada. Muestra el resumen de nuevo y vuelve a pedir confirmación.',
   ALREADY_EXISTS: 'Ese alumno ya tiene bitácora ese día. Se puede editar desde la pantalla Bitácoras.',
   FORBIDDEN: 'La escuela te quitó el permiso para registrar esto.',
   WRITE_BLOCKED: 'La licencia de la escuela está en modo solo lectura; no se pueden registrar cambios.',
   WRITE_FAILED: 'No se pudo guardar. Intenta desde la pantalla correspondiente o crea un ticket en Soporte.',
+  WRITE_UNCERTAIN: 'No sé si el cambio se guardó: la conexión falló a medio camino. Revisa la pantalla correspondiente (Asistencia o Bitácora) antes de pedírmelo otra vez; si no aparece, pídemelo de nuevo y te daré un código nuevo.',
   BAD_DATE: 'La fecha no es válida.',
   FUTURE_DATE: 'No se puede registrar una fecha futura.',
   DATE_TOO_OLD: `Sólo se pueden registrar fechas de los últimos ${MAX_BACKDATE_DAYS} días.`,
@@ -542,6 +638,24 @@ export const ERROR_MESSAGES: Record<string, string> = {
   MISSING_NOTES: 'La bitácora necesita al menos las notas del día.',
   ASK_SEND_TO_PARENTS: 'Pregunta si la bitácora se envía a la familia (sí o no).',
 };
+
+/**
+ * Was a guardedEntityWrite call DEFINITELY refused before it wrote anything?
+ * Only a 4xx answer whose body names an error code (FORBIDDEN, WRITE_BLOCKED,
+ * BAD_…): then the single-use confirmation code can be given back. A
+ * timeout, a 5xx, a rate limit or no answer at all may have saved the record
+ * (Codex review of PR #197, round 5) — the code stays used and Lumi says to
+ * check before asking again.
+ */
+export function writeRefusedBeforeWrite(e: unknown): { refused: boolean; code: string } {
+  // deno-lint-ignore no-explicit-any
+  const err = e as any;
+  const status = Number(err?.response?.status ?? err?.status);
+  const body = err?.response?.data ?? err?.data;
+  const code = typeof body?.code === 'string' ? body.code : '';
+  const refused = Number.isInteger(status) && status >= 400 && status < 500 && status !== 408 && status !== 429 && code !== '';
+  return { refused, code };
+}
 
 export function errorMessage(code: string): string {
   if (ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];

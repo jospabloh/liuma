@@ -1996,3 +1996,559 @@ Sólo frontend: `npm run deploy:site`.
 
 Deploy: `npm run deploy` (lumiQuery, lumiWrite) → `npx base44 agents push` →
 `npm run deploy:site`.
+
+## Filtro de respuestas de Lumi (2026-10-02)
+
+Tres intentos sólo de prompt no bastaron en vivo (QA r8): a una docente que
+pidió adeudos de «todas las escuelas» Lumi le ofreció «consultar los cargos
+pendientes» (LM09b), a una docente le ofreció «Publicar la tarea» y «Mandar un
+aviso» —escrituras que Lumi no tiene— (LM06), y a una familia que dijo haber
+sido promovida le contestó «Si de verdad te promovieron… Permisos y roles»
+(LP10b). Decisión del dueño: un filtro determinista.
+
+`src/lib/lumi/replyFilter.js` (`filterLumiReply`, sin imports) se aplica a
+**toda** respuesta del asistente justo antes de pintarla en `LumiChat`. Es
+**sólo de presentación**: lo que Lumi puede leer o escribir lo decide el
+servidor. Por oración (o cláusula unida por «, pero» / «;») y por renglón de
+lista:
+
+- quita una **oferta** o una **lista** (≥3 temas) de un tema fuera del
+  `helps_with` del rol; un renglón de lista cuenta como oferta si la línea que
+  la presenta lo es. «Publicar/mandar/crear…» tareas, avisos, eventos, pagos
+  no está en el `helps_with` de nadie;
+- quita la especulación de rol o de sincronización («si de verdad te
+  promovieron», «una vez que se refleje», «quizá aún no se actualiza») y
+  «Permisos y roles» para quien no es ADMIN;
+- «su/tu maestra|maestro» sin nombre detrás → «su/tu docente»;
+- si quitó algo y la respuesta ya no termina en pregunta, añade «¿Te ayudo con
+  algo de tu escuela?». Si no quitó nada, sale byte por byte.
+
+**Conservador a propósito** (cada caso tiene prueba en
+`tests/unit/lumi-reply-filter.test.js`): una afirmación que no ofrece nada
+sobrevive aunque hable de un tema ajeno —«Los papás ven sus pagos en la
+pantalla Pagos» a una docente que lo preguntó es la respuesta—; nada con un
+dígito o `$` se quita (es dato, no menú); ni una oración con `**` desbalanceado
+ni el contenido de un bloque ```.
+«Con gusto / si quieres / si necesitas» sólo cuenta como oferta si no manda
+al usuario a otro lado: «Si quieres crear un evento, ve a Calendario» o «si
+necesitas registrar una falta, entra a Ausencias» es la respuesta a «¿cómo…?»,
+no Lumi ofreciendo una escritura. Y mencionar la sincronización no es
+especular: sólo se quita culparla («un problema de sincronización», «cuando se
+sincronice»).
+
+`HELPS_WITH_BY_ROLE` es espejo de `helpsWith()` de `_lumiCore.ts` y una prueba
+los compara; otra exige un patrón en `TOPIC_PATTERNS` para cada tema que algún
+rol no tenga. **Agregar un intent o una escritura en `_lumiCore.ts` obliga a
+tocar los dos.** Si la conversación trae la respuesta `my_context` del
+servidor, su `helps_with` manda (sabe de licencia en solo lectura y de
+overrides). `LumiChat` es la única superficie que pinta respuestas de Lumi; una
+prueba falla si aparece otra sin el filtro (`aiAssist` no es el chat: su
+salida es un borrador que el usuario edita).
+
+Sólo frontend: `npm run deploy:site`. **No verificado:** en vivo contra
+respuestas nuevas del modelo; el filtro sólo conoce las formas vistas en QA y
+sus variantes cercanas, el prompt sigue siendo la primera línea.
+
+## Textos legales vigentes (v1.9.0, 2026-10-02)
+
+El Aviso de Privacidad y los Términos dejaron de ser borrador: `vigente`,
+versión `2026-10-02`, por decisión del dueño (asume el riesgo de publicarlos sin
+abogado externo). Fuentes y artículos de cada cláusula en
+`docs/legal-research-2026-10.md`; `docs/aviso-de-privacidad.md` ya sólo apunta
+a `src/lib/legal/legalDocs.js`, que sigue siendo la única fuente.
+
+- **Identidad:** `ACACIA_LEGAL_IDENTITY` (razón social, RFC y domicilio de la
+  sociedad, de su Constancia de Situación Fiscal) se escribe una sola vez; todo
+  lo demás la lee. **Nunca** el RFC, la CURP ni el domicilio de una persona
+  física: `legal-final.test.js` busca esos patrones.
+- **Versiones:** `PRIVACY_NOTICE_VERSION` = `SERVICE_TERMS_VERSION`, copiadas
+  en `provisionOnboardingProfile/entry.ts`. Cambiar el texto es subir las tres;
+  si el servidor queda atrás, todo onboarding nuevo responde 409.
+- **Cada entidad está declarada:** `ENTITY_DATA_CATEGORIES` mapea cada archivo
+  de `base44/entities/` a la frase del aviso que la describe. Una entidad nueva
+  hace fallar la prueba hasta que el aviso la cuente.
+- **IA y Base44:** Base44 publica que, fuera de su plan Enterprise, puede usar
+  los datos de las apps (incluida información personal) para entrenar modelos.
+  El borrador prometía lo contrario; el texto vigente lo **informa**, gobernado
+  por `BASE44_AI_TRAINING_EXCLUDED = false`. Pásalo a `true` sólo con evidencia
+  (plan Enterprise o exclusión por escrito) y sube la versión. Lumi corre en
+  `"model": "automatic"`, por eso se nombran Anthropic, Google y OpenAI; si se
+  fija un modelo, la prueba pide ajustar `AI_MODEL_PROVIDERS`.
+- **Conservación:** `RETENTION_TABLE` da días y fundamento por categoría. Los
+  plazos que no hace cumplir el código (auditoría a 730 días, supresión 30 días
+  después de los 45 de descarga) los ejecuta ACACIA a mano desde Mission
+  Control: es un compromiso operativo, no un cron.
+- **«Eliminar mi cuenta y mis datos»** lo describe el aviso y lo construye el
+  paquete de consentimiento: tienen que salir en el mismo despliegue.
+
+Sólo frontend + una constante de función: `npm run deploy`
+(`provisionOnboardingProfile`) **y** `npm run deploy:site` en la misma ventana —
+con el sitio nuevo y la función vieja (o al revés) el onboarding responde 409
+`CONSENT_VERSION_MISMATCH`.
+
+## Nombre propio y objetivos de 44 px (v1.9.0, paquete ui-minor, 2026-10-02)
+
+**«Hola, h.josepablo+qa-padre».** El saludo leía `full_name`, y el registro de
+Base44 deja ahí el usuario del correo. Regla: **un handle nunca se muestra como
+nombre** — `src/lib/userDisplayName.js` (`userDisplayName`, `greetingFor`,
+sin imports; `isHandleLikeName` es espejo de `displayUserName` de
+`_lumiCore.ts` y una prueba corre los dos). Sin nombre real, el saludo dice
+«Hola» a secas.
+
+**El nombre lo escribe la persona, y no va en `full_name`.** El contrato del
+SDK que trae el repo dice que `auth.updateMe()` **no** puede cambiar
+`full_name` (`auth.types.d.ts`), así que el nombre elegido vive en el campo
+propio `User.display_name` (sin `rls.write: false`: lo escribe el usuario; no
+lo lee ninguna RLS; `school_id`/`app_role` siguen bloqueados).
+`DisplayNameDialog` lo pide una vez tras entrar («¿Cómo te llamas?»; «Ahora
+no» se recuerda por usuario en el dispositivo) y queda editable en el pie del
+`SideNav` y en «Cuenta → Cambiar mi nombre» de la paleta (móvil). Las
+funciones sellan ese nombre como autor: `callerDisplayName` (idéntica en
+`guardedEntityWrite/_policy.ts` y `guardedFamilyWrite/_policy.ts`),
+`emergencyAuthorName`, `lumiQuery` (`user_name`) y `listSchoolMembers`
+(`full_name` del directorio). Sin `display_name`, todo sale igual que antes.
+Como el campo lo escribe el propio usuario, la validación del diálogo se puede
+saltar: el servidor ignora un `display_name` con `@` y sella `full_name`.
+**La pregunta espera a la bienvenida de prueba:** un fundador recién llegado
+tiene las dos (`WelcomeTrialModal` en `Home`), y abrir una encima de la otra
+apilaba dos diálogos modales. `welcomeMayStillShow` la difiere mientras la
+licencia carga o es prueba con `welcome_message_shown` en falso; al cerrar la
+bienvenida el perfil se refresca y la pregunta sale.
+
+**44 px, medidos.** `node scripts/touch-targets-scan.mjs [--width 320,390]`
+levanta Vite, simula todo `/api/` (nada llega a Base44) y, con puntero táctil,
+prueba cada elemento interactivo de las pantallas principales de cada rol
+con `elementFromPoint` sobre un cuadro de 44×44 (así cuenta un `::after` que
+agranda el área). Primera pasada: el selector de tema (42, en todas las
+pantallas), el cierre de los toasts de sonner (42: el `::after` sale de la
+caja de padding, hacen falta 13 px por lado), el enlace del pie del `Layout`
+(16 de alto), los cuatro «Ver detalle» de Reportes y los enlaces del pie de
+Ayuda. Los días del calendario medían ~37 px a 320: la tarjeta ahora llega a
+los bordes en teléfono (`-mx-4`, 2 px de padding, 1 px entre días → 44.3).
+Segunda pasada: todo ≥ 44 a 320 y 390. **No cubre** diálogos que sólo se
+abren con un clic (formularios de alta, etc.) salvo la paleta, el selector
+abierto, un toast y el diálogo del nombre.
+
+**El selector de tema cambió en el estándar** (`acacia-app-standard`,
+`shared/theme/`, commit local sin push): tamaño por variables
+`--theme-switcher-size` / `--theme-switcher-slot`, 44 px por omisión. LIUMA
+conserva 40/34 sólo con ratón (`@media (pointer: fine)` en `index.css`).
+**Falta copiarlo** a las demás apps React (lista en el README del estándar).
+
+**Desplegar:** `npm run deploy:entities` (User: `display_name`) → `npm run
+deploy` (guardedEntityWrite, guardedFamilyWrite, sendBulkNotification,
+lumiQuery, listSchoolMembers) → `npm run deploy:site`. Comprobar por
+comportamiento: una cuenta cuyo `full_name` es el handle ve «Hola» y el
+diálogo; al guardar «Ana» el inicio dice «Hola, Ana» tras recargar (eso
+prueba que `updateMe` aceptó el campo) y un aviso nuevo sale firmado «Ana».
+**No verificado en vivo:** que el `me()` del servidor traiga `display_name`
+en la raíz (el código también lo busca en `data.display_name`).
+
+## Consentimiento obligatorio y baja de cuenta (v1.9.0, 2026-10-02)
+
+Pedido del dueño: los usuarios de antes no tienen `ConsentRecord`; si no lo
+tienen, lo firman obligatoriamente, y si declinan se les lleva a borrar su
+cuenta y sus datos, con la opción de retractarse o confirmar. Medido en
+producción ese día: **10 perfiles, 4 `ConsentRecord`**, los cuatro del
+borrador `2026-09-29-borrador`. Ninguno vale para la versión vigente, así que
+**las diez cuentas verán la pantalla** en cuanto esto se despliegue.
+
+**La marca vive en el perfil y la prueba en `ConsentRecord`.**
+`UserProfile.consent_notice_version` / `consent_terms_version` /
+`consent_accepted_at` las escriben sólo `provisionOnboardingProfile` y la
+función nueva `myConsent`, **después** del `ConsentRecord` que lo prueba. Así
+el servidor exige el consentimiento sin una lectura más: `profileProblem`
+(`_scope.ts` ×3 y `guardedEntityWrite/_policy.ts`) responde
+`CONSENT_REQUIRED` si la marca no es la vigente, y lo mismo
+`guardedFamilyWrite`, `listSchoolMembers`, `approveProfile` y
+`governRoleChange`. Sin eso, la pantalla sería un aviso que un bundle viejo o
+una llamada directa se saltan. **Quedan abiertos a propósito:** crear un ticket
+(`consentExempt`, la vía de la dirección única para pedir la baja de la
+escuela) y `exportSchoolData` (los datos son de la escuela y salen con ella;
+Términos § 6). **Lo que manda o procesa datos de otros también lo exige**
+(revisión adversarial del mismo día): `sendBulkNotification` (alerta,
+recordatorios de cobro y de evento), `notifyParents`, `sendNotificationEmail`
+y el borrador de bitácora de `aiAssist` (el nombre del alumno va al modelo).
+En tickets, la regla es la de `consentExempt`: quien **abrió** el ticket
+puede responderlo y avisarlo sin consentimiento (`postTicketMessage`, la
+escalación de `sendBulkNotification`, `aiAssist` `support_intake`), pero
+actuar **como personal** sobre el ticket de otro lo exige. Sin tocar, porque
+no devuelven datos de nadie: `getMySubscription` (licencia de la escuela),
+`markWelcomeShown`, `recordAuditEvent`.
+
+**Cambiar la versión manda a TODOS a la pantalla.** La versión está copiada en
+`privacyNotice.js` y en dieciséis archivos de `base44/functions/` (con
+`uploadSchoolFile/_upload.ts`, desde la integración);
+`tests/unit/consent-gate.test.js` recorre todo `base44/functions/` y falla si
+uno difiere.
+
+**La pantalla** (`src/components/consent/ConsentGate.jsx`) envuelve todas las
+rutas con sesión en `App.jsx`. Decide `src/lib/consent/consentGate.js` (puro,
+probado): sin marca vigente nunca se pinta la app; se pregunta a `myConsent`
+(`status`, que además repara la marca si existe un `ConsentRecord` vigente) y,
+mientras tanto, spinner. Las páginas legales quedan fuera (App las monta antes)
+y `/EliminarCuenta` se pinta **sin el Layout**, porque el menú y los avisos
+llaman funciones que ya responden `CONSENT_REQUIRED`. Sin perfil no hay
+pantalla: el onboarding registra su propio consentimiento y marca el perfil.
+
+**«Eliminar mi cuenta y mis datos»** (`src/pages/EliminarCuenta.jsx`, menú
+«Mi cuenta» de los tres roles, Permisos y roles, y «No acepto»).
+`deleteMyAccount` deriva todo de quien llama — el cuerpo sólo trae la palabra
+`ELIMINAR` — y en este orden: `ConsentRecord` `WITHDRAWN` por escuela (primero:
+sin prueba no se borra nada) y se vacía la marca; vínculos `REVOKED` y
+asignaciones inactivas; se borran las ausencias, pedidos y cambios de rol
+**pendientes**; el nombre sellado en registros que se quedan con la escuela
+pasa a «Cuenta eliminada»; el correo sale de las llaves de envío
+(`notified_parent_emails`, `pending_notification_recipients`,
+`escalation_notified_recipients`); se borran `ParentProfile`, bandeja,
+excepciones y perfiles; las sesiones quedan revocadas; el `User` se marca
+`account_deleted_at` y luego se quita. Cargos y pagos no se tocan. Todo paso
+es idempotente: un fallo a medias se reintenta sin duplicar el retiro. La
+lógica está en `deleteMyAccount/_deletion.ts` (pura) y
+`tests/unit/account-deletion.test.js` la corre contra una base en memoria
+(`tests/fixtures/fake-mongo-db.js`, con `updateMany`/`deleteMany`).
+
+**No pueden:** la cuenta dueña de la plataforma (`PLATFORM_OWNER`) y **la
+única persona ACTIVE de la dirección** (`SOLE_ADMIN`: la escuela se quedaría
+sin quien la represente). A esta la página le ofrece descargar los datos y dos
+tickets: pedir que se nombre a otra persona o solicitar la eliminación de la
+escuela (módulo 7). Dos directores que se dan de baja **en el mismo segundo**
+pueden pasar los dos la comprobación y dejar la escuela sin dirección: no hay
+transacción en Base44 que lo impida. Es improbable y se arregla con un
+ticket; queda anotado, no resuelto.
+
+**La baja la puede pedir cualquiera con sesión**, no sólo un perfil ACTIVE:
+`/EliminarCuenta` está en `OWN_ACCOUNT_ROUTES` (`routeAccess.js`), abierta a
+PENDING, SUSPENDED y a quien no terminó el onboarding, y esas tres pantallas
+la enlazan (`DeleteAccountLink`). El aviso la promete «de tu cuenta», sin
+condición de estado; antes de la revisión, quien esperaba aprobación con el
+consentimiento vigente no tenía forma de llegar a ella.
+
+**Lo que el código no puede hacer, y el texto legal ya no promete:**
+
+- **Conversaciones con Lumi.** El SDK no tiene `delete` para conversaciones y
+  la API de plataforma de Base44 sólo las lista y lee (catálogo consultado el
+  2026-10-02). El aviso decía que se suprimían con la cuenta; ahora dice que
+  ACACIA lo solicita a Base44. Se cambió sin subir la versión porque nadie
+  había aceptado aún `2026-10-02` (producción sólo tenía consentimientos del
+  borrador ese día). Un test falla si el SDK gana un `delete` de agentes, para
+  usarlo y volver a prometerlo.
+- **Papelera de Base44.** Lo borrado puede quedar en la papelera; la purga
+  definitiva dentro de los 30 días es de ACACIA.
+- **Quitar el `User`.** Base44 documenta «Remove app user» (`DELETE
+  /entities/User/{id}`, el mismo que llama `entities.User.delete`) para llaves
+  de editor; que lo acepte el service role de una función **no está
+  documentado ni probado**. Si lo rechaza, la cuenta queda marcada: la app
+  muestra «Esta cuenta se eliminó» y `provisionOnboardingProfile`/`myConsent`
+  responden 410 `ACCOUNT_DELETED` hasta que ACACIA la quite en el panel.
+
+Para esos tres pasos `deleteMyAccount` deja `ACCOUNT_DELETED` en `AuditLog`
+con `manual_steps` y escribe a `soporte@acaciaco.com.mx` (sólo el id del
+usuario, no su correo). **Esos correos son trabajo pendiente de ACACIA.**
+
+**Desplegar, en este orden:**
+
+1. `npm run deploy:entities`: `ConsentRecord` (`event`, `withdrawn_at`,
+   `accepted_at` deja de ser obligatorio), `UserProfile` (las tres marcas),
+   `User` (`account_deleted_at`) y `AuditLog` (dos acciones nuevas). Antes que
+   las funciones: escriben esos campos.
+2. `npm run deploy`: nuevas `myConsent` y `deleteMyAccount` (22 de 40 en el
+   paquete; 23 con `uploadSchoolFile` de server-minor), más
+   `schoolRead`, `lumiQuery`, `lumiWrite`, `guardedEntityWrite`,
+   `guardedFamilyWrite`, `listSchoolMembers`, `approveProfile`,
+   `governRoleChange`, `provisionOnboardingProfile`, `recordAuditEvent`,
+   `sendBulkNotification`, `notifyParents`, `sendNotificationEmail`,
+   `aiAssist` y `postTicketMessage`.
+3. `npm run deploy:site` **en la misma ventana**. Entre 2 y 3 el sitio viejo
+   recibe `CONSENT_REQUIRED` y su mensaje dice «recarga la página»; al revés,
+   el sitio nuevo no encuentra `myConsent` y muestra «No pudimos comprobar» con
+   Reintentar. Ningún orden evita la ventana; las funciones primero la hacen
+   legible.
+4. Sin cambio en `lumi.jsonc`: no hace falta `agents push`.
+
+**Comprobar por comportamiento:** una cuenta QA ve «Antes de continuar» en
+cualquier ruta; `schoolRead` con ella responde 403 `CONSENT_REQUIRED`; al
+aceptar queda un `ConsentRecord` con `source: 'reacceptance'` y la app abre.
+La primera baja real debe hacerse con una cuenta QA desechable (decisión del
+dueño) para ver si `User.delete` funciona desde la función: la respuesta trae
+`userRemoved`.
+
+**Verificado aquí:** lint, typecheck, build, test (914), test:permissions,
+validate:rls (34), validate:tenant-roles, release:gate, `deno check` y
+`deno lint` de todo `base44/functions/`, `npm run test:load` (sin cambio:
+167 → 93) y, en Chromium con el backend simulado de
+`scripts/touch-targets-scan.mjs` (que ahora incluye una cuenta sin
+consentimiento, `/EliminarCuenta` de los tres roles y, desde la revisión, un
+perfil PENDING que llega a la baja desde su pantalla): la pantalla aparece en
+un enlace profundo sin menú, «Aceptar» sólo con las dos casillas, «No acepto»
+→ baja → «Volver y aceptar» → aceptar → Inicio, botón de baja deshabilitado
+hasta escribir la palabra, claro y oscuro a 390 px, y todo objetivo táctil
+≥ 44 px a 320 y 390 px (las casillas de consentimiento, también en el
+onboarding, crecen con `::after`). **No verificado:** nada contra Base44 en
+vivo — ni las funciones, ni `updateMany`/`deleteMany` con `$pull` en su motor,
+ni `User.delete` desde service role, ni el correo a soporte.
+
+## v1.9.0 · server-minor — cuatro cabos del servidor (2026-10-02)
+
+Los cuatro «detalles menores abiertos» que v1.9.0 heredaba (el dueño pidió
+cerrarlos), cerrados en el servidor. Ninguno cambia una entidad; hay **una
+función nueva** (21/40 en el paquete; 23/40 junto con las dos de
+consentimiento).
+
+**1. Cupo de alumnos por plan, en el servidor.** Antes sólo lo revisaba
+`useStudentQuota` en `GestionEscuela`: cualquier token de ADMIN creaba alumnos
+sin límite. Ahora `runSchoolWrite` (`_schoolWrite.ts`) lo aplica en todo
+`Student` **create** y en toda **reactivación** (`is_active` false → true):
+`403 STUDENT_QUOTA` con `limit`, `hard_limit` y `used`. La regla vive en
+`_policy.ts` (`STUDENT_PLAN_LIMITS`, `studentHardLimit`, `addsActiveStudent`) y
+es copia de `licenseModel.js` (Start 150, Growth 400, Plus/Fundador sin
+límite, prueba sin límite, +10 % de margen); `student-quota-server.test.js`
+corre las dos sobre la misma rejilla. Decisiones:
+
+- **Sin bandera.** `VITE_PAYWALL_GATING_ENABLED` es del bundle del navegador; un
+  cupo que una variable de build apaga es el mismo hueco. El servidor siempre
+  lo aplica (el dueño de plataforma lo salta, igual que en el cliente) y
+  `useStudentQuota` dejó de leer la bandera (`STUDENT_QUOTA_ALWAYS_GATED`), para
+  que el aviso coincida con lo que el servidor hará. La bandera sigue
+  gobernando sólo los gates de página (`useFeatureGate`, hoy vacíos).
+- **Por `license_tier`, no por `licensed_student_limit`:** el `set_plan` de
+  Mission Control sólo escribe el tier, así que ese campo queda viejo en cada
+  cambio de plan (el cliente ya lo ignoraba).
+- **Carrera por el último lugar:** después de escribir se vuelve a contar; si
+  la escuela quedó por encima, quien lo ve deshace **su** escritura (borra el
+  alumno creado, o restaura los campos del parche) y responde `STUDENT_QUOTA`.
+  En el peor caso los dos deshacen y un reintento entra; nunca queda por encima.
+- `GestionEscuela` abre el mismo diálogo de mejora cuando el rechazo viene del
+  servidor, con el `limit` que **el servidor** nombró (la licencia del
+  navegador puede tener hasta 5 min; antes el diálogo podía decir «hasta null
+  alumnos»).
+- `useStudentQuota` cuenta con `limit` 1000: el `schoolRead` por defecto
+  devuelve 200 filas, menos que el tope duro de Growth (440), y una escuela en
+  el tope se leía como 200 — sin aviso y con la cifra equivocada en el diálogo.
+
+**2. Límite por usuario en `schoolRead`.** Un cubo de fichas por usuario
+(`schoolRead/_userLimit.ts`), gastado en `entry.ts` **antes** de cualquier
+llamada a entidades: `429 RATE_LIMITED` con `limit: 'user'` y `Retry-After`, la
+misma forma que el límite de Base44, así que el reintento de lecturas del
+cliente ya lo maneja. 24 fichas, 0.2/s (12 por minuto). Tamaño **medido** con
+`npm run test:load`, que ahora corre este mismo cubo: el máximo de una persona
+en un minuto fue 9 navegando dentro de la app, 17 recargando cada 5 s y 30 en
+el bucle de 1.5 s; ningún escenario humano, ágil o dentro de la app recibe un
+solo rechazo. Un escenario nuevo («runaway»: una sesión llamando `schoolRead`
+cada 250 ms sin pausa mientras una maestra y un padre navegan) baja de 446 a 23
+rechazos del límite global y de 29 a 10 consultas fallidas de **los otros dos**.
+
+**Vive en memoria, por isolate**, y es una decisión documentada, no un
+descuido: Base44 no documenta Deno KV para sus funciones (las referencias de
+`base44-cli`/`base44-sdk` no lo mencionan) y Deno aún lo esconde tras
+`--unstable-kv` fuera de Deno Deploy; un contador en entidades gastaría el
+presupuesto que esto protege. Con N isolates calientes, un usuario puede gastar
+hasta N cubos: acota la parte de uno, no es un número exacto.
+
+**3. Subidas por el servidor: `uploadSchoolFile`.** Las tres llamadas a
+`Core.UploadFile` desde el navegador (logo del onboarding, `GestionDocumentos`,
+`ConfiguracionInicial`) pasan por `src/lib/uploads/uploadSchoolFile.js` →
+función `uploadSchoolFile` (multipart: `purpose` + `file`). Reglas en
+`uploadSchoolFile/_upload.ts`:
+
+| `purpose` | quién | tipos | máx. |
+|---|---|---|---|
+| `school_logo` | quien no tiene ningún `UserProfile` (fundando), o ADMIN activo | PNG, JPG, WEBP, GIF | 5 MB |
+| `official_document` | ADMIN activo, licencia con escritura | PDF | 10 MB |
+| `setup_document` | ADMIN activo, licencia con escritura | PDF, DOC, DOCX, JPG, PNG | 10 MB |
+
+«ADMIN activo» incluye el consentimiento vigente: `profileProblem` de
+`_upload.ts` es espejo del de `_scope.ts` (con prueba de igualdad) y responde
+`CONSENT_REQUIRED` igual que él. Lo añadió la integración: el paquete se hizo
+antes que el de consentimiento. El logo del fundador (sin perfil) no lo pide:
+el onboarding registra su propio consentimiento.
+
+Extensión **y** bytes mágicos tienen que nombrar el mismo tipo (un `.docx` es un
+ZIP que contiene `word/document.xml`; SVG no se acepta porque puede llevar
+script). Se guarda con nombre limpio (sin espacios, acentos ni ruta) y con el
+MIME de lo que el archivo **es**. Tope de 60 subidas por usuario por día de
+México, contado en `AuditLog` (`target_type: 'uploadSchoolFile'`, que además
+deja quién subió qué). `src/lib/uploads/uploadRules.js` es el espejo del
+cliente para avisar antes (con prueba de igualdad); el formulario de
+documentos ya avisa de un PDF de más de 10 MB y el onboarding de un logo que no
+es imagen, con botón «Quitar logo». Un logo rechazado no crea nada y dice por
+qué. Un archivo **sin extensión** en el nombre (un selector de nube o la
+galería del teléfono pueden dar «documento» o «IMG_2041») sube con la
+extensión de su tipo MIME (`withTypedName`): antes `isPdfFile` lo aceptaba por
+MIME y la regla de subida lo rechazaba por nombre. El servidor sigue
+comprobando los bytes, así que un MIME falso no gana nada. `upload-school-file.test.js` falla si `src/` vuelve a llamar a cualquier
+`integrations.Core.*`.
+
+**4. Códigos de confirmación de `lumiWrite`: un solo uso, 10 minutos.** El
+código era un digest de (quién, qué, alumno, día): repetir el commit el mismo
+día lo reaplicaba — y repetir un «Juan ausente» después de que la maestra lo
+corrigiera a «presente» en Asistencia deshacía la corrección. Ahora el código
+lleva su hora de emisión (`<segundos base36>-<10 hex>`, el digest la cubre),
+caduca a los 10 minutos (`410 CODE_EXPIRED`) y se usa una vez (`409
+CODE_USED`): antes de escribir se crea un reclamo en `AuditLog`
+(`target_type: 'lumiWrite:code'`, `target_id` = el código) y se relee; gana el
+más antiguo, así que dos commits con el mismo código no pasan los dos. Si la
+escritura falla, el reclamo se borra y el código sirve para reintentar. Los
+mensajes en español viven en `ERROR_MESSAGES` de `_lumiCore.ts` (copia idéntica
+en `lumiQuery/` y `lumiWrite/`) y `lumi.jsonc` dice que el código sirve una vez
+y caduca. Pruebas: `lumi-confirmation-code.test.js`.
+
+**Desplegar, en este orden:**
+
+1. `npm run deploy` — `guardedEntityWrite` (cupo), `schoolRead` (límite),
+   `lumiWrite` y `lumiQuery` (`_lumiCore.ts`), y la nueva `uploadSchoolFile`.
+   Sin cambios de entidad: `deploy:entities` no hace falta.
+2. `npx base44 agents push` (`lumi.jsonc`), después de las funciones.
+3. `npm run deploy:site` **después** del paso 1: el sitio nuevo sube archivos
+   por `uploadSchoolFile`, y sin la función cada subida falla.
+
+**Comprobar por comportamiento:** una escuela Start con 165 alumnos activos
+recibe «llegó al máximo de alumnos» al crear el 166; subir un `.html`
+renombrado a `.pdf` en Documentos responde que el contenido no corresponde; un
+logo de 6 MB en el onboarding se rechaza antes de crear la escuela; repetir un
+commit de Lumi con el mismo código responde `CODE_USED`, y uno de hace más de
+10 minutos `CODE_EXPIRED`; el log de `schoolRead` dice `schoolRead user rate
+limited` sólo ante un bucle.
+
+**No verificado:** nada corrió contra Base44 en vivo. En particular, que
+`Core.UploadFile` con service role acepte desde una función el `File`
+re-envuelto (el SDK usa el mismo camino `FormData` que en el navegador; si
+falla, la pantalla dice «No se pudo guardar el archivo» y no se guarda nada a
+medias), cuántos isolates corre Base44 por función, y el chat de Lumi
+relayando `CODE_USED`/`CODE_EXPIRED`.
+
+## v1.9.0 — consentimiento obligatorio, legal vigente y cierre de pendientes (2026-10-02)
+
+Integración de cinco paquetes hechos en paralelo desde `main` (`96eea24`), con
+`--no-ff` en `fix/v190-integration`: primero **lumi-filter**, **legal** y
+**ui-minor**; encima, **consent** y **server-minor**, que el dueño pidió con
+sus propias palabras el mismo día («si no lo tienen lo tienen que firmar
+obligatoriamente…», y «corrígelos» sobre los cuatro detalles menores). Cada
+uno tiene su sección justo arriba.
+
+**Lo que hay que saber antes de tocar cualquiera de estas piezas:**
+
+- **Aceptar la versión vigente es obligatorio, y lo exige el servidor.** La
+  marca vive en `UserProfile.consent_*` y sólo la escriben
+  `provisionOnboardingProfile` y `myConsent`, después del `ConsentRecord`.
+  `profileProblem` responde `CONSENT_REQUIRED` en `_scope.ts` ×3,
+  `guardedEntityWrite/_policy.ts` y `uploadSchoolFile/_upload.ts` (espejo con
+  prueba de igualdad), y lo mismo hacen las funciones que mandan o procesan
+  datos de otros. Una función nueva que resuelva el perfil del que llama
+  **tiene que** pasar por esa regla, o el candado tiene un hueco; las
+  excepciones (tickets propios, `exportSchoolData`, `getMySubscription`,
+  `markWelcomeShown`, `recordAuditEvent`) están nombradas en la sección de
+  consentimiento y son a propósito.
+- **Versiones legales: subirlas manda a todos a la pantalla.**
+  `PRIVACY_NOTICE_VERSION`/`SERVICE_TERMS_VERSION` (`privacyNotice.js`) y sus
+  copias en `base44/functions/` (incluida `_upload.ts`) tienen que ser iguales;
+  `consent-gate.test.js` recorre la carpeta entera.
+- **El aviso vigente ya describe lo que el código hace.** Re-aceptación «la
+  siguiente vez que entres» = `ConsentGate`; «Eliminar mi cuenta y mis datos»
+  = `/EliminarCuenta` + `deleteMyAccount`; la excepción de la única persona de
+  la dirección = `SOLE_ADMIN`. El bloqueo de despliegue que esta sección tenía
+  («el paquete legal no se despliega hasta que exista el de consentimiento»)
+  se quitó por eso, después de releer `legalDocs.js` contra el código. Lo que
+  el código no puede hacer (borrar conversaciones de Lumi, purgar la papelera
+  de Base44, quizá quitar el `User`) el texto lo atribuye a ACACIA, que lo
+  recibe por `AuditLog` y correo a soporte: **es trabajo manual pendiente**
+  cada vez que alguien se da de baja.
+- **«Vigente» es decisión del dueño** («Vigente, yo asumo», en la misma
+  conversación del 2026-10-02), incluido publicar con
+  `BASE44_AI_TRAINING_EXCLUDED = false`.
+- **Cupo de alumnos, límite por usuario, subidas y códigos de Lumi: en el
+  servidor.** El cupo no tiene bandera; `schoolRead` gasta una ficha del
+  usuario antes de cualquier llamada a entidades; ninguna
+  `integrations.Core.*` desde `src/` (prueba); un código de `lumiWrite` sirve
+  una vez y vence a los 10 minutos.
+- **Lumi:** todo texto del asistente pasa por `filterLumiReply`. Agregar un
+  intent o una escritura en `_lumiCore.ts` obliga a tocar `HELPS_WITH_BY_ROLE`
+  y `TOPIC_PATTERNS`. `lumi.jsonc` cambió (códigos de un solo uso): hace falta
+  `agents push`.
+- **Nombres:** se muestra `userDisplayName`, nunca `full_name` crudo.
+  `callerDisplayName` es idéntica en los dos `_policy.ts`. Una baja reescribe
+  el nombre sellado a «Cuenta eliminada».
+- **`ThemeSwitcher.jsx` ya no es igual al de las otras apps** hasta que el
+  commit local `bf397f7` de `acacia-app-standard` se suba y se copie.
+
+**Lo que tocó la integración:**
+
+- `CLAUDE.md` fue el único conflicto de texto (las secciones de consent y
+  server-minor se añadían al mismo final). Se conservaron las dos y esta
+  sección quedó al final.
+- **Conflicto de significado, no de texto:** `uploadSchoolFile/_upload.ts`
+  (server-minor) copiaba el `profileProblem` de `_scope.ts` de **antes** del
+  consentimiento. La prueba de igualdad de `upload-school-file.test.js` lo
+  detectó. Ahora el espejo incluye `CONSENT_REQUIRED` y lleva su copia de las
+  versiones. Además, un director sin consentimiento que sube el logo recibe
+  `CONSENT_REQUIRED` y no `NOT_ONBOARDING`, y una cuenta dada de baja cuyo
+  `User` la plataforma no quitó (ya sin perfiles, o sea en el estado de
+  «fundando») recibe `410 ACCOUNT_DELETED` en vez de poder subir logos.
+- Copias idénticas comprobadas tras integrar: `_scope.ts` ×3, `_lumiCore.ts`
+  ×2, `_templates.ts` ×4 y `_acaciaSign.ts` ×2.
+
+**Desplegar, en este orden:**
+
+1. **`npm run deploy:entities`**: `User` (`display_name`, `account_deleted_at`),
+   `UserProfile` (las tres marcas de consentimiento), `ConsentRecord` (`event`,
+   `withdrawn_at`; `accepted_at` deja de ser obligatorio) y `AuditLog` (dos
+   acciones nuevas). Antes que las funciones: las funciones escriben esos
+   campos.
+2. **`npm run deploy`**: 23 de 40. Nuevas: `myConsent`, `deleteMyAccount` y
+   `uploadSchoolFile`. Cambiadas: `schoolRead`, `lumiQuery`, `lumiWrite`,
+   `guardedEntityWrite`, `guardedFamilyWrite`, `listSchoolMembers`,
+   `approveProfile`, `governRoleChange`, `provisionOnboardingProfile`,
+   `recordAuditEvent`, `sendBulkNotification`, `notifyParents`,
+   `sendNotificationEmail`, `aiAssist` y `postTicketMessage`.
+3. **`npm run deploy:site` en la misma ventana** que el paso 2. Con el sitio
+   viejo y las funciones nuevas, el sitio recibe `CONSENT_REQUIRED` («recarga
+   la página») y sube archivos por `Core.UploadFile`; con el sitio nuevo y las
+   funciones viejas, no encuentra `myConsent` ni `uploadSchoolFile` y el
+   onboarding responde 409 `CONSENT_VERSION_MISMATCH`.
+4. **`npx base44 agents push`** (`lumi.jsonc`), después de las funciones.
+
+**Cómo comprobarlo por comportamiento:** una cuenta QA ve «Antes de
+continuar» en cualquier ruta, `schoolRead` con ella responde 403
+`CONSENT_REQUIRED`, y al aceptar queda un `ConsentRecord` con `source:
+'reacceptance'`; una cuenta QA PENDING llega a «Eliminar mi cuenta y mis
+datos» desde su pantalla; la baja de una cuenta QA desechable (decisión del
+dueño) devuelve `userRemoved`; un onboarding nuevo deja `notice_version:
+'2026-10-02'`; `/aviso-de-privacidad` sin sesión ya no dice BORRADOR; subir un
+`.html` renombrado a `.pdf` en Documentos se rechaza; repetir un commit de Lumi
+responde `CODE_USED`.
+
+**Verificado aquí (integración):** `npm run lint` (0 errores, 23
+advertencias que ya existían; `validate:functions` 23/40), `typecheck`,
+`build`, `npm test` (958/958), `test:permissions` (23/23), `validate:rls` (34
+entidades), `validate:tenant-roles`, `release:gate`, `test:load`, `deno lint`
+y `deno check --node-modules-dir=none` de todo `base44/functions/`, `deno fmt
+--check` y `deno test` de `deno/`, y `scripts/touch-targets-scan.mjs` a 320 y
+390 px en Chromium con el backend simulado (incluidas la pantalla de
+consentimiento, `/EliminarCuenta` de los tres roles y la baja desde PENDING:
+todo objetivo ≥ 44 px).
+
+**Sigue abierto:**
+
+- **Nada corrió contra Base44 en vivo.** En particular: `myConsent` y
+  `deleteMyAccount` desplegadas; si el motor ejecuta `updateMany`/`deleteMany`
+  con `$pull`/`$in` sobre arreglos como la base en memoria supone; si el
+  service role de una función puede `entities.User.delete` (lo dirá
+  `userRemoved`); si `Core.UploadFile` con service role acepta el `File`
+  re-envuelto dentro de una función; cuántos isolates corre Base44 (el cubo
+  por usuario es por isolate); Lumi relayando `CODE_USED`/`CODE_EXPIRED` en
+  un chat real; si `Retry-After` se puede leer entre orígenes sin
+  `Access-Control-Expose-Headers` (si no, el reintento cae a backoff simple).
+- **Dos directores que se dan de baja en el mismo segundo** pueden dejar la
+  escuela sin dirección; Base44 no tiene transacciones. Improbable, se arregla
+  con un ticket.
+- **`created_by` de Base44** (el correo del creador) en registros viejos
+  creados desde el navegador no se puede reescribir: «sin tu nombre» se
+  cumple en los campos de nombre, pero un ADMIN puede seguir viendo el correo
+  en esas filas antiguas.
+- Conversaciones de Lumi, papelera de Base44 y, si la plataforma lo rechaza,
+  el `User`: pasos manuales de ACACIA tras cada baja.
+- Los reclamos de código de `lumiWrite` (`AuditLog`, `target_type
+  'lumiWrite:code'`) salen en Auditoría junto a las demás filas de Lumi: ruido
+  exacto, no un error.
+- Fuera de este paquete: la escuela y cuentas demo, y el dominio de correo
+  propio.

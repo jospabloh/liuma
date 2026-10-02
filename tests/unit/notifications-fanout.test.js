@@ -127,7 +127,7 @@ test('sendBulkNotification derives recipients and text from stored records, neve
   assert.match(source, /requireActiveAdmin\(sr, user, event\.school_id\)/);
   assert.match(source, /sr\.entities\.SupportTicket\.get\(ticketId\)/);
   // Recipients' addresses come from User rows resolved server-side.
-  assert.match(source, /sr\.entities\.User\.filter\(\{ id: \{ \$in: unique \} \}/);
+  assert.match(source, /readAllByIds\(sr\.entities\.User, 'id', ids\)/);
   // No templateContext is accepted from the client.
   assert.doesNotMatch(source, /body\?\.templateContext/);
   // Once per record, and only marked when somebody was reached. For a charge
@@ -194,8 +194,8 @@ test('sendBulkNotification keeps recipients inside the stored record\'s school',
   const source = read('base44/functions/sendBulkNotification/entry.ts');
   // A charge pointing at another school's student mails nobody.
   assert.match(source, /String\(fetchedStudent\.school_id\) === String\(charge\.school_id\)/);
-  assert.match(source, /ParentStudent\.filter\(\{ school_id: schoolId, student_id: studentId, status: 'ACTIVE' \}\)/);
-  assert.match(source, /ParentStudent\.filter\(\{ school_id: event\.school_id, student_id: \{ \$in: studentIds \}/);
+  assert.match(source, /readAllOrFail\(sr\.entities\.ParentStudent, \{ school_id: schoolId, student_id: studentId, status: 'ACTIVE' \}/);
+  assert.match(source, /readAllByIds\(sr\.entities\.ParentStudent, 'student_id', studentIds, \{ school_id: event\.school_id, status: 'ACTIVE' \}\)/);
   // Whoever opened the ticket is rate limited, a school ADMIN included.
   assert.match(source, /if \(!isOwner && isRequester\) \{/);
 });

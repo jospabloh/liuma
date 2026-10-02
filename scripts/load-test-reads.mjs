@@ -29,6 +29,13 @@
 // the rate limit answered as 500, the profile read with the service role,
 // getMySubscription fresh for 2 min in memory only. "after" is this release.
 //
+// v1.9.0: "after" also runs schoolRead's per-user token bucket
+// (base44/functions/schoolRead/_userLimit.ts) in front of every schoolRead,
+// as entry.ts does, and two more readings come out: the most schoolRead calls
+// one person made in any rolling minute, and a "runaway" run — one session
+// looping schoolRead every 250 ms with no backoff while a teacher and a
+// parent browse — with the bucket off and on.
+//
 // Time is virtual (SCALE × faster than real) so a minute of three people
 // browsing runs in about a second.
 
@@ -39,6 +46,7 @@ import { makeCooldown } from '../src/lib/functionRetry.js';
 import { shouldRetryQuery, queryRetryDelay, QUERY_STALE_TIME_MS } from '../src/lib/queryErrorPolicy.js';
 import { SUBSCRIPTION_FRESH_MS } from '../src/lib/license/subscriptionSession.js';
 import { answerSchoolRead, isRateLimitError } from '../base44/functions/schoolRead/_answer.ts';
+import { makeUserRateLimiter } from '../base44/functions/schoolRead/_userLimit.ts';
 import { makeFakeDb } from '../tests/fixtures/fake-entity-db.js';
 
 const SCALE = 50;
@@ -136,11 +144,22 @@ function httpError(status, body, headers = {}) {
   return err;
 }
 
-function makePlatform({ mode, now, sleep }) {
+/** Most schoolRead invocations any one user made in a rolling minute. */
+function peakPerMinute(stamps) {
+  return Object.fromEntries(Object.entries(stamps).map(([user, ts]) => [
+    user, ts.reduce((max, t) => Math.max(max, ts.filter((x) => x >= t && x < t + 60000).length), 0),
+  ]));
+}
+
+function makePlatform({ mode, now, sleep, userLimit = mode === 'after' }) {
   const db = makeFakeDb(buildWorld());
   const budget = makeBudget({ now });
   const unmetered = { take() {} };
-  const stats = { invocations: 0, serviceOps: 0, userOps: 0, rateLimited: 0, byFunction: {} };
+  const stats = { invocations: 0, serviceOps: 0, userOps: 0, rateLimited: 0, userLimited: 0, byFunction: {}, stamps: {} };
+  // v1.9.0: schoolRead's per-user bucket, the real one, on virtual time — as
+  // entry.ts runs it, before any entity call. "before" (v1.8.2) had none.
+  const userLimiter = makeUserRateLimiter({ now });
+  stats.userLimitOn = userLimit;
   const service = meteredDb(db, budget, { get ops() { return stats.serviceOps; }, set ops(v) { stats.serviceOps = v; } });
   const own = meteredDb(db, unmetered, { get ops() { return stats.userOps; }, set ops(v) { stats.userOps = v; } });
 
@@ -167,6 +186,15 @@ function makePlatform({ mode, now, sleep }) {
           async invoke(name, payload) {
             stats.invocations += 1;
             stats.byFunction[name] = (stats.byFunction[name] || 0) + 1;
+            if (name === 'schoolRead') (stats.stamps[userId] ||= []).push(now());
+            if (userLimit && name === 'schoolRead') {
+              const allowed = userLimiter.take(userId);
+              if (!allowed.ok) {
+                stats.userLimited += 1;
+                await sleep(20);
+                throw httpError(429, { ok: false, code: 'RATE_LIMITED', error: 'RATE_LIMITED', limit: 'user' }, { 'retry-after': String(allowed.retryAfterS) });
+              }
+            }
             let answer;
             try {
               answer = await run(name, userId, payload);
@@ -461,8 +489,61 @@ export async function measureConcurrent(mode, { rounds = 3, thinkMs = 1500, relo
     invocations: platform.stats.invocations,
     serviceOps: platform.stats.serviceOps,
     rateLimitedInvocations: platform.stats.rateLimited,
+    userLimitedInvocations: platform.stats.userLimited,
+    peakPerUserPerMinute: peakPerMinute(platform.stats.stamps),
     failedQueries,
     virtualSeconds: Math.round(now() / 1000),
+  };
+}
+
+/**
+ * One session stuck in a loop — a script with a token, or a tab refetching
+ * without pause — firing AdminHome's batch every 250 ms with no retry policy,
+ * while a teacher and a parent browse in-app at a brisk pace. The question the
+ * per-user bucket (v1.9.0) answers: do THEIR screens still load? Run with and
+ * without the bucket; both runs are "after" (v1.8.3+) in every other respect.
+ */
+export async function measureRunaway({ userLimit, seconds = 180 } = {}) {
+  const { now, sleep } = clock();
+  const platform = makePlatform({ mode: 'after', now, sleep, userLimit });
+  const others = Object.entries(ROUTES).filter(([user]) => user !== 'director').map(([user, route]) => ({
+    user, route, session: makeSession({ mode: 'after', platform, user, now, sleep }),
+  }));
+  const loopClient = platform.client('director');
+  const batch = {
+    queries: [
+      { key: 'p', entity: 'UserProfile', filter: { school_id: 'A' } },
+      { key: 's', entity: 'Student', filter: { school_id: 'A', is_active: true } },
+      { key: 'c', entity: 'ChargeItem', filter: { school_id: 'A', status: { $in: UNPAID } } },
+      { key: 'e', entity: 'EmergencyContact', filter: { school_id: 'A' }, limit: 1000 },
+    ],
+  };
+  let loopCalls = 0;
+  let loopRefused = 0;
+  const loop = (async () => {
+    while (now() < seconds * 1000) {
+      loopCalls += 1;
+      await loopClient.functions.invoke('schoolRead', batch).catch(() => { loopRefused += 1; });
+      await sleep(250);
+    }
+  })();
+  await Promise.all([loop, ...others.map(async ({ route, session }) => {
+    while (now() < seconds * 1000) {
+      for (const screen of route.visits) {
+        await session.visit(route.home);
+        await sleep(5000);
+        await session.visit(screen);
+        await sleep(5000);
+      }
+    }
+  })]);
+  return {
+    loopCalls,
+    loopRefused,
+    userLimitedInvocations: platform.stats.userLimited,
+    rateLimitedInvocations: platform.stats.rateLimited,
+    othersFailedQueries: others.reduce((n, o) => n + o.session.q.outcome.failedQueries, 0),
+    othersFetched: others.reduce((n, o) => n + o.session.q.outcome.fetched, 0),
   };
 }
 
@@ -492,8 +573,12 @@ async function main() {
     const after = await measureConcurrent('after', scenario);
     concurrent.push({ ...scenario, before, after });
   }
+  const runaway = {
+    without: await measureRunaway({ userLimit: false }),
+    with: await measureRunaway({ userLimit: true }),
+  };
   if (json) {
-    console.log(JSON.stringify({ screens: screensTable, concurrent }, null, 2));
+    console.log(JSON.stringify({ screens: screensTable, concurrent, runaway }, null, 2));
     return;
   }
   console.log('Per screen, one cold visit (function invocations / service-role entity calls):\n');
@@ -508,11 +593,24 @@ async function main() {
   console.log('\nDirector + teacher + parent browsing at once (3 rounds of their routes),');
   console.log('150 service-role calls per rolling minute. "failed" = queries that reached');
   console.log('the screen as a failure after every retry (before: rendered as an empty list):\n');
-  console.log('scenario          | inv before | inv after | ops/min before | ops/min after | rate-limited before | after | failed before | after');
-  console.log('------------------|-----------:|----------:|---------------:|--------------:|--------------------:|------:|--------------:|------:');
+  console.log('"per-user" = schoolRead calls the per-user bucket (v1.9.0) answered 429 before');
+  console.log('they reached Base44 (each one also counted in "inv after").\n');
+  console.log('scenario          | inv before | inv after | ops/min before | ops/min after | rate-limited before | after | per-user | failed before | after');
+  console.log('------------------|-----------:|----------:|---------------:|--------------:|--------------------:|------:|---------:|--------------:|------:');
   for (const { name, before, after } of concurrent) {
     const perMin = (r) => Math.round(r.serviceOps / Math.max(1, r.virtualSeconds / 60));
-    console.log(`${name.padEnd(17)} | ${String(before.invocations).padStart(10)} | ${String(after.invocations).padStart(9)} | ${String(perMin(before)).padStart(14)} | ${String(perMin(after)).padStart(13)} | ${String(before.rateLimitedInvocations).padStart(19)} | ${String(after.rateLimitedInvocations).padStart(5)} | ${String(before.failedQueries).padStart(13)} | ${String(after.failedQueries).padStart(5)}`);
+    console.log(`${name.padEnd(17)} | ${String(before.invocations).padStart(10)} | ${String(after.invocations).padStart(9)} | ${String(perMin(before)).padStart(14)} | ${String(perMin(after)).padStart(13)} | ${String(before.rateLimitedInvocations).padStart(19)} | ${String(after.rateLimitedInvocations).padStart(5)} | ${String(after.userLimitedInvocations).padStart(8)} | ${String(before.failedQueries).padStart(13)} | ${String(after.failedQueries).padStart(5)}`);
+  }
+  console.log('\nPeak schoolRead calls by one person in any rolling minute (after):\n');
+  for (const { name, after } of concurrent) {
+    console.log(`${name.padEnd(17)} | ${Object.entries(after.peakPerUserPerMinute).map(([u, n]) => `${u} ${n}`).join(' · ')}`);
+  }
+  console.log('\nOne session looping schoolRead every 250 ms (no backoff) while a teacher and a');
+  console.log('parent browse in-app every 5 s, 3 minutes:\n');
+  console.log('per-user bucket | loop calls | loop refused | refused by bucket | app-limited | others: fetched | others: failed');
+  console.log('----------------|-----------:|-------------:|------------------:|------------:|----------------:|---------------:');
+  for (const [label, r] of [['off', runaway.without], ['on', runaway.with]]) {
+    console.log(`${label.padEnd(15)} | ${String(r.loopCalls).padStart(10)} | ${String(r.loopRefused).padStart(12)} | ${String(r.userLimitedInvocations).padStart(17)} | ${String(r.rateLimitedInvocations).padStart(11)} | ${String(r.othersFetched).padStart(15)} | ${String(r.othersFailedQueries).padStart(14)}`);
   }
 }
 

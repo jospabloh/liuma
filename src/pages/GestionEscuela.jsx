@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { schoolRead } from '@/lib/data/schoolRead';
 import { recordAuditRow } from '@/lib/audit';
 import { humanizeError } from '@/lib/errorMessages';
+import { functionErrorBody, functionErrorCode } from '@/lib/functionResponse';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -44,6 +45,13 @@ import { guardedCreate } from '@/lib/authorization/guardedWrite';
 
 const CONTACT_FORM_URL = 'https://forms.gle/jLQ4EtWmQhkSsahy9';
 
+/** The upgrade dialog's reason; never "hasta null alumnos". */
+function studentQuotaReason(limit) {
+  return Number.isFinite(limit) && limit > 0
+    ? `Tu plan permite hasta ${limit} alumnos activos. Da de baja a quien ya no asiste o mejora tu licencia para agregar más.`
+    : 'Tu escuela llegó al máximo de alumnos activos de su plan. Da de baja a quien ya no asiste o mejora tu licencia para agregar más.';
+}
+
 export default function GestionEscuela() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -53,6 +61,11 @@ export default function GestionEscuela() {
   const [showClassroomForm, setShowClassroomForm] = useState(false);
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  // The cap the SERVER named when it refused (STUDENT_QUOTA). This tab's own
+  // subscription can be up to 5 min old (getMySubscription is cached per
+  // session), so after a plan change its limit may be another plan's — or
+  // null, which would read "hasta null alumnos".
+  const [serverQuotaLimit, setServerQuotaLimit] = useState(null);
   const [classroomForm, setClassroomForm] = useState({ name: '', grade: '' });
   const [classroomErrors, setClassroomErrors] = useState({});
   const classroomFieldRefs = useRef({});
@@ -123,6 +136,16 @@ export default function GestionEscuela() {
     },
     onError: (error) => {
       toast.error(`Error al agregar alumno. ${humanizeError(error)}`);
+      // The server holds the plan's student cap (v1.9.0). If it refused — the
+      // count moved while the form was open, or this tab's count was stale —
+      // show the same upgrade path the pre-check shows, with a fresh count.
+      if (functionErrorCode(error) === 'STUDENT_QUOTA') {
+        queryClient.invalidateQueries({ queryKey: ['activeStudentCount'] });
+        const refusedLimit = Number(functionErrorBody(error)?.limit);
+        setServerQuotaLimit(Number.isFinite(refusedLimit) && refusedLimit > 0 ? refusedLimit : null);
+        setShowStudentForm(false);
+        setShowUpgrade(true);
+      }
     }
   });
 
@@ -323,9 +346,9 @@ export default function GestionEscuela() {
 
       <UpgradePlansModal
         open={showUpgrade}
-        onClose={() => setShowUpgrade(false)}
+        onClose={() => { setShowUpgrade(false); setServerQuotaLimit(null); }}
         currentTier={studentQuota.licenseTier}
-        reason={`Tu plan permite hasta ${studentQuota.limit} alumnos. Mejora tu licencia para agregar más.`}
+        reason={studentQuotaReason(serverQuotaLimit ?? studentQuota.limit)}
       />
 
       {/* Create Classroom Modal */}

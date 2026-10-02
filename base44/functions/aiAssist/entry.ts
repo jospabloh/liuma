@@ -15,6 +15,19 @@
 // never from a client-supplied prompt string. Both tasks are also capped per
 // user per day (DAILY_LIMITS).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
+
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
 
 const MAX_QUESTIONS = 6; // mirrors src/lib/support/aiIntake.js's MAX_QUESTIONS
 
@@ -217,15 +230,20 @@ function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const task = String(body?.task || '');
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const isPlatformOwner = user.role === 'admin';
 
     if (task === 'diary_draft') {
@@ -236,12 +254,14 @@ Deno.serve(async (req) => {
       if (!student) return bad(404, 'NOT_FOUND', 'Student not found');
 
       if (!isPlatformOwner) {
-        const profiles: Array<{ status?: string; app_role?: string }> = await sr.entities.UserProfile.filter({
+        const profiles: Array<{ status?: string; app_role?: string; consent_notice_version?: string; consent_terms_version?: string }> = await sr.entities.UserProfile.filter({
           user_id: user.id,
           school_id: student.school_id,
         });
         const profile = profiles.find((p) => p.status === 'ACTIVE' && ['TEACHER', 'ADMIN'].includes(String(p.app_role)));
         if (!profile) return bad(403, 'NO_PROFILE', 'Requires an active TEACHER or ADMIN profile in this school');
+        // A child's name goes to the model: not before the current consent (v1.9.0).
+        if (!profileConsentIsCurrent(profile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
       }
 
       // Sales-readiness audit 2026-09-29 (F31 / LUMI-10): the old prompt asked
@@ -330,4 +350,18 @@ Responde SOLO el JSON del esquema.`;
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Clock } from 'lucide-react';
 import SignOutButton from '@/components/auth/SignOutButton';
+import DeleteAccountLink from '@/components/account/DeleteAccountLink';
 
 export default function PendingApproval() {
   return (
@@ -30,6 +31,9 @@ export default function PendingApproval() {
         </div>
         {/* Via AuthContext.logout so the remembered identity is cleared too. */}
         <SignOutButton />
+        <div className="mt-4">
+          <DeleteAccountLink />
+        </div>
       </motion.div>
     </div>
   );

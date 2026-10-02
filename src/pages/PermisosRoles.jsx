@@ -37,6 +37,11 @@ import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants'
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
 import { humanizeError } from '@/lib/errorMessages';
 import FieldError from '@/components/forms/FieldError';
+import { Link } from 'react-router-dom';
+import { downloadSchoolExport } from '@/lib/account/schoolExport';
+import { incompleteExportMessage, schoolDeletionRequestAllowed } from '@/lib/account/schoolExportStatus';
+import SchoolBackupStatus from '@/components/account/SchoolBackupStatus';
+import { ACCOUNT_DELETION_PATH, ACCOUNT_DELETION_TITLE } from '@/lib/account/accountDeletion';
 
 const PENDING_CHANGE_ENTITY = 'PendingChange';
 // The "plantillas de rol" grid and the tenant "Danger Zone" spec table that
@@ -88,6 +93,11 @@ export default function PermisosRoles() {
   const [rollbackOverrideId, setRollbackOverrideId] = React.useState('');
   const [isApplyingRollback, setIsApplyingRollback] = React.useState(false);
   const [isExporting, setIsExporting] = React.useState(false);
+  // What the last export held, and the "continuar sin respaldo completo"
+  // acknowledgement (SchoolBackupStatus).
+  const [backup, setBackup] = React.useState(null);
+  const [backupAcknowledged, setBackupAcknowledged] = React.useState(false);
+  const deletionAllowed = schoolDeletionRequestAllowed({ backup, acknowledged: backupAcknowledged });
   const [isRequestingDeletion, setIsRequestingDeletion] = React.useState(false);
   const [deletionReason, setDeletionReason] = React.useState('');
 
@@ -496,21 +506,12 @@ export default function PermisosRoles() {
   const handleExportSchoolData = async () => {
     setIsExporting(true);
     try {
-      // invokeFunction unwraps the axios response to the export body.
       // Export has to work in read-only mode — it is the half of "solo
       // lectura" that promises nothing is held hostage.
-      const payload = await invokeFunction(base44, 'exportSchoolData', {});
-      if (!payload?.ok) throw new Error(payload?.error || 'export failed');
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `liuma-${userProfile.school_id}-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      toast.success('Descarga iniciada');
+      const result = await downloadSchoolExport(userProfile.school_id);
+      setBackup(result);
+      if (result.complete) toast.success('Respaldo completo descargado');
+      else toast.warning(incompleteExportMessage(result), { duration: 15000 });
     } catch {
       toast.error('No se pudo generar la exportación');
     } finally {
@@ -526,6 +527,7 @@ export default function PermisosRoles() {
   // an instant, irreversible self-service action -- same principle as every
   // other tenant-wide deletion in this portfolio going through a human.
   const handleRequestSchoolDeletion = async () => {
+    if (!deletionAllowed) return;
     if (!deletionReason.trim()) {
       showError('deletion', 'Describe el motivo de la solicitud.');
       return;
@@ -691,8 +693,18 @@ export default function PermisosRoles() {
               className={errors.deletion ? 'border-red-500 dark:border-red-400' : undefined}
             />
             <FieldError id="deletion-error" message={errors.deletion} />
-            <Button variant="destructive" onClick={handleRequestSchoolDeletion} disabled={isRequestingDeletion}>
+            <SchoolBackupStatus backup={backup} acknowledged={backupAcknowledged} onAcknowledge={setBackupAcknowledged} idPrefix="permisos-backup" />
+            <Button variant="destructive" onClick={handleRequestSchoolDeletion} disabled={isRequestingDeletion || !deletionAllowed}>
               {isRequestingDeletion ? 'Enviando...' : 'Solicitar eliminación de la escuela'}
+            </Button>
+          </div>
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">{ACCOUNT_DELETION_TITLE}</p>
+            <p className="text-xs text-muted-foreground">
+              Elimina sólo tu cuenta personal; la escuela y sus datos siguen. Si eres la única persona de la dirección, primero hay que nombrar a otra o solicitar la eliminación de la escuela.
+            </p>
+            <Button asChild variant="outline">
+              <Link to={ACCOUNT_DELETION_PATH}>{ACCOUNT_DELETION_TITLE}</Link>
             </Button>
           </div>
         </div>

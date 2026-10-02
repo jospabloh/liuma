@@ -46,6 +46,7 @@ import {
 } from '../onboarding/joinCode.js';
 import { PRIVACY_NOTICE_VERSION, TERMS_VERSION, CONSENT_SCOPES } from '../consent/privacyNotice.js';
 import { buildTrialSubscription } from '../license/licenseModel.js';
+import { accountDeletedAt, accountDeletionStartedAt } from '../account/accountDeletion.js';
 
 export const APP_ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 export { JOIN_CODE_ALPHABET, JOIN_CODE_LENGTH };
@@ -86,12 +87,22 @@ export function resolveOnboardingProvision({ user, school, role, schoolAdmins = 
 // Build the create/update payload for an onboarding upsert. On an EXISTING
 // profile we never rewrite app_role/status (those are governance-controlled once
 // the profile exists); we only refresh onboarding-owned fields.
-export function buildOnboardingUpsert({ user, schoolId, phone, appRole, status, existingProfile }) {
+/** The consent stamp a profile carries once its ConsentRecord is written —
+ * what schoolRead and the write paths check (profileConsentIsCurrent). */
+export function buildConsentStamp(now = new Date()) {
+  return {
+    consent_notice_version: PRIVACY_NOTICE_VERSION,
+    consent_terms_version: TERMS_VERSION,
+    consent_accepted_at: (now instanceof Date ? now : new Date(now)).toISOString(),
+  };
+}
+
+export function buildOnboardingUpsert({ user, schoolId, phone, appRole, status, existingProfile, now = new Date() }) {
   if (existingProfile) {
     return {
       action: 'update',
       id: existingProfile.id,
-      payload: { phone: phone || '', onboarding_completed: true },
+      payload: { phone: phone || '', onboarding_completed: true, ...buildConsentStamp(now) },
     };
   }
   return {
@@ -104,6 +115,7 @@ export function buildOnboardingUpsert({ user, schoolId, phone, appRole, status, 
       status,
       phone: phone || '',
       onboarding_completed: true,
+      ...buildConsentStamp(now),
     },
   };
 }
@@ -194,6 +206,122 @@ export async function resolveSchoolByCode(sr, rawCode) {
   return null;
 }
 
+// --- Racing a deletion (Codex review of PR #197, round 7) -------------------
+//
+// The deletion markers are checked on the auth.me() snapshot at the top, but
+// deleteMyAccount can set its marker — and finish its clean-up — while this
+// call is still writing. Same compensation as myConsent: re-read the STORED
+// User right before the commit point (the profile write) and right after it;
+// if a marker is set (or the User is gone), undo what THIS call wrote and
+// refuse. A marker written before our post-commit read is seen by it; one
+// written after it comes after our profile exists, and the deletion removes
+// that profile itself (it re-reads profiles after its own marker).
+//
+// The ConsentRecord this call wrote is NOT deleted: consent history is legal
+// evidence the deletion path itself never deletes (Aviso de Privacidad,
+// retention table: "la constancia de tu consentimiento y de su retiro se
+// conserva"). A WITHDRAWN record is appended after it instead, so the newest
+// record for that school is the withdrawal and nothing repairs a stamp from
+// the acceptance. MIRRORED in provisionOnboardingProfile/entry.ts.
+
+function provisionNotFound(e) {
+  return e?.status === 404 || /not found/i.test(String(e?.message ?? ''));
+}
+
+/** 'none' | 'marked' (a marker is set, or the User is gone) | 'unknown'. */
+export async function storedDeletionState(sr, userId) {
+  let row;
+  try {
+    row = await sr.entities.User.get(String(userId));
+  } catch (e) {
+    return provisionNotFound(e) ? 'marked' : 'unknown';
+  }
+  return accountDeletedAt(row) || accountDeletionStartedAt(row) ? 'marked' : 'none';
+}
+
+/** What a profile that could not be deleted is reduced to: no access, no personal data. */
+export const PROFILE_NEUTRALIZED = Object.freeze({
+  status: 'SUSPENDED',
+  phone: '',
+  photo_url: '',
+  pending_notification_recipients: [],
+  consent_notice_version: '',
+  consent_terms_version: '',
+  consent_accepted_at: '',
+});
+
+async function provisionTryTwice(fn) {
+  for (let i = 0; i < 2; i += 1) {
+    try { await fn(); return true; } catch { /* retried once */ }
+  }
+  return false;
+}
+
+/** Undo exactly what this call wrote. Logs (with ids) whatever it could not. */
+export async function compensateOnboarding(sr, { userId, schoolId, role, written, now }) {
+  const failed = [];
+  // Layered (Codex review of PR #197, round 8): a profile that cannot be
+  // deleted is at least SUSPENDED and emptied — it grants nothing and holds
+  // nothing personal — and whatever is still unresolved is persisted for the
+  // owner (ONBOARDING_COMPENSATION_UNRESOLVED), not only logged.
+  const neutralize = (id) => provisionTryTwice(() => sr.entities.UserProfile.update(id, PROFILE_NEUTRALIZED));
+  if (written.createdProfileId) {
+    const id = written.createdProfileId;
+    if (!await provisionTryTwice(() => sr.entities.UserProfile.delete(id)) && !await neutralize(id)) failed.push(`UserProfile ${id}`);
+  }
+  if (written.stampedProfileId) {
+    const id = written.stampedProfileId;
+    const clear = { consent_notice_version: '', consent_terms_version: '' };
+    if (!await provisionTryTwice(() => sr.entities.UserProfile.update(id, clear)) && !await neutralize(id)) failed.push(`UserProfile stamp ${id}`);
+  }
+  if (written.consentWritten) {
+    const withdrawnAt = new Date(Math.max(Date.now(), now.getTime() + 1)).toISOString();
+    const ok = await provisionTryTwice(() => sr.entities.ConsentRecord.create({
+      user_id: userId, school_id: schoolId, app_role: role, event: 'WITHDRAWN',
+      notice_version: PRIVACY_NOTICE_VERSION, terms_version: TERMS_VERSION,
+      accepted_general: false, accepted_sensitive_minor_data: false, accepted_scopes: [],
+      withdrawn_at: withdrawnAt, source: 'onboarding_cancelled',
+    }));
+    if (!ok) failed.push(`ConsentRecord WITHDRAWN for ${schoolId}`);
+  }
+  // A school (and its trial) this call founded, only while nobody else is in it.
+  if (written.createdSchoolId) {
+    let others = null;
+    try {
+      others = await sr.entities.UserProfile.filter({ school_id: written.createdSchoolId });
+    } catch {
+      others = null;
+    }
+    if (others && others.length === 0) {
+      if (written.createdSubId && !await provisionTryTwice(() => sr.entities.SchoolSubscription.delete(written.createdSubId))) failed.push(`SchoolSubscription ${written.createdSubId}`);
+      if (!await provisionTryTwice(() => sr.entities.School.delete(written.createdSchoolId))) failed.push(`School ${written.createdSchoolId}`);
+    } else if (!others) {
+      failed.push(`School ${written.createdSchoolId} (members unreadable)`);
+    }
+  }
+  if (failed.length) {
+    console.error('provisionOnboardingProfile: compensation incomplete', userId, failed.join('; '));
+    const recorded = await provisionTryTwice(() => sr.entities.AuditLog.create({
+      school_id: schoolId || 'unknown',
+      user_id: userId,
+      action: 'ONBOARDING_COMPENSATION_UNRESOLVED',
+      target_type: 'UserProfile',
+      target_id: String(written.createdProfileId || written.stampedProfileId || ''),
+      details: { unresolved: failed, school_created: written.createdSchoolId || null, subscription_created: written.createdSubId || null },
+    }));
+    if (!recorded) console.error('provisionOnboardingProfile: unresolved compensation not recorded', userId, failed.join('; '));
+  }
+  return failed;
+}
+
+async function refuseIfDeleting(sr, { user, schoolId, role, written, now }) {
+  const state = await storedDeletionState(sr, user.id);
+  if (state === 'none') return;
+  await compensateOnboarding(sr, { userId: user.id, schoolId, role, written, now });
+  if (state === 'marked') throw new ProvisionError(403, 'ACCOUNT_DELETION_IN_PROGRESS', 'This account is being deleted');
+  throw new ProvisionError(503, 'ONBOARDING_NOT_CONFIRMED', 'Could not confirm the account; retry');
+}
+
 /**
  * The provisioning algorithm. `sr` = service-role entities client
  * ({ entities: { School, SchoolSubscription, UserProfile, ConsentRecord } }).
@@ -201,6 +329,10 @@ export async function resolveSchoolByCode(sr, rawCode) {
  */
 export async function runOnboardingProvision({ user, body, sr, now = new Date(), userAgent = '', randomBytes }) {
   if (!user?.id) throw new ProvisionError(401, 'UNAUTHENTICATED', 'Unauthorized');
+  if (accountDeletedAt(user)) throw new ProvisionError(410, 'ACCOUNT_DELETED', 'This account was deleted');
+  // Onboarding writes consent: refused while a deletion is under way, like
+  // myConsent (MIRRORS provisionOnboardingProfile/entry.ts).
+  if (accountDeletionStartedAt(user)) throw new ProvisionError(403, 'ACCOUNT_DELETION_IN_PROGRESS', 'This account is being deleted');
   const role = String(body?.role || '');
   if (!APP_ROLES.includes(role)) throw new ProvisionError(400, 'INVALID_ROLE', 'Invalid onboarding role');
   const phone = sanitizePhone(body?.phone);
@@ -212,6 +344,8 @@ export async function runOnboardingProvision({ user, body, sr, now = new Date(),
 
   const myProfiles = await sr.entities.UserProfile.filter({ user_id: user.id });
 
+  // What THIS call wrote, so a race with a deletion undoes exactly that.
+  const written = { createdSchoolId: null, createdSubId: null, consentWritten: false, createdProfileId: null, stampedProfileId: null };
   let school;
   if (role === 'ADMIN') {
     const name = sanitizeSchoolName(body?.newSchool?.name);
@@ -230,6 +364,7 @@ export async function runOnboardingProvision({ user, body, sr, now = new Date(),
         logo_url: sanitizeLogoUrl(body?.newSchool?.logo_url) || undefined,
         is_demo: false,
       });
+      written.createdSchoolId = school?.id || null;
     }
   } else {
     school = await resolveSchoolByCode(sr, body?.joinCode);
@@ -248,26 +383,39 @@ export async function runOnboardingProvision({ user, body, sr, now = new Date(),
 
   if (role === 'ADMIN') {
     const subs = await sr.entities.SchoolSubscription.filter({ school_id: school.id });
-    if (!subs?.length) await sr.entities.SchoolSubscription.create(buildTrialSubscription(school.id, now));
+    if (!subs?.length) {
+      const sub = await sr.entities.SchoolSubscription.create(buildTrialSubscription(school.id, now));
+      written.createdSubId = sub?.id || null;
+    }
   }
 
   // Must land before the profile (the commit point): no record, no onboarding.
   await sr.entities.ConsentRecord.create(buildServerConsentRecord({ user, schoolId: school.id, role, now, userAgent }));
+  written.consentWritten = true;
+
+  // Right before the commit point: a deletion that started meanwhile wins.
+  await refuseIfDeleting(sr, { user, schoolId: school.id, role, written, now });
 
   const existing = myProfiles.find((p) => p.school_id === school.id) || null;
   const upsert = buildOnboardingUpsert({
-    user, schoolId: school.id, phone, appRole: decision.appRole, status: decision.status, existingProfile: existing,
+    user, schoolId: school.id, phone, appRole: decision.appRole, status: decision.status, existingProfile: existing, now,
   });
   let profileId;
   let status = decision.status;
   if (upsert.action === 'update') {
     await sr.entities.UserProfile.update(upsert.id, upsert.payload);
     profileId = upsert.id;
+    written.stampedProfileId = upsert.id;
     status = existing.status || decision.status;
   } else {
     const created = await sr.entities.UserProfile.create(upsert.payload);
     profileId = created?.id || null;
+    written.createdProfileId = profileId;
   }
+
+  // …and right after it: a marker set before this read is seen here; one set
+  // after it finds our profile, which the deletion then removes itself.
+  await refuseIfDeleting(sr, { user, schoolId: school.id, role, written, now });
 
   return { ok: true, profileId, status, schoolId: school.id, schoolName: school.name || '' };
 }

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { notificationService } from '@/lib/notifications/service';
 import { Loader2, School, GraduationCap, Users, ArrowRight, Check, Upload } from 'lucide-react';
 import { extractPaletteFromFile, DEFAULT_THEME } from '@/lib/tenantTheme';
 import { logAuditEvent } from '@/lib/audit';
+import { uploadProblem } from '@/lib/uploads/uploadRules';
 import {
   PRIVACY_NOTICE_VERSION,
   PRIVACY_NOTICE_URL,
@@ -67,6 +68,8 @@ export default function Onboarding({ user, onComplete, onCancel }) {
   // { field: 'schoolCode' | 'newSchoolName' | 'consent' | null, message }
   const [formError, setFormError] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
+  const [logoError, setLogoError] = useState(null);
+  const logoInputRef = useRef(null);
   const [themePreview, setThemePreview] = useState(DEFAULT_THEME);
   const [consent, setConsent] = useState({ general: false, sensitive: false });
 
@@ -150,9 +153,24 @@ export default function Onboarding({ user, onComplete, onCancel }) {
 
 
 
+  const clearLogo = () => {
+    setLogoFile(null);
+    setThemePreview(DEFAULT_THEME);
+    if (logoInputRef.current) logoInputRef.current.value = '';
+  };
+
   const handleLogoChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    // The server (uploadSchoolFile) decides; this only spares a refusal that
+    // would surface after the whole form was filled in.
+    const problem = uploadProblem('school_logo', file);
+    if (problem) {
+      clearLogo();
+      setLogoError(problem);
+      return;
+    }
+    setLogoError(null);
     setLogoFile(file);
     try {
       const extracted = await extractPaletteFromFile(file);
@@ -313,8 +331,23 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                     </div>
                     <div>
                       <Label htmlFor="onb-logo">Logo (opcional)</Label>
-                      <Input id="onb-logo" type="file" accept="image/*" onChange={handleLogoChange} className="mt-1 h-12" aria-describedby="onb-logo-help" />
-                      <p id="onb-logo-help" className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Upload className="w-3 h-3" aria-hidden="true" /> Tomamos los colores de tu logo; puedes ajustarlos abajo.</p>
+                      <Input
+                        id="onb-logo"
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        onChange={handleLogoChange}
+                        className="mt-1 h-12"
+                        aria-invalid={Boolean(logoError)}
+                        aria-describedby={logoError ? 'onb-logo-help onb-logo-error' : 'onb-logo-help'}
+                      />
+                      <p id="onb-logo-help" className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Upload className="w-3 h-3" aria-hidden="true" /> PNG, JPG, WEBP o GIF de hasta 5 MB. Tomamos los colores de tu logo; puedes ajustarlos abajo.</p>
+                      <FieldError id="onb-logo-error" message={logoError} />
+                      {logoFile && (
+                        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={clearLogo}>
+                          Quitar logo
+                        </Button>
+                      )}
                     </div>
                     <div className="rounded-xl border border-border p-3 bg-muted">
                       <p className="text-sm font-medium text-foreground mb-2">Colores de tu escuela</p>
@@ -425,7 +458,7 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                     <Checkbox
                       checked={consent.general}
                       onCheckedChange={(value) => setConsent((c) => ({ ...c, general: value === true }))}
-                      className="mt-0.5"
+                      className="mt-0.5 relative after:absolute after:-inset-[15px]"
                       aria-label="Acepto el Aviso de Privacidad y los Términos del servicio"
                     />
                     <span className="text-sm text-muted-foreground">
@@ -455,7 +488,7 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                     <Checkbox
                       checked={consent.sensitive}
                       onCheckedChange={(value) => setConsent((c) => ({ ...c, sensitive: value === true }))}
-                      className="mt-0.5"
+                      className="mt-0.5 relative after:absolute after:-inset-[15px]"
                       aria-label="Consentimiento expreso de datos sensibles"
                     />
                     <span className="text-sm text-muted-foreground">{sensitiveConsentLabel(formData.role)}</span>

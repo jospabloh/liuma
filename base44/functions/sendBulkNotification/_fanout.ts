@@ -154,9 +154,24 @@ export function paymentLabels(charge: Record<string, unknown> | null | undefined
  * other notice carries the author's name. A director with no name on their
  * account still gets a meaningful line, never an email local part.
  */
-export function emergencyAuthorName(user: { full_name?: unknown } | null | undefined): string {
-  const name = typeof user?.full_name === 'string' ? user.full_name.trim() : '';
-  return (name && !name.includes('@') ? name : 'Dirección de la escuela').slice(0, 200);
+export function emergencyAuthorName(
+  user: { full_name?: unknown; display_name?: unknown; email?: unknown; data?: { display_name?: unknown } | null } | null | undefined,
+): string {
+  // The name the director chose in LIUMA wins (User.display_name, the same
+  // field guardedEntityWrite/_policy.ts#callerDisplayName stamps elsewhere).
+  // A handle is not a name (Codex review of PR #197): same rule as
+  // guardedEntityWrite/_policy.ts#isHandleLikeName, tested on the same cases.
+  const handleLike = (value: string): boolean => {
+    if (!value || value.includes('@')) return true;
+    const local = String(user?.email ?? '').split('@')[0].trim().toLowerCase();
+    if (local && value.toLowerCase() === local) return true;
+    return !/\s/.test(value) && /[.+_\d]/.test(value);
+  };
+  const chosenRaw = typeof user?.display_name === 'string' ? user.display_name : typeof user?.data?.display_name === 'string' ? user.data.display_name : '';
+  const chosen = chosenRaw.replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!handleLike(chosen)) return chosen;
+  const name = typeof user?.full_name === 'string' ? user.full_name.replace(/\s+/g, ' ').trim() : '';
+  return (handleLike(name) ? 'Dirección de la escuela' : name).slice(0, 200);
 }
 
 /**

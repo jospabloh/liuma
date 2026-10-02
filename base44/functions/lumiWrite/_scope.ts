@@ -37,6 +37,8 @@ export type Profile = {
   app_role?: string;
   status?: string;
   onboarding_completed?: boolean;
+  consent_notice_version?: string;
+  consent_terms_version?: string;
   created_date?: string;
 };
 
@@ -72,15 +74,37 @@ export function selectCurrentProfile(profiles: Profile[] = []): Profile | null {
   return eligible[0] || sorted[0] || null;
 }
 
+// The Aviso de Privacidad / Términos versions in force (v1.9.0). MIRRORS
+// src/lib/consent/privacyNotice.js and every other copy under
+// base44/functions/ — tests/unit/consent-gate.test.js fails if any differs.
+export const CONSENT_NOTICE_VERSION = '2026-10-02';
+export const CONSENT_TERMS_VERSION = '2026-10-02';
+
+// Has this profile accepted the CURRENT texts? The stamp is written only by
+// provisionOnboardingProfile and myConsent (service role; UserProfile update
+// is service-role only), right after the ConsentRecord that proves it — so it
+// costs no extra read here: the profile is already loaded.
+export function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
+
 // The selected profile must itself be usable. Returns an error code, or null.
 // The platform owner is NOT exempt: they read inside their own school profile
 // like anyone else (their cross-school screens read the entities directly,
 // under the owner-only RLS).
+//
+// CONSENT_REQUIRED (v1.9.0, owner decision 2026-10-02): accepting the current
+// Aviso de Privacidad and Términos is mandatory to use LIUMA. The app shows a
+// blocking screen (src/components/consent/ConsentGate.jsx), and this is the
+// half a cached bundle or a direct API call cannot skip.
 export function profileProblem(profile: Profile | null): string | null {
   if (!profile) return 'NO_PROFILE';
   if (profile.status !== 'ACTIVE') return 'INACTIVE_PROFILE';
   if (!profile.school_id) return 'NO_SCHOOL';
   if (!ROLES.includes(profile.app_role as Role)) return 'INVALID_ROLE';
+  if (!profileConsentIsCurrent(profile)) return 'CONSENT_REQUIRED';
   return null;
 }
 

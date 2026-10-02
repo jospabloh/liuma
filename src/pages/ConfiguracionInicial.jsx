@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSchoolStudents } from '@/hooks/useSchoolStudents';
 import { percentOfStudentsCovered } from '@/lib/schoolStudents';
 import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
+import { uploadSchoolFile } from '@/lib/uploads/uploadSchoolFile';
+import { humanizeError } from '@/lib/errorMessages';
 
 export default function ConfiguracionInicial() {
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -114,10 +116,14 @@ export default function ConfiguracionInicial() {
     const file = e.target.files[0];
     if (!file) return;
 
+    // Let the same file be chosen again after an error.
+    e.target.value = '';
     setUploadingFile(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      
+      // Through the server, which checks type (by content, not just the
+      // name) and size before storing it (v1.9.0).
+      const file_url = await uploadSchoolFile(base44, { purpose: 'setup_document', file });
+
       const step = steps.find(s => s.id === stepId);
       const existingDocs = step.documents || [];
       
@@ -131,7 +137,7 @@ export default function ConfiguracionInicial() {
       
       toast.success('Documento subido');
     } catch (error) {
-      toast.error('Error al subir documento');
+      toast.error(`Error al subir el documento. ${humanizeError(error)}`);
     }
     setUploadingFile(false);
   };
@@ -524,7 +530,7 @@ export default function ConfiguracionInicial() {
                             type="file"
                             className="hidden"
                             onChange={(e) => handleFileUpload(e, step.id)}
-                            accept=".pdf,.doc,.docx,.jpg,.png"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                           />
                         </label>
                       </div>

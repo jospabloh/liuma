@@ -137,6 +137,7 @@ otra escuela se registra ahí con otro correo.
 | **Calendario Escolar** | `/CalendarioEscolar` | Calendario mensual con eventos de hoy y próximos. | Ver eventos; el **admin** crea/edita/elimina eventos. |
 | **Soporte** | `/Soporte` | Mesa de ayuda: preguntar a Lumi o abrir y seguir tickets. Al crear un ticket, la app adjunta automáticamente el diagnóstico técnico (pantalla, versión, navegador y eventos recientes) — sólo escribes tu problema. | "Preguntar a Lumi"; "Crear ticket"; ver/responder tus tickets. |
 | **Ayuda** | `/Ayuda` | Este manual en versión corta: primeros pasos y guía rápida de tu rol, con buscador. Al pie, el Aviso de Privacidad, los Términos, la versión y el correo de soporte. | Buscar; leer. |
+| **Eliminar mi cuenta y mis datos** | `/EliminarCuenta` | Qué se elimina y qué conserva la escuela; confirmación escribiendo ELIMINAR. La única persona activa de la dirección ve en su lugar la solicitud de eliminación de la escuela. | Eliminar la propia cuenta; volver atrás. |
 | **Historial de Cambios** | `/HistorialCambios` | Resumen en lenguaje sencillo de las novedades recientes de LIUMA, con la versión actual en el pie. | Sólo lectura. |
 
 ---
@@ -315,23 +316,37 @@ con un latido cada 60 segundos.
   (`school_id`).
 - **Datos de alumnos:** padres ven sólo a sus hijos; maestros sólo a los alumnos
   de sus salones; admins a su escuela.
-- **Aviso de Privacidad:** público dentro de la app en
-  [`/aviso-de-privacidad`](/aviso-de-privacidad) (sin sesión, porque quien lo
-  lee todavía no tiene perfil). La escuela es la **responsable** y ACACIA el
-  **encargado**; nombra a los proveedores (Base44 —hosting, datos y correo—,
-  Anthropic para Lumi vía Base44, Mercado Pago sólo para el cobro de la
-  licencia; **no** Resend: LIUMA no lo usa, todo correo sale por
-  `Core.SendEmail` de Base44), la conservación y cómo
-  ejercer los derechos ARCO. **Es un BORRADOR pendiente de revisión legal** y la
-  página lo dice arriba; el texto vive en `src/lib/legal/legalDocs.js`.
-- **Consentimiento (LFPDPPP):** el onboarding pide aceptar el aviso y, para
-  familias, el consentimiento expreso para los datos sensibles de sus hijos; el
-  personal se compromete a tratarlos sólo para el cuidado del alumno. Cada
-  aceptación fija la versión del aviso (`PRIVACY_NOTICE_VERSION`, hoy
-  `2026-09-29-borrador`). **Hoy la única constancia es una fila de `AuditLog`
-  escrita en el mejor esfuerzo:** la entidad `ConsentRecord` que el código
-  intenta usar no existe en Base44, así que esa escritura se omite en silencio.
-  Crearla y escribirla del lado del servidor es trabajo pendiente del onboarding.
+- **Aviso de Privacidad y Términos:** públicos dentro de la app en
+  [`/aviso-de-privacidad`](/aviso-de-privacidad) y [`/terminos`](/terminos)
+  (sin sesión, porque quien los lee todavía no tiene perfil). **Vigentes desde
+  el 2 de octubre de 2026** (versión `2026-10-02`). Identifican a ACACIA (razón
+  social, RFC y domicilio de la sociedad); la escuela es la **responsable** y
+  ACACIA el **encargado** (Base44 y sus proveedores, subencargados). Nombran a
+  los proveedores (Base44 —hosting, datos y correo—; Anthropic, Google y OpenAI
+  como modelos de IA que Base44 elige para Lumi; Mercado Pago sólo para el cobro
+  de la licencia), la tabla de conservación con días, el procedimiento ARCO
+  (20 días hábiles), la revocación y «Eliminar mi cuenta y mis datos». El texto
+  vive en `src/lib/legal/legalDocs.js`; la investigación y sus fuentes, en
+  `docs/legal-research-2026-10.md`.
+- **Consentimiento (LFPDPPP):** el onboarding pide aceptar el aviso y los
+  términos y, para familias, el consentimiento expreso para los datos sensibles
+  de sus hijos; el personal se compromete a tratarlos sólo para el cuidado del
+  alumno. El servidor (`provisionOnboardingProfile`) escribe un
+  `ConsentRecord` con la versión aceptada (`PRIVACY_NOTICE_VERSION`, hoy
+  `2026-10-02`), la fecha y el navegador, y rechaza cualquier otra versión.
+- **Re-aceptación obligatoria (v1.9.0):** quien tiene perfil y no ha aceptado
+  la versión vigente (todas las cuentas creadas antes del 2 de octubre de
+  2026) ve, antes de cualquier pantalla, «Antes de continuar»: los dos
+  documentos, las dos casillas, **Aceptar** y **No acepto**. Aceptar escribe
+  un `ConsentRecord` (`myConsent`); «No acepto» lleva a «Eliminar mi cuenta y
+  mis datos», desde donde puede volver y aceptar. Sin aceptar, el servidor no
+  entrega datos de la escuela (`CONSENT_REQUIRED`).
+- **Eliminar mi cuenta y mis datos** (`/EliminarCuenta`, todos los roles,
+  menú «Mi cuenta»): explica qué se elimina y qué conserva la escuela, pide
+  escribir `ELIMINAR` y cierra la sesión. La única persona activa de la
+  dirección no puede eliminar su cuenta: la pantalla le ofrece descargar los
+  datos de la escuela y solicitar la eliminación de la escuela o que se nombre
+  a otra persona de la dirección.
 
 ---
 

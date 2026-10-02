@@ -66,13 +66,13 @@ export default function Ayuda() {
 
         <footer className="pt-4 text-center text-xs text-muted-foreground space-y-1.5">
           <p>
-            <Link to={PRIVACY_NOTICE_PATH} className="underline">Aviso de Privacidad</Link>
+            <Link to={PRIVACY_NOTICE_PATH} className="underline coarse:inline-flex coarse:min-h-11 coarse:items-center">Aviso de Privacidad</Link>
             {' · '}
-            <Link to={SERVICE_TERMS_PATH} className="underline">Términos del servicio</Link>
+            <Link to={SERVICE_TERMS_PATH} className="underline coarse:inline-flex coarse:min-h-11 coarse:items-center">Términos del servicio</Link>
             {' · '}
-            <Link to={createPageUrl('HistorialCambios')} className="underline">Historial de cambios</Link>
+            <Link to={createPageUrl('HistorialCambios')} className="underline coarse:inline-flex coarse:min-h-11 coarse:items-center">Historial de cambios</Link>
           </p>
-          <p>Soporte: <a href={`mailto:${SUPPORT_EMAIL}`} className="underline">{SUPPORT_EMAIL}</a></p>
+          <p>Soporte: <a href={`mailto:${SUPPORT_EMAIL}`} className="underline coarse:inline-flex coarse:min-h-11 coarse:items-center">{SUPPORT_EMAIL}</a></p>
           <p>LIUMA {APP_VERSION} · {RELEASE_DATE} · un producto de ACACIA</p>
         </footer>
       </div>

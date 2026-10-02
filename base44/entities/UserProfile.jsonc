@@ -90,6 +90,40 @@
         "write": false
       }
     },
+    "consent_notice_version": {
+      "type": "string",
+      "description": "Versión del Aviso de Privacidad que esta persona aceptó para esta escuela (v1.9.0). La escriben sólo provisionOnboardingProfile y myConsent, DESPUÉS del ConsentRecord que lo prueba; deleteMyAccount la vacía al retirar el consentimiento. schoolRead, guardedEntityWrite, guardedFamilyWrite, Lumi, listSchoolMembers, approveProfile y governRoleChange responden CONSENT_REQUIRED si no es la vigente.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "consent_terms_version": {
+      "type": "string",
+      "description": "Versión de los Términos del servicio aceptada, junto con consent_notice_version. Mismas reglas.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "consent_accepted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Cuándo se aceptó (reloj del servidor). Mismas reglas.",
+      "rls": {
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
     "is_super_admin": {
       "type": "boolean",
       "default": false,

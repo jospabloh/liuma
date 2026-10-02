@@ -9,13 +9,13 @@ import {
   PRIVACY_NOTICE_STATUS,
   SERVICE_TERMS_PATH,
   SERVICE_TERMS_VERSION,
-  legalTextIsDraft,
 } from '../../src/lib/consent/privacyNotice.js';
 import {
   PRIVACY_NOTICE,
   SERVICE_TERMS,
   DATA_PROCESSORS,
   processorNames,
+  legalDocumentText,
 } from '../../src/lib/legal/legalDocs.js';
 import { TRIAL_DURATION_DAYS, PLAN_TIERS, PLAN_CATALOG } from '../../src/lib/license/licenseModel.js';
 import { HELP_SECTIONS, filterHelpSections, normalizeForSearch } from '../../src/lib/help/helpContent.js';
@@ -24,13 +24,8 @@ import { getDestinations, ROLES } from '../../src/components/nav/navRegistry.js'
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8');
 
-function docText(doc) {
-  return [
-    doc.title,
-    ...doc.summary,
-    ...doc.sections.flatMap((s) => [s.heading, ...(s.paragraphs || []), ...(s.items || []), s.closing || '']),
-  ].join('\n');
-}
+// Everything a reader sees, tables and processor cards included.
+const docText = legalDocumentText;
 
 // ── The consent link must land on a page that exists ─────────────────────────
 // The audit's critical finding: the LFPDPPP checkbox linked to a URL that fell
@@ -57,28 +52,22 @@ test('App.jsx mounts the legal pages publicly, before the auth/profile gate', ()
   assert.doesNotMatch(pagesConfig, /aviso-de-privacidad|LegalDocumentPage/);
 });
 
-// ── Draft status is visible, and pinned by the version string ────────────────
+// ── Final status, pinned by the version string ───────────────────────────────
 
-test('while unreviewed, the legal texts are flagged as BORRADOR everywhere', () => {
-  assert.equal(PRIVACY_NOTICE_STATUS, 'borrador', 'flip to vigente only after legal sign-off');
-  assert.equal(legalTextIsDraft(), true);
-  assert.equal(PRIVACY_NOTICE.isDraft, true);
-  assert.equal(SERVICE_TERMS.isDraft, true);
+test('the legal texts are vigente, and the page shows the date they took effect', () => {
+  assert.equal(PRIVACY_NOTICE_STATUS, 'vigente');
   // The version is what onboarding shows next to the checkbox and what every
-  // consent row pins, so a consent given to the draft stays identifiable.
-  assert.match(PRIVACY_NOTICE_VERSION, /-borrador$/);
-  assert.match(SERVICE_TERMS_VERSION, /-borrador$/);
+  // consent row pins: a consent given to the 2026-09-29 draft stays identifiable.
+  assert.doesNotMatch(PRIVACY_NOTICE_VERSION, /borrador/);
+  assert.doesNotMatch(SERVICE_TERMS_VERSION, /borrador/);
+  assert.notEqual(PRIVACY_NOTICE_VERSION, '2026-09-29-borrador');
   const page = read('src/components/legal/LegalDocumentPage.jsx');
-  assert.match(page, /doc\.isDraft && \(/);
-  assert.match(page, /BORRADOR pendiente de revisión legal/);
-  assert.ok(PRIVACY_NOTICE.reviewNotes.length > 0 && SERVICE_TERMS.reviewNotes.length > 0);
-});
-
-test('a reviewed ("vigente") notice must not keep the -borrador version suffix', () => {
-  // Guards the release step: flipping the status without bumping the version
-  // would make post-review consents indistinguishable from draft ones.
-  if (!legalTextIsDraft()) assert.doesNotMatch(PRIVACY_NOTICE_VERSION, /borrador/);
-  assert.equal(legalTextIsDraft('vigente'), false);
+  assert.doesNotMatch(page, /isDraft|reviewNotes|BORRADOR/);
+  assert.match(page, /Vigente desde el \{doc\.effectiveDate\}/);
+  assert.equal(PRIVACY_NOTICE.effectiveDate, '2 de octubre de 2026');
+  assert.equal(SERVICE_TERMS.effectiveDate, '2 de octubre de 2026');
+  assert.equal(PRIVACY_NOTICE.reviewNotes, undefined);
+  assert.equal(SERVICE_TERMS.reviewNotes, undefined);
 });
 
 // ── What the privacy notice has to say ───────────────────────────────────────

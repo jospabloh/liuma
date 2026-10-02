@@ -2048,3 +2048,40 @@ salida es un borrador que el usuario edita).
 Sólo frontend: `npm run deploy:site`. **No verificado:** en vivo contra
 respuestas nuevas del modelo; el filtro sólo conoce las formas vistas en QA y
 sus variantes cercanas, el prompt sigue siendo la primera línea.
+
+## Textos legales vigentes (v1.9.0, 2026-10-02)
+
+El Aviso de Privacidad y los Términos dejaron de ser borrador: `vigente`,
+versión `2026-10-02`, por decisión del dueño (asume el riesgo de publicarlos sin
+abogado externo). Fuentes y artículos de cada cláusula en
+`docs/legal-research-2026-10.md`; `docs/aviso-de-privacidad.md` ya sólo apunta
+a `src/lib/legal/legalDocs.js`, que sigue siendo la única fuente.
+
+- **Identidad:** `ACACIA_LEGAL_IDENTITY` (razón social, RFC y domicilio de la
+  sociedad, de su Constancia de Situación Fiscal) se escribe una sola vez; todo
+  lo demás la lee. **Nunca** el RFC, la CURP ni el domicilio de una persona
+  física: `legal-final.test.js` busca esos patrones.
+- **Versiones:** `PRIVACY_NOTICE_VERSION` = `SERVICE_TERMS_VERSION`, copiadas
+  en `provisionOnboardingProfile/entry.ts`. Cambiar el texto es subir las tres;
+  si el servidor queda atrás, todo onboarding nuevo responde 409.
+- **Cada entidad está declarada:** `ENTITY_DATA_CATEGORIES` mapea cada archivo
+  de `base44/entities/` a la frase del aviso que la describe. Una entidad nueva
+  hace fallar la prueba hasta que el aviso la cuente.
+- **IA y Base44:** Base44 publica que, fuera de su plan Enterprise, puede usar
+  los datos de las apps (incluida información personal) para entrenar modelos.
+  El borrador prometía lo contrario; el texto vigente lo **informa**, gobernado
+  por `BASE44_AI_TRAINING_EXCLUDED = false`. Pásalo a `true` sólo con evidencia
+  (plan Enterprise o exclusión por escrito) y sube la versión. Lumi corre en
+  `"model": "automatic"`, por eso se nombran Anthropic, Google y OpenAI; si se
+  fija un modelo, la prueba pide ajustar `AI_MODEL_PROVIDERS`.
+- **Conservación:** `RETENTION_TABLE` da días y fundamento por categoría. Los
+  plazos que no hace cumplir el código (auditoría a 730 días, supresión 30 días
+  después de los 45 de descarga) los ejecuta ACACIA a mano desde Mission
+  Control: es un compromiso operativo, no un cron.
+- **«Eliminar mi cuenta y mis datos»** lo describe el aviso y lo construye el
+  paquete de consentimiento: tienen que salir en el mismo despliegue.
+
+Sólo frontend + una constante de función: `npm run deploy`
+(`provisionOnboardingProfile`) **y** `npm run deploy:site` en la misma ventana —
+con el sitio nuevo y la función vieja (o al revés) el onboarding responde 409
+`CONSENT_VERSION_MISMATCH`.

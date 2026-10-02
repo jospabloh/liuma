@@ -23,6 +23,7 @@ import {
   UPLOAD_AUDIT_TARGET,
   uploadDayKey,
   mexicoDayKey,
+  isDefinitiveRefusal,
 } from '../../base44/functions/uploadSchoolFile/_upload.ts';
 import { makeFakeMongoDb } from '../fixtures/fake-mongo-db.js';
 import { selectCurrentProfile as readSelect, profileProblem as readProblem } from '../../base44/functions/schoolRead/_scope.ts';
@@ -218,13 +219,34 @@ test('the slot is reserved BEFORE storing; no reservation, no upload (fail close
   assert.match(humanizeError(Object.assign(new Error('x'), { data: { code: 'UPLOAD_QUOTA_UNAVAILABLE' } })), /No se pudo preparar la subida/);
 });
 
-test('a failed upload gives its slot back; a failed URL note does not undo the count', async () => {
+// Codex review of PR #197, round 5: a failure is only a no-op when it is a
+// definite refusal. A timeout, a 5xx, a dropped connection or an answer with
+// no URL may have stored the file — that claim keeps counting.
+test('a DEFINITE provider refusal gives the slot back; an ambiguous failure keeps counting', async () => {
+  const tables = quotaWorld(DAILY_UPLOAD_LIMIT - 5);
+  const refused = await runQuota(makeFakeMongoDb(tables, { idPrefix: 'a' }), async () => { throw Object.assign(new Error('bad file'), { response: { status: 400 } }); });
+  assert.deepEqual([refused.status, refused.body.code], [502, 'UPLOAD_FAILED']);
+  assert.equal(tables.AuditLog.length, DAILY_UPLOAD_LIMIT - 5, 'a 400 stored nothing: slot given back');
+  for (const [prefix, upload] of [
+    ['b', async () => { throw new Error('socket hang up'); }],
+    ['c', async () => { throw Object.assign(new Error('gateway'), { status: 502 }); }],
+    ['d', async () => { throw Object.assign(new Error('slow'), { status: 408 }); }],
+    ['e', async () => { throw Object.assign(new Error('busy'), { status: 429 }); }],
+    ['f', async () => ''],
+  ]) {
+    const before = tables.AuditLog.length;
+    const r = await runQuota(makeFakeMongoDb(tables, { idPrefix: prefix }), upload);
+    assert.equal(r.body.code, 'UPLOAD_FAILED', prefix);
+    assert.equal(tables.AuditLog.length, before + 1, `${prefix}: may have been stored, so it counts`);
+  }
+  assert.equal(tables.AuditLog.length, DAILY_UPLOAD_LIMIT, 'the ambiguous ones filled the cap');
+  assert.equal((await runQuota(makeFakeMongoDb(tables, { idPrefix: 'g' }), async () => 'https://cdn.base44.app/f/w.pdf')).body.code, 'UPLOAD_DAILY_LIMIT');
+  assert.equal(isDefinitiveRefusal({ status: 413 }), true);
+  for (const e of [null, {}, new Error('x'), { status: 500 }, { response: { status: 503 } }, { status: 408 }, { status: 429 }]) assert.equal(isDefinitiveRefusal(e), false, JSON.stringify(e));
+});
+
+test('a failed URL note does not undo the count', async () => {
   const tables = quotaWorld(DAILY_UPLOAD_LIMIT - 1);
-  const failed = await runQuota(makeFakeMongoDb(tables, { idPrefix: 'a' }), async () => { throw new Error('storage down'); });
-  assert.deepEqual([failed.status, failed.body.code], [502, 'UPLOAD_FAILED']);
-  const empty = await runQuota(makeFakeMongoDb(tables, { idPrefix: 'b' }), async () => '');
-  assert.equal(empty.body.code, 'UPLOAD_FAILED');
-  assert.equal(tables.AuditLog.length, DAILY_UPLOAD_LIMIT - 1, 'both claims released');
   // The last slot still works, even when adding the URL to the claim fails:
   // the claim already counts.
   const ok = await runQuota(makeFakeMongoDb(tables, { idPrefix: 'c', failOn: { entity: 'AuditLog', op: 'update', message: 'boom' } }), async () => 'https://cdn.base44.app/f/z.pdf');

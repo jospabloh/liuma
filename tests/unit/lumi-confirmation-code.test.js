@@ -10,6 +10,7 @@ import {
   confirmationCode,
   errorMessage,
   releaseConfirmationCode,
+  writeRefusedBeforeWrite,
 } from '../../base44/functions/lumiWrite/_lumiCore.ts';
 
 // v1.9.0 (server-minor). lumiWrite's confirmation code was a digest of
@@ -96,13 +97,30 @@ test('Lumi gets a Spanish reason it can relay for both refusals', () => {
   assert.match(agent.instructions, /El código sirve una sola vez y caduca a los 10 minutos/);
 });
 
-test('lumiWrite: check → claim → write, and every failed write releases the claim', () => {
+// Codex review of PR #197, round 5: the code was given back on ANY failure,
+// but a timeout or a 5xx may have saved the record — a second commit with the
+// same code would then repeat it. Only a definite refusal gives it back.
+test('only a definite pre-write refusal gives the code back; an ambiguous failure keeps it used', () => {
+  const refused = (status, code) => ({ response: { status, data: code ? { ok: false, code } : undefined } });
+  for (const e of [refused(403, 'FORBIDDEN'), refused(403, 'WRITE_BLOCKED'), refused(400, 'BAD_STATUS'), refused(409, 'ALREADY_EXISTS'), { status: 404, data: { code: 'NOT_FOUND' } }]) {
+    assert.equal(writeRefusedBeforeWrite(e).refused, true, JSON.stringify(e));
+  }
+  for (const e of [new Error('socket hang up'), null, refused(500, 'INTERNAL'), refused(502), refused(503, 'X'), refused(429, 'RATE_LIMITED'), refused(408, 'TIMEOUT'), refused(403)]) {
+    assert.equal(writeRefusedBeforeWrite(e).refused, false, JSON.stringify(e));
+  }
+  assert.match(errorMessage('WRITE_UNCERTAIN'), /No sé si el cambio se guardó[\s\S]*Revisa la pantalla/);
+});
+
+test('lumiWrite: check → claim → write; the claim is released only after a definite refusal', () => {
   const src = read('base44/functions/lumiWrite/entry.ts');
   const check = src.indexOf('await checkConfirmationCode(');
   const claim = src.indexOf('await claimConfirmationCode(');
   const write = src.indexOf("functions.invoke('guardedEntityWrite'");
   assert.ok(check > 0 && check < claim && claim < write, 'the code is checked and claimed before anything is written');
-  assert.equal((src.match(/await releaseConfirmationCode\(sr, claimId\)/g) || []).length, 2, 'both failure paths release');
+  assert.equal((src.match(/await releaseConfirmationCode\(sr, claimId\)/g) || []).length, 1, 'one release, on one path');
+  const handler = src.slice(src.indexOf('const verdict = writeRefusedBeforeWrite(e);'));
+  assert.ok(handler.indexOf("if (!verdict.refused) return fail(502, 'WRITE_UNCERTAIN');") < handler.indexOf('await releaseConfirmationCode(sr, claimId)'), 'ambiguous failures return before releasing');
+  assert.match(src, /if \(!record\?\.id\) return fail\(502, 'WRITE_UNCERTAIN'\);/, 'an answer without a record keeps the code used too');
   assert.match(src, /confirmation_expires_in_minutes: CONFIRMATION_TTL_SECONDS \/ 60/);
   assert.doesNotMatch(src, /day: today/, 'the old per-day code is gone');
 });

@@ -671,6 +671,68 @@ test('a director who loses the seat but cannot clear its own mark is told it is 
   assert.match(read('src/pages/EliminarCuenta.jsx'), /deletionErrorMessage\(code, \{ blocked: functionErrorBody\(e\)\?\.blocked === true \}\)/);
 });
 
+// Codex review of PR #197, round 5: a failed write is not proof nothing was
+// written. The reservation write may commit and lose its answer; giving the
+// seat back then would let a retry skip the check while the other director
+// leaves too.
+function reservationWriteFails(tables, { commits, getFails = false }) {
+  const db = makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } });
+  const update = db.entities.User.update;
+  const get = db.entities.User.get;
+  let attempted = false;
+  db.entities.User.update = async (id, patch) => {
+    if ('account_deletion_reserved_at' in patch) {
+      attempted = true;
+      if (commits) await update(id, patch);
+      throw new Error('socket hang up');
+    }
+    return update(id, patch);
+  };
+  // The read-back after the failed write fails too (the earlier reads work).
+  db.entities.User.get = async (id) => {
+    if (getFails && attempted) throw new Error('socket hang up');
+    return get(id);
+  };
+  return db;
+}
+
+test('the reservation committed but its answer was lost: the deletion carries on, the seat stays taken', async () => {
+  const { tables } = twoDirectors();
+  const r = await del(reservationWriteFails(tables, { commits: true }), USERS.admin);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-admin'), false);
+  assert.equal(tables.UserProfile.filter((p) => p.school_id === 'sA' && p.app_role === 'ADMIN' && p.status === 'ACTIVE').length, 1);
+  // The other director cannot leave now.
+  const other = await del(makeFakeMongoDb(tables, { idPrefix: 'o' }), USERS.admin2);
+  assert.equal(other.body.code, 'SOLE_ADMIN');
+});
+
+test('the reservation provably absent: the seat and the mark are given back', async () => {
+  const { tables } = twoDirectors();
+  const r = await del(reservationWriteFails(tables, { commits: false }), USERS.admin);
+  assert.deepEqual([r.status, r.body.code], [503, 'DELETION_NOT_STARTED']);
+  const me = tables.User.find((u) => u.id === 'u-admin');
+  assert.equal(me.account_deletion_started_at, '');
+  assert.equal(me.account_deletion_reserved_at, undefined);
+  assert.equal(tables.AuditLog.some((x) => x.target_type === 'AccountDeletionClaim' && x.user_id === 'u-admin'), false);
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-admin'), true, 'nothing destructive');
+});
+
+test('the reservation cannot be read back: the claim is KEPT (the other director is refused), and a retry finishes', async () => {
+  const { tables } = twoDirectors();
+  const r = await del(reservationWriteFails(tables, { commits: true, getFails: true }), USERS.admin);
+  assert.deepEqual([r.status, r.body.code], [503, 'DELETION_NOT_STARTED']);
+  assert.ok(tables.AuditLog.some((x) => x.target_type === 'AccountDeletionClaim' && x.user_id === 'u-admin'), 'claim kept');
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-admin'), true, 'nothing destructive');
+  const other = await del(makeFakeMongoDb(tables, { idPrefix: 'o' }), USERS.admin2);
+  assert.equal(other.body.code, 'SOLE_ADMIN', 'the school is never left empty');
+  // Its own retry (the reservation was in fact stored) finishes.
+  const me = tables.User.find((u) => u.id === 'u-admin');
+  const retry = await del(makeFakeMongoDb(tables, { idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.admin, ...me });
+  assert.equal(retry.status, 200, JSON.stringify(retry.body));
+  assert.equal(tables.UserProfile.filter((p) => p.school_id === 'sA' && p.app_role === 'ADMIN' && p.status === 'ACTIVE').length, 1);
+});
+
 test('only the RESERVATION skips the director check on a retry, not the started mark', async () => {
   const { tables } = twoDirectors();
   // Started but never reserved (its claim phase was cut short).

@@ -343,6 +343,18 @@ function isRateLimit(e: unknown): boolean {
 
 export type QuotaResult = { status: number; body: Record<string, unknown> };
 
+/**
+ * Did the call fail with an explicit refusal, before anything was stored?
+ * Only a 4xx answer counts — not 408 (timeout) or 429 (rate limit), which
+ * say nothing about whether the work was done. No status at all (network,
+ * thrown inside the SDK) is ambiguous too.
+ */
+export function isDefinitiveRefusal(e: unknown): boolean {
+  const err = e as { status?: unknown; response?: { status?: unknown } } | null;
+  const status = Number(err?.response?.status ?? err?.status);
+  return Number.isInteger(status) && status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
 const refuse = (status: number, code: string): QuotaResult => ({ status, body: { ok: false, code, error: code } });
 
 async function releaseClaim(sr: Db, claimId: string): Promise<void> {
@@ -361,7 +373,8 @@ async function releaseClaim(sr: Db, claimId: string): Promise<void> {
  *      cannot be written there is no upload (503 UPLOAD_QUOTA_UNAVAILABLE).
  *   2. rank it among today's rows; past DAILY_UPLOAD_LIMIT, the claim is
  *      released and the request refused (429 UPLOAD_DAILY_LIMIT).
- *   3. upload; on failure the claim is released (502 UPLOAD_FAILED).
+ *   3. upload; on a DEFINITE refusal (4xx) the claim is released; on an
+ *      ambiguous failure it keeps counting (502 UPLOAD_FAILED either way).
  *   4. the claim becomes the record of the upload (URL added, best-effort:
  *      it already counts and already says who uploaded what for what).
  */
@@ -415,14 +428,20 @@ export async function uploadWithinDailyLimit({ sr, user, schoolId, purpose, file
   }
 
   let url = '';
+  let refusedByProvider = false;
   try {
     url = await upload();
   } catch (e) {
     console.error('uploadSchoolFile upload failed', (e as Error)?.message);
+    refusedByProvider = isDefinitiveRefusal(e);
     url = '';
   }
   if (!url) {
-    await releaseClaim(sr, claimId);
+    // Give the slot back only when the provider DEFINITELY refused (an
+    // explicit 4xx). A timeout, a 5xx, a dropped connection or an answer
+    // without a URL may have stored the file anyway (Codex review of PR #197,
+    // round 5): the claim keeps counting, so the cap errs toward refusing.
+    if (refusedByProvider) await releaseClaim(sr, claimId);
     return refuse(502, 'UPLOAD_FAILED');
   }
 

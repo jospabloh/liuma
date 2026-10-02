@@ -42,6 +42,7 @@ import {
   selectCurrentProfile, profileProblem, canWriteKind, WRITE_KINDS,
   mexicoToday, validateWrite, confirmationCode, describeWrite, fullName, errorMessage, label,
   checkConfirmationCode, claimConfirmationCode, releaseConfirmationCode, CONFIRMATION_TTL_SECONDS,
+  writeRefusedBeforeWrite,
 } from './_lumiCore.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -173,18 +174,19 @@ Deno.serve(async (req) => {
         record = unwrap(await base44.functions.invoke('guardedEntityWrite', payload)).record || null;
       }
     } catch (e) {
-      // Nothing was written: give the code back so a retry within its 10
-      // minutes works (a retry is safe — attendance updates in place, a
-      // second bitácora is refused as ALREADY_EXISTS).
+      // Give the code back ONLY on a definite refusal before writing (a 4xx
+      // with an error code): then a retry within its 10 minutes works. Any
+      // other failure may have saved the record — the code stays used, and
+      // Lumi says to check the screen before asking again.
+      const verdict = writeRefusedBeforeWrite(e);
+      if (!verdict.refused) return fail(502, 'WRITE_UNCERTAIN');
       await releaseConfirmationCode(sr, claimId);
       const err = invokeError(e);
       const denied = ['FORBIDDEN', 'WRITE_BLOCKED', 'STUDENT_NOT_IN_SCHOOL', 'NO_PROFILE'].includes(String(err.code));
       return fail(denied ? 403 : 502, err.code === 'WRITE_BLOCKED' || err.code === 'FORBIDDEN' ? err.code : 'WRITE_FAILED');
     }
-    if (!record?.id) {
-      await releaseConfirmationCode(sr, claimId);
-      return fail(502, 'WRITE_FAILED');
-    }
+    // An answer without the saved record: it may have been saved anyway.
+    if (!record?.id) return fail(502, 'WRITE_UNCERTAIN');
 
     // Parent email, same function and same conditions as the app's own pages:
     // an absence always notifies (notifyParents is idempotent per record), a

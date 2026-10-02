@@ -315,6 +315,8 @@ async function reserveDirectorSeats(sr: Db, userId: string, profiles: Profile[])
   // the marker (so I can use the app again). Retried; a marker that cannot
   // be cleared leaves the person blocked, and the answer says so.
   for (const id of myClaims) await tryTwice(() => sr.entities.AuditLog.delete(id));
+  // …and any claim an earlier, unfinished attempt kept (see step 0b).
+  await tryTwice(() => sr.entities.AuditLog.deleteMany({ target_type: DELETION_CLAIM_TARGET, user_id: userId }));
   const unblocked = await tryTwice(() => sr.entities.User.update(userId, { account_deletion_started_at: '' }));
   if (unreadable && !lost.length) {
     return fail(503, 'DELETION_NOT_STARTED', 'The directors of your school could not be checked; nothing was changed, retry', { blocked: !unblocked });
@@ -471,12 +473,31 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
     try {
       await sr.entities.User.update(userId, { account_deletion_reserved_at: nowIso });
     } catch (e) {
-      // Without the durable reservation a retry would re-judge a seat others
-      // already counted as gone: give it back and start over.
-      await sr.entities.AuditLog.deleteMany({ target_type: DELETION_CLAIM_TARGET, user_id: userId }).catch(() => null);
-      await sr.entities.User.update(userId, { account_deletion_started_at: '' }).catch(() => null);
-      if (isRateLimit(e)) throw e;
-      return fail(503, 'DELETION_NOT_STARTED', 'The deletion could not be started; nothing was changed, retry');
+      // A failed write may still have been stored (response lost). Giving the
+      // seat back while the reservation exists would let a later retry skip
+      // the check AND let the other director leave too (Codex review of PR
+      // #197, round 5). So re-read: stored → carry on; proven absent → give
+      // the claim and the marker back; unreadable → keep the claim (the other
+      // director is refused meanwhile; the school is never left empty) and
+      // ask for a retry, which re-runs the check.
+      let stored: boolean | null = null;
+      try {
+        const row = await sr.entities.User.get(userId);
+        stored = Boolean(deletionReservedAt(row));
+      } catch {
+        stored = null;
+      }
+      if (stored === null) {
+        if (isRateLimit(e)) throw e;
+        return fail(503, 'DELETION_NOT_STARTED', 'The deletion could not be started; retry');
+      }
+      if (!stored) {
+        await sr.entities.AuditLog.deleteMany({ target_type: DELETION_CLAIM_TARGET, user_id: userId }).catch(() => null);
+        await sr.entities.User.update(userId, { account_deletion_started_at: '' }).catch(() => null);
+        if (isRateLimit(e)) throw e;
+        return fail(503, 'DELETION_NOT_STARTED', 'The deletion could not be started; nothing was changed, retry');
+      }
+      // Stored: the reservation is real; proceed as if the write had answered.
     }
   }
 

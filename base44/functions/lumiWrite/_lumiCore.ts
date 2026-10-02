@@ -630,6 +630,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   FORBIDDEN: 'La escuela te quitó el permiso para registrar esto.',
   WRITE_BLOCKED: 'La licencia de la escuela está en modo solo lectura; no se pueden registrar cambios.',
   WRITE_FAILED: 'No se pudo guardar. Intenta desde la pantalla correspondiente o crea un ticket en Soporte.',
+  WRITE_UNCERTAIN: 'No sé si el cambio se guardó: la conexión falló a medio camino. Revisa la pantalla correspondiente (Asistencia o Bitácora) antes de pedírmelo otra vez; si no aparece, pídemelo de nuevo y te daré un código nuevo.',
   BAD_DATE: 'La fecha no es válida.',
   FUTURE_DATE: 'No se puede registrar una fecha futura.',
   DATE_TOO_OLD: `Sólo se pueden registrar fechas de los últimos ${MAX_BACKDATE_DAYS} días.`,
@@ -637,6 +638,24 @@ export const ERROR_MESSAGES: Record<string, string> = {
   MISSING_NOTES: 'La bitácora necesita al menos las notas del día.',
   ASK_SEND_TO_PARENTS: 'Pregunta si la bitácora se envía a la familia (sí o no).',
 };
+
+/**
+ * Was a guardedEntityWrite call DEFINITELY refused before it wrote anything?
+ * Only a 4xx answer whose body names an error code (FORBIDDEN, WRITE_BLOCKED,
+ * BAD_…): then the single-use confirmation code can be given back. A
+ * timeout, a 5xx, a rate limit or no answer at all may have saved the record
+ * (Codex review of PR #197, round 5) — the code stays used and Lumi says to
+ * check before asking again.
+ */
+export function writeRefusedBeforeWrite(e: unknown): { refused: boolean; code: string } {
+  // deno-lint-ignore no-explicit-any
+  const err = e as any;
+  const status = Number(err?.response?.status ?? err?.status);
+  const body = err?.response?.data ?? err?.data;
+  const code = typeof body?.code === 'string' ? body.code : '';
+  const refused = Number.isInteger(status) && status >= 400 && status < 500 && status !== 408 && status !== 429 && code !== '';
+  return { refused, code };
+}
 
 export function errorMessage(code: string): string {
   if (ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];

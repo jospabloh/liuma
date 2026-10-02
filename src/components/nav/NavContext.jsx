@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import CommandPalette from './CommandPalette.jsx';
+import DisplayNameDialog from '@/components/account/DisplayNameDialog';
 import { selectCurrentUserProfile } from '@/lib/tenantSelection';
+import { shouldPromptForName } from '@/lib/userDisplayName';
 
 /**
  * Shared navigation state so the command palette can be opened from anywhere —
@@ -42,6 +44,23 @@ export function NavProvider({ children }) {
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const closePalette = useCallback(() => setPaletteOpen(false), []);
 
+  // "¿Cómo te llamas?": asked once, by itself, to an ACTIVE member whose
+  // account has no real name (full_name empty or an email handle — live QA
+  // of v1.8.5 greeted "Hola, h.josepablo+qa-padre"), then reachable from the
+  // account menu as an edit. Not on the login, onboarding or pending screens:
+  // `role` is null there.
+  const [nameDialog, setNameDialog] = useState(null); // null | 'prompt' | 'edit'
+  const openNameDialog = useCallback(() => setNameDialog('edit'), []);
+  // At most once per page load; "Ahora no" is also stored per user.
+  const askedForName = useRef(false);
+  useEffect(() => {
+    if (askedForName.current || !role || nameDialog !== null) return;
+    if (shouldPromptForName(user)) {
+      askedForName.current = true;
+      setNameDialog('prompt');
+    }
+  }, [role, user, nameDialog]);
+
   // ⌘K / Ctrl+K toggles the palette from anywhere.
   useEffect(() => {
     const onKey = (e) => {
@@ -55,9 +74,17 @@ export function NavProvider({ children }) {
   }, []);
 
   return (
-    <NavContext.Provider value={{ role, user, profile, paletteOpen, openPalette, closePalette }}>
+    <NavContext.Provider value={{ role, user, profile, paletteOpen, openPalette, closePalette, openNameDialog }}>
       {children}
-      {role && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} role={role} />}
+      {role && <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} role={role} onEditName={openNameDialog} />}
+      {role && user && (
+        <DisplayNameDialog
+          open={nameDialog !== null}
+          onOpenChange={(next) => { if (!next) setNameDialog(null); }}
+          user={user}
+          mode={nameDialog === 'prompt' ? 'prompt' : 'edit'}
+        />
+      )}
     </NavContext.Provider>
   );
 }
@@ -76,6 +103,7 @@ export function useNav() {
       paletteOpen: false,
       openPalette: () => {},
       closePalette: () => {},
+      openNameDialog: () => {},
     }
   );
 }

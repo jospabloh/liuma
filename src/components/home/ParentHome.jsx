@@ -16,6 +16,7 @@ import { selectOverdueCharges, UNPAID_CHARGE_STATUSES } from '@/lib/payments/ove
 import LoadError from '@/components/ui/LoadError';
 import { blockingLoadFailure } from '@/lib/loadFailure';
 import { unreadNoticeCount } from '@/lib/notifications/inbox';
+import { greetingFor } from '@/lib/userDisplayName';
 
 export default function ParentHome({ user, userProfile, subscription }) {
   const today = schoolToday();
@@ -102,7 +103,7 @@ export default function ParentHome({ user, userProfile, subscription }) {
     <div className="min-h-screen bg-background">
       <HomeHeader
         eyebrow={format(schoolTodayDate(), "EEEE d 'de' MMMM", { locale: es })}
-        title={`Hola, ${user.full_name?.split(' ')[0] || 'Padre'}`}
+        title={greetingFor(user)}
       />
 
       {/* Main Content */}

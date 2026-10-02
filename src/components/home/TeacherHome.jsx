@@ -16,6 +16,7 @@ import LoadError from '@/components/ui/LoadError';
 import { blockingLoadFailure } from '@/lib/loadFailure';
 import { unreadNoticeCount } from '@/lib/notifications/inbox';
 import { countLabel } from '@/lib/spanishText';
+import { greetingFor } from '@/lib/userDisplayName';
 
 // `events`: upcoming events the server already limited to the school-wide
 // ones and this teacher's classrooms (read with the rest of the home lists).
@@ -127,7 +128,7 @@ export default function TeacherHome({ user, userProfile, subscription }) {
     <div className="min-h-screen bg-background">
       <HomeHeader
         eyebrow={format(schoolTodayDate(), "EEEE d 'de' MMMM", { locale: es })}
-        title={`Hola, ${user.full_name?.split(' ')[0] || 'Maestro'}`}
+        title={greetingFor(user)}
       />
 
       {/* Diary Progress */}

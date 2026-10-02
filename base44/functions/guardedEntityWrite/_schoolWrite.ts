@@ -33,6 +33,7 @@
 // in-memory database with two schools.
 import {
   buildSchoolWrite,
+  callerDisplayName,
   decideCreateTargets,
   decideSchoolRecord,
   effectiveLicenseIsReadOnly,
@@ -285,7 +286,7 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
 
   const built = buildSchoolWrite(entity, operation, input, {
     userId: String(user.id),
-    userName: String(user.full_name || ''),
+    userName: callerDisplayName(user),
     userEmail: String(user.email || ''),
     profileId: String(usableProfile?.id || ''),
     role: appRole,

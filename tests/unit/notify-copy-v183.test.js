@@ -274,8 +274,10 @@ test('the client templates.js renders exactly what the server sends', async () =
 // --- 5. mobile: tap targets and iOS focus zoom ------------------------------------
 
 test('small controls give a finger 44px', () => {
-  // Sonner's 20x20 close button: a 44x44 hit area, same look.
-  assert.match(read('src/components/ui/sonner.jsx'), /closeButton: "after:absolute after:-inset-3"/);
+  // Sonner's 20x20 close button: a 44x44 hit area, same look. 13px a side,
+  // not 12 (v1.9.0): the ::after starts at the padding box, 18px, and
+  // -inset-3 made it 42.
+  assert.match(read('src/components/ui/sonner.jsx'), /closeButton: "after:absolute after:-inset-\[13px\]"/);
   // The Switch already had one (36x20 drawn, 44x44 hit) — keep it.
   assert.match(read('src/components/ui/switch.jsx'), /h-5 w-9 [^"]*after:absolute after:-inset-x-1 after:-inset-y-3/);
   // /entrar: show-password 44x44 inside the 48px field; inline links 44 tall on touch.
@@ -290,8 +292,9 @@ test('small controls give a finger 44px', () => {
   const discounts = read('src/pages/GestionDescuentos.jsx');
   assert.match(discounts, /size="icon" variant="outline" aria-label="Editar descuento"/);
   assert.match(discounts, /size="icon"\s*variant="outline"\s*aria-label="Eliminar descuento"/);
-  // Calendar days: tight gutters below sm so a day is 44px wide from 375px.
+  // Calendar days: from v1.9.0 the card bleeds to the screen edges below sm
+  // (1px between days, 2px padding) so a day is 44px wide even at 320px.
   const calendar = read('src/pages/CalendarioEscolar.jsx');
-  assert.match(calendar, /grid grid-cols-7 gap-0\.5 sm:gap-2/);
-  assert.match(calendar, /shadow-sm p-2 sm:p-6/);
+  assert.match(calendar, /grid grid-cols-7 gap-px sm:gap-2/);
+  assert.match(calendar, /shadow-sm px-0\.5 py-2 sm:mx-0 sm:rounded-2xl sm:border sm:p-6/);
 });

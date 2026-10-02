@@ -319,6 +319,12 @@ html, body, #root {
 @media (max-width: 767px) {
   :root { --theme-switcher-bottom: 5.25rem; }
 }
+/* Size: the shared component defaults to 44px (a finger's target) since
+   v1.9.0. Under a mouse LIUMA keeps the smaller 40px circle / 34px slots it
+   always had; a touch screen at any width gets the default. */
+@media (pointer: fine) {
+  :root { --theme-switcher-size: 40px; --theme-switcher-slot: 34px; }
+}
 
 /* While the Lumi bubble is on screen (GlobalLumiBubble.jsx sets
    html[data-lumi-bubble]) it owns the bottom-right corner, so the switcher

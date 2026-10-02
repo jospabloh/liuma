@@ -1996,3 +1996,54 @@ Sólo frontend: `npm run deploy:site`.
 
 Deploy: `npm run deploy` (lumiQuery, lumiWrite) → `npx base44 agents push` →
 `npm run deploy:site`.
+
+## Nombre propio y objetivos de 44 px (v1.9.0, paquete ui-minor, 2026-10-02)
+
+**«Hola, h.josepablo+qa-padre».** El saludo leía `full_name`, y el registro de
+Base44 deja ahí el usuario del correo. Regla: **un handle nunca se muestra como
+nombre** — `src/lib/userDisplayName.js` (`userDisplayName`, `greetingFor`,
+sin imports; `isHandleLikeName` es espejo de `displayUserName` de
+`_lumiCore.ts` y una prueba corre los dos). Sin nombre real, el saludo dice
+«Hola» a secas.
+
+**El nombre lo escribe la persona, y no va en `full_name`.** El contrato del
+SDK que trae el repo dice que `auth.updateMe()` **no** puede cambiar
+`full_name` (`auth.types.d.ts`), así que el nombre elegido vive en el campo
+propio `User.display_name` (sin `rls.write: false`: lo escribe el usuario; no
+lo lee ninguna RLS; `school_id`/`app_role` siguen bloqueados).
+`DisplayNameDialog` lo pide una vez tras entrar («¿Cómo te llamas?»; «Ahora
+no» se recuerda por usuario en el dispositivo) y queda editable en el pie del
+`SideNav` y en «Cuenta → Cambiar mi nombre» de la paleta (móvil). Las
+funciones sellan ese nombre como autor: `callerDisplayName` (idéntica en
+`guardedEntityWrite/_policy.ts` y `guardedFamilyWrite/_policy.ts`),
+`emergencyAuthorName`, `lumiQuery` (`user_name`) y `listSchoolMembers`
+(`full_name` del directorio). Sin `display_name`, todo sale igual que antes.
+
+**44 px, medidos.** `node scripts/touch-targets-scan.mjs [--width 320,390]`
+levanta Vite, simula todo `/api/` (nada llega a Base44) y, con puntero táctil,
+prueba cada elemento interactivo de las pantallas principales de cada rol
+con `elementFromPoint` sobre un cuadro de 44×44 (así cuenta un `::after` que
+agranda el área). Primera pasada: el selector de tema (42, en todas las
+pantallas), el cierre de los toasts de sonner (42: el `::after` sale de la
+caja de padding, hacen falta 13 px por lado), el enlace del pie del `Layout`
+(16 de alto), los cuatro «Ver detalle» de Reportes y los enlaces del pie de
+Ayuda. Los días del calendario medían ~37 px a 320: la tarjeta ahora llega a
+los bordes en teléfono (`-mx-4`, 2 px de padding, 1 px entre días → 44.3).
+Segunda pasada: todo ≥ 44 a 320 y 390. **No cubre** diálogos que sólo se
+abren con un clic (formularios de alta, etc.) salvo la paleta, el selector
+abierto, un toast y el diálogo del nombre.
+
+**El selector de tema cambió en el estándar** (`acacia-app-standard`,
+`shared/theme/`, commit local sin push): tamaño por variables
+`--theme-switcher-size` / `--theme-switcher-slot`, 44 px por omisión. LIUMA
+conserva 40/34 sólo con ratón (`@media (pointer: fine)` en `index.css`).
+**Falta copiarlo** a las demás apps React (lista en el README del estándar).
+
+**Desplegar:** `npm run deploy:entities` (User: `display_name`) → `npm run
+deploy` (guardedEntityWrite, guardedFamilyWrite, sendBulkNotification,
+lumiQuery, listSchoolMembers) → `npm run deploy:site`. Comprobar por
+comportamiento: una cuenta cuyo `full_name` es el handle ve «Hola» y el
+diálogo; al guardar «Ana» el inicio dice «Hola, Ana» tras recargar (eso
+prueba que `updateMe` aceptó el campo) y un aviso nuevo sale firmado «Ana».
+**No verificado en vivo:** que el `me()` del servidor traiga `display_name`
+en la raíz (el código también lo busca en `data.display_name`).

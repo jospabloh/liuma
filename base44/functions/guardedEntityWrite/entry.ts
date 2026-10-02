@@ -46,6 +46,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import {
   ATTRIBUTION_FIELDS,
   CLASSROOM_BOUND_ENTITIES,
+  callerDisplayName,
   POLICY_WRITE,
   decideCreateTargets,
   decideModifyExisting,
@@ -336,7 +337,7 @@ Deno.serve(async (req) => {
       const attribution = ATTRIBUTION_FIELDS[entity];
       if (attribution) {
         data[attribution.id] = user.id;
-        if (attribution.name) data[attribution.name] = String(user.full_name || '');
+        if (attribution.name) data[attribution.name] = callerDisplayName(user);
       }
 
       // Base44 security scan, 2026-09-28 (confirmed, found via notifyParents

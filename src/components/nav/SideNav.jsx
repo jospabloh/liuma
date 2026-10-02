@@ -5,6 +5,7 @@ import { NavIcon } from './navIcons.jsx';
 import { useNav } from './NavContext.jsx';
 import { getGroupedDestinations, isActivePath, pageUrl } from './navRegistry';
 import SignOutButton from '@/components/auth/SignOutButton';
+import { userDisplayName } from '@/lib/userDisplayName';
 
 /**
  * Persistent desktop navigation rail (md and up). Mobile keeps the four-item
@@ -25,7 +26,7 @@ const ROLE_LABELS = {
   PARENT: 'Familia',
 };
 
-/** Two-letter initials from a name/email, for the identity avatar. */
+/** Two-letter initials from a person's name, for the identity avatar ('·' without one). */
 function initialsOf(name = '') {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '·';
@@ -35,7 +36,7 @@ function initialsOf(name = '') {
 
 export default function SideNav() {
   const { pathname } = useLocation();
-  const { role, user, openPalette } = useNav();
+  const { role, user, openPalette, openNameDialog } = useNav();
 
   // No role yet (loading, logged out, onboarding) → don't show the rail, so it
   // stays off the login/onboarding screens just like the bottom bar.
@@ -43,7 +44,10 @@ export default function SideNav() {
 
   const groups = getGroupedDestinations(role);
   const homeActive = isActivePath(pathname, 'Home');
-  const displayName = user?.full_name || user?.email || 'Tu cuenta';
+  // A handle is never shown as a name (userDisplayName): with no real name the
+  // footer shows the email, which is who the account is, and the avatar a dot.
+  const personName = userDisplayName(user);
+  const displayName = personName || user?.email || 'Tu cuenta';
 
   const itemClass = (active) =>
     `group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all duration-150 ${
@@ -138,13 +142,23 @@ export default function SideNav() {
           way out (a shared school computer must be able to sign off). */}
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">
-            {initialsOf(displayName)}
-          </span>
-          <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{ROLE_LABELS[role] || 'Familia'}</p>
-          </div>
+          {/* Name + avatar are one button: "Cambiar mi nombre" opens the same
+              dialog the first sign-in asks with (DisplayNameDialog). */}
+          <button
+            type="button"
+            onClick={openNameDialog}
+            aria-label={`${personName ? 'Cambiar mi nombre' : 'Escribir mi nombre'} (${displayName})`}
+            title={personName ? 'Cambiar mi nombre' : 'Escribir mi nombre'}
+            className="-mx-1 flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring coarse:min-h-11"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">
+              {initialsOf(personName)}
+            </span>
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate text-sm font-medium text-foreground">{displayName}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{ROLE_LABELS[role] || 'Familia'}</span>
+            </span>
+          </button>
           <Link
             to={pageUrl(role === 'PARENT' || role === 'TEACHER' ? 'Soporte' : 'SoporteAdmin')}
             aria-label="Soporte"

@@ -187,11 +187,17 @@ test('safe-area insets are real, and every fixed control accounts for them', () 
 // ---------------------------------------------------------- month grid --
 
 // LOW: a phone's day cell is ~40px; the "Festival" chip showed 12px of 123px.
+// v1.9.0: and at 320px it was ~37px wide, under a finger's 44px.
 test('the month grid shows dots on phones and titled chips from sm up', () => {
   const src = read('src/pages/CalendarioEscolar.jsx');
   assert.match(src, /flex justify-center gap-0\.5 sm:hidden" aria-hidden="true" data-event-dots/);
   assert.match(src, /<div className="hidden sm:block space-y-1">/);
   assert.match(src, /min-h-12 sm:min-h-20 p-1 sm:p-2/);
+  // v1.9.0: seven days reach 44px at 320px only if the card bleeds to the
+  // edges (no page gutter, 2px padding, 1px gaps): (320 - 4 - 6) / 7 ≈ 44.3.
+  assert.match(src, /<Card className="-mx-4 rounded-none border-x-0 [^"]*px-0\.5 py-2 sm:mx-0 sm:rounded-2xl sm:border sm:p-6">/);
+  assert.match(src, /<div className="grid grid-cols-7 gap-px sm:gap-2">/);
+  assert.ok((320 - 2 * 2 - 6 * 1) / 7 >= 44, 'the arithmetic the classes encode');
   assert.match(src, /dayEvents\.length === 1 \? '1 evento'/, 'the dots are aria-hidden, so the count must be in the label');
   assert.equal((src.match(/size="icon"\s*\n\s*aria-label="Mes (anterior|siguiente)"/g) || []).length, 2);
 });

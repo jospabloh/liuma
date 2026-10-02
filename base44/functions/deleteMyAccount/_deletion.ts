@@ -478,7 +478,7 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
     return fail(400, 'CONFIRMATION_REQUIRED', `Type ${CONFIRMATION_WORD} to confirm`);
   }
 
-  const profiles = await myProfiles(sr, userId);
+  let profiles = await myProfiles(sr, userId);
   // A deletion that already RESERVED its director seat is finished, not
   // re-judged: refusing now (another director left meanwhile) would strand
   // the person, whose access is already closed.
@@ -496,7 +496,6 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
 
   const nowIso = now.toISOString();
   const emails = emailVariants(user.email);
-  const profileIds = profiles.map((p) => String(p.id || '')).filter(Boolean);
 
   // 0. The deletion-in-progress marker, BEFORE any other write. From here
   //    on myConsent refuses to stamp consent (and compensates a stamp it
@@ -516,6 +515,14 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   // 0b. A director claims their seat and re-checks that another director
   //     stays (reserveDirectorSeats); then the RESERVATION is written, and
   //     only it lets a retry skip the check. Nothing destructive before it.
+  // Re-read the profiles AFTER the marker (Codex review of PR #197, round
+  // 7): a concurrent onboarding may have created one since the first read.
+  // From the marker on, onboarding refuses and undoes itself, so this read
+  // sees every profile that will survive — and a director seat created by
+  // that onboarding is judged by the seat check below, not missed.
+  profiles = await myProfiles(sr, userId);
+  const profileIds = profiles.map((p) => String(p.id || '')).filter(Boolean);
+
   if (!reserved) {
     const refused = await reserveDirectorSeats(sr, userId, profiles);
     if (refused) return refused;

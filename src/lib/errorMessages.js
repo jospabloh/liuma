@@ -84,6 +84,9 @@ const CODE_MESSAGES = {
   ACCOUNT_DELETED: 'Esta cuenta se eliminó. Si quieres volver a LIUMA, escribe a soporte@acaciaco.com.mx.',
   // deleteMyAccount started and did not finish: the deletion page finishes it.
   ACCOUNT_DELETION_IN_PROGRESS: 'La eliminación de tu cuenta está en curso. Recarga la página para terminarla.',
+  // provisionOnboardingProfile could not confirm the account was not being
+  // deleted, so it undid its writes: nothing was created, retry.
+  ONBOARDING_NOT_CONFIRMED: 'No pudimos confirmar tu registro y no se guardó nada. Inténtalo de nuevo en un momento.',
 };
 
 const STATUS_MESSAGES = {

@@ -50,6 +50,11 @@ export function createFakeEntity(seed = [], { name = 'Entity' } = {}) {
     async list() {
       return rows;
     },
+    async delete(id) {
+      const i = rows.findIndex((r) => r.id === id);
+      if (i < 0) throw Object.assign(new Error('not found'), { status: 404 });
+      rows.splice(i, 1);
+    },
   };
 }
 
@@ -67,7 +72,8 @@ export function createOnboardingBackend(seed = {}, actingUser, { now = new Date(
       SchoolSubscription: createFakeEntity(seed.subscriptions, { name: 'Sub' }),
       UserProfile: createFakeEntity(seed.profiles, { name: 'Profile' }),
       ConsentRecord: createFakeEntity(seed.consents, { name: 'Consent' }),
-      User: createFakeEntity(seed.users, { name: 'User' }),
+      // The acting user exists (provisioning re-reads it for deletion markers).
+      User: createFakeEntity(seed.users ?? (actingUser?.id ? [actingUser] : []), { name: 'User' }),
     },
   };
   const invokeCalls = [];

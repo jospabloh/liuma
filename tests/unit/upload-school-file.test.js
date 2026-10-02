@@ -21,6 +21,8 @@ import {
   DAILY_UPLOAD_LIMIT,
   QUOTA_READ_LIMIT,
   UPLOAD_AUDIT_TARGET,
+  uploadDayKey,
+  mexicoDayKey,
 } from '../../base44/functions/uploadSchoolFile/_upload.ts';
 import { makeFakeMongoDb } from '../fixtures/fake-mongo-db.js';
 import { selectCurrentProfile as readSelect, profileProblem as readProblem } from '../../base44/functions/schoolRead/_scope.ts';
@@ -173,6 +175,7 @@ function quotaWorld(alreadyToday) {
     id: `old-${String(i).padStart(3, '0')}`,
     user_id: UPLOADER.id,
     target_type: UPLOAD_AUDIT_TARGET,
+    target_id: uploadDayKey(UPLOADER.id, QUOTA_NOW),
     created_date: `2026-10-02T07:${String(i % 60).padStart(2, '0')}:00.000Z`,
   }));
   return { AuditLog };
@@ -230,14 +233,29 @@ test('a failed upload gives its slot back; a failed URL note does not undo the c
   assert.equal((await runQuota(makeFakeMongoDb(tables, { idPrefix: 'd' }), async () => 'https://cdn.base44.app/f/w.pdf')).body.code, 'UPLOAD_DAILY_LIMIT');
 });
 
-test('a re-count that cannot see the whole day refuses rather than guess', async () => {
-  const tables = { AuditLog: Array.from({ length: QUOTA_READ_LIMIT }, (_, i) => ({
-    id: `x-${String(i).padStart(4, '0')}`, user_id: UPLOADER.id, target_type: UPLOAD_AUDIT_TARGET, created_date: '2026-10-01T10:00:00.000Z',
-  })) };
+test('the count reads only TODAY\'s claims: a long history never locks the cap; a full page of today refuses', async () => {
+  assert.equal(mexicoDayKey(new Date('2026-10-02T05:59:00Z')), '2026-10-01', '23:59 in Mexico is still yesterday');
+  assert.equal(uploadDayKey('u-1', QUOTA_NOW), 'upload:u-1:2026-10-02');
+  // 600 uploads over the 10 previous days, none today: allowed (the first
+  // version read the newest 500 rows of ALL history and refused forever).
+  const history = { AuditLog: Array.from({ length: 600 }, (_, i) => {
+    const day = new Date(Date.UTC(2026, 8, 22 + Math.floor(i / 60), 18, i % 60));
+    return { id: `h-${String(i).padStart(4, '0')}`, user_id: UPLOADER.id, target_type: UPLOAD_AUDIT_TARGET, target_id: uploadDayKey(UPLOADER.id, day), created_date: day.toISOString() };
+  }) };
   let stored = 0;
-  const r = await runQuota(makeFakeMongoDb(tables), async () => { stored += 1; return 'https://cdn.base44.app/f/q.pdf'; });
-  assert.equal(r.body.code, 'UPLOAD_DAILY_LIMIT');
-  assert.equal(stored, 0);
+  const upload = async () => { stored += 1; return 'https://cdn.base44.app/f/q.pdf'; };
+  const ok = await runQuota(makeFakeMongoDb(history), upload);
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(stored, 1);
+  // 60 today: refused, nothing stored.
+  const full = quotaWorld(DAILY_UPLOAD_LIMIT);
+  full.AuditLog.push(...history.AuditLog);
+  assert.equal((await runQuota(makeFakeMongoDb(full), upload)).body.code, 'UPLOAD_DAILY_LIMIT');
+  assert.equal(stored, 1);
+  // A page of today's own claims that cannot be seen whole: fail closed.
+  const burst = quotaWorld(QUOTA_READ_LIMIT);
+  assert.equal((await runQuota(makeFakeMongoDb(burst), upload)).body.code, 'UPLOAD_DAILY_LIMIT');
+  assert.equal(stored, 1);
 });
 
 test('only an http(s) URL back from Core.UploadFile counts as stored, in either SDK response shape', () => {

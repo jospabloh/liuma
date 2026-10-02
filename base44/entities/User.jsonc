@@ -21,6 +21,14 @@
         "write": false
       }
     },
+    "account_deletion_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "La persona confirmó «Eliminar mi cuenta y mis datos» y deleteMyAccount empezó (v1.9.0). Se escribe ANTES de cualquier otro cambio: mientras esté puesta, myConsent no vuelve a sellar el consentimiento (y borra el sello que escribiera en paralelo), toda función que exige consentimiento rechaza a la persona y la app muestra la página de eliminación para terminarla. write:false: sólo el service role la escribe.",
+      "rls": {
+        "write": false
+      }
+    },
     "app_role": {
       "type": "string",
       "description": "Rol de app del usuario (ADMIN/TEACHER/PARENT), leído por RLS como user_condition data.app_role (SchoolSubscription.read). Nadie lo escribe hoy: el rol vive en UserProfile. write:false para que nadie se dé ADMIN a sí mismo con updateMe (módulo 24 del estándar).",

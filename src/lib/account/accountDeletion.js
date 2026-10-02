@@ -40,6 +40,18 @@ export function accountDeletedAt(user) {
   return typeof v === 'string' ? v : '';
 }
 
+/**
+ * deleteMyAccount writes this marker before anything else (Codex review of
+ * PR #197). While it is set and the account is not finished, access is closed
+ * everywhere, accepting the texts again is refused, and the app shows the
+ * deletion page to finish it. MIRRORED in deleteMyAccount/_deletion.ts
+ * (deletionStartedAt) and myConsent/_consent.ts.
+ */
+export function accountDeletionStartedAt(user) {
+  const v = user?.account_deletion_started_at ?? user?.data?.account_deletion_started_at;
+  return typeof v === 'string' ? v : '';
+}
+
 /** What goes away. Role decides which lines apply. */
 export function deletedItems(role) {
   const items = [
@@ -77,6 +89,8 @@ const ERROR_MESSAGES = {
   PLATFORM_OWNER: 'La cuenta dueña de la plataforma no se puede eliminar desde la app.',
   RATE_LIMITED: 'Hay mucha actividad en este momento. Espera unos segundos e inténtalo de nuevo: lo que ya se hizo no se repite.',
   UNAUTHENTICATED: 'Tu sesión expiró. Vuelve a iniciar sesión e inténtalo de nuevo.',
+  // The deletion-in-progress marker could not be written: nothing changed.
+  DELETION_NOT_STARTED: `No se pudo iniciar la eliminación de tu cuenta. No se cambió nada; inténtalo de nuevo o escribe a ${ACACIA_SUPPORT_EMAIL}.`,
   // deleteMyAccount could not mark the account as deleted, so it kept the
   // profile instead of leaving an account that could sign up again. Access is
   // already closed; a retry finishes the rest.

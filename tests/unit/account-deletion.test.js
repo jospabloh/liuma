@@ -13,7 +13,8 @@ import {
   runAccountDeletion,
   soleAdminSchoolIds,
 } from '../../base44/functions/deleteMyAccount/_deletion.ts';
-import { consentStatus, profileConsentIsCurrent as serverStampIsCurrent } from '../../base44/functions/myConsent/_consent.ts';
+import { acceptConsent, consentStatus, profileConsentIsCurrent as serverStampIsCurrent } from '../../base44/functions/myConsent/_consent.ts';
+import { decideConsentGate } from '../../src/lib/consent/consentGate.js';
 import { ACTION_TIER } from '../../base44/functions/recordAuditEvent/_policy.ts';
 import {
   ACCOUNT_DELETION_PAGE,
@@ -184,16 +185,18 @@ test('a parent deletes their account: access closed, account data gone, school r
 test('evidence first: the withdrawal is recorded before anything is deleted, and consent records are never deleted', async () => {
   const { db, tables } = world();
   await del(db, USERS.parent);
-  // Access falls before anything else: the server gates read the stamp, so
-  // clearing it is the first write (Codex review of PR #197). Then the
-  // evidence, then the stamp again (see the race test below), then deletions.
-  const [stampWrite, firstWrite, againWrite] = db.writes;
+  // The deletion-in-progress marker is the very first write (Codex review of
+  // PR #197: it is what myConsent checks before and after stamping). Then
+  // the stamps fall, then the evidence, then the stamps again, then deletions.
+  const [markerWrite, stampWrite, firstWrite, againWrite] = db.writes;
+  assert.deepEqual([markerWrite.entity, markerWrite.op, markerWrite.id], ['User', 'update', 'u-parent']);
+  assert.deepEqual(Object.keys(markerWrite.data), ['account_deletion_started_at']);
   assert.deepEqual([stampWrite.entity, stampWrite.op], ['UserProfile', 'updateMany']);
   assert.equal(stampWrite.data.$set.consent_notice_version, '');
   assert.deepEqual([againWrite.entity, againWrite.op], ['UserProfile', 'updateMany']);
   assert.equal(againWrite.data.$set.consent_notice_version, '');
   const firstDeletion = db.writes.findIndex((w) => /delete/i.test(w.op));
-  assert.ok(firstDeletion > 1, 'nothing is deleted before the withdrawal is recorded');
+  assert.ok(firstDeletion > 2, 'nothing is deleted before the withdrawal is recorded');
   assert.equal(firstWrite.entity, 'ConsentRecord');
   assert.equal(firstWrite.op, 'create');
   assert.equal(firstWrite.data.event, 'WITHDRAWN');
@@ -430,7 +433,9 @@ test('if the User can be neither marked nor removed, the profiles stay and the c
   const sent = [];
   const db = makeFakeMongoDb(tables, {
     failOn: [
-      { entity: 'User', op: 'update', message: 'Forbidden', status: 403 },
+      // The 2nd User.update is the account_deleted_at mark (the 1st is the
+      // deletion-in-progress marker).
+      { entity: 'User', op: 'update', nth: 2, message: 'Forbidden', status: 403 },
       { entity: 'User', op: 'delete', message: 'Forbidden', status: 403 },
     ],
     integrations: { Core: { SendEmail: async (m) => { sent.push(m); } } },
@@ -445,7 +450,9 @@ test('if the User can be neither marked nor removed, the profiles stay and the c
   assert.equal(kept.length, 1);
   assert.equal(serverStampIsCurrent(kept[0]), false);
   assert.equal(tables.ParentStudent.find((l) => l.id === 'ps1').status, 'REVOKED');
-  assert.equal(db.writes.some((w) => w.entity === 'User'), false);
+  assert.equal(db.writes.some((w) => w.entity === 'User' && w.op !== 'update'), false);
+  assert.equal(accountDeletedAt(tables.User.find((u) => u.id === 'u-parent')), '', 'not marked deleted');
+  assert.ok(tables.User.find((u) => u.id === 'u-parent').account_deletion_started_at, 'but the deletion is known to have started');
   assert.equal(sent.length, 0, 'ACACIA is not told a deletion happened that did not');
   assert.match(deletionErrorMessage('ACCOUNT_NOT_MARKED'), /vuelve a intentarlo/);
   assert.notEqual(deletionErrorMessage('ACCOUNT_NOT_MARKED'), deletionErrorMessage('SOMETHING_ELSE'));
@@ -471,6 +478,225 @@ test('a marked account cannot onboard or join again, by role or by school code',
   const refuse = fn.indexOf("if (accountDeletedAt(user)) return bad(410, 'ACCOUNT_DELETED'", serve);
   assert.ok(refuse > serve, 'the refusal is inside the handler');
   assert.ok(refuse < fn.indexOf('req.json()', serve), 'and before the body is read');
+});
+
+// ---------------------------------------------------------------------------
+// The handshake between deleteMyAccount and myConsent (Codex review of PR
+// #197, second pass). Ordering alone could not stop a myConsent repair or
+// re-acceptance that read before the withdrawal from stamping after the last
+// clear. Now deleteMyAccount writes User.account_deletion_started_at first and
+// myConsent re-reads it after every stamp write. The harness below runs both
+// against the same tables and interleaves their database calls in every
+// order within the window where they meet.
+
+// Cooperative scheduler: each actor's DB call waits for its turn in
+// `schedule`; an actor that finished is skipped; past the end, all run free.
+function scheduler(schedule) {
+  let pos = 0;
+  const waiting = new Map();
+  const done = new Set();
+  const pump = () => {
+    while (pos < schedule.length && done.has(schedule[pos])) pos += 1;
+    const next = pos < schedule.length ? schedule[pos] : null;
+    for (const [actor, resolve] of [...waiting]) {
+      if (next === null || actor === next) {
+        waiting.delete(actor);
+        resolve();
+        if (next !== null) break;
+      }
+    }
+  };
+  return {
+    before: (actor) => new Promise((resolve) => { waiting.set(actor, resolve); pump(); }),
+    after: () => { pos += 1; pump(); },
+    finish: (actor) => { done.add(actor); pump(); },
+  };
+}
+
+function scheduledDb(tables, actor, sched, opts = {}) {
+  const db = makeFakeMongoDb(tables, { idPrefix: actor, integrations: { Core: { SendEmail: async () => {} } }, ...opts });
+  const entities = new Proxy({}, {
+    get(_, name) {
+      const handler = db.entities[name];
+      return new Proxy(handler, {
+        get(target, op) {
+          const fn = target[op];
+          if (typeof fn !== 'function') return fn;
+          return async (...args) => {
+            if (sched) await sched.before(actor);
+            try { return await fn.apply(target, args); } finally { if (sched) sched.after(actor); }
+          };
+        },
+      });
+    },
+  });
+  return { entities, integrations: db.integrations, writes: db.writes };
+}
+
+// Every way of placing k C's among the first n D's.
+function placements(n, k) {
+  const out = [];
+  const walk = (d, c, acc) => {
+    if (d === n && c === k) { out.push(acc); return; }
+    if (d < n) walk(d + 1, c, [...acc, 'D']);
+    if (c < k) walk(d, c + 1, [...acc, 'C']);
+  };
+  walk(0, 0, []);
+  return out;
+}
+
+const ACCEPT_BODY = { general: true, sensitive: true, noticeVersion: '2026-10-02', termsVersion: '2026-10-02' };
+const CONSENT_OPS = {
+  repair: (db) => consentStatus(db, USERS.parent),
+  accept: (db) => acceptConsent(db, USERS.parent, ACCEPT_BODY, NOW, 'test-agent'),
+};
+
+// The parent's stamp is missing (so a repair from cr-new, or a
+// re-acceptance, would write one), and the deletion stops short of deleting
+// the profiles (a 429), which is when a stamp left behind would mean access.
+function raceWorld() {
+  const w = world();
+  const p = w.tables.UserProfile.find((x) => x.id === 'p-parent');
+  Object.assign(p, { consent_notice_version: '', consent_terms_version: '' });
+  return w;
+}
+const DELETION_STOPS = { failOn: { entity: 'UserProfile', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } };
+
+async function opCount(run) {
+  const { tables } = raceWorld();
+  const db = scheduledDb(tables, 'X', null, run.opts);
+  let n = 0;
+  const counting = { ...db, entities: new Proxy({}, { get: (_, name) => new Proxy(db.entities[name], { get: (t, op) => (typeof t[op] === 'function' ? (...a) => { n += 1; return t[op](...a); } : t[op]) }) }) };
+  await run.fn(counting).catch(() => {});
+  return n;
+}
+
+for (const [kind, consentOp] of Object.entries(CONSENT_OPS)) {
+  test(`no consent stamp survives a started deletion, in every interleaving with a myConsent ${kind}; a retry converges`, async () => {
+    const k = await opCount({ fn: consentOp });
+    const n = 8; // the deletion's first calls: profiles, marker, clear, consent rows, withdrawal, clear, audit…
+    const schedules = placements(n, k);
+    // …and the myConsent call entirely after the deletion stopped.
+    schedules.push([...Array(60).fill('D'), ...Array(k).fill('C')]);
+    let stampedThenUndone = 0;
+    for (const schedule of schedules) {
+      const { tables } = raceWorld();
+      const sched = scheduler(schedule);
+      const d = scheduledDb(tables, 'D', sched, DELETION_STOPS);
+      const c = scheduledDb(tables, 'C', sched);
+      const [dr, cr] = await Promise.allSettled([
+        del(d, USERS.parent).finally(() => sched.finish('D')),
+        consentOp(c).finally(() => sched.finish('C')),
+      ]);
+      const label = schedule.join('');
+      assert.equal(dr.status, 'rejected', `${label}: the deletion stops at the profiles (429)`);
+      const profile = tables.UserProfile.find((x) => x.id === 'p-parent');
+      assert.ok(profile, label);
+      assert.equal(serverStampIsCurrent(profile), false, `${label}: a stamp survived the started deletion`);
+      if (c.writes.some((w) => w.entity === 'UserProfile' && w.data?.consent_notice_version === '2026-10-02')) stampedThenUndone += 1;
+      // If myConsent answered "all good", it did so before the deletion began.
+      if (cr.status === 'fulfilled' && cr.value.status === 200 && cr.value.body.required === false) {
+        assert.ok(c.writes.some((w) => w.entity === 'UserProfile'), `${label}: claimed consent without stamping`);
+      }
+
+      const retry = await del(scheduledDb(tables, 'R', null), { ...USERS.parent, ...tables.User.find((u) => u.id === 'u-parent') });
+      assert.equal(retry.status, 200, `${label}: retry ${JSON.stringify(retry.body)}`);
+      assert.equal(tables.UserProfile.some((x) => x.user_id === 'u-parent'), false, label);
+    }
+    assert.ok(stampedThenUndone > 0, 'the harness reaches the interleavings where myConsent stamped mid-deletion');
+  });
+}
+
+test('the deletion marker is written before anything else; if it fails, nothing changed and the person can still accept', async () => {
+  const { tables } = raceWorld();
+  const before = structuredClone(tables);
+  const db = makeFakeMongoDb(tables, { failOn: { entity: 'User', op: 'update', nth: 1, message: 'Forbidden', status: 403 } });
+  const r = await del(db, USERS.parent);
+  assert.deepEqual([r.status, r.body.code], [503, 'DELETION_NOT_STARTED']);
+  assert.deepEqual(tables, before, 'not one row changed');
+  assert.match(deletionErrorMessage('DELETION_NOT_STARTED'), /No se cambió nada/);
+  const accepted = await acceptConsent(makeFakeMongoDb(tables), USERS.parent, ACCEPT_BODY, NOW, 'x');
+  assert.equal(accepted.status, 200, 'nothing started, so nothing blocks the acceptance');
+});
+
+test('a started deletion blocks re-acceptance and repair, and the app shows the deletion page to finish it', async () => {
+  const { tables } = raceWorld();
+  // Stopped part-way, before the account is marked deleted.
+  const stopped = await del(makeFakeMongoDb(tables, { failOn: { entity: 'AbsenceNotification', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } }), USERS.parent).catch((e) => e);
+  assert.match(String(stopped?.message), /Rate limit/);
+  const userRow = tables.User.find((u) => u.id === 'u-parent');
+  assert.ok(userRow.account_deletion_started_at);
+  // The token may or may not carry the marker: the stored User decides.
+  for (const caller of [USERS.parent, { ...USERS.parent, ...userRow }]) {
+    const accept = await acceptConsent(makeFakeMongoDb(tables), caller, ACCEPT_BODY, NOW, 'x');
+    assert.deepEqual([accept.status, accept.body.code], [409, 'ACCOUNT_DELETION_IN_PROGRESS']);
+    const status = await consentStatus(makeFakeMongoDb(tables), caller);
+    assert.equal(status.body.deletionInProgress, true);
+    assert.notEqual(status.body.repaired, true);
+  }
+  assert.equal(tables.ConsentRecord.filter((c) => c.event === 'ACCEPTED' && c.source === 'reacceptance').length, 0);
+
+  const profile = tables.UserProfile.find((p) => p.id === 'p-parent');
+  const gate = (extra) => decideConsentGate({ user: { ...USERS.parent, ...userRow }, profile, pathname: '/', ...extra });
+  assert.equal(gate(), 'deletion_in_progress');
+  // Even with a stamp a race might have left: the marker wins.
+  assert.equal(decideConsentGate({ user: { ...USERS.parent, ...userRow }, profile: { ...profile, consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02' } }), 'deletion_in_progress');
+  // Marked deleted but a profile is still there (the profile delete failed): finish it too.
+  assert.equal(decideConsentGate({ user: { id: 'u', account_deleted_at: NOW.toISOString() }, profile }), 'deletion_in_progress');
+  assert.equal(decideConsentGate({ user: { id: 'u', account_deleted_at: NOW.toISOString() }, profile: null }), 'deleted');
+  // A token without the marker: the status answer routes the same way.
+  assert.equal(decideConsentGate({ user: USERS.parent, profile, status: { ok: true, required: true, deletionInProgress: true } }), 'deletion_in_progress');
+
+  const gateSrc = read('src/components/consent/ConsentGate.jsx');
+  assert.match(gateSrc, /decision === 'deletion_in_progress'[\s\S]*?<EliminarCuenta gated resume \/>/);
+  const page = read('src/pages/EliminarCuenta.jsx');
+  assert.match(page, /\{resume \? null : \(/, 'no "Volver y aceptar" while finishing');
+
+  // The page's retry finishes it.
+  const retry = await del(makeFakeMongoDb(tables, { idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.parent, ...userRow });
+  assert.equal(retry.status, 200);
+  assert.equal(tables.User.find((u) => u.id === 'u-parent'), undefined);
+});
+
+test('a started deletion is finished even if the person became the only director meanwhile', async () => {
+  const two = world({ withSecondAdmin: true });
+  const stop = { failOn: { entity: 'AbsenceNotification', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } };
+  await assert.rejects(() => del(makeFakeMongoDb(two.tables, stop), USERS.admin), /Rate limit/);
+  // The other director leaves before the retry.
+  two.tables.UserProfile = two.tables.UserProfile.filter((p) => p.user_id !== 'u-admin2');
+  const userRow = two.tables.User.find((u) => u.id === 'u-admin');
+  const r = await del(makeFakeMongoDb(two.tables, { idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.admin, ...userRow });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  // Without a started deletion the same state is still refused.
+  assert.equal((await del(world().db, USERS.admin)).body.code, 'SOLE_ADMIN');
+});
+
+test('every consent-gated function refuses a caller whose deletion started, right after authenticating', () => {
+  const fns = ['aiAssist', 'approveProfile', 'governRoleChange', 'guardedEntityWrite', 'guardedFamilyWrite', 'listSchoolMembers', 'lumiQuery', 'lumiWrite', 'notifyParents', 'postTicketMessage', 'schoolRead', 'sendBulkNotification', 'sendNotificationEmail', 'uploadSchoolFile'];
+  const helper = (src) => src.match(/\nfunction accountDeletionBlocked[\s\S]*?\n}\n/)?.[0];
+  const reference = helper(read('base44/functions/schoolRead/entry.ts'));
+  assert.ok(reference);
+  const blocked = new Function(`${reference.replace(/: unknown|: boolean|\bas \{[\s\S]*?\};/g, (m) => (m.startsWith('as') ? ';' : ''))} return accountDeletionBlocked;`)();
+  assert.equal(blocked({ account_deletion_started_at: NOW.toISOString() }), true);
+  assert.equal(blocked({ data: { account_deleted_at: NOW.toISOString() } }), true);
+  assert.equal(blocked({ account_deletion_started_at: '' }), false);
+  assert.equal(blocked({ id: 'u' }), false);
+  for (const fn of fns) {
+    const src = read(`base44/functions/${fn}/entry.ts`);
+    assert.equal(helper(src), reference, `${fn}: the helper is the same code`);
+    const auth = src.search(/\n\s+const user = await base44\.auth\.me\(\)/);
+    const gate = src.indexOf('if (accountDeletionBlocked(user)) return');
+    const firstEntity = src.indexOf('sr.entities.', auth) === -1 ? Infinity : src.indexOf('.entities.', auth);
+    assert.ok(auth > 0 && gate > auth && gate < firstEntity, `${fn}: refused right after auth.me(), before any entity call`);
+  }
+  // Every function that checks the consent stamp is in the list.
+  for (const dir of fs.readdirSync(new URL('base44/functions/', ROOT))) {
+    let src = '';
+    try { src = read(`base44/functions/${dir}/entry.ts`); } catch { continue; }
+    if (/profileConsentIsCurrent\(/.test(src) || /import[^;]*profileProblem/.test(src)) assert.ok(fns.includes(dir), `${dir} gates on consent but not on a started deletion`);
+  }
+  const schema = readJsonc('base44/entities/User.jsonc').properties.account_deletion_started_at;
+  assert.deepEqual(schema?.rls, { write: false }, 'only the service role writes the marker');
 });
 
 test('every entity and field the deletion writes exists in the schemas', () => {

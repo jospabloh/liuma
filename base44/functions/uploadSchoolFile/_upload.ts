@@ -296,8 +296,23 @@ export function uploadedUrl(result: unknown): string {
 type Db = any;
 type ClaimRow = { id?: string; created_date?: string };
 
-/** Today's upload rows read back to rank a claim; more than this many means refuse. */
+/** Today's upload rows read back to rank a claim; a full page means refuse. */
 export const QUOTA_READ_LIMIT = 500;
+
+/** Today's calendar day in Mexico, 'YYYY-MM-DD'. */
+export function mexicoDayKey(now: Date): string {
+  return new Date(mexicoDayStart(now)).toISOString().slice(0, 10);
+}
+
+/**
+ * The exact-match key a claim is filed and counted under: one user, one
+ * Mexico day. The count reads ONLY today's rows (Codex review of PR #197: it
+ * read the newest 500 rows of all history, so after ~500 lifetime uploads
+ * the full-page guard refused forever).
+ */
+export function uploadDayKey(userId: string, now: Date): string {
+  return `upload:${userId}:${mexicoDayKey(now)}`;
+}
 
 /** Base44 dates may lack a zone; they are UTC. */
 function rowTime(row: ClaimRow): number {
@@ -367,7 +382,7 @@ export async function uploadWithinDailyLimit({ sr, user, schoolId, purpose, file
     user_email: user?.email || '',
     action: 'RECORD_CREATED',
     target_type: UPLOAD_AUDIT_TARGET,
-    target_id: purpose,
+    target_id: uploadDayKey(userId, now),
   };
   const details = { purpose, file_type: fileType, size };
 
@@ -383,12 +398,13 @@ export async function uploadWithinDailyLimit({ sr, user, schoolId, purpose, file
 
   let rows: ClaimRow[];
   try {
-    rows = await sr.entities.AuditLog.filter({ user_id: userId, target_type: UPLOAD_AUDIT_TARGET }, '-created_date', QUOTA_READ_LIMIT) || [];
+    rows = await sr.entities.AuditLog.filter({ user_id: userId, target_type: UPLOAD_AUDIT_TARGET, target_id: base.target_id }, '-created_date', QUOTA_READ_LIMIT) || [];
   } catch (e) {
     await releaseClaim(sr, claimId);
     return isRateLimit(e) ? refuse(429, 'RATE_LIMITED') : refuse(503, 'UPLOAD_QUOTA_UNAVAILABLE');
   }
-  // A full page means rows older than the window are unknown: refuse.
+  // A full page of TODAY's rows means some are unseen: refuse (fail closed).
+  // Far above the cap, so only reachable by a burst of concurrent claims.
   const pageFull = rows.length >= QUOTA_READ_LIMIT;
   // The insert may not be visible to the re-read yet; it is certainly in the set.
   if (!rows.some((r) => String(r.id || '') === claimId)) rows = [...rows, claim];

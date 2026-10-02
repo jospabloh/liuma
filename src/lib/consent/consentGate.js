@@ -9,6 +9,10 @@
  *   'deletion_page' → "Eliminar mi cuenta y mis datos", reached by "No acepto"
  *   'status_error'  → could not ask the server; retry or sign out
  *   'deleted'       → this account was deleted (User marked, not yet removed)
+ *   'deletion_in_progress' → deleteMyAccount started and did not finish (or
+ *                     marked the User but kept a profile): the deletion page,
+ *                     to finish it — never the consent screen, since
+ *                     accepting again would undo a half-done deletion.
  *
  * Fails CLOSED once a profile exists without the current stamp: until the
  * server says otherwise, the person sees the consent screen or a retry, never
@@ -17,7 +21,7 @@
  * screen then shows its own load error, and the server refuses data anyway).
  */
 import { profileConsentIsCurrent } from './privacyNotice.js';
-import { ACCOUNT_DELETION_PATH, accountDeletedAt } from '../account/accountDeletion.js';
+import { ACCOUNT_DELETION_PATH, accountDeletedAt, accountDeletionStartedAt } from '../account/accountDeletion.js';
 
 export function decideConsentGate({
   user,
@@ -34,12 +38,14 @@ export function decideConsentGate({
   // the app — and fire its reads — for a frame before the gate decides.
   if (profileLoading) return 'loading';
   if (!user) return 'pass';
-  if (accountDeletedAt(user)) return 'deleted';
+  if (accountDeletedAt(user)) return profile ? 'deletion_in_progress' : 'deleted';
+  if (accountDeletionStartedAt(user)) return 'deletion_in_progress';
   if (profileFailed || !profile) return 'pass';
   if (profileConsentIsCurrent(profile)) return 'pass';
   if (statusLoading) return 'loading';
   if (statusFailed) return 'status_error';
   if (status?.accountDeleted) return 'deleted';
+  if (status?.deletionInProgress) return 'deletion_in_progress';
   if (status && status.required === false) return 'pass';
   if (!status) return 'loading';
   const path = String(pathname || '').replace(/\/+$/, '') || '/';

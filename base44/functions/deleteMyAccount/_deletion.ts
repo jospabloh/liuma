@@ -29,18 +29,21 @@
 //       and AuditLog keeps the withdrawal and the deletion (730 days,
 //       retention table).
 //
-// ORDER, AND WHY (Codex review of PR #197). Every server gate authorizes from
-// the consent STAMP on UserProfile, not from the ConsentRecords, so the stamp
-// is what has to fall first:
-//   a. clear the stamps            → access closed; nothing withdrawn yet, so a
-//                                    failure here changes nothing (and
-//                                    myConsent may repair the stamp from the
-//                                    acceptance that is still the newest).
-//   b. append WITHDRAWN            → from now on myConsent never repairs.
-//   c. clear the stamps AGAIN      → closes the one window in which a
-//                                    concurrent myConsent repair read the old
-//                                    acceptance between (a) and (b). A failure
-//                                    here throws; it runs on every retry.
+// ORDER, AND WHY (Codex review of PR #197, twice). Every server gate
+// authorizes from the consent STAMP on UserProfile, and myConsent writes that
+// stamp concurrently (repair, re-acceptance). Ordering alone cannot win that
+// race, so there is a two-way handshake on a marker:
+//   0. User.account_deletion_started_at is written FIRST, before anything
+//      destructive. If it fails, nothing changed (503 DELETION_NOT_STARTED).
+//   a. clear the stamps; b. append WITHDRAWN; c. clear the stamps again.
+//   myConsent: refuses to stamp when the marker (or account_deleted_at) is
+//   set, and after every stamp write RE-READS the marker and clears its own
+//   stamp if it is set. A stamp written before step 0 is cleared by (a); one
+//   written after step 0 is cleared by myConsent itself. Every
+//   consent-gated function also refuses a caller whose User carries the
+//   marker (auth.me() returns User custom fields; no extra read), and the
+//   app shows the deletion page, so a half-done deletion is finished by
+//   re-confirming, never undone by re-accepting.
 //   …
 //   8. mark the User account_deleted_at BEFORE deleting the profiles: if the
 //      mark fails nothing irreversible about the account has happened and the
@@ -136,6 +139,14 @@ function fail(status: number, code: string, message: string, extra: Record<strin
 export function accountDeletedAt(user: unknown): string {
   const u = (user ?? {}) as Caller;
   const v = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return typeof v === 'string' ? v : '';
+}
+
+// MIRRORS src/lib/account/accountDeletion.js#accountDeletionStartedAt and
+// myConsent/_consent.ts#accountDeletionStartedAt.
+export function deletionStartedAt(user: unknown): string {
+  const u = (user ?? {}) as { account_deletion_started_at?: unknown; data?: { account_deletion_started_at?: unknown } | null };
+  const v = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
   return typeof v === 'string' ? v : '';
 }
 
@@ -273,7 +284,12 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   }
 
   const profiles = await myProfiles(sr, userId);
-  const sole = await soleAdminSchools(sr, profiles, userId);
+  // A deletion that already started is finished, not re-judged: the person
+  // was not the only director when they confirmed, their access is already
+  // closed and they can no longer re-accept — refusing now (another director
+  // left meanwhile) would strand them on the deletion page.
+  const alreadyStarted = Boolean(deletionStartedAt(user) || accountDeletedAt(user));
+  const sole = alreadyStarted ? [] : await soleAdminSchools(sr, profiles, userId);
   if (sole.length) {
     return fail(409, 'SOLE_ADMIN', 'You are the only active director of your school', { soleAdminSchools: sole });
   }
@@ -282,7 +298,22 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   const emails = emailVariants(user.email);
   const profileIds = profiles.map((p) => String(p.id || '')).filter(Boolean);
 
-  // 1a. Cut access first: the stamps are what the server gates read.
+  // 0. The deletion-in-progress marker, BEFORE any other write. From here
+  //    on myConsent refuses to stamp consent (and compensates a stamp it
+  //    wrote concurrently: it re-reads this marker after every stamp write),
+  //    every consent-gated function refuses the caller, and the app shows the
+  //    deletion page to finish — never the consent screen. If this write
+  //    fails nothing has changed and the call says so; a retry starts over.
+  //    A retry keeps the first start date.
+  const startedAt = deletionStartedAt(user) || nowIso;
+  try {
+    await sr.entities.User.update(userId, { account_deletion_started_at: startedAt });
+  } catch (e) {
+    if (isRateLimit(e)) throw e;
+    return fail(503, 'DELETION_NOT_STARTED', 'The deletion could not be started; nothing was changed, retry');
+  }
+
+  // 1a. Cut access: the stamps are what the server gates read.
   await revokeConsentStamps(sr, userId);
 
   // 1b. Evidence before any deletion: a WITHDRAWN ConsentRecord per school the
@@ -315,10 +346,10 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
     withdrawnNow.push(schoolId);
   }
   const withdrawals = withdrawnNow.length;
-  // 1c. Again, now that the withdrawal is the newest record: a myConsent
-  //    repair that read the old acceptance before 1b cannot have left a stamp
-  //    behind. From here on the stamp cannot come back (myConsent does not
-  //    repair from a withdrawal), so a later failure leaves no access.
+  // 1c. Again. Not what keeps the stamp away — the marker of step 0 is: a
+  //    myConsent stamp written before it is cleared by 1a, one written after
+  //    it is cleared by myConsent's own re-read — but cheap, idempotent, and
+  //    run on every retry.
   await revokeConsentStamps(sr, userId);
   // The trail next to the other sensitive actions. Best-effort: the
   // ConsentRecord above is the evidence, and a log failure must not leave the

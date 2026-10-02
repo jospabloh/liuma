@@ -37,7 +37,7 @@ const ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
-type Caller = { id?: string; email?: string; role?: string; account_deleted_at?: unknown; data?: { account_deleted_at?: unknown } | null };
+type Caller = { id?: string; email?: string; role?: string; account_deleted_at?: unknown; account_deletion_started_at?: unknown; data?: { account_deleted_at?: unknown; account_deletion_started_at?: unknown } | null };
 export type Profile = {
   id?: string;
   user_id?: string;
@@ -86,6 +86,67 @@ export function accountDeletedAt(user: unknown): string {
   const u = (user ?? {}) as Caller;
   const v = u.account_deleted_at ?? u.data?.account_deleted_at;
   return typeof v === 'string' ? v : '';
+}
+
+// MIRRORS deleteMyAccount/_deletion.ts#deletionStartedAt (and
+// src/lib/account/accountDeletion.js#accountDeletionStartedAt).
+export function accountDeletionStartedAt(user: unknown): string {
+  const u = (user ?? {}) as { account_deletion_started_at?: unknown; data?: { account_deletion_started_at?: unknown } | null };
+  const v = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  return typeof v === 'string' ? v : '';
+}
+
+// --- The handshake with deleteMyAccount (Codex review of PR #197) ----------
+//
+// deleteMyAccount writes User.account_deletion_started_at BEFORE anything
+// else and then clears every consent stamp. This side refuses to stamp once
+// it sees the marker and, because its own check and its own write are not
+// atomic, RE-READS the marker after every stamp write and clears that stamp
+// if a deletion started meanwhile. Either the deletion's clear comes after
+// our write (the marker was written before it), or our re-read comes after
+// the marker: in every interleaving no stamp survives a started deletion.
+
+function isNotFound(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return err?.status === 404 || /not found/i.test(String(err?.message ?? ''));
+}
+
+/** The marker as STORED (service role), not as the caller's token saw it. */
+async function storedDeletionMarker(sr: Db, user: Caller): Promise<string> {
+  let row: unknown = null;
+  try {
+    row = await sr.entities.User.get(String(user.id));
+  } catch (e) {
+    // A User the platform already removed has nothing left to stamp for.
+    if (isNotFound(e)) return '';
+    throw e;
+  }
+  return accountDeletionStartedAt(row) || accountDeletedAt(row);
+}
+
+const DELETION_IN_PROGRESS: Result = {
+  status: 409,
+  body: { ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'This account is being deleted' },
+};
+
+/**
+ * Called right after a stamp write. If a deletion started meanwhile — or the
+ * marker cannot be read — the stamp just written is cleared and the caller
+ * gets an error (a fresh status call repairs a legitimate stamp from its
+ * ConsentRecord, so failing closed here costs one retry, never the consent).
+ */
+async function compensateStamp(sr: Db, user: Caller, profileId: string): Promise<Result | null> {
+  let marker = '';
+  let readError: unknown = null;
+  try {
+    marker = await storedDeletionMarker(sr, user);
+  } catch (e) {
+    readError = e;
+  }
+  if (!marker && !readError) return null;
+  await sr.entities.UserProfile.update(profileId, { consent_notice_version: '', consent_terms_version: '' });
+  if (readError) throw readError;
+  return DELETION_IN_PROGRESS;
 }
 
 function when(row: ConsentRow): string {
@@ -141,6 +202,11 @@ export async function consentStatus(sr: Db, user: Caller): Promise<Result> {
     return { status: 200, body: { ok: true, required: false, accountDeleted: true, hasProfile: false } };
   }
   const profile = await loadCaller(sr, user);
+  // A started deletion is finished from the deletion page, never undone by
+  // accepting again: no repair, and the app is told why.
+  if (accountDeletionStartedAt(user) || await storedDeletionMarker(sr, user)) {
+    return { status: 200, body: statusBody(profile, true, { deletionInProgress: true }) };
+  }
   // No profile: onboarding records the consent itself (provisionOnboardingProfile).
   if (!profile) return { status: 200, body: statusBody(null, false) };
   if (profileConsentIsCurrent(profile)) return { status: 200, body: statusBody(profile, false) };
@@ -151,8 +217,11 @@ export async function consentStatus(sr: Db, user: Caller): Promise<Result> {
     : [];
   const accepted = currentAcceptance(rows || [], schoolId);
   if (accepted && profile.id) {
-    // Evidence exists, the stamp does not: repair it (idempotent).
+    // Evidence exists, the stamp does not: repair it (idempotent) — and undo
+    // it if a deletion started while we were writing.
     await sr.entities.UserProfile.update(profile.id, stampFor(String(accepted.accepted_at || new Date().toISOString())));
+    const refused = await compensateStamp(sr, user, profile.id);
+    if (refused) return { status: 200, body: statusBody({ ...profile, consent_notice_version: '', consent_terms_version: '' }, true, { deletionInProgress: true }) };
     return { status: 200, body: statusBody({ ...profile, ...stampFor('') }, false, { repaired: true }) };
   }
   return { status: 200, body: statusBody(profile, true) };
@@ -168,6 +237,7 @@ export async function acceptConsent(
 ): Promise<Result> {
   if (!user?.id) return { status: 401, body: { ok: false, code: 'UNAUTHENTICATED', error: 'Unauthorized' } };
   if (accountDeletedAt(user)) return { status: 410, body: { ok: false, code: 'ACCOUNT_DELETED', error: 'This account was deleted' } };
+  if (accountDeletionStartedAt(user)) return DELETION_IN_PROGRESS;
   if (body?.general !== true || body?.sensitive !== true) {
     return { status: 400, body: { ok: false, code: 'CONSENT_REQUIRED', error: 'Both acceptances are required' } };
   }
@@ -181,6 +251,8 @@ export async function acceptConsent(
     return { status: 409, body: { ok: false, code: 'NO_PROFILE', error: 'Finish onboarding first' } };
   }
   if (profileConsentIsCurrent(profile)) return { status: 200, body: statusBody(profile, false, { already: true }) };
+
+  if (await storedDeletionMarker(sr, user)) return DELETION_IN_PROGRESS;
 
   const role = ROLES.includes(String(profile.app_role)) ? String(profile.app_role) : undefined;
   const acceptedAt = now.toISOString();
@@ -200,6 +272,10 @@ export async function acceptConsent(
     source: 'reacceptance',
   });
   await sr.entities.UserProfile.update(profile.id, stampFor(acceptedAt));
+  // The ConsentRecord stays (it happened); the stamp does not, if a deletion
+  // started meanwhile.
+  const refused = await compensateStamp(sr, user, profile.id);
+  if (refused) return refused;
 
   // Best-effort trail next to the other sensitive actions; the ConsentRecord
   // above is the evidence that matters.

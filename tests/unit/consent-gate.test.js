@@ -272,7 +272,11 @@ test('the gate: blocks a profile without the current consent, and never flashes 
   assert.equal(gate({ status: { required: true }, pathname: `${ACCOUNT_DELETION_PATH}/` }), 'deletion_page');
   assert.equal(gate({ status: { required: false, repaired: true } }), 'pass');
   assert.equal(gate({ status: { accountDeleted: true } }), 'deleted');
-  assert.equal(decideConsentGate({ user: { id: 'u1', account_deleted_at: '2026-10-02' }, profile }), 'deleted');
+  assert.equal(decideConsentGate({ user: { id: 'u1', account_deleted_at: '2026-10-02' }, profile: null }), 'deleted');
+  // Marked deleted but a profile survived (its delete failed): the deletion
+  // page, to finish it (Codex review of PR #197).
+  assert.equal(decideConsentGate({ user: { id: 'u1', account_deleted_at: '2026-10-02' }, profile }), 'deletion_in_progress');
+  assert.equal(decideConsentGate({ user: { id: 'u1', account_deletion_started_at: '2026-10-02' }, profile: { ...profile, ...CURRENT } }), 'deletion_in_progress');
   // PENDING people accepted (or not) the draft too: they are gated as well.
   assert.equal(decideConsentGate({ user, profile: { id: 'p', status: 'PENDING' }, status: { required: true } }), 'consent');
 });

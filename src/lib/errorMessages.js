@@ -76,6 +76,8 @@ const CODE_MESSAGES = {
   CONSENT_REQUIRED: 'Antes de continuar, acepta la versión vigente del Aviso de Privacidad y los Términos. Recarga la página.',
   CONSENT_VERSION_MISMATCH: 'El Aviso de Privacidad se actualizó mientras lo leías. Recarga la página para ver la versión vigente.',
   ACCOUNT_DELETED: 'Esta cuenta se eliminó. Si quieres volver a LIUMA, escribe a soporte@acaciaco.com.mx.',
+  // deleteMyAccount started and did not finish: the deletion page finishes it.
+  ACCOUNT_DELETION_IN_PROGRESS: 'La eliminación de tu cuenta está en curso. Recarga la página para terminarla.',
 };
 
 const STATUS_MESSAGES = {

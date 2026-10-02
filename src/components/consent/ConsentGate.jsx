@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { profileConsentIsCurrent } from '@/lib/consent/privacyNotice';
 import { CONSENT_STATUS_QUERY_KEY, fetchConsentStatus } from '@/lib/consent/consentApi';
-import { ACCOUNT_DELETION_PATH, accountDeletedAt } from '@/lib/account/accountDeletion';
+import { ACCOUNT_DELETION_PATH, accountDeletedAt, accountDeletionStartedAt } from '@/lib/account/accountDeletion';
 import { decideConsentGate } from '@/lib/consent/consentGate';
 import { humanizeError } from '@/lib/errorMessages';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ export default function ConsentGate({ children }) {
   const { user, userProfile, profileQuery, isLoading } = useCurrentProfile();
 
   const stampIsCurrent = profileConsentIsCurrent(userProfile);
-  const needsStatus = Boolean(user?.id && userProfile?.id && !stampIsCurrent && !accountDeletedAt(user));
+  const needsStatus = Boolean(user?.id && userProfile?.id && !stampIsCurrent && !accountDeletedAt(user) && !accountDeletionStartedAt(user));
   const statusQuery = useQuery({
     queryKey: [CONSENT_STATUS_QUERY_KEY, user?.id, userProfile?.id],
     queryFn: fetchConsentStatus,
@@ -87,6 +87,13 @@ export default function ConsentGate({ children }) {
           </div>
         </div>
       </div>
+    );
+  }
+  if (decision === 'deletion_in_progress') {
+    return (
+      <React.Suspense fallback={<Spinner />}>
+        <EliminarCuenta gated resume />
+      </React.Suspense>
     );
   }
   if (decision === 'deletion_page') {

@@ -28,6 +28,7 @@ import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
 import { functionErrorCode } from '@/lib/functionResponse';
 import { humanizeError } from '@/lib/errorMessages';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 const SOLE_ADMIN_REQUESTS = {
   school: {
@@ -55,7 +56,7 @@ const SOLE_ADMIN_REQUESTS = {
  * they get the module-7 "Solicitar eliminación de la escuela" path here, plus
  * the school export, without needing to accept the texts first.
  */
-export default function EliminarCuenta({ gated = false }) {
+export default function EliminarCuenta({ gated = false, resume = false }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { logout } = useAuth();
@@ -147,14 +148,19 @@ export default function EliminarCuenta({ gated = false }) {
       {gated ? (
         <header className="mx-auto max-w-2xl px-4 sm:px-6 pt-6 pb-2">
           <h1 className="text-xl font-semibold text-foreground">{ACCOUNT_DELETION_TITLE}</h1>
-          <p className="text-sm text-muted-foreground">No aceptaste el Aviso de Privacidad y los Términos. Puedes cambiar de opinión o eliminar tu cuenta.</p>
+          <p className="text-sm text-muted-foreground">
+            {resume
+              ? 'La eliminación de tu cuenta quedó en curso y tu acceso ya está cerrado. Vuelve a confirmar para terminarla: lo que ya se hizo no se repite.'
+              : 'No aceptaste el Aviso de Privacidad y los Términos. Puedes cambiar de opinión o eliminar tu cuenta.'}
+          </p>
+          {resume ? <SignOutButton className="mt-3 min-h-11" /> : null}
         </header>
       ) : (
         <PageHeader title={ACCOUNT_DELETION_TITLE} subtitle="Zona de peligro" showBack backTo={createPageUrl('Home')} />
       )}
 
       <div className="mx-auto max-w-2xl px-4 sm:px-6 py-4 pb-24 space-y-4">
-        {gated ? (
+        {gated && !resume ? (
           <Button type="button" className="min-h-11 w-full sm:w-auto bg-brand text-white hover:bg-brand/90" onClick={goBack}>
             Volver y aceptar
           </Button>
@@ -259,9 +265,11 @@ export default function EliminarCuenta({ gated = false }) {
             />
             {deleteError ? <p id="delete-error" role="alert" className="text-sm text-red-700 dark:text-red-400">{deleteError}</p> : null}
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <Button type="button" variant="outline" className="min-h-11" onClick={goBack} disabled={deleting}>
-                {gated ? 'Volver y aceptar' : 'Cancelar'}
-              </Button>
+              {resume ? null : (
+                <Button type="button" variant="outline" className="min-h-11" onClick={goBack} disabled={deleting}>
+                  {gated ? 'Volver y aceptar' : 'Cancelar'}
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="destructive"

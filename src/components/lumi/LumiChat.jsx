@@ -30,6 +30,7 @@ import {
   userMessageIdForTurn,
   visibleMessages,
 } from '@/lib/lumi/chat';
+import { filterLumiReply, helpsWithFromMessages } from '@/lib/lumi/replyFilter';
 import { AUDIT_ENTITIES, logAuditEvent } from '@/lib/audit';
 
 // Mounted only while open (GlobalLumiBubble renders it inside AnimatePresence
@@ -534,6 +535,11 @@ export default function LumiChat({ onClose, userProfile }) {
   // --- Rendering -----------------------------------------------------------
 
   const shownMessages = useMemo(() => visibleMessages(messages), [messages]);
+  // Display-only clean-up of each reply (src/lib/lumi/replyFilter.js): no
+  // offers of topics this role cannot use, no role/sync speculation, no
+  // guessed "su maestra". The server's own helps_with, when the conversation
+  // has a my_context answer, is more precise than the role mirror.
+  const serverHelpsWith = useMemo(() => helpsWithFromMessages(messages), [messages]);
   const timeline = useMemo(() => mergeTimeline(shownMessages, notices), [shownMessages, notices]);
   const toolLabel = pendingToolLabel(messages);
   const quickActions = quickActionsFor(role);
@@ -735,7 +741,7 @@ export default function LumiChat({ onClose, userProfile }) {
                     <p className="whitespace-pre-wrap break-words text-sm">{payload.text}</p>
                   ) : (
                     <div>
-                      <LumiMarkdown>{payload.text}</LumiMarkdown>
+                      <LumiMarkdown>{filterLumiReply(payload.text, { role, helpsWith: serverHelpsWith })}</LumiMarkdown>
                       {Array.isArray(payload.meta?.sources) && payload.meta.sources.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-2">
                           Fuente: {payload.meta.sources.join(', ')}

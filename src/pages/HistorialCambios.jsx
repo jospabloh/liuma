@@ -10,6 +10,17 @@ import { APP_VERSION, RELEASE_DATE } from '@/lib/appConfig';
 // ChangeLog pages.
 const CHANGES = [
   {
+    date: '2026-10-02',
+    title: 'Versión 1.9.0: tu nombre, avisos legales y botones más fáciles de tocar',
+    items: [
+      'LIUMA te pregunta cómo te llamas y usa ese nombre para saludarte y para firmar tus avisos y bitácoras. Puedes cambiarlo cuando quieras desde tu cuenta.',
+      'Ya no verás tu correo en lugar de tu nombre en el saludo.',
+      'Lumi ya no te ofrece cosas que tu rol no puede hacer ni especula sobre cambios de rol.',
+      'El Aviso de Privacidad y los Términos ya son definitivos: dicen quién es responsable de tus datos, qué se guarda, por cuánto tiempo y con qué proveedores.',
+      'En el teléfono, los botones pequeños (tema, cerrar avisos, enlaces, días del calendario) ahora son más fáciles de tocar.',
+    ],
+  },
+  {
     date: '2026-10-01',
     title: 'Versión 1.8.5: Lumi más preciso y Reportes más claro',
     items: [

@@ -5,6 +5,37 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.9.0] - 2026-10-02
+
+Lumi reply filter, final legal texts, real names and 44px touch targets.
+
+### Added
+
+- **Lumi reply filter** (`src/lib/lumi/replyFilter.js`). Every assistant
+  reply is filtered before it is shown: offers of things the role cannot do,
+  speculation about role changes or "sync", and "Permisos y roles" for
+  non-directors are dropped. Presentation only; the server still decides
+  what Lumi can read or write.
+- **"¿Cómo te llamas?"** A person can set the name LIUMA shows
+  (`User.display_name`); greetings, notices, diary entries and family
+  requests are signed with it. An email handle is never shown as a name.
+
+### Changed
+
+- **Aviso de Privacidad and Términos are final** (`vigente`, version
+  `2026-10-02`): the company's legal identity, every entity declared, the
+  Base44 AI-training disclosure and a retention table. Onboarding now
+  records version `2026-10-02` and rejects any other (409).
+- **Touch targets measured at 44px** on phones: theme switcher, toast close,
+  footer link, Reportes "Ver detalle", Ayuda links, calendar days.
+
+### Not included
+
+- The consent package (re-acceptance for existing accounts and
+  "Eliminar mi cuenta y mis datos") and the server-minor package were not
+  built. The legal text already describes the account-deletion option, so it
+  must not be deployed before that exists.
+
 ## [1.8.5] - 2026-10-01
 
 Minor issues from the live retest of v1.8.3.

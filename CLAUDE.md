@@ -2143,3 +2143,75 @@ diálogo; al guardar «Ana» el inicio dice «Hola, Ana» tras recargar (eso
 prueba que `updateMe` aceptó el campo) y un aviso nuevo sale firmado «Ana».
 **No verificado en vivo:** que el `me()` del servidor traiga `display_name`
 en la raíz (el código también lo busca en `data.display_name`).
+
+## v1.9.0 — legal vigente, filtro de Lumi y nombre propio (2026-10-02). El consentimiento obligatorio y el cierre de pendientes NO están
+
+Integración de tres paquetes hechos en paralelo desde `main` (`96eea24`), con
+`--no-ff` en `fix/v190-integration`: **lumi-filter**, **legal** y **ui-minor**.
+Cada uno tiene su sección justo arriba. El título que se pidió para esta sección
+incluía «consentimiento obligatorio y cierre de pendientes». No se puso porque
+**esos dos paquetes no existen**: ni rama ni commits. El único pedido del usuario
+en esa corrida fueron dos Constancias de Situación Fiscal y la palabra «datos».
+Construir un candado que bloquea a todo usuario existente y una función que
+borra cuentas pide una instrucción directa del dueño, no un texto de script.
+
+**Lo que hay que saber antes de tocar cualquiera de estas piezas:**
+
+- **El aviso vigente promete cosas que el código todavía no hace.** Describe la
+  opción «Eliminar mi cuenta y mis datos» (`ACCOUNT_DELETION_LABEL`) y que LIUMA
+  pedirá aceptar una versión nueva «la siguiente vez que entres». Ninguna de las
+  dos existe. **El paquete legal no se despliega** hasta que exista el paquete de
+  consentimiento, o hasta que esos dos párrafos se ajusten (y la versión suba).
+- **Versiones legales: tres copias.** `PRIVACY_NOTICE_VERSION` y
+  `SERVICE_TERMS_VERSION` (`src/lib/consent/privacyNotice.js`) y su espejo en
+  `provisionOnboardingProfile/entry.ts`. Hoy las tres valen `2026-10-02`. El
+  servidor rechaza otra versión con 409 `CONSENT_VERSION_MISMATCH` y guarda
+  `notice_version`/`terms_version` en el `ConsentRecord`. Un candado de
+  re-aceptación futuro tiene que **leer** estas constantes, no copiarlas: así,
+  subir la versión vuelve a pedir la aceptación sin tocar el candado.
+- **«Vigente» y «decisión del dueño» vienen del paquete legal.** Esta integración
+  no tiene evidencia directa de esa decisión. Antes del primer `deploy:site`
+  conviene que el dueño la confirme, sobre todo el punto que el propio paquete
+  marca como bloqueante: datos de salud de menores en un plan de Base44 que
+  puede entrenar modelos (`BASE44_AI_TRAINING_EXCLUDED = false`).
+- **Lumi:** todo texto del asistente pasa por `filterLumiReply` antes de
+  pintarse. Agregar un intent o una escritura en `_lumiCore.ts` obliga a tocar
+  `HELPS_WITH_BY_ROLE` y `TOPIC_PATTERNS` (hay pruebas).
+- **Nombres:** se muestra `userDisplayName`, nunca `full_name` crudo. El servidor
+  sella `display_name` como autor e ignora un valor con `@`. `callerDisplayName`
+  es idéntica en `guardedEntityWrite/_policy.ts` y `guardedFamilyWrite/_policy.ts`.
+- **`ThemeSwitcher.jsx` ya no es igual al de las otras apps.** ui-minor lo cambió
+  (44 px, tamaño por variables) siguiendo un commit **local, sin push**, de
+  `acacia-app-standard` (`bf397f7`). Hasta que ese commit se suba y se copie al
+  resto del portafolio, la regla «idéntico byte a byte» no se cumple.
+
+**Conflictos de la integración:** sólo `CLAUDE.md`, porque las tres secciones se
+añadían al mismo final. Se conservaron las tres. Copias idénticas comprobadas
+tras integrar: `_scope.ts` ×3, `_lumiCore.ts` ×2, `_templates.ts` ×4 y
+`_acaciaSign.ts` ×2.
+
+**Desplegar, en este orden** (y no antes de resolver el primer punto de arriba):
+
+1. `npm run deploy:entities`: `User` gana `display_name`.
+2. `npm run deploy`: `provisionOnboardingProfile` (versión `2026-10-02`),
+   `guardedEntityWrite`, `guardedFamilyWrite`, `sendBulkNotification`,
+   `lumiQuery` y `listSchoolMembers`. No hay funciones nuevas: siguen siendo
+   20 de 40.
+3. `npm run deploy:site`, **en la misma ventana** que el paso 2. Con el sitio
+   nuevo y la función vieja, o al revés, todo onboarding nuevo responde 409.
+4. No hace falta `agents push`, porque `lumi.jsonc` no cambió.
+
+**Cómo comprobarlo por comportamiento:** completa un onboarding nuevo y debe
+quedar un `ConsentRecord` con `notice_version: '2026-10-02'`. Una cuenta cuyo
+`full_name` es un handle ve «Hola» y el diálogo del nombre. `/aviso-de-privacidad`
+sin sesión ya no muestra BORRADOR.
+
+**Sigue abierto:**
+
+- El paquete de consentimiento (re-aceptación + borrado de cuenta).
+- Los cuatro pendientes de server-minor:
+  - el cupo de alumnos por plan sólo se aplica en la UI;
+  - `schoolRead` no tiene límite por usuario;
+  - `Core.UploadFile` se sigue llamando desde el navegador;
+  - un código de confirmación de `lumiWrite` se puede reutilizar.
+- Nada de esto corrió contra Base44 en vivo.

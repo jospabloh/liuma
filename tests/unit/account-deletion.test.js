@@ -191,15 +191,17 @@ test('evidence first: the withdrawal is recorded before anything is deleted, and
   // The deletion-in-progress marker is the very first write (Codex review of
   // PR #197: it is what myConsent checks before and after stamping). Then
   // the stamps fall, then the evidence, then the stamps again, then deletions.
-  const [markerWrite, stampWrite, firstWrite, againWrite] = db.writes;
+  // (A parent holds no director seat, so the reservation follows at once.)
+  const [markerWrite, reservedWrite, stampWrite, firstWrite, againWrite] = db.writes;
   assert.deepEqual([markerWrite.entity, markerWrite.op, markerWrite.id], ['User', 'update', 'u-parent']);
   assert.deepEqual(Object.keys(markerWrite.data), ['account_deletion_started_at']);
+  assert.deepEqual(Object.keys(reservedWrite.data), ['account_deletion_reserved_at']);
   assert.deepEqual([stampWrite.entity, stampWrite.op], ['UserProfile', 'updateMany']);
   assert.equal(stampWrite.data.$set.consent_notice_version, '');
   assert.deepEqual([againWrite.entity, againWrite.op], ['UserProfile', 'updateMany']);
   assert.equal(againWrite.data.$set.consent_notice_version, '');
   const firstDeletion = db.writes.findIndex((w) => /delete/i.test(w.op));
-  assert.ok(firstDeletion > 2, 'nothing is deleted before the withdrawal is recorded');
+  assert.ok(firstDeletion > 3, 'nothing is deleted before the withdrawal is recorded');
   assert.equal(firstWrite.entity, 'ConsentRecord');
   assert.equal(firstWrite.op, 'create');
   assert.equal(firstWrite.data.event, 'WITHDRAWN');
@@ -436,9 +438,9 @@ test('if the User can be neither marked nor removed, the profiles stay and the c
   const sent = [];
   const db = makeFakeMongoDb(tables, {
     failOn: [
-      // The 2nd User.update is the account_deleted_at mark (the 1st is the
-      // deletion-in-progress marker).
-      { entity: 'User', op: 'update', nth: 2, message: 'Forbidden', status: 403 },
+      // The 3rd User.update is the account_deleted_at mark (the 1st is the
+      // deletion-in-progress marker, the 2nd the reservation).
+      { entity: 'User', op: 'update', nth: 3, message: 'Forbidden', status: 403 },
       { entity: 'User', op: 'delete', message: 'Forbidden', status: 403 },
     ],
     integrations: { Core: { SendEmail: async (m) => { sent.push(m); } } },
@@ -609,6 +611,76 @@ for (const [kind, consentOp] of Object.entries(CONSENT_OPS)) {
     assert.ok(stampedThenUndone > 0, 'the harness reaches the interleavings where myConsent stamped mid-deletion');
   });
 }
+
+// Codex review of PR #197, round 4: two ACTIVE directors confirming at once
+// both passed the read-only sole-director check, and their retries skipped
+// it — the school lost both. Each director now claims its seat (a claim row
+// the server timestamps), re-reads, and only the RESERVATION skips the check
+// on a retry.
+function twoDirectors() {
+  const w = world({ withSecondAdmin: true });
+  w.tables.User.push({ id: 'u-admin2', email: 'dir2@ejemplo.mx' });
+  return w;
+}
+
+test('two directors deleting at once, in every interleaving: exactly one leaves, the school keeps a director', async () => {
+  const k = 6; // each one's claim phase: marker, claim, directors, claims, (school), reservation / give-back
+  const schedules = placements(k, k).map((p) => ['D', 'D', 'D', 'C', 'C', 'C', ...p]);
+  for (const schedule of schedules) {
+    const { tables } = twoDirectors();
+    let t = 0;
+    const clock = () => new Date(Date.UTC(2026, 9, 2, 12, 0, 0, t += 1)).toISOString();
+    const sched = scheduler(schedule);
+    const a = scheduledDb(tables, 'D', sched, { clock });
+    const b = scheduledDb(tables, 'C', sched, { clock });
+    const [ra, rb] = await Promise.all([
+      del(a, USERS.admin).finally(() => sched.finish('D')),
+      del(b, USERS.admin2).finally(() => sched.finish('C')),
+    ]);
+    const label = schedule.join('');
+    const codes = [ra, rb].map((r) => r.status === 200 ? 'ok' : r.body.code).sort();
+    assert.deepEqual(codes, ['SOLE_ADMIN', 'ok'], `${label}: ${JSON.stringify([ra.body, rb.body])}`);
+    const admins = tables.UserProfile.filter((p) => p.school_id === 'sA' && p.app_role === 'ADMIN' && p.status === 'ACTIVE');
+    assert.equal(admins.length, 1, `${label}: the school keeps one director`);
+    const loserId = admins[0].user_id;
+    const loser = tables.User.find((u) => u.id === loserId);
+    assert.equal(loser.account_deletion_started_at || '', '', `${label}: the loser can use the app again`);
+    assert.equal(loser.account_deletion_reserved_at, undefined, label);
+    assert.equal(tables.AuditLog.some((r) => r.target_type === 'AccountDeletionClaim' && r.user_id === loserId), false, `${label}: the loser's claim is gone`);
+    const loserResult = ra.status === 200 ? rb : ra;
+    assert.equal(loserResult.body.blocked, false, label);
+    // Its retry: now really the only director — refused, nothing written.
+    const again = makeFakeMongoDb(tables, { idPrefix: 'r' });
+    const retry = await del(again, { ...USERS.admin2, id: loserId, ...loser });
+    assert.equal(retry.body.code, 'SOLE_ADMIN', label);
+    assert.equal(again.writes.length, 0, label);
+  }
+});
+
+test('a director who loses the seat but cannot clear its own mark is told it is blocked, in Spanish', async () => {
+  const { tables } = twoDirectors();
+  // The other director already holds an earlier claim.
+  tables.AuditLog.push({ id: 'claim-1', target_type: 'AccountDeletionClaim', target_id: 'sA', user_id: 'u-admin', school_id: 'sA', created_date: '2026-10-02T11:00:00.000Z' });
+  // The give-back of the marker (2nd User.update) fails, and so does its retry.
+  const db = makeFakeMongoDb(tables, { failOn: [2, 3].map((nth) => ({ entity: 'User', op: 'update', nth, message: 'Forbidden', status: 403 })) });
+  const r = await del(db, USERS.admin2);
+  assert.deepEqual([r.status, r.body.code, r.body.blocked], [409, 'SOLE_ADMIN', true]);
+  assert.equal(tables.AuditLog.some((x) => x.user_id === 'u-admin2' && x.target_type === 'AccountDeletionClaim'), false, 'its claim is given back');
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-admin2'), true, 'nothing destructive happened');
+  assert.match(deletionErrorMessage('SOLE_ADMIN', { blocked: true }), /bloqueada[\s\S]*soporte@acaciaco\.com\.mx/);
+  assert.match(read('src/pages/EliminarCuenta.jsx'), /deletionErrorMessage\(code, \{ blocked: functionErrorBody\(e\)\?\.blocked === true \}\)/);
+});
+
+test('only the RESERVATION skips the director check on a retry, not the started mark', async () => {
+  const { tables } = twoDirectors();
+  // Started but never reserved (its claim phase was cut short).
+  tables.User.find((u) => u.id === 'u-admin').account_deletion_started_at = NOW.toISOString();
+  tables.UserProfile = tables.UserProfile.filter((p) => p.user_id !== 'u-admin2');
+  const r = await del(makeFakeMongoDb(tables), { ...USERS.admin, account_deletion_started_at: NOW.toISOString() });
+  assert.equal(r.body.code, 'SOLE_ADMIN', 'still judged');
+  const preview = await previewDeletion(makeFakeMongoDb(tables), USERS.admin);
+  assert.deepEqual([preview.body.resume, preview.body.soleAdmin], [false, true]);
+});
 
 test('the deletion marker is written before anything else; if it fails, nothing changed and the person can still accept', async () => {
   const { tables } = raceWorld();

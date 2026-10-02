@@ -200,22 +200,126 @@ function isNotFound(e: unknown): boolean {
   return err?.status === 404 || /not found/i.test(String(err?.message ?? ''));
 }
 
+// MIRRORS nothing on the client: only this function reads it.
+export function deletionReservedAt(user: unknown): string {
+  const u = (user ?? {}) as { account_deletion_reserved_at?: unknown; data?: { account_deletion_reserved_at?: unknown } | null };
+  const v = u.account_deletion_reserved_at ?? u.data?.account_deletion_reserved_at;
+  return typeof v === 'string' ? v : '';
+}
+
 /**
- * Has this person's deletion already started (or been marked done)? The
- * token's copy first; the stored User otherwise. A started deletion is
- * FINISHED, never re-judged: the person was not the only director when they
- * confirmed, their access is already closed and they cannot re-accept, so a
- * SOLE_ADMIN answer now (another director left meanwhile) would strand them.
+ * Did this deletion already pass the director check (or finish)? Only a
+ * durable RESERVATION skips it on a retry — not the started marker (Codex
+ * review of PR #197, round 4: two directors starting at once both had the
+ * marker, so both retries skipped the check and the school lost both). The
+ * token's copy first; the stored User otherwise.
  */
-async function deletionAlreadyStarted(sr: Db, user: Caller): Promise<boolean> {
-  if (deletionStartedAt(user) || accountDeletedAt(user)) return true;
+async function deletionReserved(sr: Db, user: Caller): Promise<boolean> {
+  if (deletionReservedAt(user) || accountDeletedAt(user)) return true;
   try {
     const row = await sr.entities.User.get(String(user.id));
-    return Boolean(deletionStartedAt(row) || accountDeletedAt(row));
+    return Boolean(deletionReservedAt(row) || accountDeletedAt(row));
   } catch (e) {
     if (isNotFound(e)) return false;
     throw e;
   }
+}
+
+// --- The director seat (claim pattern, like resolvePaymentRace) ------------
+//
+// The pre-check (soleAdminSchools) is a read: two directors of a two-director
+// school confirming at once both pass it. So a director's deletion CLAIMS its
+// leave first — an AuditLog row per school, whose created_date the SERVER
+// assigns, so claims are ordered by when they were written, not by each
+// caller's clock — and only then re-reads the school's ACTIVE directors and
+// live claims. Rule: I may leave iff some ACTIVE director remains after
+// removing every claimer whose claim is at or before mine (same instant
+// counts as before: on an exact tie both refuse, never both leave).
+//
+// Why it holds: if A's claim was written before B's, B's re-read (after B's
+// own claim) sees A's claim, so B removes A and itself; A only removes
+// itself. With two directors, B refuses and A goes — whatever the order of
+// the reads. A loser deletes its claim and clears its marker; a claim left
+// behind by a failed clean-up only makes later deletions MORE careful.
+
+export const DELETION_CLAIM_TARGET = 'AccountDeletionClaim';
+const SEAT_READ_LIMIT = 500;
+
+type ClaimRow = { id?: string; user_id?: string; created_date?: string };
+
+function claimTime(row: ClaimRow): string {
+  return String(row.created_date || '');
+}
+
+/** May `userId` leave `schoolId`? Pure: admins and claims as read after my claim. */
+export function seatDecision(admins: Profile[], claims: ClaimRow[], myClaim: ClaimRow, userId: string): boolean {
+  const adminIds = new Set(admins.map((a) => String(a.user_id || '')).filter(Boolean));
+  const mine = claimTime(myClaim);
+  const leavingFirst = new Set<string>([userId]);
+  for (const c of claims) {
+    const id = String(c.user_id || '');
+    if (!adminIds.has(id)) continue; // no longer a director: irrelevant
+    if (claimTime(c) <= mine) leavingFirst.add(id);
+  }
+  return [...adminIds].some((id) => !leavingFirst.has(id));
+}
+
+async function tryTwice(fn: () => Promise<unknown>): Promise<boolean> {
+  for (let i = 0; i < 2; i += 1) {
+    try { await fn(); return true; } catch { /* retried */ }
+  }
+  return false;
+}
+
+/**
+ * Claim the seat in every school where the caller is an ACTIVE director.
+ * Returns null when they may leave, or the refusal (after giving the claims
+ * and the started marker back).
+ */
+async function reserveDirectorSeats(sr: Db, userId: string, profiles: Profile[]): Promise<Result | null> {
+  const schools = [...new Set(profiles
+    .filter((p) => p.app_role === 'ADMIN' && p.status === 'ACTIVE' && p.school_id)
+    .map((p) => String(p.school_id)))];
+  const myClaims: string[] = [];
+  const lost: Array<{ id: string; name: string }> = [];
+  let unreadable = false;
+  for (const schoolId of schools) {
+    let claim: ClaimRow;
+    try {
+      claim = await sr.entities.AuditLog.create({
+        school_id: schoolId, user_id: userId, action: 'RECORD_CREATED',
+        target_type: DELETION_CLAIM_TARGET, target_id: schoolId, details: { purpose: 'director_leaving' },
+      });
+    } catch (e) {
+      if (isRateLimit(e)) throw e;
+      unreadable = true;
+      break;
+    }
+    if (claim?.id) myClaims.push(String(claim.id));
+    const admins: Profile[] = (await sr.entities.UserProfile.filter({ school_id: schoolId, app_role: 'ADMIN', status: 'ACTIVE' }, 'created_date', SEAT_READ_LIMIT)) || [];
+    const adminIds = admins.map((a) => String(a.user_id || '')).filter(Boolean);
+    const claims: ClaimRow[] = adminIds.length
+      ? (await sr.entities.AuditLog.filter({ target_type: DELETION_CLAIM_TARGET, target_id: schoolId, user_id: { $in: adminIds } }, 'created_date', SEAT_READ_LIMIT)) || []
+      : [];
+    // A page that may hide rows cannot prove a director remains: refuse.
+    if (admins.length >= SEAT_READ_LIMIT || claims.length >= SEAT_READ_LIMIT) { unreadable = true; break; }
+    const seen = claims.some((c) => String(c.id) === String(claim.id)) ? claims : [...claims, claim];
+    if (!seatDecision(admins, seen, claim, userId)) {
+      const school: { name?: string } | null = await sr.entities.School.get(schoolId).catch(() => null);
+      lost.push({ id: schoolId, name: String(school?.name || '') });
+    }
+  }
+  if (!lost.length && !unreadable) return null;
+
+  // Give everything back: claims first (so others stop counting me), then
+  // the marker (so I can use the app again). Retried; a marker that cannot
+  // be cleared leaves the person blocked, and the answer says so.
+  for (const id of myClaims) await tryTwice(() => sr.entities.AuditLog.delete(id));
+  const unblocked = await tryTwice(() => sr.entities.User.update(userId, { account_deletion_started_at: '' }));
+  if (unreadable && !lost.length) {
+    return fail(503, 'DELETION_NOT_STARTED', 'The directors of your school could not be checked; nothing was changed, retry', { blocked: !unblocked });
+  }
+  return fail(409, 'SOLE_ADMIN', 'You are the only active director of your school', { soleAdminSchools: lost, blocked: !unblocked });
 }
 
 /** { action: 'preview' } — what the page needs to choose its path. */
@@ -226,7 +330,7 @@ export async function previewDeletion(sr: Db, user: Caller): Promise<Result> {
     return { status: 200, body: { ok: true, platformOwner: true, soleAdmin: false, soleAdminSchools: [], hasProfile: false, role: null, resume: false } };
   }
   const profiles = await myProfiles(sr, userId);
-  const resume = await deletionAlreadyStarted(sr, user);
+  const resume = await deletionReserved(sr, user);
   const sole = resume ? [] : await soleAdminSchools(sr, profiles, userId);
   return {
     status: 200,
@@ -328,12 +432,13 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   }
 
   const profiles = await myProfiles(sr, userId);
-  // A deletion that already started is finished, not re-judged: the person
-  // was not the only director when they confirmed, their access is already
-  // closed and they can no longer re-accept — refusing now (another director
-  // left meanwhile) would strand them on the deletion page.
-  const alreadyStarted = await deletionAlreadyStarted(sr, user);
-  const sole = alreadyStarted ? [] : await soleAdminSchools(sr, profiles, userId);
+  // A deletion that already RESERVED its director seat is finished, not
+  // re-judged: refusing now (another director left meanwhile) would strand
+  // the person, whose access is already closed.
+  const reserved = await deletionReserved(sr, user);
+  // The cheap read-only pre-check: a lone director is refused with nothing
+  // written. It is not the decision — reserveDirectorSeats below is.
+  const sole = reserved ? [] : await soleAdminSchools(sr, profiles, userId);
   if (sole.length) {
     return fail(409, 'SOLE_ADMIN', 'You are the only active director of your school', { soleAdminSchools: sole });
   }
@@ -355,6 +460,24 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   } catch (e) {
     if (isRateLimit(e)) throw e;
     return fail(503, 'DELETION_NOT_STARTED', 'The deletion could not be started; nothing was changed, retry');
+  }
+
+  // 0b. A director claims their seat and re-checks that another director
+  //     stays (reserveDirectorSeats); then the RESERVATION is written, and
+  //     only it lets a retry skip the check. Nothing destructive before it.
+  if (!reserved) {
+    const refused = await reserveDirectorSeats(sr, userId, profiles);
+    if (refused) return refused;
+    try {
+      await sr.entities.User.update(userId, { account_deletion_reserved_at: nowIso });
+    } catch (e) {
+      // Without the durable reservation a retry would re-judge a seat others
+      // already counted as gone: give it back and start over.
+      await sr.entities.AuditLog.deleteMany({ target_type: DELETION_CLAIM_TARGET, user_id: userId }).catch(() => null);
+      await sr.entities.User.update(userId, { account_deletion_started_at: '' }).catch(() => null);
+      if (isRateLimit(e)) throw e;
+      return fail(503, 'DELETION_NOT_STARTED', 'The deletion could not be started; nothing was changed, retry');
+    }
   }
 
   // 1a. Cut access: the stamps are what the server gates read.

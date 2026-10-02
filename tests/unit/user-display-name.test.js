@@ -237,6 +237,19 @@ test('the server never stamps an email handle as an author: the role instead (Co
   assert.equal(emergencyAuthorName({ display_name: 'dir_2026', full_name: 'Laura Gómez' }), 'Laura Gómez');
 });
 
+test('a handle in display_name is not a name on the client either, and the name prompt still appears', () => {
+  const user = { id: 'u1', email: 'h.josepablo+qa@gmail.com', display_name: 'h.josepablo+qa', full_name: 'h.josepablo+qa' };
+  assert.equal(userDisplayName(user), '');
+  assert.equal(greetingFor(user), 'Hola');
+  assert.equal(shouldPromptForName(user, memoryStorage()), true, 'the handle does not silence the question');
+  // A handle-like chosen name falls through to a real full_name.
+  assert.equal(userDisplayName({ display_name: 'h.josepablo+qa', full_name: 'José Pablo' }), 'José Pablo');
+  // The client and the server agree on every case.
+  for (const u of [user, { display_name: 'Laura Gómez' }, { display_name: 'juan_perez', full_name: 'Juan Pérez' }, { display_name: 'laura', email: 'laura@x.mx', full_name: 'Laura G' }]) {
+    assert.equal(userDisplayName(u), entityCallerName(u), JSON.stringify(u));
+  }
+});
+
 test('the name question waits for the trial welcome instead of stacking on it', () => {
   const founder = { app_role: 'ADMIN', welcome_message_shown: false };
   assert.equal(welcomeMayStillShow({ profile: founder, subscriptionLoading: true }), true, 'license still loading');

@@ -12,7 +12,8 @@
 // `failOn` makes an operation throw (or only its nth call), to test what a
 // failure part-way leaves.
 
-const OPS = new Set(['$eq', '$ne', '$in', '$nin']);
+// Range operators compare as strings, like ISO dates do.
+const OPS = new Set(['$eq', '$ne', '$in', '$nin', '$gte', '$gt', '$lte', '$lt']);
 
 function scalarMatches(value, cond) {
   if (cond === null || typeof cond !== 'object' || Array.isArray(cond)) {
@@ -26,6 +27,10 @@ function scalarMatches(value, cond) {
       case '$ne': return !values.includes(operand);
       case '$in': return values.some((v) => operand.includes(v));
       case '$nin': return !values.some((v) => operand.includes(v));
+      case '$gte': return values.some((v) => v != null && String(v) >= String(operand));
+      case '$gt': return values.some((v) => v != null && String(v) > String(operand));
+      case '$lte': return values.some((v) => v != null && String(v) <= String(operand));
+      case '$lt': return values.some((v) => v != null && String(v) < String(operand));
     }
     return false;
   });
@@ -56,7 +61,9 @@ function applyUpdate(row, data) {
 // `idPrefix` keeps ids unique when several fakes write to the same tables.
 // `batchSize` makes updateMany change at most that many rows per call and say
 // has_more, like Base44 (500 per batch).
-export function makeFakeMongoDb(tables, { failOn = null, integrations = null, idPrefix = 'new', batchSize = Infinity } = {}) {
+// `clock` (() => ISO string) lets several fakes over the same tables share one
+// created_date sequence, like one server.
+export function makeFakeMongoDb(tables, { failOn = null, integrations = null, idPrefix = 'new', batchSize = Infinity, clock = null } = {}) {
   const writes = [];
   const calls = [];
   const entities = {};
@@ -65,12 +72,10 @@ export function makeFakeMongoDb(tables, { failOn = null, integrations = null, id
   // (1-based) of that entity+op, so a test can fail the SECOND of two writes.
   const rules = (Array.isArray(failOn) ? failOn : failOn ? [failOn] : []).map((r) => ({ ...r, seen: 0 }));
   const maybeFail = (entity, op) => {
-    for (const rule of rules) {
-      if (rule.entity !== entity || rule.op !== op) continue;
-      rule.seen += 1;
-      if (rule.nth && rule.nth !== rule.seen) continue;
-      throw Object.assign(new Error(rule.message || 'boom'), { status: rule.status });
-    }
+    const matching = rules.filter((rule) => rule.entity === entity && rule.op === op);
+    for (const rule of matching) rule.seen += 1; // every rule counts every call
+    const hit = matching.find((rule) => !rule.nth || rule.nth === rule.seen);
+    if (hit) throw Object.assign(new Error(hit.message || 'boom'), { status: hit.status });
   };
   const table = (name) => {
     if (!tables[name]) tables[name] = [];
@@ -99,7 +104,7 @@ export function makeFakeMongoDb(tables, { failOn = null, integrations = null, id
     },
     async create(data) {
       maybeFail(name, 'create');
-      const row = { id: `${idPrefix}-${name}-${nextId++}`, created_date: `2026-10-02T12:00:${String(nextId).padStart(2, '0')}.000Z`, ...structuredClone(data) };
+      const row = { id: `${idPrefix}-${name}-${nextId++}`, created_date: clock ? clock() : `2026-10-02T12:00:${String(nextId).padStart(2, '0')}.000Z`, ...structuredClone(data) };
       table(name).push(row);
       writes.push({ entity: name, op: 'create', id: row.id, data: structuredClone(data) });
       return structuredClone(row);

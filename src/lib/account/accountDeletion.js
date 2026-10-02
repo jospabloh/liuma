@@ -114,7 +114,12 @@ const ERROR_MESSAGES = {
 };
 
 /** Spanish sentence for a deleteMyAccount refusal or failure. */
-export function deletionErrorMessage(code) {
+export function deletionErrorMessage(code, { blocked = false } = {}) {
+  // deleteMyAccount lost the director check but could not undo its own
+  // "deletion started" mark: the account stays closed until ACACIA lifts it.
+  if (blocked) {
+    return `${ERROR_MESSAGES[code] || 'No se pudo eliminar tu cuenta.'} Tu cuenta quedó bloqueada mientras tanto: escribe a ${ACACIA_SUPPORT_EMAIL} para que la reactivemos.`;
+  }
   return ERROR_MESSAGES[code]
     || `No se pudo completar la eliminación. Inténtalo de nuevo (lo que ya se hizo no se repite) o escribe a ${ACACIA_SUPPORT_EMAIL}.`;
 }

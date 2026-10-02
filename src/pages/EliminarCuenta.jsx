@@ -27,7 +27,7 @@ import { DELETION_PREVIEW_QUERY_KEY, deleteMyAccount, previewAccountDeletion } f
 import { downloadSchoolExport } from '@/lib/account/schoolExport';
 import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
-import { functionErrorCode } from '@/lib/functionResponse';
+import { functionErrorBody, functionErrorCode } from '@/lib/functionResponse';
 import { humanizeError } from '@/lib/errorMessages';
 import SignOutButton from '@/components/auth/SignOutButton';
 
@@ -99,7 +99,7 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
       logout();
     } catch (e) {
       const code = functionErrorCode(e);
-      setDeleteError(code ? deletionErrorMessage(code) : humanizeError(e));
+      setDeleteError(code ? deletionErrorMessage(code, { blocked: functionErrorBody(e)?.blocked === true }) : humanizeError(e));
       if (code === 'SOLE_ADMIN') previewQuery.refetch();
       setDeleting(false);
     }

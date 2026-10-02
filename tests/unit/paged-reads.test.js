@@ -54,7 +54,35 @@ test('2,501 profiles (past the old 2,000 limit) are all read, page by page, sequ
   assert.equal(result.rows.length, 2501);
   assert.equal(new Set(result.rows.map((r) => r.id)).size, 2501);
   assert.equal(w.calls.length, Math.ceil(2501 / PAGE_SIZE));
-  for (const [, sort, limit] of w.calls) assert.deepEqual([sort, limit], ['created_date', PAGE_SIZE]);
+  for (const [, sort, limit, skip] of w.calls) assert.deepEqual([sort, limit, skip], ['created_date', PAGE_SIZE, undefined], 'keyset, never offsets');
+});
+
+// Codex review, round 4: offset paging (skip) lost a row whenever one was
+// deleted from a page already read — every later row shifted back by one.
+test('a row deleted from an already-read page between page reads never costs a later row', async () => {
+  const all = rows(1001);
+  const db = makeFakeMongoDb({ Student: all.map((r) => ({ ...r })) });
+  let pages = 0;
+  const handler = {
+    async filter(...args) {
+      const out = await db.entities.Student.filter(...args);
+      pages += 1;
+      // After the first page, someone removes a student that page returned.
+      if (pages === 1) db.tables.Student.splice(db.tables.Student.findIndex((r) => r.id === out[3].id), 1);
+      return out;
+    },
+  };
+  const result = await readAllPages(handler, { school_id: 'sA' });
+  assert.equal(result.complete, true);
+  const ids = new Set(result.rows.map((r) => r.id));
+  for (const r of db.tables.Student) assert.ok(ids.has(r.id), `${r.id} was skipped`);
+  assert.ok(ids.has(all[1000].id), 'the last row is read');
+});
+
+test('a tie on created_date wider than a page is reported incomplete, never looped on', async () => {
+  const same = rows(PAGE_SIZE + 10).map((r) => ({ ...r, created_date: '2026-01-01T00:00:00.000Z' }));
+  const result = await readAllPages(makeFakeMongoDb({ Student: same }).entities.Student, { school_id: 'sA' });
+  assert.equal(result.complete, false);
 });
 
 test('5,001 users by id (past the old 5,000 limit) are all read, in bounded $in chunks', async () => {
@@ -72,7 +100,7 @@ test('past the hard bound the read says so — never a quiet truncation', async 
   const db = makeFakeMongoDb({ Student: rows(n) });
   const partial = await readAllPages(db.entities.Student, { school_id: 'sA' });
   assert.equal(partial.complete, false);
-  assert.equal(partial.rows.length, PAGE_SIZE * MAX_PAGES);
+  assert.ok(partial.rows.length < n && partial.rows.length >= (PAGE_SIZE - 1) * MAX_PAGES);
   await assert.rejects(() => readAllOrFail(db.entities.Student, { school_id: 'sA' }, 'students'),
     (e) => e instanceof IncompleteReadError && e.code === 'RECIPIENTS_INCOMPLETE' && e.status === 503);
   // Exactly at a page boundary is still complete (one empty page confirms it).

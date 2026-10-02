@@ -41,8 +41,13 @@ function chosenName(user) {
  */
 export function userDisplayName(user) {
   if (!user) return '';
-  const chosen = chosenName(user);
-  if (chosen) return chosen.slice(0, DISPLAY_NAME_MAX);
+  // The chosen name passes the same handle test (Codex review of PR #197):
+  // it is self-written with updateMe, so the dialog's validation can be
+  // skipped — and a handle there would also silence the name prompt
+  // (shouldPromptForName reads this). Same rule the server stamps with
+  // (guardedEntityWrite/_policy.ts#callerDisplayName).
+  const chosen = chosenName(user).slice(0, DISPLAY_NAME_MAX);
+  if (chosen && !isHandleLikeName(chosen, user.email)) return chosen;
   const full = String(user.full_name ?? '').replace(/\s+/g, ' ').trim();
   return isHandleLikeName(full, user.email) ? '' : full;
 }

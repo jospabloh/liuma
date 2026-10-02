@@ -29,6 +29,14 @@
         "write": false
       }
     },
+    "account_deletion_reserved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "deleteMyAccount pasó la comprobación de dirección (otra persona activa de la dirección se queda en la escuela) y reservó la baja. Sólo esta marca deja que un reintento se salte esa comprobación; la de inicio (account_deletion_started_at) no basta, porque dos directoras que empiezan a la vez la tienen las dos. write:false: sólo el service role la escribe.",
+      "rls": {
+        "write": false
+      }
+    },
     "app_role": {
       "type": "string",
       "description": "Rol de app del usuario (ADMIN/TEACHER/PARENT), leído por RLS como user_condition data.app_role (SchoolSubscription.read). Nadie lo escribe hoy: el rol vive en UserProfile. write:false para que nadie se dé ADMIN a sí mismo con updateMe (módulo 24 del estándar).",

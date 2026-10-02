@@ -195,15 +195,39 @@ async function soleAdminSchools(sr: Db, profiles: Profile[], userId: string): Pr
   return out;
 }
 
+function isNotFound(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return err?.status === 404 || /not found/i.test(String(err?.message ?? ''));
+}
+
+/**
+ * Has this person's deletion already started (or been marked done)? The
+ * token's copy first; the stored User otherwise. A started deletion is
+ * FINISHED, never re-judged: the person was not the only director when they
+ * confirmed, their access is already closed and they cannot re-accept, so a
+ * SOLE_ADMIN answer now (another director left meanwhile) would strand them.
+ */
+async function deletionAlreadyStarted(sr: Db, user: Caller): Promise<boolean> {
+  if (deletionStartedAt(user) || accountDeletedAt(user)) return true;
+  try {
+    const row = await sr.entities.User.get(String(user.id));
+    return Boolean(deletionStartedAt(row) || accountDeletedAt(row));
+  } catch (e) {
+    if (isNotFound(e)) return false;
+    throw e;
+  }
+}
+
 /** { action: 'preview' } — what the page needs to choose its path. */
 export async function previewDeletion(sr: Db, user: Caller): Promise<Result> {
   if (!user?.id) return fail(401, 'UNAUTHENTICATED', 'Unauthorized');
   const userId = String(user.id);
   if (user.role === 'admin') {
-    return { status: 200, body: { ok: true, platformOwner: true, soleAdmin: false, soleAdminSchools: [], hasProfile: false, role: null } };
+    return { status: 200, body: { ok: true, platformOwner: true, soleAdmin: false, soleAdminSchools: [], hasProfile: false, role: null, resume: false } };
   }
   const profiles = await myProfiles(sr, userId);
-  const sole = await soleAdminSchools(sr, profiles, userId);
+  const resume = await deletionAlreadyStarted(sr, user);
+  const sole = resume ? [] : await soleAdminSchools(sr, profiles, userId);
   return {
     status: 200,
     body: {
@@ -213,20 +237,40 @@ export async function previewDeletion(sr: Db, user: Caller): Promise<Result> {
       role: profiles[0]?.app_role || null,
       soleAdmin: sole.length > 0,
       soleAdminSchools: sole,
+      // The page then always offers "finish the deletion".
+      resume,
     },
   };
 }
 
+/** updateMany batches per call before giving up (×500 rows per batch). */
+export const MAX_UPDATE_BATCHES = 40;
+
+/**
+ * A bulk step that stopped with rows left (Codex review of PR #197: the
+ * loop used to stop at its bound with has_more still true and report
+ * success). Thrown BEFORE the account is marked deleted or removed, so the
+ * page offers a retry, and the retry continues where this one stopped —
+ * every query here excludes the rows it already changed.
+ */
+export class DeletionIncompleteError extends Error {
+  status = 503;
+  code = 'DELETION_INCOMPLETE';
+  constructor(entity: string) {
+    super(`updateMany on ${entity} still had rows left after ${MAX_UPDATE_BATCHES} batches`);
+  }
+}
+
 async function updateAll(sr: Db, entity: string, query: Record<string, unknown>, data: Record<string, unknown>): Promise<number> {
   let total = 0;
-  // updateMany works in batches of up to 500 and says has_more; every query
-  // here excludes the rows it already changed, so a repeat converges.
-  for (let i = 0; i < 40; i += 1) {
+  // updateMany works in batches of up to 500 and says has_more; loop until
+  // it says there are none, and FAIL — never report done — at the bound.
+  for (let i = 0; i < MAX_UPDATE_BATCHES; i += 1) {
     const res: { updated?: number; has_more?: boolean } | null = await sr.entities[entity].updateMany(query, data);
     total += Number(res?.updated || 0);
-    if (!res?.has_more) break;
+    if (!res?.has_more) return total;
   }
-  return total;
+  throw new DeletionIncompleteError(entity);
 }
 
 // Clearing the stamp sends the person to the consent screen and makes every
@@ -288,7 +332,7 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   // was not the only director when they confirmed, their access is already
   // closed and they can no longer re-accept — refusing now (another director
   // left meanwhile) would strand them on the deletion page.
-  const alreadyStarted = Boolean(deletionStartedAt(user) || accountDeletedAt(user));
+  const alreadyStarted = await deletionAlreadyStarted(sr, user);
   const sole = alreadyStarted ? [] : await soleAdminSchools(sr, profiles, userId);
   if (sole.length) {
     return fail(409, 'SOLE_ADMIN', 'You are the only active director of your school', { soleAdminSchools: sole });

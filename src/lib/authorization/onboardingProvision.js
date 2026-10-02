@@ -46,7 +46,7 @@ import {
 } from '../onboarding/joinCode.js';
 import { PRIVACY_NOTICE_VERSION, TERMS_VERSION, CONSENT_SCOPES } from '../consent/privacyNotice.js';
 import { buildTrialSubscription } from '../license/licenseModel.js';
-import { accountDeletedAt } from '../account/accountDeletion.js';
+import { accountDeletedAt, accountDeletionStartedAt } from '../account/accountDeletion.js';
 
 export const APP_ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 export { JOIN_CODE_ALPHABET, JOIN_CODE_LENGTH };
@@ -214,6 +214,9 @@ export async function resolveSchoolByCode(sr, rawCode) {
 export async function runOnboardingProvision({ user, body, sr, now = new Date(), userAgent = '', randomBytes }) {
   if (!user?.id) throw new ProvisionError(401, 'UNAUTHENTICATED', 'Unauthorized');
   if (accountDeletedAt(user)) throw new ProvisionError(410, 'ACCOUNT_DELETED', 'This account was deleted');
+  // Onboarding writes consent: refused while a deletion is under way, like
+  // myConsent (MIRRORS provisionOnboardingProfile/entry.ts).
+  if (accountDeletionStartedAt(user)) throw new ProvisionError(403, 'ACCOUNT_DELETION_IN_PROGRESS', 'This account is being deleted');
   const role = String(body?.role || '');
   if (!APP_ROLES.includes(role)) throw new ProvisionError(400, 'INVALID_ROLE', 'Invalid onboarding role');
   const phone = sanitizePhone(body?.phone);

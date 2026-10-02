@@ -52,6 +52,20 @@ export function accountDeletionStartedAt(user) {
   return typeof v === 'string' ? v : '';
 }
 
+/**
+ * Which body the deletion page shows: 'owner' (cannot delete), 'sole_admin'
+ * (the school-request path, no confirm button) or 'confirm'. A deletion that
+ * already started ALWAYS gets 'confirm' — whether the page was opened to
+ * finish it (`resume`) or the server says so (`preview.resume`): without the
+ * button the person would be stuck, access closed and re-acceptance refused
+ * (Codex review of PR #197).
+ */
+export function deletionPageMode({ preview, resume = false } = {}) {
+  if (preview?.platformOwner) return 'owner';
+  if (resume || preview?.resume) return 'confirm';
+  return preview?.soleAdmin ? 'sole_admin' : 'confirm';
+}
+
 /** What goes away. Role decides which lines apply. */
 export function deletedItems(role) {
   const items = [
@@ -89,6 +103,8 @@ const ERROR_MESSAGES = {
   PLATFORM_OWNER: 'La cuenta dueña de la plataforma no se puede eliminar desde la app.',
   RATE_LIMITED: 'Hay mucha actividad en este momento. Espera unos segundos e inténtalo de nuevo: lo que ya se hizo no se repite.',
   UNAUTHENTICATED: 'Tu sesión expiró. Vuelve a iniciar sesión e inténtalo de nuevo.',
+  // A bulk step had rows left; the account was not marked deleted yet.
+  DELETION_INCOMPLETE: 'La eliminación de tu cuenta quedó a medias porque hay muchos registros que actualizar. Vuelve a intentarlo para continuar donde se quedó.',
   // The deletion-in-progress marker could not be written: nothing changed.
   DELETION_NOT_STARTED: `No se pudo iniciar la eliminación de tu cuenta. No se cambió nada; inténtalo de nuevo o escribe a ${ACACIA_SUPPORT_EMAIL}.`,
   // deleteMyAccount could not mark the account as deleted, so it kept the

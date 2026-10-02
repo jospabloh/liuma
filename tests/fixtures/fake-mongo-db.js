@@ -54,7 +54,9 @@ function applyUpdate(row, data) {
 }
 
 // `idPrefix` keeps ids unique when several fakes write to the same tables.
-export function makeFakeMongoDb(tables, { failOn = null, integrations = null, idPrefix = 'new' } = {}) {
+// `batchSize` makes updateMany change at most that many rows per call and say
+// has_more, like Base44 (500 per batch).
+export function makeFakeMongoDb(tables, { failOn = null, integrations = null, idPrefix = 'new', batchSize = Infinity } = {}) {
   const writes = [];
   const calls = [];
   const entities = {};
@@ -120,10 +122,11 @@ export function makeFakeMongoDb(tables, { failOn = null, integrations = null, id
     },
     async updateMany(query, data) {
       maybeFail(name, 'updateMany');
-      const hits = table(name).filter((r) => rowMatches(r, query));
+      const matching = table(name).filter((r) => rowMatches(r, query));
+      const hits = matching.slice(0, batchSize);
       for (const row of hits) applyUpdate(row, data);
       writes.push({ entity: name, op: 'updateMany', query: structuredClone(query), data: structuredClone(data), count: hits.length });
-      return { success: true, updated: hits.length, has_more: false };
+      return { success: true, updated: hits.length, has_more: matching.length > hits.length };
     },
     async deleteMany(query) {
       maybeFail(name, 'deleteMany');

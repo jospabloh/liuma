@@ -120,6 +120,8 @@ type Plan = {
 };
 type Summary = {
   total: number; reached: number; emailed: number; emailFailed: number; noChannel: number;
+  // Recipients past MAX_RECIPIENTS: counted in `total`, never "reached".
+  notAttempted: number;
 };
 
 class HttpError extends Error {
@@ -566,7 +568,13 @@ async function deliver(sr: Any, user: Any, plan: Plan): Promise<Summary> {
     }
   });
 
-  const summary: Summary = { total: recipients.length, reached: 0, emailed: 0, emailFailed: 0, noChannel: 0 };
+  // `total` is everyone the plan named, not the slice attempted: a cut list
+  // reads "Enviado a 2000 de 2300", never "2000 de 2000" (Codex review of
+  // PR #197 — a bounded step must not report the remainder as done).
+  const summary: Summary = {
+    total: plan.recipients.length, reached: 0, emailed: 0, emailFailed: 0, noChannel: 0,
+    notAttempted: plan.recipients.length - recipients.length,
+  };
   const delivered: Recipient[] = [];
   const failures: Array<{ key: string; error: string }> = [];
   results.forEach((res, i) => {

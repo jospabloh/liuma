@@ -172,6 +172,73 @@ test('two creates racing for the last seat never leave the school over the cap',
   assert.ok(!db.writes.some((w) => w.entity === 'AuditLog' && w.data?.action === 'RECORD_CREATED'), 'an undone write is not audited as created');
 });
 
+// The over-cap undo is not infallible (Codex review of PR #197): it is
+// retried, falls back to is_active:false (out of the count), and only if all
+// of that fails says so — never a refusal that claims nothing was saved while
+// the school sits over its cap.
+function racingSchool() {
+  const db = school({ active: 164 });
+  const create = db.entities.Student.create.bind(db.entities.Student);
+  let raced = false;
+  db.entities.Student.create = async (data) => {
+    if (!raced) { raced = true; await create({ ...data, first_name: 'Paralela' }); }
+    return create(data);
+  };
+  return db;
+}
+
+test('over the cap and the delete fails: the new student is taken out of the count instead', async () => {
+  const db = racingSchool();
+  db.entities.Student.delete = async () => { throw new Error('store down'); };
+  const r = await runSchoolWrite({ sr: db, user: ADMIN, body: newStudent, now: NOW });
+  assert.equal(r.body.code, 'STUDENT_QUOTA');
+  assert.equal(await activeCount(db), 165, 'never left over the cap');
+});
+
+test('over the cap and every undo fails: 500 STUDENT_QUOTA_UNRESOLVED with the record id, in Spanish', async () => {
+  const db = racingSchool();
+  db.entities.Student.delete = async () => { throw new Error('store down'); };
+  const update = db.entities.Student.update.bind(db.entities.Student);
+  let updates = 0;
+  db.entities.Student.update = async (...a) => { updates += 1; throw new Error('store down'); };
+  const r = await runSchoolWrite({ sr: db, user: ADMIN, body: newStudent, now: NOW });
+  assert.equal(r.status, 500);
+  assert.equal(r.body.code, 'STUDENT_QUOTA_UNRESOLVED');
+  assert.ok(r.body.record_id);
+  assert.equal(updates, 2, 'the deactivation was retried');
+  assert.match(humanizeError(Object.assign(new Error('x'), { data: { code: 'STUDENT_QUOTA_UNRESOLVED' } })), /no se pudo deshacer/);
+  void update;
+});
+
+test('re-activation over the cap: if the full undo fails, is_active goes back to false anyway', async () => {
+  const db = school({ active: 164, inactive: 1 });
+  // A parallel activation lands between our check and our write.
+  const update = db.entities.Student.update.bind(db.entities.Student);
+  let n = 0;
+  db.entities.Student.update = async (id, patch) => {
+    n += 1;
+    if (n === 1) await db.entities.Student.create({ school_id: 'sA', first_name: 'Paralela', is_active: true });
+    // The full undo (2nd and 3rd calls, it carries first_name) fails.
+    if ('first_name' in patch && n > 1) throw new Error('store down');
+    return update(id, patch);
+  };
+  const r = await runSchoolWrite({ sr: db, user: ADMIN, body: { entity: 'Student', operation: 'update', id: 'off0', data: { is_active: true, first_name: 'Otro' } }, now: NOW });
+  assert.equal(r.body.code, 'STUDENT_QUOTA');
+  const row = await db.entities.Student.get('off0');
+  assert.equal(row.is_active, false, 'out of the count');
+  assert.equal(await activeCount(db), 165);
+});
+
+test('a re-count that cannot be read is treated as over the cap: undone and refused', async () => {
+  const db = school({ active: 100 });
+  const filter = db.entities.Student.filter.bind(db.entities.Student);
+  let reads = 0;
+  db.entities.Student.filter = async (...a) => { reads += 1; if (reads === 2) throw new Error('read failed'); return filter(...a); };
+  const r = await runSchoolWrite({ sr: db, user: ADMIN, body: newStudent, now: NOW });
+  assert.equal(r.body.code, 'STUDENT_QUOTA');
+  assert.equal(await activeCount(db), 100);
+});
+
 test('the refusal reads as Spanish in the app, and the browser warning is no longer behind the paywall flag', () => {
   const message = humanizeError({ response: { status: 403, data: { ok: false, code: 'STUDENT_QUOTA' } } });
   assert.match(message, /máximo de alumnos activos de su plan/);

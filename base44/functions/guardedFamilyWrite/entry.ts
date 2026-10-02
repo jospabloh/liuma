@@ -214,11 +214,22 @@ Deno.serve(async (req) => {
         20,
       );
       if (absenceRaceLoser(after, { ...built.data, ...record })) {
-        try {
-          await sr.entities.AbsenceNotification.delete(String(record.id));
-        } catch (e) {
-          console.error('guardedFamilyWrite: duplicate absence could not be removed', record.id, (e as Error)?.message);
-          return bad(500, 'ABSENCE_CONFLICT_UNRESOLVED', `absence ${record.id} duplicates another request and could not be removed`);
+        // The undo is retried, and falls back to REJECTED — a rejected
+        // request is not "live" (checkAbsenceRequest), so the day keeps one
+        // live request even if the duplicate cannot be removed. Only if both
+        // fail is the conflict reported as unresolved.
+        const id = String(record.id);
+        const tryTwice = async (fn: () => Promise<unknown>): Promise<boolean> => {
+          for (let i = 0; i < 2; i += 1) {
+            try { await fn(); return true; } catch (e) {
+              console.error('guardedFamilyWrite: duplicate absence undo failed', id, (e as Error)?.message);
+            }
+          }
+          return false;
+        };
+        const removed = await tryTwice(() => sr.entities.AbsenceNotification.delete(id));
+        if (!removed && !await tryTwice(() => sr.entities.AbsenceNotification.update(id, { status: 'REJECTED', admin_notes: 'Duplicada: ya había una solicitud para ese día.' }))) {
+          return bad(500, 'ABSENCE_CONFLICT_UNRESOLVED', `absence ${id} duplicates another request and could not be removed`);
         }
         return bad(409, 'ABSENCE_DUPLICATE', 'there is already a request for that day');
       }

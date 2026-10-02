@@ -106,6 +106,10 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
 
     const sr = base44.asServiceRole;
     // The caller's OWN rows, with THEIR token (UserProfile.read is own-row
@@ -182,3 +186,17 @@ Deno.serve(async (req) => {
     return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
 });
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

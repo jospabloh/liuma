@@ -41,12 +41,12 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return fail(401, 'UNAUTHENTICATED');
+    // Same 410 as provisionOnboardingProfile and myConsent (v1.9.0 consent).
+    if (accountDeletedAt(user)) return fail(410, 'ACCOUNT_DELETED');
     // A deletion of this account started or finished (deleteMyAccount): no
     // access here, whatever consent stamp a race may have left behind.
     // auth.me() returns the User's custom fields, so this costs no read.
     if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
-    // Same 410 as provisionOnboardingProfile and myConsent (v1.9.0 consent).
-    if (accountDeletedAt(user)) return fail(410, 'ACCOUNT_DELETED');
 
     // Refuse an oversized body before parsing it into memory.
     const length = Number(req.headers.get('content-length') || '0');

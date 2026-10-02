@@ -7,6 +7,8 @@ import {
   ANONYMIZE,
   ANONYMIZED_NAME,
   CONFIRMATION_WORD as SERVER_WORD,
+  DeletionIncompleteError,
+  MAX_UPDATE_BATCHES,
   PURGE_DAYS as SERVER_PURGE_DAYS,
   confirmationMatches as serverConfirms,
   previewDeletion,
@@ -25,6 +27,7 @@ import {
   confirmationMatches,
   deletedItems,
   deletionErrorMessage,
+  deletionPageMode,
   keptItems,
 } from '../../src/lib/account/accountDeletion.js';
 import { ACCOUNT_DELETION_LABEL, PRIVACY_NOTICE, SERVICE_TERMS, PURGE_DAYS, RETENTION_TABLE } from '../../src/lib/legal/legalDocs.js';
@@ -650,7 +653,7 @@ test('a started deletion blocks re-acceptance and repair, and the app shows the 
   const gateSrc = read('src/components/consent/ConsentGate.jsx');
   assert.match(gateSrc, /decision === 'deletion_in_progress'[\s\S]*?<EliminarCuenta gated resume \/>/);
   const page = read('src/pages/EliminarCuenta.jsx');
-  assert.match(page, /\{resume \? null : \(/, 'no "Volver y aceptar" while finishing');
+  assert.match(page, /\{finishing \? null : \(/, 'no "Volver y aceptar" while finishing');
 
   // The page's retry finishes it.
   const retry = await del(makeFakeMongoDb(tables, { idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.parent, ...userRow });
@@ -671,8 +674,10 @@ test('a started deletion is finished even if the person became the only director
   assert.equal((await del(world().db, USERS.admin)).body.code, 'SOLE_ADMIN');
 });
 
-test('every consent-gated function refuses a caller whose deletion started, right after authenticating', () => {
-  const fns = ['aiAssist', 'approveProfile', 'governRoleChange', 'guardedEntityWrite', 'guardedFamilyWrite', 'listSchoolMembers', 'lumiQuery', 'lumiWrite', 'notifyParents', 'postTicketMessage', 'schoolRead', 'sendBulkNotification', 'sendNotificationEmail', 'uploadSchoolFile'];
+test('every function a signed-in person can call refuses a started deletion, right after authenticating', () => {
+  // The only two that must keep answering: the deletion itself (to finish
+  // it) and myConsent (to say "deletion in progress"; it refuses to stamp).
+  const EXEMPT = ['deleteMyAccount', 'myConsent'];
   const helper = (src) => src.match(/\nfunction accountDeletionBlocked[\s\S]*?\n}\n/)?.[0];
   const reference = helper(read('base44/functions/schoolRead/entry.ts'));
   assert.ok(reference);
@@ -681,22 +686,78 @@ test('every consent-gated function refuses a caller whose deletion started, righ
   assert.equal(blocked({ data: { account_deleted_at: NOW.toISOString() } }), true);
   assert.equal(blocked({ account_deletion_started_at: '' }), false);
   assert.equal(blocked({ id: 'u' }), false);
-  for (const fn of fns) {
-    const src = read(`base44/functions/${fn}/entry.ts`);
-    assert.equal(helper(src), reference, `${fn}: the helper is the same code`);
-    const auth = src.search(/\n\s+const user = await base44\.auth\.me\(\)/);
-    const gate = src.indexOf('if (accountDeletionBlocked(user)) return');
-    const firstEntity = src.indexOf('sr.entities.', auth) === -1 ? Infinity : src.indexOf('.entities.', auth);
-    assert.ok(auth > 0 && gate > auth && gate < firstEntity, `${fn}: refused right after auth.me(), before any entity call`);
-  }
-  // Every function that checks the consent stamp is in the list.
+  const gated = [];
   for (const dir of fs.readdirSync(new URL('base44/functions/', ROOT))) {
     let src = '';
     try { src = read(`base44/functions/${dir}/entry.ts`); } catch { continue; }
-    if (/profileConsentIsCurrent\(/.test(src) || /import[^;]*profileProblem/.test(src)) assert.ok(fns.includes(dir), `${dir} gates on consent but not on a started deletion`);
+    const auth = src.search(/\n\s+const user = await base44\.auth\.me\(\)/);
+    if (auth < 0 || EXEMPT.includes(dir)) continue; // acaciaControl: HMAC, no user
+    gated.push(dir);
+    assert.equal(helper(src), reference, `${dir}: the helper is the same code`);
+    const gate = src.indexOf('if (accountDeletionBlocked(user)) return');
+    const firstEntity = src.indexOf('.entities.', auth);
+    const body = src.indexOf('req.json()', auth);
+    assert.ok(gate > auth && (firstEntity < 0 || gate < firstEntity) && (body < 0 || gate < body), `${dir}: refused right after auth.me(), before the body or any entity`);
   }
+  // Including the ones Codex named: the consent-exempt export and onboarding,
+  // which writes consent and a profile.
+  for (const fn of ['exportSchoolData', 'provisionOnboardingProfile', 'getMySubscription', 'markWelcomeShown', 'schoolRead', 'guardedEntityWrite']) assert.ok(gated.includes(fn), fn);
   const schema = readJsonc('base44/entities/User.jsonc').properties.account_deletion_started_at;
   assert.deepEqual(schema?.rls, { write: false }, 'only the service role writes the marker');
+});
+
+test('onboarding refuses an account whose deletion started (it writes consent and a profile)', async () => {
+  const started = { id: 'u-x', email: 'x@y.mx', account_deletion_started_at: NOW.toISOString() };
+  await assert.rejects(
+    () => runOnboardingProvision({ user: started, body: { role: 'PARENT' }, sr: { entities: {} } }),
+    (e) => e.code === 'ACCOUNT_DELETION_IN_PROGRESS' && e.status === 403,
+  );
+});
+
+test('a bulk step that still has rows at its bound FAILS before the account is marked or removed; a retry finishes', async () => {
+  const { tables } = world();
+  const rows = MAX_UPDATE_BATCHES * 500 + 1; // one more than the bound can reach
+  tables.Attendance = Array.from({ length: rows }, (_, i) => ({ id: `at-${i}`, school_id: 'sA', recorded_by: 'u-teacher', recorded_by_name: 'Maestra Ana' }));
+  const db = makeFakeMongoDb(tables, { batchSize: 500, integrations: { Core: { SendEmail: async () => {} } } });
+  await assert.rejects(() => del(db, USERS.teacher), (e) => e instanceof DeletionIncompleteError && e.code === 'DELETION_INCOMPLETE' && e.status === 503);
+  const userRow = tables.User.find((u) => u.id === 'u-teacher');
+  assert.ok(userRow, 'not removed');
+  assert.equal(accountDeletedAt(userRow), '', 'not marked deleted');
+  assert.ok(tables.UserProfile.some((p) => p.user_id === 'u-teacher'), 'profiles kept');
+  assert.equal(tables.Attendance.filter((a) => a.recorded_by_name !== ANONYMIZED_NAME).length, 1);
+  assert.match(deletionErrorMessage('DELETION_INCOMPLETE'), /Vuelve a intentarlo/);
+  const entry = read('base44/functions/deleteMyAccount/entry.ts');
+  assert.match(entry, /e instanceof DeletionIncompleteError[\s\S]*?status: e\.status/);
+
+  const retry = await del(makeFakeMongoDb(tables, { batchSize: 500, idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.teacher, ...userRow });
+  assert.equal(retry.status, 200, JSON.stringify(retry.body));
+  assert.equal(tables.Attendance.every((a) => a.recorded_by_name === ANONYMIZED_NAME), true);
+  assert.equal(tables.User.some((u) => u.id === 'u-teacher'), false);
+});
+
+test('a started deletion previews as "finish it", never as the sole-director path, and the page always offers the button', async () => {
+  const two = world({ withSecondAdmin: true });
+  const stop = { failOn: { entity: 'AbsenceNotification', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } };
+  await assert.rejects(() => del(makeFakeMongoDb(two.tables, stop), USERS.admin), /Rate limit/);
+  two.tables.UserProfile = two.tables.UserProfile.filter((p) => p.user_id !== 'u-admin2');
+  // The token may or may not carry the marker: the stored User decides.
+  for (const caller of [USERS.admin, { ...USERS.admin, ...two.tables.User.find((u) => u.id === 'u-admin') }]) {
+    const preview = await previewDeletion(makeFakeMongoDb(two.tables), caller);
+    assert.equal(preview.body.soleAdmin, false);
+    assert.equal(preview.body.resume, true);
+    assert.equal(deletionPageMode({ preview: preview.body }), 'confirm');
+  }
+  // Not started: still the sole-director path.
+  const fresh = await previewDeletion(world().db, USERS.admin);
+  assert.deepEqual([fresh.body.soleAdmin, fresh.body.resume], [true, false]);
+  assert.equal(deletionPageMode({ preview: fresh.body }), 'sole_admin');
+  // The page: finishing never shows the sole-admin branch, even on an old answer.
+  assert.equal(deletionPageMode({ preview: fresh.body, resume: true }), 'confirm');
+  assert.equal(deletionPageMode({ preview: { platformOwner: true } }), 'owner');
+  const page = read('src/pages/EliminarCuenta.jsx');
+  assert.match(page, /const mode = deletionPageMode\(\{ preview, resume \}\);/);
+  assert.match(page, /mode === 'sole_admin' \? \(/);
+  assert.doesNotMatch(page, /preview\?\.soleAdmin \?/);
 });
 
 test('every entity and field the deletion writes exists in the schemas', () => {

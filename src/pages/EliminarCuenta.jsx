@@ -20,6 +20,7 @@ import {
   confirmationMatches,
   deletedItems,
   deletionErrorMessage,
+  deletionPageMode,
   keptItems,
 } from '@/lib/account/accountDeletion';
 import { DELETION_PREVIEW_QUERY_KEY, deleteMyAccount, previewAccountDeletion } from '@/lib/consent/consentApi';
@@ -70,6 +71,9 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
     staleTime: 0,
   });
   const preview = previewQuery.data;
+  const mode = deletionPageMode({ preview, resume });
+  // Finishing a deletion that already started: no way back to "accept".
+  const finishing = resume || Boolean(preview?.resume);
 
   const [confirmText, setConfirmText] = React.useState('');
   const [deleting, setDeleting] = React.useState(false);
@@ -149,18 +153,18 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
         <header className="mx-auto max-w-2xl px-4 sm:px-6 pt-6 pb-2">
           <h1 className="text-xl font-semibold text-foreground">{ACCOUNT_DELETION_TITLE}</h1>
           <p className="text-sm text-muted-foreground">
-            {resume
+            {finishing
               ? 'La eliminación de tu cuenta quedó en curso y tu acceso ya está cerrado. Vuelve a confirmar para terminarla: lo que ya se hizo no se repite.'
               : 'No aceptaste el Aviso de Privacidad y los Términos. Puedes cambiar de opinión o eliminar tu cuenta.'}
           </p>
-          {resume ? <SignOutButton className="mt-3 min-h-11" /> : null}
+          {finishing ? <SignOutButton className="mt-3 min-h-11" /> : null}
         </header>
       ) : (
         <PageHeader title={ACCOUNT_DELETION_TITLE} subtitle="Zona de peligro" showBack backTo={createPageUrl('Home')} />
       )}
 
       <div className="mx-auto max-w-2xl px-4 sm:px-6 py-4 pb-24 space-y-4">
-        {gated && !resume ? (
+        {gated && !finishing ? (
           <Button type="button" className="min-h-11 w-full sm:w-auto bg-brand text-white hover:bg-brand/90" onClick={goBack}>
             Volver y aceptar
           </Button>
@@ -195,11 +199,11 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
             <p className="text-sm text-foreground">{humanizeError(previewQuery.error)}</p>
             <Button type="button" variant="outline" className="min-h-11" onClick={() => previewQuery.refetch()}>Reintentar</Button>
           </Card>
-        ) : preview?.platformOwner ? (
+        ) : mode === 'owner' ? (
           <Card className="p-5 text-sm text-foreground" role="note">
             {deletionErrorMessage('PLATFORM_OWNER')}
           </Card>
-        ) : preview?.soleAdmin ? (
+        ) : mode === 'sole_admin' ? (
           <Card className="p-5 space-y-4 border-amber-300 dark:border-amber-700">
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
@@ -265,7 +269,7 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
             />
             {deleteError ? <p id="delete-error" role="alert" className="text-sm text-red-700 dark:text-red-400">{deleteError}</p> : null}
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              {resume ? null : (
+              {finishing ? null : (
                 <Button type="button" variant="outline" className="min-h-11" onClick={goBack} disabled={deleting}>
                   {gated ? 'Volver y aceptar' : 'Cancelar'}
                 </Button>

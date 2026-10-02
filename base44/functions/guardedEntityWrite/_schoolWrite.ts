@@ -387,15 +387,52 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
   if (quotaCheck.refusal) return quotaCheck.refusal;
   // Two creates racing at the last free seat both pass the check above. After
   // the write, whoever sees the school OVER the cap undoes their own write and
-  // is refused; at worst both undo and one retry succeeds. The count never
-  // stays past the cap.
-  const overCapAfterWrite = async (): Promise<boolean> => quotaCheck.hardLimit != null
-    && await countActiveStudents(sr, schoolId, quotaCheck.hardLimit + 1) > quotaCheck.hardLimit;
+  // is refused; at worst both undo and one retry succeeds.
+  //
+  // The undo is not assumed to work (Codex review of PR #197): it is retried,
+  // and it falls back to the one field that matters — is_active:false takes
+  // the student out of the count even if the rest cannot be put back. A
+  // re-count that cannot be read is treated as over the cap (undo, refuse,
+  // retry). Only if every attempt fails does the answer say the school may be
+  // over its cap (500 STUDENT_QUOTA_UNRESOLVED, logged with the record id),
+  // never a plain success or a refusal that claims nothing was saved.
+  const overCapAfterWrite = async (): Promise<boolean> => {
+    if (quotaCheck.hardLimit == null) return false;
+    try {
+      return await countActiveStudents(sr, schoolId, quotaCheck.hardLimit + 1) > quotaCheck.hardLimit;
+    } catch (e) {
+      console.error('guardedEntityWrite: student re-count failed; undoing the write', (e as Error)?.message);
+      return true;
+    }
+  };
+  const attempt = async (fn: () => Promise<unknown>): Promise<boolean> => {
+    for (let i = 0; i < 2; i += 1) {
+      try { await fn(); return true; } catch (e) {
+        console.error('guardedEntityWrite: student quota undo failed', (e as Error)?.message);
+      }
+    }
+    return false;
+  };
+  const unresolved = (recordId: string): WriteResult => {
+    console.error('guardedEntityWrite: student over the cap could not be undone', schoolId, recordId);
+    return {
+      status: 500,
+      body: {
+        ok: false, code: 'STUDENT_QUOTA_UNRESOLVED', record_id: recordId,
+        error: 'The school is over its student limit and the new active student could not be undone; deactivate it by hand',
+      },
+    };
+  };
 
   if (operation === 'create') {
     const record = await sr.entities[entity].create(data);
     if (record?.id && await overCapAfterWrite()) {
-      await sr.entities[entity].delete(String(record.id));
+      const id = String(record.id);
+      // Out of the count first, then gone (best-effort): an inactive leftover
+      // is harmless, an active one is not.
+      const outOfCount = await attempt(() => sr.entities[entity].update(id, { is_active: false }));
+      const deleted = await attempt(() => sr.entities[entity].delete(id));
+      if (!outOfCount && !deleted) return unresolved(id);
       return studentQuotaRefusal(quotaCheck.limit, quotaCheck.hardLimit!, quotaCheck.hardLimit!);
     }
     await writeAudit(sr, {
@@ -411,10 +448,12 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
   const record = await sr.entities[entity].update(recordId, data);
   if (await overCapAfterWrite()) {
     // Put back every field this patch touched, not only is_active: the
-    // refusal says nothing was saved.
+    // refusal says nothing was saved. If that cannot be done, at least the
+    // student leaves the count (it was inactive before this patch).
     const undo = Object.fromEntries(Object.keys(data).map((field) => [field, existing![field] ?? null]));
     undo.is_active = existing!.is_active === true;
-    await sr.entities[entity].update(recordId, undo);
+    const restored = await attempt(() => sr.entities[entity].update(recordId, undo));
+    if (!restored && !await attempt(() => sr.entities[entity].update(recordId, { is_active: false }))) return unresolved(recordId);
     return studentQuotaRefusal(quotaCheck.limit, quotaCheck.hardLimit!, quotaCheck.hardLimit!);
   }
   await writeAudit(sr, {

@@ -14,7 +14,7 @@
 // The page is src/pages/EliminarCuenta.jsx; it is reachable from the consent
 // screen ("No acepto") and from every role's menu.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { previewDeletion, runAccountDeletion } from './_deletion.ts';
+import { DeletionIncompleteError, previewDeletion, runAccountDeletion } from './_deletion.ts';
 
 // Same test as schoolRead/_answer.ts#isRateLimitError (functions cannot
 // import across directories; tests/unit/rate-limit-resilience.test.js keeps
@@ -51,6 +51,12 @@ Deno.serve(async (req) => {
   } catch (e) {
     // Every step is idempotent, so a failure part-way is safe to retry: the
     // page says so and offers "Intentar de nuevo".
+    // A bulk step stopped with rows left: nothing was marked deleted yet, and
+    // a retry continues where this one stopped (DeletionIncompleteError).
+    if (e instanceof DeletionIncompleteError) {
+      console.warn('deleteMyAccount incomplete', e.message);
+      return Response.json({ ok: false, code: e.code, error: e.code }, { status: e.status });
+    }
     if (isRateLimitError(e)) {
       console.warn('deleteMyAccount rate limited');
       return Response.json({ ok: false, code: 'RATE_LIMITED', error: 'RATE_LIMITED' }, { status: 429, headers: { 'Retry-After': '10' } });

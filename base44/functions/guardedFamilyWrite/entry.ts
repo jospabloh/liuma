@@ -32,7 +32,7 @@
 //
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { FAMILY_OPERATIONS, absenceRaceLoser, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
+import { FAMILY_OPERATIONS, absenceRaceLoser, callerDisplayName, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
 
@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
     const built = buildFamilyPayload(entity, operation, input, {
       isAdmin,
       userId: String(user.id),
-      userName: String(user.full_name || ''),
+      userName: callerDisplayName(user),
       schoolId,
       studentId,
       existing,

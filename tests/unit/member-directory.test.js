@@ -62,8 +62,9 @@ test('listSchoolMembers: caller must be an ACTIVE ADMIN/TEACHER of that school, 
   assert.match(source, /p\.status === 'ACTIVE' && DIRECTORY_ROLES\.includes/);
   // A teacher does not see who is pending approval.
   assert.match(source, /callerRole === 'ADMIN'\s*\? schoolProfiles\s*: schoolProfiles\.filter\(\(p\) => p\.status === 'ACTIVE'\)/);
-  // Only these three fields leave the server.
-  assert.match(source, /\(\{ id: String\(u\.id\), full_name: String\(u\.full_name \|\| ''\), email: String\(u\.email \|\| ''\) \}\)/);
+  // Only these three fields leave the server. full_name carries the name the
+  // member chose (User.display_name) when there is one (v1.9.0).
+  assert.match(source, /\(\{\s*id: String\(u\.id\),\s*full_name: String\(u\.display_name \|\| u\.data\?\.display_name \|\| u\.full_name \|\| ''\)\.trim\(\)\.slice\(0, 200\),\s*email: String\(u\.email \|\| ''\),\s*\}\)\)/);
 });
 
 test('approveProfile checks the ADMIN against the TARGET\'s stored school, PENDING only, never self', () => {

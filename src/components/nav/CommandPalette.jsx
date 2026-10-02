@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, UserPen } from 'lucide-react';
 import {
   CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator,
 } from '@/components/ui/command';
@@ -17,7 +17,7 @@ import { getGroupedDestinations, pageUrl } from './navRegistry';
  * persistent chrome, so this is the one place a parent on a shared phone can
  * sign out (the SideNav footer carries it on desktop).
  */
-export default function CommandPalette({ open, onOpenChange, role }) {
+export default function CommandPalette({ open, onOpenChange, role, onEditName }) {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const groups = getGroupedDestinations(role);
@@ -48,6 +48,12 @@ export default function CommandPalette({ open, onOpenChange, role }) {
         ))}
         <CommandSeparator />
         <CommandGroup heading="Cuenta">
+          {onEditName && (
+            <CommandItem value="Cambiar mi nombre perfil cuenta" onSelect={() => { onOpenChange(false); onEditName(); }}>
+              <UserPen className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <span>Cambiar mi nombre</span>
+            </CommandItem>
+          )}
           <CommandItem value="Cerrar sesión salir logout" onSelect={() => { onOpenChange(false); logout(); }}>
             <LogOut className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <span>Cerrar sesión</span>

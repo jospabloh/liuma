@@ -139,7 +139,8 @@ Deno.serve(async (req) => {
           ...base,
           // '' when full_name is only the email handle: Lumi must not guess a
           // name out of it (QA r5, LP12).
-          user_name: displayUserName(user.full_name, user.email),
+          // The name the user chose in LIUMA (User.display_name) first.
+          user_name: displayUserName(user.display_name || user.data?.display_name, user.email) || displayUserName(user.full_name, user.email),
           // What to offer, from the server's own intent table (not recalled
           // by the model): a docente is never offered pagos or uniformes.
           helps_with: helpsWith(scope.role, writable),

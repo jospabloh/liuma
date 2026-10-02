@@ -6,6 +6,23 @@
 // Keep POLICY_WRITE in sync by hand with src/lib/authorization/policy.js's
 // POLICY (Deno functions can't import across directories).
 
+// The author name a write stamps (author_name, teacher_name, parent_name…).
+// `display_name` is the name the person chose in LIUMA ("¿Cómo te llamas?",
+// a User custom field: the SDK's auth.updateMe() cannot write full_name);
+// `full_name` is whatever signup left, often the email handle. Without a
+// chosen name this returns full_name exactly as before. Identical in
+// guardedEntityWrite/_policy.ts and guardedFamilyWrite/_policy.ts (functions
+// cannot import across directories); tests/unit/user-display-name.test.js
+// runs both copies on the same cases.
+export function callerDisplayName(user: unknown): string {
+  const u = (user ?? {}) as { display_name?: unknown; full_name?: unknown; data?: { display_name?: unknown } | null };
+  const raw = typeof u.display_name === 'string' ? u.display_name : typeof u.data?.display_name === 'string' ? u.data.display_name : '';
+  const chosen = raw.replace(/\s+/g, ' ').trim().slice(0, 60);
+  // The field is self-written with updateMe, so the dialog's validation can be
+  // skipped: an address there is not a name (same rule as emergencyAuthorName).
+  return chosen && !chosen.includes('@') ? chosen : String(u.full_name || '');
+}
+
 export const POLICY_WRITE: Record<string, string[]> = {
   Notice: ['ADMIN', 'TEACHER'],
   Attendance: ['ADMIN', 'TEACHER'],

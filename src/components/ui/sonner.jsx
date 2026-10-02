@@ -18,11 +18,14 @@ const Toaster = (props) => {
       richColors
       closeButton
       expand={false}
-      // Sonner draws its close button 20x20. The ::after widens what a finger
-      // can hit to 44x44 without changing how it looks (same trick as Switch).
+      // Sonner draws its close button 20x20 with a 1px border. The ::after
+      // widens what a finger can hit to 44x44 without changing how it looks
+      // (same trick as Switch). It is placed from the padding box, so it
+      // takes 13px a side, not 12: -inset-3 gave 18 + 24 = 42px, which the
+      // v1.9.0 touch scan (scripts/touch-targets-scan.mjs) caught.
       toastOptions={{
         style: { borderRadius: "12px" },
-        classNames: { closeButton: "after:absolute after:-inset-3" },
+        classNames: { closeButton: "after:absolute after:-inset-[13px]" },
       }}
       {...props}
     />

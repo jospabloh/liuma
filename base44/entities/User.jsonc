@@ -2,6 +2,10 @@
   "name": "User",
   "type": "object",
   "properties": {
+    "display_name": {
+      "type": "string",
+      "description": "El nombre que la persona eligió en LIUMA («¿Cómo te llamas?», src/components/account/DisplayNameDialog.jsx). Existe porque auth.updateMe() no puede escribir full_name (contrato del SDK) y full_name suele ser el usuario del correo. Lo escribe el propio usuario con updateMe — por eso NO lleva rls.write: false —, y ninguna regla de RLS lo lee: no da acceso a nada, sólo es el nombre que se muestra y que las funciones sellan como autor. Máximo 60 caracteres, validado en src/lib/userDisplayName.js y recortado en el servidor."
+    },
     "school_id": {
       "type": "string",
       "description": "Escuela del usuario, leída por RLS como {{user.data.school_id}} (SchoolSubscription.read). Nadie la escribe hoy: la escuela vigente vive en UserProfile. write:false para que nadie pueda apuntarse a otra escuela con updateMe (módulo 24 del estándar). Si algún día se llena, que sea desde una función con service role.",

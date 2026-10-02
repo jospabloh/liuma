@@ -91,7 +91,14 @@ Deno.serve(async (req) => {
     const rows: any[] = await sr.entities.User.filter({ id: { $in: userIds } }, undefined, MAX_MEMBERS);
     const users: DirectoryUser[] = (rows || [])
       .filter((u) => u?.id && userIds.includes(u.id))
-      .map((u) => ({ id: String(u.id), full_name: String(u.full_name || ''), email: String(u.email || '') }));
+      // full_name carries the name the member chose in LIUMA (User.display_name)
+      // when there is one: the directory shows names, and signup's full_name is
+      // often just the email handle.
+      .map((u) => ({
+        id: String(u.id),
+        full_name: String(u.display_name || u.data?.display_name || u.full_name || '').trim().slice(0, 200),
+        email: String(u.email || ''),
+      }));
 
     return Response.json({ ok: true, users });
   } catch (e) {

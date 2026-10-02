@@ -9,7 +9,8 @@
 // starts relying on another operator fails here instead of passing against a
 // permissive fake.
 //
-// `failOn` makes one operation throw, to test what a failure part-way leaves.
+// `failOn` makes an operation throw (or only its nth call), to test what a
+// failure part-way leaves.
 
 const OPS = new Set(['$eq', '$ne', '$in', '$nin']);
 
@@ -52,13 +53,22 @@ function applyUpdate(row, data) {
   }
 }
 
-export function makeFakeMongoDb(tables, { failOn = null, integrations = null } = {}) {
+// `idPrefix` keeps ids unique when several fakes write to the same tables.
+export function makeFakeMongoDb(tables, { failOn = null, integrations = null, idPrefix = 'new' } = {}) {
   const writes = [];
   const calls = [];
   const entities = {};
   let nextId = 1;
+  // `failOn` is one rule or a list; a rule with `nth` fails only the nth call
+  // (1-based) of that entity+op, so a test can fail the SECOND of two writes.
+  const rules = (Array.isArray(failOn) ? failOn : failOn ? [failOn] : []).map((r) => ({ ...r, seen: 0 }));
   const maybeFail = (entity, op) => {
-    if (failOn && failOn.entity === entity && failOn.op === op) throw Object.assign(new Error(failOn.message || 'boom'), { status: failOn.status });
+    for (const rule of rules) {
+      if (rule.entity !== entity || rule.op !== op) continue;
+      rule.seen += 1;
+      if (rule.nth && rule.nth !== rule.seen) continue;
+      throw Object.assign(new Error(rule.message || 'boom'), { status: rule.status });
+    }
   };
   const table = (name) => {
     if (!tables[name]) tables[name] = [];
@@ -87,7 +97,7 @@ export function makeFakeMongoDb(tables, { failOn = null, integrations = null } =
     },
     async create(data) {
       maybeFail(name, 'create');
-      const row = { id: `new-${name}-${nextId++}`, created_date: `2026-10-02T12:00:${String(nextId).padStart(2, '0')}.000Z`, ...structuredClone(data) };
+      const row = { id: `${idPrefix}-${name}-${nextId++}`, created_date: `2026-10-02T12:00:${String(nextId).padStart(2, '0')}.000Z`, ...structuredClone(data) };
       table(name).push(row);
       writes.push({ entity: name, op: 'create', id: row.id, data: structuredClone(data) });
       return structuredClone(row);

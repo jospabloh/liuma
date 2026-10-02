@@ -64,6 +64,8 @@ const CODE_MESSAGES = {
   FILE_TYPE_NOT_ALLOWED: 'Ese tipo de archivo no se puede subir aquí.',
   FILE_CONTENT_MISMATCH: 'El contenido del archivo no corresponde a su extensión. Ábrelo y guárdalo de nuevo en el formato correcto.',
   UPLOAD_DAILY_LIMIT: 'Llegaste al límite de archivos que se pueden subir hoy. Inténtalo mañana.',
+  // The daily slot could not be reserved, so nothing was stored (fail closed).
+  UPLOAD_QUOTA_UNAVAILABLE: 'No se pudo preparar la subida del archivo. Inténtalo de nuevo en un momento.',
   UPLOAD_FAILED: 'No se pudo guardar el archivo. Inténtalo de nuevo en un momento.',
   NOT_ONBOARDING: 'Tu cuenta ya pertenece a una escuela; el logo lo cambia la dirección.',
   // Base44's app-wide rate limit (v1.8.3). Reads were already retried by the

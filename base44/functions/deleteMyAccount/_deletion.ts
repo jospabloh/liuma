@@ -25,8 +25,30 @@
 //       patrimonial records of the school; PaymentRecord carries only an id).
 //   "La constancia de tu consentimiento y de su retiro se conserva"
 //       → ConsentRecords are never deleted; a WITHDRAWN record is appended
-//       per school FIRST (no evidence, no deletion), and AuditLog keeps the
-//       withdrawal and the deletion (730 days, retention table).
+//       per school before anything is deleted (no evidence, no deletion),
+//       and AuditLog keeps the withdrawal and the deletion (730 days,
+//       retention table).
+//
+// ORDER, AND WHY (Codex review of PR #197). Every server gate authorizes from
+// the consent STAMP on UserProfile, not from the ConsentRecords, so the stamp
+// is what has to fall first:
+//   a. clear the stamps            → access closed; nothing withdrawn yet, so a
+//                                    failure here changes nothing (and
+//                                    myConsent may repair the stamp from the
+//                                    acceptance that is still the newest).
+//   b. append WITHDRAWN            → from now on myConsent never repairs.
+//   c. clear the stamps AGAIN      → closes the one window in which a
+//                                    concurrent myConsent repair read the old
+//                                    acceptance between (a) and (b). A failure
+//                                    here throws; it runs on every retry.
+//   …
+//   8. mark the User account_deleted_at BEFORE deleting the profiles: if the
+//      mark fails nothing irreversible about the account has happened and the
+//      call fails (ACCOUNT_NOT_MARKED); profiles are never gone while the User
+//      could still onboard again.
+// So on every partial failure: a WITHDRAWN record ⇒ no stamp, and no profile
+// ⇒ a marked (or removed) User. Every step is idempotent and a retry runs
+// them all again.
 //
 // What code cannot do, and the function says so instead of pretending:
 //   - Lumi conversations: neither the SDK nor Base44's platform API offers a
@@ -39,9 +61,11 @@
 //   - Removing the User goes through `entities.User.delete` (Base44's "Remove
 //     app user": immediate loss of access; the app owner cannot be removed).
 //     Whether the platform accepts it from a function's service role is not
-//     documented. If it refuses, the User keeps account_deleted_at, which the
-//     app and provisionOnboardingProfile treat as deleted, and ACACIA removes
-//     it from the panel.
+//     documented. If it refuses, the User keeps account_deleted_at (written
+//     BEFORE the profiles are deleted, and required: without it the call
+//     fails with ACCOUNT_NOT_MARKED), which the app, myConsent and
+//     provisionOnboardingProfile treat as deleted, and ACACIA removes it from
+//     the panel.
 //
 // WHO: everything derives from the authenticated caller — no body field
 // names a user, profile or school. The only body field is the typed
@@ -194,6 +218,12 @@ async function updateAll(sr: Db, entity: string, query: Record<string, unknown>,
   return total;
 }
 
+// Clearing the stamp sends the person to the consent screen and makes every
+// server gate (profileConsentIsCurrent) refuse them.
+async function revokeConsentStamps(sr: Db, userId: string): Promise<number> {
+  return await updateAll(sr, 'UserProfile', { user_id: userId, consent_notice_version: { $ne: '' } }, { $set: { consent_notice_version: '', consent_terms_version: '' } });
+}
+
 async function deleteAll(sr: Db, entity: string, query: Record<string, unknown>): Promise<number> {
   const res: { deleted?: number } | null = await sr.entities[entity].deleteMany(query);
   return Number(res?.deleted || 0);
@@ -252,8 +282,11 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   const emails = emailVariants(user.email);
   const profileIds = profiles.map((p) => String(p.id || '')).filter(Boolean);
 
-  // 1. Evidence first: a WITHDRAWN ConsentRecord per school the person had a
-  //    profile or a consent in. A retry does not stack a second one.
+  // 1a. Cut access first: the stamps are what the server gates read.
+  await revokeConsentStamps(sr, userId);
+
+  // 1b. Evidence before any deletion: a WITHDRAWN ConsentRecord per school the
+  //    person had a profile or a consent in. A retry does not stack a second one.
   const consentRows: ConsentRow[] = await sr.entities.ConsentRecord.filter({ user_id: userId }, '-created_date', 200) || [];
   const latest = latestBySchool(consentRows);
   const schools = [...new Set([
@@ -282,11 +315,11 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
     withdrawnNow.push(schoolId);
   }
   const withdrawals = withdrawnNow.length;
-  // From here on the person has withdrawn: if a later step fails and they do
-  // not retry, the app must not keep running on the old acceptance. Clearing
-  // the stamp sends them back to the consent screen (and myConsent will not
-  // repair it: the newest record is the withdrawal).
-  await updateAll(sr, 'UserProfile', { user_id: userId, consent_notice_version: { $ne: '' } }, { $set: { consent_notice_version: '', consent_terms_version: '' } });
+  // 1c. Again, now that the withdrawal is the newest record: a myConsent
+  //    repair that read the old acceptance before 1b cannot have left a stamp
+  //    behind. From here on the stamp cannot come back (myConsent does not
+  //    repair from a withdrawal), so a later failure leaves no access.
+  await revokeConsentStamps(sr, userId);
   // The trail next to the other sensitive actions. Best-effort: the
   // ConsentRecord above is the evidence, and a log failure must not leave the
   // deletion half-started for a reason the person cannot fix. Only for the
@@ -349,18 +382,27 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
     ? await updateAll(sr, 'AppSession', { user_email: { $in: emails }, revoked_by: { $ne: 'account_deleted' } }, { $set: { revoked_at: nowIso, revoked_by: 'account_deleted' } })
     : 0;
 
-  // 8. The commit point: without a profile nothing in LIUMA answers.
+  // 8. The durable mark BEFORE the profiles go: provisionOnboardingProfile and
+  //    myConsent refuse a marked User. If the mark fails, the profiles stay
+  //    (already without consent, links or assignments: no access) and the
+  //    call fails, so a retry finishes it. Never "profiles gone, User free to
+  //    onboard again, and the page saying it worked".
+  //    A retry keeps the first deletion date.
+  const markedAt = accountDeletedAt(user) || nowIso;
+  try {
+    await sr.entities.User.update(userId, { account_deleted_at: markedAt, display_name: '' });
+  } catch (e) {
+    if (isRateLimit(e)) throw e;
+    return fail(503, 'ACCOUNT_NOT_MARKED', 'The account could not be marked as deleted, so its profiles were kept; retry to finish');
+  }
+  const userMarked = true;
+
+  // 9. The commit point: without a profile nothing in LIUMA answers.
   const deletedProfiles = await deleteAll(sr, 'UserProfile', { user_id: userId });
 
-  // 9. The User: mark, then remove. Either one failing is reported, not fatal.
-  let userMarked = false;
+  // 10. Remove the User. Best-effort now: the mark above already makes the
+  //     account deleted for LIUMA; ACACIA removes it from the panel if not.
   let userRemoved = false;
-  try {
-    await sr.entities.User.update(userId, { account_deleted_at: nowIso, display_name: '' });
-    userMarked = true;
-  } catch {
-    userMarked = false;
-  }
   try {
     await sr.entities.User.delete(userId);
     userRemoved = true;
@@ -383,7 +425,7 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
     userRemoved,
   };
 
-  // 10. The trail, and ACACIA's manual steps (best-effort: the deletion above
+  // 11. The trail, and ACACIA's manual steps (best-effort: the deletion above
   //     already happened and must not be reported as failed).
   const manualSteps = [
     `Pedir a Base44 la supresión de las conversaciones con Lumi del usuario ${userId}.`,

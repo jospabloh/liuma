@@ -13,7 +13,7 @@ import {
 } from '../../src/lib/userDisplayName.js';
 // The REAL server code (Node 22 strips the TS types).
 import { displayUserName } from '../../base44/functions/lumiQuery/_lumiCore.ts';
-import { callerDisplayName as entityCallerName } from '../../base44/functions/guardedEntityWrite/_policy.ts';
+import { callerDisplayName as entityCallerName, isHandleLikeName as entityHandleLike } from '../../base44/functions/guardedEntityWrite/_policy.ts';
 import { callerDisplayName as familyCallerName } from '../../base44/functions/guardedFamilyWrite/_policy.ts';
 import { emergencyAuthorName } from '../../base44/functions/sendBulkNotification/_fanout.ts';
 
@@ -182,19 +182,59 @@ test('the server stamps the chosen name as author, full_name as before without o
     assert.equal(entityCallerName(user), expected, JSON.stringify(user));
     assert.equal(familyCallerName(user), expected, JSON.stringify(user));
   }
-  // The two copies are the same function (functions cannot import across
-  // directories).
-  const fnText = (p) => read(p).match(/export function callerDisplayName[\s\S]*?\n}\n/)[0];
+  // The two copies are the same code, rule and labels included (functions
+  // cannot import across directories).
+  const fnText = (p) => read(p).match(/\/\/ The author name a write stamps[\s\S]*?export function callerDisplayName[\s\S]*?\n}\n/)[0];
   assert.equal(fnText('base44/functions/guardedEntityWrite/_policy.ts'), fnText('base44/functions/guardedFamilyWrite/_policy.ts'));
 
-  assert.match(read('base44/functions/guardedEntityWrite/entry.ts'), /data\[attribution\.name\] = callerDisplayName\(user\);/);
-  assert.match(read('base44/functions/guardedEntityWrite/_schoolWrite.ts'), /userName: callerDisplayName\(user\),/);
-  assert.match(read('base44/functions/guardedFamilyWrite/entry.ts'), /userName: callerDisplayName\(user\),/);
+  // Every stamp passes the caller's role, so a missing name becomes the role.
+  assert.match(read('base44/functions/guardedEntityWrite/entry.ts'), /data\[attribution\.name\] = callerDisplayName\(user, profile\?\.app_role \|\| \(isPlatformOwner \? 'ADMIN' : ''\)\);/);
+  assert.match(read('base44/functions/guardedEntityWrite/_schoolWrite.ts'), /userName: callerDisplayName\(user, appRole\),/);
+  assert.match(read('base44/functions/guardedFamilyWrite/entry.ts'), /userName: callerDisplayName\(user, isAdmin \? 'ADMIN' : 'PARENT'\),/);
+  assert.doesNotMatch(read('base44/functions/guardedEntityWrite/_policy.ts'), /requester_name: [^\n]*userEmail/, 'a ticket never names its requester by address');
   assert.match(read('base44/functions/lumiQuery/entry.ts'), /user_name: displayUserName\(user\.display_name \|\| user\.data\?\.display_name, user\.email\) \|\| displayUserName\(user\.full_name, user\.email\)/);
   assert.match(read('base44/functions/listSchoolMembers/entry.ts'), /full_name: String\(u\.display_name \|\| u\.data\?\.display_name \|\| u\.full_name \|\| ''\)/);
 
   assert.equal(emergencyAuthorName({ full_name: 'h.josepablo+qa-director@gmail.com', display_name: 'Laura' }), 'Laura');
   assert.equal(emergencyAuthorName({ full_name: 'Laura Gómez', display_name: '' }), 'Laura Gómez');
+});
+
+test('the server never stamps an email handle as an author: the role instead (Codex review of PR #197)', () => {
+  const handleUsers = [
+    { full_name: 'h.josepablo+qa-maestro', email: 'h.josepablo+qa-maestro@gmail.com' },
+    { full_name: 'h.josepablo', email: 'h.josepablo@gmail.com' },
+    { full_name: 'maestra2026', email: 'otra@ejemplo.mx' },
+    { full_name: 'laura@example.com' },
+    { full_name: 'LAURA', email: 'laura@ejemplo.mx' }, // equals the local part
+    // A self-written display_name that skipped the dialog is checked too.
+    { display_name: 'h.josepablo', full_name: 'h.josepablo', email: 'h.josepablo@gmail.com' },
+    { display_name: 'juan_perez' },
+    {},
+  ];
+  for (const user of handleUsers) {
+    for (const [role, label] of [['ADMIN', 'Dirección'], ['TEACHER', 'Docente'], ['PARENT', 'Familia'], ['', ''], [undefined, '']]) {
+      assert.equal(entityCallerName(user, role), label, `${JSON.stringify(user)} as ${role}`);
+      assert.equal(familyCallerName(user, role), label, `${JSON.stringify(user)} as ${role}`);
+    }
+  }
+  // A handle-like display_name falls through to a real full_name.
+  assert.equal(entityCallerName({ display_name: 'h.jose', full_name: 'José Pablo H.' }, 'TEACHER'), 'José Pablo H.');
+  // Real names are untouched, whatever the role.
+  assert.equal(entityCallerName({ full_name: 'Laura', email: 'lgomez@ejemplo.mx' }, 'TEACHER'), 'Laura');
+  assert.equal(familyCallerName({ display_name: 'Ana María', full_name: 'a.maria' }, 'PARENT'), 'Ana María');
+
+  // One rule for "is this a handle": the greeting's, Lumi's and the stamp's.
+  const samples = ['', 'Laura', 'Laura Gómez', 'h.josepablo', 'h.josepablo+qa', 'ana_m', 'maestra2026', 'x@y.mx', 'Lau G.', 'LAURA'];
+  for (const name of samples) {
+    for (const email of [undefined, 'laura@ejemplo.mx']) {
+      assert.equal(entityHandleLike(name, email), isHandleLikeName(name, email), `${name} / ${email}`);
+      assert.equal(entityHandleLike(name, email), displayUserName(name, email) === '', `${name} / ${email} (Lumi)`);
+    }
+  }
+
+  // The emergency notice's author line follows the same rule.
+  assert.equal(emergencyAuthorName({ full_name: 'h.josepablo', email: 'h.josepablo@gmail.com' }), 'Dirección de la escuela');
+  assert.equal(emergencyAuthorName({ display_name: 'dir_2026', full_name: 'Laura Gómez' }), 'Laura Gómez');
 });
 
 test('the name question waits for the trial welcome instead of stacking on it', () => {

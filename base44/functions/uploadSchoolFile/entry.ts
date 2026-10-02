@@ -27,8 +27,7 @@ import {
   decideUploader,
   effectiveLicenseIsReadOnly,
   uploadedUrl,
-  uploadsToday,
-  DAILY_UPLOAD_LIMIT,
+  uploadWithinDailyLimit,
   MAX_REQUEST_BYTES,
   UPLOAD_AUDIT_TARGET,
 } from './_upload.ts';
@@ -71,35 +70,40 @@ Deno.serve(async (req) => {
     const checked = checkFile(purpose, { name: file.name, size: file.size, bytes });
     if (!checked.ok) return fail(checked.status, checked.code);
 
-    if (user.role !== 'admin') {
-      const recent: Array<{ created_date?: string }> = await sr.entities.AuditLog.filter(
-        { user_id: user.id, target_type: UPLOAD_AUDIT_TARGET }, '-created_date', DAILY_UPLOAD_LIMIT + 1,
-      );
-      if (uploadsToday(recent, new Date()) >= DAILY_UPLOAD_LIMIT) return fail(429, 'UPLOAD_DAILY_LIMIT');
-    }
-
     // Stored under a clean name, typed by what the bytes are.
     const clean = new File([bytes], checked.name, { type: checked.mime });
-    let url = '';
-    try {
-      url = uploadedUrl(await sr.integrations.Core.UploadFile({ file: clean }));
-    } catch (e) {
-      console.error('uploadSchoolFile upload failed', (e as Error)?.message);
-      return fail(502, 'UPLOAD_FAILED');
-    }
-    if (!url) return fail(502, 'UPLOAD_FAILED');
+    const store = async () => uploadedUrl(await sr.integrations.Core.UploadFile({ file: clean }));
 
-    // The record of who uploaded what (and the daily cap's counter). Best
-    // effort: the file is stored; failing now would invite a duplicate upload.
-    await sr.entities.AuditLog.create({
-      school_id: who.schoolId || 'onboarding',
-      user_id: user.id,
-      user_email: user.email || '',
-      action: 'RECORD_CREATED',
-      target_type: UPLOAD_AUDIT_TARGET,
-      target_id: purpose,
-      details: { purpose, file_type: checked.type, size: bytes.length, file_url: url },
-    }).catch((e: Error) => console.error('uploadSchoolFile audit failed', e?.message));
+    let url = '';
+    if (user.role === 'admin') {
+      // The platform owner has no cap; the record is still kept (best-effort).
+      try { url = await store(); } catch (e) { console.error('uploadSchoolFile upload failed', (e as Error)?.message); }
+      if (!url) return fail(502, 'UPLOAD_FAILED');
+      await sr.entities.AuditLog.create({
+        school_id: who.schoolId || 'onboarding',
+        user_id: user.id,
+        user_email: user.email || '',
+        action: 'RECORD_CREATED',
+        target_type: UPLOAD_AUDIT_TARGET,
+        target_id: purpose,
+        details: { purpose, file_type: checked.type, size: bytes.length, state: 'stored', file_url: url },
+      }).catch((e: Error) => console.error('uploadSchoolFile audit failed', e?.message));
+    } else {
+      // The slot is reserved BEFORE the file is stored, and no reservation
+      // means no upload — see uploadWithinDailyLimit in ./_upload.ts.
+      const result = await uploadWithinDailyLimit({
+        sr,
+        user,
+        schoolId: who.schoolId,
+        purpose,
+        fileType: checked.type,
+        size: bytes.length,
+        now: new Date(),
+        upload: store,
+      });
+      if (result.status !== 200) return fail(result.status, String(result.body.code));
+      url = String(result.body.file_url);
+    }
 
     return Response.json({ ok: true, file_url: url, content_type: checked.mime, size: bytes.length });
   } catch (e) {

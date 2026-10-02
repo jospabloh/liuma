@@ -187,7 +187,8 @@ Deno.serve(async (req) => {
     const built = buildFamilyPayload(entity, operation, input, {
       isAdmin,
       userId: String(user.id),
-      userName: callerDisplayName(user),
+      // Past the checks above a non-admin writes as the child's linked parent.
+      userName: callerDisplayName(user, isAdmin ? 'ADMIN' : 'PARENT'),
       schoolId,
       studentId,
       existing,

@@ -13,7 +13,7 @@ import {
   runAccountDeletion,
   soleAdminSchoolIds,
 } from '../../base44/functions/deleteMyAccount/_deletion.ts';
-import { consentStatus } from '../../base44/functions/myConsent/_consent.ts';
+import { consentStatus, profileConsentIsCurrent as serverStampIsCurrent } from '../../base44/functions/myConsent/_consent.ts';
 import { ACTION_TIER } from '../../base44/functions/recordAuditEvent/_policy.ts';
 import {
   ACCOUNT_DELETION_PAGE,
@@ -184,7 +184,16 @@ test('a parent deletes their account: access closed, account data gone, school r
 test('evidence first: the withdrawal is recorded before anything is deleted, and consent records are never deleted', async () => {
   const { db, tables } = world();
   await del(db, USERS.parent);
-  const firstWrite = db.writes[0];
+  // Access falls before anything else: the server gates read the stamp, so
+  // clearing it is the first write (Codex review of PR #197). Then the
+  // evidence, then the stamp again (see the race test below), then deletions.
+  const [stampWrite, firstWrite, againWrite] = db.writes;
+  assert.deepEqual([stampWrite.entity, stampWrite.op], ['UserProfile', 'updateMany']);
+  assert.equal(stampWrite.data.$set.consent_notice_version, '');
+  assert.deepEqual([againWrite.entity, againWrite.op], ['UserProfile', 'updateMany']);
+  assert.equal(againWrite.data.$set.consent_notice_version, '');
+  const firstDeletion = db.writes.findIndex((w) => /delete/i.test(w.op));
+  assert.ok(firstDeletion > 1, 'nothing is deleted before the withdrawal is recorded');
   assert.equal(firstWrite.entity, 'ConsentRecord');
   assert.equal(firstWrite.op, 'create');
   assert.equal(firstWrite.data.event, 'WITHDRAWN');
@@ -331,6 +340,137 @@ test('if Base44 refuses to remove the User, the account stays marked as deleted 
   );
   const fn = read('base44/functions/provisionOnboardingProfile/entry.ts');
   assert.match(fn, /if \(accountDeletedAt\(user\)\) return bad\(410, 'ACCOUNT_DELETED'/);
+});
+
+// The invariants a partial failure must never break (Codex review of PR #197):
+//  - withdrawn ⇒ no access: once a WITHDRAWN record exists, no profile of the
+//    person carries a consent stamp the server gates would accept, and
+//    myConsent does not repair one;
+//  - no profile ⇒ the User is marked (or removed): otherwise the account could
+//    onboard again with its data already gone.
+async function assertSafeAfterPartialFailure(tables, label) {
+  const withdrawn = tables.ConsentRecord.some((c) => c.user_id === 'u-parent' && c.event === 'WITHDRAWN');
+  const profiles = tables.UserProfile.filter((p) => p.user_id === 'u-parent');
+  if (withdrawn) {
+    for (const p of profiles) {
+      assert.equal(serverStampIsCurrent(p), false, `${label}: withdrawn but a profile still passes the server gates`);
+    }
+    const userRow = tables.User.find((u) => u.id === 'u-parent');
+    if (userRow && profiles.length) {
+      const status = await consentStatus(makeFakeMongoDb(tables), { ...USERS.parent, ...userRow });
+      assert.notEqual(status.body.repaired, true, `${label}: myConsent repaired the stamp after a withdrawal`);
+    }
+  }
+  if (!profiles.length) {
+    const userRow = tables.User.find((u) => u.id === 'u-parent');
+    assert.ok(!userRow || accountDeletedAt(userRow), `${label}: profiles gone but the User is neither marked nor removed`);
+  }
+}
+
+test('a failure at ANY write leaves no access after the withdrawal and no unmarked account without profiles; a retry completes', async () => {
+  // Every write a healthy run makes, as (entity, op, nth call).
+  const healthy = world();
+  await del(healthy.db, USERS.parent);
+  const seen = {};
+  const steps = healthy.db.writes.map((w) => {
+    const key = `${w.entity}.${w.op}`;
+    seen[key] = (seen[key] || 0) + 1;
+    return { entity: w.entity, op: w.op, nth: seen[key] };
+  });
+  assert.ok(steps.length > 10, 'the run makes the writes this test enumerates');
+  for (const step of steps) {
+    for (const status of [undefined, 429]) {
+      const label = `${step.entity}.${step.op}#${step.nth}${status ? ' (429)' : ''}`;
+      const { tables } = world();
+      const failing = makeFakeMongoDb(tables, {
+        failOn: { ...step, status, message: status ? 'Rate limit exceeded' : 'boom' },
+        integrations: { Core: { SendEmail: async () => {} } },
+      });
+      let r = null;
+      try { r = await del(failing, USERS.parent); } catch { r = null; }
+      if (r && r.status === 200) assert.equal(r.body.ok, true, label);
+      await assertSafeAfterPartialFailure(tables, label);
+
+      // A failed call is retried (the page offers it) on a healthy
+      // connection: it converges, without a second withdrawal. A call that
+      // already answered 200 has nothing left to retry.
+      if (!r || r.status !== 200) {
+        const userRow = tables.User.find((u) => u.id === 'u-parent');
+        const caller = userRow ? { ...USERS.parent, ...userRow } : USERS.parent;
+        const retry = await del(makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } }), caller);
+        assert.equal(retry.status, 200, `${label}: retry ${JSON.stringify(retry.body)}`);
+      }
+      assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-parent'), false, label);
+      assert.equal(tables.ConsentRecord.filter((c) => c.event === 'WITHDRAWN').length, 1, label);
+    }
+  }
+});
+
+test('a myConsent repair racing the withdrawal cannot leave a stamp behind, even if a later step fails', async () => {
+  const { tables } = world();
+  const db = makeFakeMongoDb(tables, { failOn: { entity: 'UserProfile', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } });
+  // A concurrent myConsent 'status' call read the (still newest) acceptance
+  // after the first clear and writes its repair just before the WITHDRAWN
+  // record lands.
+  const create = db.entities.ConsentRecord.create;
+  db.entities.ConsentRecord.create = async (data) => {
+    for (const p of tables.UserProfile.filter((x) => x.user_id === 'u-parent')) {
+      Object.assign(p, { consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02' });
+    }
+    return create(data);
+  };
+  await assert.rejects(() => del(db, USERS.parent), /Rate limit/);
+  const p = tables.UserProfile.find((x) => x.user_id === 'u-parent');
+  assert.ok(p, 'the failure came before the profiles were deleted');
+  assert.equal(serverStampIsCurrent(p), false, 'the second clear removed the raced repair');
+});
+
+test('if the User can be neither marked nor removed, the profiles stay and the call fails in Spanish — a retry finishes it', async () => {
+  const { tables } = world();
+  const sent = [];
+  const db = makeFakeMongoDb(tables, {
+    failOn: [
+      { entity: 'User', op: 'update', message: 'Forbidden', status: 403 },
+      { entity: 'User', op: 'delete', message: 'Forbidden', status: 403 },
+    ],
+    integrations: { Core: { SendEmail: async (m) => { sent.push(m); } } },
+  });
+  const r = await del(db, USERS.parent);
+  assert.equal(r.status, 503);
+  assert.equal(r.body.ok, false, 'never reported as done');
+  assert.equal(r.body.code, 'ACCOUNT_NOT_MARKED');
+  // Profiles kept (so the account cannot onboard as a fresh one with its data
+  // gone), but already without access.
+  const kept = tables.UserProfile.filter((p) => p.user_id === 'u-parent');
+  assert.equal(kept.length, 1);
+  assert.equal(serverStampIsCurrent(kept[0]), false);
+  assert.equal(tables.ParentStudent.find((l) => l.id === 'ps1').status, 'REVOKED');
+  assert.equal(db.writes.some((w) => w.entity === 'User'), false);
+  assert.equal(sent.length, 0, 'ACACIA is not told a deletion happened that did not');
+  assert.match(deletionErrorMessage('ACCOUNT_NOT_MARKED'), /vuelve a intentarlo/);
+  assert.notEqual(deletionErrorMessage('ACCOUNT_NOT_MARKED'), deletionErrorMessage('SOMETHING_ELSE'));
+
+  const retry = await del(makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } }), USERS.parent);
+  assert.equal(retry.status, 200);
+  assert.equal(tables.User.some((u) => u.id === 'u-parent'), false);
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-parent'), false);
+});
+
+test('a marked account cannot onboard or join again, by role or by school code', async () => {
+  const marked = { id: 'u-gone', email: 'x@y.mx', account_deleted_at: NOW.toISOString() };
+  for (const body of [{ role: 'PARENT' }, { role: 'TEACHER', joinCode: 'ABCD-EFGH' }, { role: 'ADMIN', schoolName: 'Nueva' }]) {
+    await assert.rejects(
+      () => runOnboardingProvision({ user: marked, body, sr: { entities: {} } }),
+      (e) => e.code === 'ACCOUNT_DELETED' && e.status === 410,
+    );
+  }
+  // The function refuses before it reads the body, so no branch (found a
+  // school, join by code) runs for a marked User.
+  const fn = read('base44/functions/provisionOnboardingProfile/entry.ts');
+  const serve = fn.indexOf('Deno.serve');
+  const refuse = fn.indexOf("if (accountDeletedAt(user)) return bad(410, 'ACCOUNT_DELETED'", serve);
+  assert.ok(refuse > serve, 'the refusal is inside the handler');
+  assert.ok(refuse < fn.indexOf('req.json()', serve), 'and before the body is read');
 });
 
 test('every entity and field the deletion writes exists in the schemas', () => {

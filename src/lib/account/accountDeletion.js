@@ -77,6 +77,10 @@ const ERROR_MESSAGES = {
   PLATFORM_OWNER: 'La cuenta dueña de la plataforma no se puede eliminar desde la app.',
   RATE_LIMITED: 'Hay mucha actividad en este momento. Espera unos segundos e inténtalo de nuevo: lo que ya se hizo no se repite.',
   UNAUTHENTICATED: 'Tu sesión expiró. Vuelve a iniciar sesión e inténtalo de nuevo.',
+  // deleteMyAccount could not mark the account as deleted, so it kept the
+  // profile instead of leaving an account that could sign up again. Access is
+  // already closed; a retry finishes the rest.
+  ACCOUNT_NOT_MARKED: `No se pudo terminar de eliminar tu cuenta. Tu acceso ya quedó cerrado; vuelve a intentarlo para completar la eliminación (lo que ya se hizo no se repite) o escribe a ${ACACIA_SUPPORT_EMAIL}.`,
 };
 
 /** Spanish sentence for a deleteMyAccount refusal or failure. */

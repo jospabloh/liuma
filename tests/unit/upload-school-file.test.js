@@ -16,8 +16,13 @@ import {
   safeFileName,
   selectCurrentProfile as uploadSelect,
   uploadedUrl,
-  uploadsToday,
+  claimRank,
+  uploadWithinDailyLimit,
+  DAILY_UPLOAD_LIMIT,
+  QUOTA_READ_LIMIT,
+  UPLOAD_AUDIT_TARGET,
 } from '../../base44/functions/uploadSchoolFile/_upload.ts';
+import { makeFakeMongoDb } from '../fixtures/fake-mongo-db.js';
 import { selectCurrentProfile as readSelect, profileProblem as readProblem } from '../../base44/functions/schoolRead/_scope.ts';
 import { PRIVACY_NOTICE_VERSION, SERVICE_TERMS_VERSION } from '../../src/lib/consent/privacyNotice.js';
 import { effectiveLicenseIsReadOnly as writeReadOnly } from '../../base44/functions/guardedEntityWrite/_policy.ts';
@@ -143,12 +148,96 @@ test('the upload function picks "my school" and reads the license by the same ru
 test('the daily cap counts Mexico\'s day, and zone-less Base44 dates as UTC', () => {
   const now = new Date('2026-10-02T15:00:00Z'); // 09:00 in Mexico
   const rows = [
-    { created_date: '2026-10-02T06:30:00' }, // 00:30 Mexico, today
-    { created_date: '2026-10-02T05:59:00Z' }, // 23:59 yesterday in Mexico
-    { created_date: '2026-10-02T14:00:00.000Z' },
-    { created_date: 'not a date' },
+    { id: 'a', created_date: '2026-10-02T06:30:00' }, // 00:30 Mexico, today
+    { id: 'b', created_date: '2026-10-02T05:59:00Z' }, // 23:59 yesterday in Mexico
+    { id: 'c', created_date: '2026-10-02T14:00:00.000Z' },
+    { id: 'd', created_date: 'not a date' },
   ];
-  assert.equal(uploadsToday(rows, now), 2);
+  // Yesterday's row and the unreadable one do not count ahead of today's.
+  assert.equal(claimRank(rows, 'a', now), 0);
+  assert.equal(claimRank(rows, 'c', now), 1);
+  assert.equal(claimRank(rows, 'b', now), -1);
+  // Same instant: the id decides, the same way for every reader.
+  const tie = [{ id: 'y', created_date: '2026-10-02T14:00:00Z' }, { id: 'x', created_date: '2026-10-02T14:00:00Z' }];
+  assert.equal(claimRank(tie, 'x', now), 0);
+  assert.equal(claimRank([...tie].reverse(), 'x', now), 0);
+});
+
+// The cap, race-free (Codex review of PR #197): the first version read the
+// count, uploaded, and only then wrote the counter — best-effort. Concurrent
+// requests all saw 59 and all uploaded, and a failing AuditLog never counted.
+const QUOTA_NOW = new Date('2026-10-02T18:00:00Z'); // 12:00 in Mexico
+const UPLOADER = { id: 'u-dir', email: 'dir@ejemplo.mx' };
+function quotaWorld(alreadyToday) {
+  const AuditLog = Array.from({ length: alreadyToday }, (_, i) => ({
+    id: `old-${String(i).padStart(3, '0')}`,
+    user_id: UPLOADER.id,
+    target_type: UPLOAD_AUDIT_TARGET,
+    created_date: `2026-10-02T07:${String(i % 60).padStart(2, '0')}:00.000Z`,
+  }));
+  return { AuditLog };
+}
+const runQuota = (db, upload) => uploadWithinDailyLimit({
+  sr: db, user: UPLOADER, schoolId: 'sA', purpose: 'official_document', fileType: 'pdf', size: 10, now: QUOTA_NOW, upload,
+});
+
+test('the daily cap holds under concurrency: with one slot left, five simultaneous uploads store exactly one file', async () => {
+  const tables = quotaWorld(DAILY_UPLOAD_LIMIT - 1);
+  const db = makeFakeMongoDb(tables);
+  let stored = 0;
+  const upload = async () => { stored += 1; return `https://cdn.base44.app/f/${stored}.pdf`; };
+  const results = await Promise.all(Array.from({ length: 5 }, () => runQuota(db, upload)));
+  assert.equal(results.filter((r) => r.status === 200).length, 1, JSON.stringify(results.map((r) => r.body.code)));
+  assert.equal(stored, 1, 'only the request inside the cap reached the storage');
+  for (const r of results.filter((x) => x.status !== 200)) assert.equal(r.body.code, 'UPLOAD_DAILY_LIMIT');
+  assert.equal(tables.AuditLog.length, DAILY_UPLOAD_LIMIT, 'refused claims are released; the stored one stays as the record');
+  const record = tables.AuditLog.find((r) => r.details?.state === 'stored');
+  assert.equal(record.details.file_url, 'https://cdn.base44.app/f/1.pdf');
+  // Next one: refused, nothing stored.
+  assert.equal((await runQuota(db, upload)).body.code, 'UPLOAD_DAILY_LIMIT');
+  assert.equal(stored, 1);
+});
+
+test('the slot is reserved BEFORE storing; no reservation, no upload (fail closed)', async () => {
+  const tables = quotaWorld(0);
+  let stored = 0;
+  const upload = async () => { stored += 1; return 'https://cdn.base44.app/f/x.pdf'; };
+  // The claim cannot be written: nothing is stored.
+  const r = await runQuota(makeFakeMongoDb(tables, { failOn: { entity: 'AuditLog', op: 'create', message: 'enum value not deployed' } }), upload);
+  assert.deepEqual([r.status, r.body.code], [503, 'UPLOAD_QUOTA_UNAVAILABLE']);
+  const limited = await runQuota(makeFakeMongoDb(tables, { failOn: { entity: 'AuditLog', op: 'create', message: 'Rate limit exceeded', status: 429 } }), upload);
+  assert.deepEqual([limited.status, limited.body.code], [429, 'RATE_LIMITED']);
+  // The re-count cannot be read: the claim is released, nothing is stored.
+  const blind = await runQuota(makeFakeMongoDb(tables, { failOn: { entity: 'AuditLog', op: 'filter', message: 'boom' } }), upload);
+  assert.deepEqual([blind.status, blind.body.code], [503, 'UPLOAD_QUOTA_UNAVAILABLE']);
+  assert.equal(stored, 0);
+  assert.equal(tables.AuditLog.length, 0);
+  assert.match(humanizeError(Object.assign(new Error('x'), { data: { code: 'UPLOAD_QUOTA_UNAVAILABLE' } })), /No se pudo preparar la subida/);
+});
+
+test('a failed upload gives its slot back; a failed URL note does not undo the count', async () => {
+  const tables = quotaWorld(DAILY_UPLOAD_LIMIT - 1);
+  const failed = await runQuota(makeFakeMongoDb(tables, { idPrefix: 'a' }), async () => { throw new Error('storage down'); });
+  assert.deepEqual([failed.status, failed.body.code], [502, 'UPLOAD_FAILED']);
+  const empty = await runQuota(makeFakeMongoDb(tables, { idPrefix: 'b' }), async () => '');
+  assert.equal(empty.body.code, 'UPLOAD_FAILED');
+  assert.equal(tables.AuditLog.length, DAILY_UPLOAD_LIMIT - 1, 'both claims released');
+  // The last slot still works, even when adding the URL to the claim fails:
+  // the claim already counts.
+  const ok = await runQuota(makeFakeMongoDb(tables, { idPrefix: 'c', failOn: { entity: 'AuditLog', op: 'update', message: 'boom' } }), async () => 'https://cdn.base44.app/f/z.pdf');
+  assert.equal(ok.status, 200);
+  assert.equal(tables.AuditLog.length, DAILY_UPLOAD_LIMIT);
+  assert.equal((await runQuota(makeFakeMongoDb(tables, { idPrefix: 'd' }), async () => 'https://cdn.base44.app/f/w.pdf')).body.code, 'UPLOAD_DAILY_LIMIT');
+});
+
+test('a re-count that cannot see the whole day refuses rather than guess', async () => {
+  const tables = { AuditLog: Array.from({ length: QUOTA_READ_LIMIT }, (_, i) => ({
+    id: `x-${String(i).padStart(4, '0')}`, user_id: UPLOADER.id, target_type: UPLOAD_AUDIT_TARGET, created_date: '2026-10-01T10:00:00.000Z',
+  })) };
+  let stored = 0;
+  const r = await runQuota(makeFakeMongoDb(tables), async () => { stored += 1; return 'https://cdn.base44.app/f/q.pdf'; });
+  assert.equal(r.body.code, 'UPLOAD_DAILY_LIMIT');
+  assert.equal(stored, 0);
 });
 
 test('only an http(s) URL back from Core.UploadFile counts as stored, in either SDK response shape', () => {
@@ -272,13 +361,20 @@ test('no screen calls Core.UploadFile (or any Core integration) from the browser
 
 test('entry.ts: size gate before parsing, WHO before reading the bytes, profiles pinned to the caller', () => {
   const src = read('base44/functions/uploadSchoolFile/entry.ts');
-  const order = ['content-length', 'req.formData()', 'decideUploader(', 'effectiveLicenseIsReadOnly(', 'file.arrayBuffer()', 'checkFile(', 'uploadsToday(', 'Core.UploadFile('];
+  const order = ['content-length', 'req.formData()', 'decideUploader(', 'effectiveLicenseIsReadOnly(', 'file.arrayBuffer()', 'checkFile(', 'uploadWithinDailyLimit('];
   let last = -1;
   for (const marker of order) {
     const at = src.indexOf(marker);
     assert.ok(at > last, `${marker} comes after the previous step`);
     last = at;
   }
+  // Everyone but the platform owner stores ONLY through the reservation.
+  assert.equal((src.match(/Core\.UploadFile\(/g) || []).length, 1, 'one storage call, wrapped');
+  assert.match(src, /upload: store,/);
+  assert.equal((src.match(/await store\(\)/g) || []).length, 1, 'called directly only on the owner branch');
+  const ownerBranch = src.indexOf("if (user.role === 'admin') {");
+  assert.ok(ownerBranch > 0 && ownerBranch < src.indexOf('await store()') && src.indexOf('await store()') < src.indexOf('} else {', ownerBranch),
+    'the direct call is inside the owner branch');
   assert.match(src, /UserProfile\.filter\(\{ user_id: user\.id \}/);
   assert.match(src, /new File\(\[bytes\], checked\.name, \{ type: checked\.mime \}\)/);
   assert.doesNotMatch(src, /school_id:\s*form\.get|form\.get\('school/, 'the school never comes from the request');

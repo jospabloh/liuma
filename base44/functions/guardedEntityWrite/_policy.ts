@@ -6,21 +6,41 @@
 // Keep POLICY_WRITE in sync by hand with src/lib/authorization/policy.js's
 // POLICY (Deno functions can't import across directories).
 
-// The author name a write stamps (author_name, teacher_name, parent_name…).
-// `display_name` is the name the person chose in LIUMA ("¿Cómo te llamas?",
-// a User custom field: the SDK's auth.updateMe() cannot write full_name);
-// `full_name` is whatever signup left, often the email handle. Without a
-// chosen name this returns full_name exactly as before. Identical in
-// guardedEntityWrite/_policy.ts and guardedFamilyWrite/_policy.ts (functions
-// cannot import across directories); tests/unit/user-display-name.test.js
-// runs both copies on the same cases.
-export function callerDisplayName(user: unknown): string {
-  const u = (user ?? {}) as { display_name?: unknown; full_name?: unknown; data?: { display_name?: unknown } | null };
+// The author name a write stamps (author_name, teacher_name, parent_name,
+// uploaded_by_name, requester_name). `display_name` is the name the person
+// chose in LIUMA ("¿Cómo te llamas?", a User custom field: the SDK's
+// auth.updateMe() cannot write full_name); `full_name` is whatever signup
+// left, often the email handle. A handle is never stamped as a name (Codex
+// review of PR #197): the same rule as the greeting (src/lib/userDisplayName.js
+// #isHandleLikeName) and Lumi (_lumiCore.ts#displayUserName) — empty, an
+// address, the email's local part, or one token with . + _ or digits. Both
+// fields are checked: display_name is self-written with updateMe, so the
+// dialog's validation can be skipped. Without a real name the stamp is the
+// caller's ROLE ('Dirección', 'Docente', 'Familia'), because these fields are
+// shown as the author in lists and e-mails, where a blank reads as a bug and
+// the role is what the reader needs; with no role, ''.
+// Identical in guardedEntityWrite/_policy.ts and guardedFamilyWrite/_policy.ts
+// (functions cannot import across directories), from this comment to the end
+// of callerDisplayName; tests/unit/user-display-name.test.js compares the
+// two and runs both on the same cases.
+export const AUTHOR_ROLE_LABELS: Record<string, string> = { ADMIN: 'Dirección', TEACHER: 'Docente', PARENT: 'Familia' };
+
+export function isHandleLikeName(name: unknown, email?: unknown): boolean {
+  const value = String(name ?? '').trim();
+  if (!value || value.includes('@')) return true;
+  const local = String(email ?? '').split('@')[0].trim().toLowerCase();
+  if (local && value.toLowerCase() === local) return true;
+  return !/\s/.test(value) && /[.+_\d]/.test(value);
+}
+
+export function callerDisplayName(user: unknown, role?: unknown): string {
+  const u = (user ?? {}) as { display_name?: unknown; full_name?: unknown; email?: unknown; data?: { display_name?: unknown } | null };
   const raw = typeof u.display_name === 'string' ? u.display_name : typeof u.data?.display_name === 'string' ? u.data.display_name : '';
   const chosen = raw.replace(/\s+/g, ' ').trim().slice(0, 60);
-  // The field is self-written with updateMe, so the dialog's validation can be
-  // skipped: an address there is not a name (same rule as emergencyAuthorName).
-  return chosen && !chosen.includes('@') ? chosen : String(u.full_name || '');
+  if (!isHandleLikeName(chosen, u.email)) return chosen;
+  const full = String(u.full_name ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!isHandleLikeName(full, u.email)) return full;
+  return AUTHOR_ROLE_LABELS[String(role ?? '')] || '';
 }
 
 export const POLICY_WRITE: Record<string, string[]> = {
@@ -698,7 +718,8 @@ function stampServerFields(entity: string, operation: Op, data: Record<string, u
           requester_user_id: ctx.userId,
           requester_profile_id: ctx.profileId,
           requester_role: ctx.role,
-          requester_name: ctx.userName || ctx.userEmail || 'Usuario',
+          // Never the address: callerDisplayName already fell back to the role.
+          requester_name: ctx.userName || 'Usuario',
           category,
           priority,
           channel_origin: data.channel_origin || 'MANUAL',

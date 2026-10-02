@@ -337,7 +337,7 @@ Deno.serve(async (req) => {
       const attribution = ATTRIBUTION_FIELDS[entity];
       if (attribution) {
         data[attribution.id] = user.id;
-        if (attribution.name) data[attribution.name] = callerDisplayName(user);
+        if (attribution.name) data[attribution.name] = callerDisplayName(user, profile?.app_role || (isPlatformOwner ? 'ADMIN' : ''));
       }
 
       // Base44 security scan, 2026-09-28 (confirmed, found via notifyParents

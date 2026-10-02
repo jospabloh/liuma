@@ -323,7 +323,7 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
 
   const built = buildSchoolWrite(entity, operation, input, {
     userId: String(user.id),
-    userName: callerDisplayName(user),
+    userName: callerDisplayName(user, appRole),
     userEmail: String(user.email || ''),
     profileId: String(usableProfile?.id || ''),
     role: appRole,

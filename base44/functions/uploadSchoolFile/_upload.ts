@@ -21,7 +21,13 @@
 //      name and the MIME type of what the bytes ARE, never what the browser
 //      claimed.
 //   4. HOW MUCH: a per-user daily cap, counted in AuditLog (durable, unlike an
-//      in-memory bucket — uploads are rare enough to afford the read).
+//      in-memory bucket — uploads are rare enough to afford the read). The
+//      slot is RESERVED before the file is stored (reserveUploadSlot): a
+//      claim row is written first, then today's rows are re-read and ranked
+//      in a fixed order, so concurrent requests cannot all see "59" and all
+//      upload, and a claim that cannot be written means no upload (fail
+//      closed). Codex review of PR #197: the first version counted, uploaded,
+//      and only then wrote the counter, best-effort.
 
 export type FileType = 'pdf' | 'png' | 'jpeg' | 'gif' | 'webp' | 'doc' | 'docx';
 export type Who = 'onboarding' | 'admin';
@@ -268,16 +274,6 @@ export function mexicoDayStart(now: Date): number {
   return Date.parse(`${get('year')}-${get('month')}-${get('day')}T06:00:00.000Z`);
 }
 
-/** How many of these audit rows fall on today's Mexico day. Base44 dates may lack a zone; they are UTC. */
-export function uploadsToday(rows: Array<{ created_date?: string }>, now: Date): number {
-  const since = mexicoDayStart(now);
-  return (rows || []).filter((r) => {
-    const raw = String(r.created_date || '');
-    const t = Date.parse(/([zZ]|[+-]\d\d:\d\d)$/.test(raw) ? raw : `${raw}Z`);
-    return Number.isFinite(t) && t >= since;
-  }).length;
-}
-
 /** AuditLog target_type for every upload (the daily cap counts these). */
 export const UPLOAD_AUDIT_TARGET = 'uploadSchoolFile';
 
@@ -292,4 +288,132 @@ export function uploadedUrl(result: unknown): string {
   } catch {
     return '';
   }
+}
+
+// --- Reserving a slot (the cap, race-free) ------------------------------------------
+
+// deno-lint-ignore no-explicit-any
+type Db = any;
+type ClaimRow = { id?: string; created_date?: string };
+
+/** Today's upload rows read back to rank a claim; more than this many means refuse. */
+export const QUOTA_READ_LIMIT = 500;
+
+/** Base44 dates may lack a zone; they are UTC. */
+function rowTime(row: ClaimRow): number {
+  const raw = String(row.created_date || '');
+  return Date.parse(/([zZ]|[+-]\d\d:\d\d)$/.test(raw) ? raw : `${raw}Z`);
+}
+
+/**
+ * The claim's 0-based position among today's upload rows, oldest first, ties
+ * broken by id — the same order for every concurrent request, so exactly the
+ * first DAILY_UPLOAD_LIMIT of them get through (as resolvePaymentRace does for
+ * payments). -1 when the claim is not among them.
+ */
+export function claimRank(rows: ClaimRow[], claimId: string, now: Date): number {
+  const since = mexicoDayStart(now);
+  const today = (rows || []).filter((r) => {
+    const t = rowTime(r);
+    return Number.isFinite(t) && t >= since;
+  });
+  today.sort((a, b) => (rowTime(a) - rowTime(b)) || String(a.id || '').localeCompare(String(b.id || '')));
+  return today.findIndex((r) => String(r.id || '') === claimId);
+}
+
+function isRateLimit(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return err?.status === 429 || /rate limit/i.test(String(err?.message ?? ''));
+}
+
+export type QuotaResult = { status: number; body: Record<string, unknown> };
+
+const refuse = (status: number, code: string): QuotaResult => ({ status, body: { ok: false, code, error: code } });
+
+async function releaseClaim(sr: Db, claimId: string): Promise<void> {
+  // A claim that cannot be removed keeps counting: the cap errs toward refusing.
+  try {
+    await sr.entities.AuditLog.delete(claimId);
+  } catch (e) {
+    console.error('uploadSchoolFile: claim could not be released', claimId, (e as Error)?.message);
+  }
+}
+
+/**
+ * Reserve a slot, store the file, record it. `upload` stores the (already
+ * checked) file and returns its URL, or '' / throws on failure.
+ *   1. claim: an AuditLog row for this upload, written BEFORE storing. If it
+ *      cannot be written there is no upload (503 UPLOAD_QUOTA_UNAVAILABLE).
+ *   2. rank it among today's rows; past DAILY_UPLOAD_LIMIT, the claim is
+ *      released and the request refused (429 UPLOAD_DAILY_LIMIT).
+ *   3. upload; on failure the claim is released (502 UPLOAD_FAILED).
+ *   4. the claim becomes the record of the upload (URL added, best-effort:
+ *      it already counts and already says who uploaded what for what).
+ */
+export async function uploadWithinDailyLimit({ sr, user, schoolId, purpose, fileType, size, now, upload }: {
+  sr: Db;
+  user: { id?: string; email?: string };
+  schoolId: string | null;
+  purpose: string;
+  fileType: string;
+  size: number;
+  now: Date;
+  upload: () => Promise<string>;
+}): Promise<QuotaResult> {
+  const userId = String(user?.id || '');
+  const base = {
+    school_id: schoolId || 'onboarding',
+    user_id: userId,
+    user_email: user?.email || '',
+    action: 'RECORD_CREATED',
+    target_type: UPLOAD_AUDIT_TARGET,
+    target_id: purpose,
+  };
+  const details = { purpose, file_type: fileType, size };
+
+  let claim: ClaimRow;
+  try {
+    claim = await sr.entities.AuditLog.create({ ...base, details: { ...details, state: 'reserved' } });
+  } catch (e) {
+    console.error('uploadSchoolFile: claim not written', (e as Error)?.message);
+    return isRateLimit(e) ? refuse(429, 'RATE_LIMITED') : refuse(503, 'UPLOAD_QUOTA_UNAVAILABLE');
+  }
+  const claimId = String(claim?.id || '');
+  if (!claimId) return refuse(503, 'UPLOAD_QUOTA_UNAVAILABLE');
+
+  let rows: ClaimRow[];
+  try {
+    rows = await sr.entities.AuditLog.filter({ user_id: userId, target_type: UPLOAD_AUDIT_TARGET }, '-created_date', QUOTA_READ_LIMIT) || [];
+  } catch (e) {
+    await releaseClaim(sr, claimId);
+    return isRateLimit(e) ? refuse(429, 'RATE_LIMITED') : refuse(503, 'UPLOAD_QUOTA_UNAVAILABLE');
+  }
+  // A full page means rows older than the window are unknown: refuse.
+  const pageFull = rows.length >= QUOTA_READ_LIMIT;
+  // The insert may not be visible to the re-read yet; it is certainly in the set.
+  if (!rows.some((r) => String(r.id || '') === claimId)) rows = [...rows, claim];
+  const rank = claimRank(rows, claimId, now);
+  if (pageFull || rank < 0 || rank >= DAILY_UPLOAD_LIMIT) {
+    await releaseClaim(sr, claimId);
+    return refuse(429, 'UPLOAD_DAILY_LIMIT');
+  }
+
+  let url = '';
+  try {
+    url = await upload();
+  } catch (e) {
+    console.error('uploadSchoolFile upload failed', (e as Error)?.message);
+    url = '';
+  }
+  if (!url) {
+    await releaseClaim(sr, claimId);
+    return refuse(502, 'UPLOAD_FAILED');
+  }
+
+  try {
+    await sr.entities.AuditLog.update(claimId, { details: { ...details, state: 'stored', file_url: url } });
+  } catch (e) {
+    console.error('uploadSchoolFile: claim not updated with the URL', (e as Error)?.message);
+  }
+  return { status: 200, body: { ok: true, file_url: url } };
 }

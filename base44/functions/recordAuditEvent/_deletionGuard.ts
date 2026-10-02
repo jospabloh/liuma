@@ -26,9 +26,11 @@
 //       read per write plus one.
 //   A row compensated nowhere (both attempts failed) is recorded as an
 //   AuditLog DELETION_STRAGGLER_UNRESOLVED row with its entity and id, for
-//   the owner. A post-check whose read FAILS lets the write stand:
-//   deleteMyAccount runs a final sweep right before it marks the account
-//   deleted, which catches anything that slipped through this way.
+//   the owner. A post-check whose read FAILS twice cannot tell whether a
+//   deletion started, so it compensates nothing (no marker is known) but
+//   records the row the same way and the request answers 503
+//   DELETION_STATE_UNVERIFIED — never a success (Codex review of PR #197,
+//   round 9: the deletion's final sweep may already have run).
 //
 // School data is never deleted to compensate — only what deleteMyAccount
 // itself would delete (the user's own unattended requests and inbox rows).
@@ -61,6 +63,16 @@ export class DeletionInProgressError extends Error {
   code = 'ACCOUNT_DELETION_IN_PROGRESS';
   constructor() {
     super('ACCOUNT_DELETION_IN_PROGRESS');
+  }
+}
+
+export const DELETION_UNVERIFIED_BODY = { ok: false, code: 'DELETION_STATE_UNVERIFIED', error: 'DELETION_STATE_UNVERIFIED' };
+
+export class DeletionUnverifiedError extends Error {
+  status = 503;
+  code = 'DELETION_STATE_UNVERIFIED';
+  constructor() {
+    super('DELETION_STATE_UNVERIFIED');
   }
 }
 
@@ -129,28 +141,35 @@ export async function compensateRow(sr: Db, entity: string, id: string, userId: 
   if (action?.op === 'delete') ok = await tryTwice(() => sr.entities[entity].delete(id));
   if (action?.op === 'update') ok = await tryTwice(() => sr.entities[entity].update(id, action.data));
   if (ok) return true;
-  console.error('deletion guard: straggler not compensated', entity, id, userId);
+  await recordStraggler(sr, entity, id, userId, String(row?.school_id || ''), action?.op || 'read_failed');
+  return false;
+}
+
+/** The owner's record of a write the guard could not settle (retried once). */
+export async function recordStraggler(sr: Db, entity: string, id: string, userId: string, schoolId: string, reason: string): Promise<void> {
+  console.error('deletion guard: unresolved straggler', entity, id, userId, reason);
   await tryTwice(() => sr.entities.AuditLog.create({
-    school_id: String(row?.school_id || 'unknown'),
+    school_id: schoolId || 'unknown',
     user_id: userId,
     action: 'DELETION_STRAGGLER_UNRESOLVED',
     target_type: entity,
     target_id: id,
-    details: { action: action?.op || 'read_failed' },
+    details: { action: reason },
   }));
-  return false;
 }
 
 const WRITE_OPS = new Set(['create', 'update', 'delete', 'bulkCreate', 'updateMany', 'deleteMany']);
 
-type Guard = { sr: Db; tripped: () => boolean };
+type Guard = { sr: Db; tripped: () => boolean; unverified: () => boolean };
 
 /** The service-role client with every write checked (see the top of this file). */
 export function guardWrites(raw: Db, userId: string): Guard {
   let checked = false;
   let tripped = false;
+  let unverified = false;
   const pre = async () => {
     if (tripped) throw new DeletionInProgressError();
+    if (unverified) throw new DeletionUnverifiedError();
     if (checked) return;
     if (await storedDeletionState(raw, userId) === 'marked') {
       tripped = true;
@@ -159,11 +178,22 @@ export function guardWrites(raw: Db, userId: string): Guard {
     checked = true;
   };
   const post = async (entity: string, written: Row[]) => {
-    let state: 'marked' | 'none' = 'none';
-    try {
-      state = await storedDeletionState(raw, userId);
-    } catch {
-      return; // unreadable: the deletion's final sweep is the backstop
+    let state: 'marked' | 'none' | 'unknown' = 'unknown';
+    for (let i = 0; i < 2 && state === 'unknown'; i += 1) {
+      try {
+        state = await storedDeletionState(raw, userId);
+      } catch {
+        state = 'unknown';
+      }
+    }
+    if (state === 'unknown') {
+      // No marker is known, so nothing is compensated; the row is recorded
+      // and the request does not report success.
+      unverified = true;
+      for (const row of written) {
+        if (row?.id) await recordStraggler(raw, entity, String(row.id), userId, String(row.school_id || ''), 'state_unverified');
+      }
+      throw new DeletionUnverifiedError();
     }
     if (state !== 'marked') return;
     tripped = true;
@@ -199,7 +229,7 @@ export function guardWrites(raw: Db, userId: string): Guard {
       return Reflect.get(target, prop);
     },
   });
-  return { sr, tripped: () => tripped };
+  return { sr, tripped: () => tripped, unverified: () => unverified };
 }
 
 export type Guarded = (raw: Db, userId: string) => Db;
@@ -207,7 +237,8 @@ export type Guarded = (raw: Db, userId: string) => Db;
 /**
  * Wraps a function's handler: `guarded(raw, userId)` hands out checked
  * clients, and if any of them tripped — whatever the handler answered, and
- * whatever it caught — the answer is 403 ACCOUNT_DELETION_IN_PROGRESS.
+ * whatever it caught — the answer is 403 ACCOUNT_DELETION_IN_PROGRESS (or
+ * 503 DELETION_STATE_UNVERIFIED when the state could not be read back).
  */
 export function withDeletionGuard(handler: (req: Request, guarded: Guarded) => Promise<Response>): (req: Request) => Promise<Response> {
   return async (req: Request) => {
@@ -224,9 +255,13 @@ export function withDeletionGuard(handler: (req: Request, guarded: Guarded) => P
       if (e instanceof DeletionInProgressError || guards.some((g) => g.tripped())) {
         return Response.json(DELETION_IN_PROGRESS_BODY, { status: 403 });
       }
+      if (e instanceof DeletionUnverifiedError || guards.some((g) => g.unverified())) {
+        return Response.json(DELETION_UNVERIFIED_BODY, { status: 503 });
+      }
       throw e;
     }
     if (guards.some((g) => g.tripped())) return Response.json(DELETION_IN_PROGRESS_BODY, { status: 403 });
+    if (guards.some((g) => g.unverified())) return Response.json(DELETION_UNVERIFIED_BODY, { status: 503 });
     return res;
   };
 }

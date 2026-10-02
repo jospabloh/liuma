@@ -98,6 +98,7 @@ export function makeFakeMongoDb(tables, { failOn = null, integrations = null, id
     },
     async get(id) {
       calls.push({ entity: name, op: 'get', id });
+      maybeFail(name, 'get');
       const row = table(name).find((r) => r.id === id);
       if (!row) throw new Error('not found');
       return structuredClone(row);

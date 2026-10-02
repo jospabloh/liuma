@@ -15,6 +15,7 @@
 // exportFamilyData). A failure on any single entity doesn't fail the whole
 // export.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { finalExportGate } from './_exportGate.ts';
 
 const EXPORTED_ENTITIES = [
   'Student', 'Classroom', 'TeacherClassroom', 'ParentStudent', 'ParentProfile',
@@ -70,6 +71,10 @@ Deno.serve(async (req) => {
         errors[entityName] = (e as Error).message;
       }
     }));
+
+    // The deletion may have started while the school was being read.
+    const gate = await finalExportGate(sr, String(user.id));
+    if (!gate.ok) return Response.json({ ok: false, code: gate.code, error: gate.code }, { status: gate.status });
 
     return Response.json({
       ok: true,

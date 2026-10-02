@@ -8,11 +8,13 @@ import {
   ANONYMIZED_NAME as GUARD_ANONYMIZED_NAME,
   OPEN_CHANGE_STATUSES as GUARD_OPEN,
   DeletionInProgressError,
+  DeletionUnverifiedError,
   guardWrites,
   withDeletionGuard,
 } from '../../base44/functions/guardedEntityWrite/_deletionGuard.ts';
 import { ANONYMIZE, ANONYMIZED_NAME, runAccountDeletion } from '../../base44/functions/deleteMyAccount/_deletion.ts';
 import { runOnboardingProvision } from '../../src/lib/authorization/onboardingProvision.js';
+import { finalExportGate } from '../../base44/functions/exportSchoolData/_exportGate.ts';
 import { PRIVACY_NOTICE_VERSION } from '../../src/lib/consent/privacyNotice.js';
 
 // Codex review of PR #197, round 8. The deletion-marker gate read only the
@@ -144,16 +146,62 @@ test('a compensation that fails twice is recorded for the owner (DELETION_STRAGG
   assert.deepEqual([row.target_type, row.target_id, row.user_id, row.school_id], ['DiaryEntry', tables.DiaryEntry[0].id, T, 'sA']);
 });
 
-test('a post-check that cannot read the User lets the write stand (the deletion\'s final sweep is the backstop)', async () => {
+// Round 9: the final sweep may already have run, so an unreadable post-check
+// cannot simply let the write stand.
+test('a post-check that cannot read the User (twice) records the row and answers 503, compensating nothing', async () => {
   const tables = school();
   const db = makeFakeMongoDb(tables);
   const get = db.entities.User.get;
   let reads = 0;
-  db.entities.User.get = async (id) => { reads += 1; if (reads === 2) throw new Error('socket hang up'); return get(id); };
-  const { sr, tripped } = guardWrites(db, T);
-  await sr.entities.DiaryEntry.create({ school_id: 'sA', teacher_id: T, teacher_name: 'Ana' });
+  db.entities.User.get = async (id) => { reads += 1; if (reads >= 2) throw new Error('socket hang up'); return get(id); };
+  const { sr, tripped, unverified } = guardWrites(db, T);
+  await assert.rejects(() => sr.entities.DiaryEntry.create({ school_id: 'sA', teacher_id: T, teacher_name: 'Ana' }), DeletionUnverifiedError);
+  assert.equal(reads, 3, 'pre-read, post-read, one retry');
   assert.equal(tripped(), false);
-  assert.equal(tables.DiaryEntry[0].teacher_name, 'Ana');
+  assert.equal(unverified(), true);
+  assert.equal(tables.DiaryEntry[0].teacher_name, 'Ana', 'no marker is known: nothing compensated');
+  const row = tables.AuditLog.find((a) => a.action === 'DELETION_STRAGGLER_UNRESOLVED');
+  assert.deepEqual([row.target_type, row.target_id, row.school_id, row.details.action], ['DiaryEntry', tables.DiaryEntry[0].id, 'sA', 'state_unverified']);
+  // Further writes in the same request are refused, and the wrapper answers 503.
+  await assert.rejects(() => sr.entities.DiaryEntry.create({ teacher_id: T }), DeletionUnverifiedError);
+  const handler = withDeletionGuard(async (_req, guarded) => {
+    const w = guarded(db, T);
+    await w.entities.Homework.create({ teacher_id: T, teacher_name: 'Ana' }).catch(() => null);
+    return Response.json({ ok: true });
+  });
+  reads = 0;
+  db.entities.User.get = async (id) => { reads += 1; if (reads >= 2) throw new Error('socket hang up'); return get(id); };
+  const res = await handler(new Request('http://x/'));
+  assert.deepEqual([res.status, (await res.json()).code], [503, 'DELETION_STATE_UNVERIFIED']);
+});
+
+test('…but one failed read followed by a clean retry lets the write stand', async () => {
+  const tables = school();
+  const db = makeFakeMongoDb(tables);
+  const get = db.entities.User.get;
+  let reads = 0;
+  db.entities.User.get = async (id) => { reads += 1; if (reads === 2) throw new Error('blip'); return get(id); };
+  const { sr, tripped, unverified } = guardWrites(db, T);
+  await sr.entities.DiaryEntry.create({ school_id: 'sA', teacher_id: T, teacher_name: 'Ana' });
+  assert.deepEqual([tripped(), unverified()], [false, false]);
+  assert.equal(tables.AuditLog.length, 0);
+});
+
+test('the school export is discarded if the deletion started while it was read, or the state cannot be read', async () => {
+  const run = async (user) => finalExportGate(makeFakeMongoDb({ User: user ? [user] : [] }), T);
+  assert.deepEqual(await run({ id: T }), { ok: true });
+  assert.deepEqual(await run({ id: T, account_deletion_started_at: NOW.toISOString() }), { ok: false, status: 403, code: 'ACCOUNT_DELETION_IN_PROGRESS' });
+  assert.deepEqual(await run({ id: T, data: { account_deleted_at: NOW.toISOString() } }), { ok: false, status: 403, code: 'ACCOUNT_DELETION_IN_PROGRESS' });
+  assert.deepEqual(await run(null), { ok: false, status: 403, code: 'ACCOUNT_DELETION_IN_PROGRESS' }, 'a removed User');
+  const broken = makeFakeMongoDb({ User: [{ id: T }] }, { failOn: { entity: 'User', op: 'get', message: 'socket hang up' } });
+  assert.deepEqual(await finalExportGate(broken, T), { ok: false, status: 503, code: 'DELETION_STATE_UNVERIFIED' });
+  // Checked right before the export is returned, after the reads.
+  const src = read('base44/functions/exportSchoolData/entry.ts');
+  const reads = src.lastIndexOf('entity.filter(');
+  const gate = src.indexOf('await finalExportGate(sr, String(user.id))');
+  const answer = src.indexOf('exported_at:');
+  assert.ok(reads > 0 && gate > reads && answer > gate);
+  assert.match(src, /if \(!gate\.ok\) return Response\.json\(\{ ok: false, code: gate\.code, error: gate\.code \}, \{ status: gate\.status \}\);/);
 });
 
 test('withDeletionGuard answers 403 whatever the handler caught or answered', async () => {

@@ -24,6 +24,9 @@
 //      action:'commit' only runs with the code that exact preview produced
 //      (a digest of who/what/when, see confirmationCode) — the model cannot
 //      skip the preview or commit something other than what was shown.
+//      Since v1.9.0 the code also expires after 10 minutes (410 CODE_EXPIRED)
+//      and commits once (409 CODE_USED): repeating a commit no longer
+//      re-applies it, e.g. reverting a correction made since in Asistencia.
 //   4. DELEGATES the write to guardedEntityWrite and the parent email to
 //      notifyParents, invoked with the caller's own token — the same two
 //      functions the Asistencia and CrearBitacora pages use. No write or
@@ -38,6 +41,7 @@ import {
   type Profile, type Scope,
   selectCurrentProfile, profileProblem, canWriteKind, WRITE_KINDS,
   mexicoToday, validateWrite, confirmationCode, describeWrite, fullName, errorMessage, label,
+  checkConfirmationCode, claimConfirmationCode, releaseConfirmationCode, CONFIRMATION_TTL_SECONDS,
 } from './_lumiCore.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -106,7 +110,8 @@ Deno.serve(async (req) => {
     }
     const data = validation.data;
     const name = fullName(student);
-    const code = await confirmationCode({ userId: user.id, kind, studentId, data, day: today });
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const writeParts = { userId: String(user.id), kind, studentId, data };
 
     // Existing record for that student and day (attendance is updated in place;
     // a second bitácora the same day is refused, same as CrearBitacora).
@@ -116,6 +121,7 @@ Deno.serve(async (req) => {
     if (kind === 'diary' && existing) return fail(409, 'ALREADY_EXISTS');
 
     if (action === 'preview') {
+      const code = await confirmationCode({ ...writeParts, issuedAt: nowSeconds });
       return Response.json({
         ok: true,
         action: 'preview',
@@ -125,11 +131,21 @@ Deno.serve(async (req) => {
         // "hoy ya estaba como ausente".
         previous_status: kind === 'attendance' && existing ? label('attendance_status', existing.status) : '',
         confirmation_code: code,
-        next_step: 'Muestra el resumen y pregunta "¿Lo registro?". Sólo si la persona confirma, repite la llamada con action "commit", los mismos datos y este confirmation_code.',
+        confirmation_expires_in_minutes: CONFIRMATION_TTL_SECONDS / 60,
+        next_step: 'Muestra el resumen y pregunta "¿Lo registro?". Sólo si la persona confirma, repite la llamada con action "commit", los mismos datos y este confirmation_code. El código sirve una sola vez y caduca en 10 minutos.',
       });
     }
 
-    if (String(body?.confirmation_code || '') !== code) return fail(409, 'NEEDS_CONFIRMATION');
+    const codeState = await checkConfirmationCode(body?.confirmation_code, writeParts, nowSeconds);
+    if (codeState === 'NEEDS_CONFIRMATION') return fail(409, 'NEEDS_CONFIRMATION');
+    if (codeState === 'CODE_EXPIRED') return fail(410, 'CODE_EXPIRED');
+    // Single use: the claim is written before the write and re-read, so two
+    // commits with the same code cannot both get through.
+    const code = String(body.confirmation_code);
+    const claimId = await claimConfirmationCode(sr, {
+      code, userId: String(user.id), userEmail: user.email || '', schoolId, kind, studentId,
+    });
+    if (!claimId) return fail(409, 'CODE_USED');
 
     // --- commit: delegate to guardedEntityWrite with the caller's own token.
     let record: Row | null = null;
@@ -153,11 +169,18 @@ Deno.serve(async (req) => {
         record = unwrap(await base44.functions.invoke('guardedEntityWrite', payload)).record || null;
       }
     } catch (e) {
+      // Nothing was written: give the code back so a retry within its 10
+      // minutes works (a retry is safe — attendance updates in place, a
+      // second bitácora is refused as ALREADY_EXISTS).
+      await releaseConfirmationCode(sr, claimId);
       const err = invokeError(e);
       const denied = ['FORBIDDEN', 'WRITE_BLOCKED', 'STUDENT_NOT_IN_SCHOOL', 'NO_PROFILE'].includes(String(err.code));
       return fail(denied ? 403 : 502, err.code === 'WRITE_BLOCKED' || err.code === 'FORBIDDEN' ? err.code : 'WRITE_FAILED');
     }
-    if (!record?.id) return fail(502, 'WRITE_FAILED');
+    if (!record?.id) {
+      await releaseConfirmationCode(sr, claimId);
+      return fail(502, 'WRITE_FAILED');
+    }
 
     // Parent email, same function and same conditions as the app's own pages:
     // an absence always notifies (notifyParents is idempotent per record), a
@@ -183,7 +206,7 @@ Deno.serve(async (req) => {
       action: 'AI_REQUEST_ALLOWED',
       target_type: kind === 'attendance' ? 'Attendance' : 'DiaryEntry',
       target_id: String(record.id),
-      details: { tool: 'lumiWrite', kind, updated_existing: !!existing, parents_notified: parentsNotified },
+      details: { tool: 'lumiWrite', kind, updated_existing: !!existing, parents_notified: parentsNotified, confirmation_code: code },
     }).catch(() => null);
 
     return Response.json({

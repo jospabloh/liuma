@@ -46,6 +46,10 @@ import {
   referencesToCheck,
   schoolWriteRule,
   selectCurrentProfile,
+  addsActiveStudent,
+  studentHardLimit,
+  studentPlanLimit,
+  studentQuotaRefusal,
   userReferencesToCheck,
 } from './_policy.ts';
 import type { CallerProfile, Op } from './_policy.ts';
@@ -76,10 +80,39 @@ export async function resolveCallerProfile(sr: Db, user: Caller): Promise<{ prof
   return { profile, problem: profileProblem(profile) };
 }
 
+type SubscriptionRow = { subscription_status?: string; license_tier?: string; trial_end_date?: string };
+
+/** The school's newest SchoolSubscription row, or null. */
+export async function readSubscription(sr: Db, schoolId: string): Promise<SubscriptionRow | null> {
+  const subs: SubscriptionRow[] = await sr.entities.SchoolSubscription.filter({ school_id: schoolId }, '-created_date', 1);
+  return (subs || [])[0] || null;
+}
+
 export async function licenseIsReadOnly(sr: Db, schoolId: string, now: Date): Promise<boolean> {
-  const subs: Array<{ subscription_status?: string; license_tier?: string; trial_end_date?: string }> =
-    await sr.entities.SchoolSubscription.filter({ school_id: schoolId }, '-created_date', 1);
-  return effectiveLicenseIsReadOnly((subs || [])[0] || null, now);
+  return effectiveLicenseIsReadOnly(await readSubscription(sr, schoolId), now);
+}
+
+async function countActiveStudents(sr: Db, schoolId: string, upTo: number): Promise<number> {
+  const rows: Array<{ school_id?: string; is_active?: boolean }> =
+    await sr.entities.Student.filter({ school_id: schoolId, is_active: true }, '-created_date', upTo);
+  return (rows || []).filter((s) => String(s.school_id || '') === schoolId && s.is_active === true).length;
+}
+
+/**
+ * The plan's student cap, before the write (see studentHardLimit in
+ * ./_policy.ts). Returns the refusal, or the hard limit to re-check after the
+ * write (null = nothing to re-check).
+ */
+type QuotaCheck = { refusal: WriteResult | null; hardLimit: number | null; limit: number | null };
+
+async function checkStudentQuota(sr: Db, schoolId: string): Promise<QuotaCheck> {
+  const sub = await readSubscription(sr, schoolId);
+  const limit = studentPlanLimit(sub);
+  const hardLimit = studentHardLimit(sub);
+  if (hardLimit == null) return { refusal: null, hardLimit: null, limit };
+  const used = await countActiveStudents(sr, schoolId, hardLimit);
+  if (used >= hardLimit) return { refusal: studentQuotaRefusal(limit, hardLimit, used), hardLimit, limit };
+  return { refusal: null, hardLimit, limit };
 }
 
 // Returns the first client-supplied reference (see REFERENCE_ENTITIES) whose
@@ -345,8 +378,26 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
     };
   }
 
+  // The plan's student cap (v1.9.0): only a write that ADDS an active student
+  // is held to it, and only for a school user — the platform owner bypasses,
+  // as in the client.
+  const quotaCheck: QuotaCheck = entity === 'Student' && !isPlatformOwner && addsActiveStudent(operation, data, existing)
+    ? await checkStudentQuota(sr, schoolId)
+    : { refusal: null, hardLimit: null, limit: null };
+  if (quotaCheck.refusal) return quotaCheck.refusal;
+  // Two creates racing at the last free seat both pass the check above. After
+  // the write, whoever sees the school OVER the cap undoes their own write and
+  // is refused; at worst both undo and one retry succeeds. The count never
+  // stays past the cap.
+  const overCapAfterWrite = async (): Promise<boolean> => quotaCheck.hardLimit != null
+    && await countActiveStudents(sr, schoolId, quotaCheck.hardLimit + 1) > quotaCheck.hardLimit;
+
   if (operation === 'create') {
     const record = await sr.entities[entity].create(data);
+    if (record?.id && await overCapAfterWrite()) {
+      await sr.entities[entity].delete(String(record.id));
+      return studentQuotaRefusal(quotaCheck.limit, quotaCheck.hardLimit!, quotaCheck.hardLimit!);
+    }
     await writeAudit(sr, {
       ...auditBase,
       action: 'RECORD_CREATED',
@@ -358,6 +409,14 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
 
   const recordId = String(existing!.id);
   const record = await sr.entities[entity].update(recordId, data);
+  if (await overCapAfterWrite()) {
+    // Put back every field this patch touched, not only is_active: the
+    // refusal says nothing was saved.
+    const undo = Object.fromEntries(Object.keys(data).map((field) => [field, existing![field] ?? null]));
+    undo.is_active = existing!.is_active === true;
+    await sr.entities[entity].update(recordId, undo);
+    return studentQuotaRefusal(quotaCheck.limit, quotaCheck.hardLimit!, quotaCheck.hardLimit!);
+  }
   await writeAudit(sr, {
     ...auditBase,
     action: 'RECORD_UPDATED',

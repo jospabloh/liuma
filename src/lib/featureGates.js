@@ -41,9 +41,13 @@ export const FEATURE_TIERS = {
 };
 
 /**
- * Gating master switch. Tier gating is ON by default; set
- * VITE_PAYWALL_GATING_ENABLED=false in the build env to disable it (e.g. for a
- * sandbox tenant). The ACACIA platform owner always bypasses gating regardless.
+ * Gating master switch for the page-level FEATURE gates (useFeatureGate). Tier
+ * gating is ON by default; set VITE_PAYWALL_GATING_ENABLED=false in the build
+ * env to disable it (e.g. for a sandbox tenant). The ACACIA platform owner
+ * always bypasses gating regardless.
+ *
+ * It does NOT switch off the student cap (v1.9.0): that one is enforced by the
+ * server with no flag, and useStudentQuota always warns about it.
  */
 export const PAYWALL_GATING_ENABLED =
   import.meta.env.VITE_PAYWALL_GATING_ENABLED !== 'false';

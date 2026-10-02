@@ -74,7 +74,11 @@ test('lumiWrite delegates to guardedEntityWrite and notifyParents behind a confi
   const src = read('base44/functions/lumiWrite/entry.ts');
   assert.match(src, /functions\.invoke\('guardedEntityWrite'/);
   assert.match(src, /functions\.invoke\('notifyParents', \{ kind: notifyKind, recordId: record\.id \}\)/);
-  assert.match(src, /if \(String\(body\?\.confirmation_code \|\| ''\) !== code\) return fail\(409, 'NEEDS_CONFIRMATION'\)/);
+  // The commit runs only with this write's own, live, unused code (v1.9.0:
+  // checkConfirmationCode + claimConfirmationCode, see lumi-confirmation-code.test.js).
+  assert.match(src, /if \(codeState === 'NEEDS_CONFIRMATION'\) return fail\(409, 'NEEDS_CONFIRMATION'\)/);
+  assert.match(src, /if \(codeState === 'CODE_EXPIRED'\) return fail\(410, 'CODE_EXPIRED'\)/);
+  assert.match(src, /if \(!claimId\) return fail\(409, 'CODE_USED'\)/);
   // No direct entity writes: every write goes through the guarded path.
   assert.doesNotMatch(src, /entities\.(Attendance|DiaryEntry)\.(create|update)/);
   // A teacher may only write for students in their own classrooms.

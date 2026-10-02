@@ -21,6 +21,7 @@
 // loads it directly (tests/unit/director-forms.test.js).
 
 import { parseLocalDate, startOfLocalDay } from '../dates.js';
+import { uploadProblem } from '../uploads/uploadRules.js';
 
 // guardedEntityWrite's cleanFieldValue() silently TRUNCATES a 'string' at 300
 // characters and a 'text' at 5000. Saying so here, before the write, is the
@@ -182,6 +183,11 @@ export function validateDocumentForm(form, file) {
 
   if (!file) errors.file = 'Elige el archivo PDF que vas a subir.';
   else if (!isPdfFile(file)) errors.file = 'El archivo debe ser un PDF.';
+  else {
+    // The server's own rule (uploadSchoolFile): a .pdf name and at most 10 MB.
+    const problem = uploadProblem('official_document', file);
+    if (problem) errors.file = problem;
+  }
   return errors;
 }
 

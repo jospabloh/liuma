@@ -46,6 +46,7 @@ import {
 } from '../onboarding/joinCode.js';
 import { PRIVACY_NOTICE_VERSION, TERMS_VERSION, CONSENT_SCOPES } from '../consent/privacyNotice.js';
 import { buildTrialSubscription } from '../license/licenseModel.js';
+import { accountDeletedAt } from '../account/accountDeletion.js';
 
 export const APP_ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 export { JOIN_CODE_ALPHABET, JOIN_CODE_LENGTH };
@@ -86,12 +87,22 @@ export function resolveOnboardingProvision({ user, school, role, schoolAdmins = 
 // Build the create/update payload for an onboarding upsert. On an EXISTING
 // profile we never rewrite app_role/status (those are governance-controlled once
 // the profile exists); we only refresh onboarding-owned fields.
-export function buildOnboardingUpsert({ user, schoolId, phone, appRole, status, existingProfile }) {
+/** The consent stamp a profile carries once its ConsentRecord is written —
+ * what schoolRead and the write paths check (profileConsentIsCurrent). */
+export function buildConsentStamp(now = new Date()) {
+  return {
+    consent_notice_version: PRIVACY_NOTICE_VERSION,
+    consent_terms_version: TERMS_VERSION,
+    consent_accepted_at: (now instanceof Date ? now : new Date(now)).toISOString(),
+  };
+}
+
+export function buildOnboardingUpsert({ user, schoolId, phone, appRole, status, existingProfile, now = new Date() }) {
   if (existingProfile) {
     return {
       action: 'update',
       id: existingProfile.id,
-      payload: { phone: phone || '', onboarding_completed: true },
+      payload: { phone: phone || '', onboarding_completed: true, ...buildConsentStamp(now) },
     };
   }
   return {
@@ -104,6 +115,7 @@ export function buildOnboardingUpsert({ user, schoolId, phone, appRole, status, 
       status,
       phone: phone || '',
       onboarding_completed: true,
+      ...buildConsentStamp(now),
     },
   };
 }
@@ -201,6 +213,7 @@ export async function resolveSchoolByCode(sr, rawCode) {
  */
 export async function runOnboardingProvision({ user, body, sr, now = new Date(), userAgent = '', randomBytes }) {
   if (!user?.id) throw new ProvisionError(401, 'UNAUTHENTICATED', 'Unauthorized');
+  if (accountDeletedAt(user)) throw new ProvisionError(410, 'ACCOUNT_DELETED', 'This account was deleted');
   const role = String(body?.role || '');
   if (!APP_ROLES.includes(role)) throw new ProvisionError(400, 'INVALID_ROLE', 'Invalid onboarding role');
   const phone = sanitizePhone(body?.phone);
@@ -256,7 +269,7 @@ export async function runOnboardingProvision({ user, body, sr, now = new Date(),
 
   const existing = myProfiles.find((p) => p.school_id === school.id) || null;
   const upsert = buildOnboardingUpsert({
-    user, schoolId: school.id, phone, appRole: decision.appRole, status: decision.status, existingProfile: existing,
+    user, schoolId: school.id, phone, appRole: decision.appRole, status: decision.status, existingProfile: existing, now,
   });
   let profileId;
   let status = decision.status;

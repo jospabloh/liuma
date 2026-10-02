@@ -171,6 +171,19 @@ export const HELP_SECTIONS = [
     pages: [],
     paragraphs: [
       'Cada escuela sólo ve sus propios datos; los maestros ven a los alumnos de sus salones y cada familia sólo a sus hijos. Consulta el Aviso de Privacidad y los Términos del servicio al pie de esta página.',
+      'Aceptar el Aviso de Privacidad y los Términos vigentes es obligatorio para usar LIUMA. Cuando cambian, LIUMA te pide aceptarlos de nuevo al entrar.',
+    ],
+  },
+  {
+    id: 'eliminar-cuenta',
+    title: 'Eliminar mi cuenta y mis datos',
+    roles: ALL,
+    pages: ['EliminarCuenta'],
+    steps: [
+      'Abre el menú (Más) y elige «Eliminar mi cuenta y mis datos». También llegas ahí si no aceptas el Aviso de Privacidad.',
+      'Lee qué se elimina y qué conserva la escuela. Si cambias de opinión, vuelve atrás: no se borra nada hasta que confirmas.',
+      'Escribe ELIMINAR y confirma. Tu sesión se cierra en ese momento.',
+      'Si eres la única persona de la dirección, no puedes eliminar tu cuenta: desde la misma pantalla puedes pedir que se nombre a otra persona o solicitar la eliminación de la escuela.',
     ],
   },
 ];

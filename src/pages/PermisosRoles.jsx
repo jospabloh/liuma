@@ -37,6 +37,9 @@ import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants'
 import { guardedCreate } from '@/lib/authorization/guardedWrite';
 import { humanizeError } from '@/lib/errorMessages';
 import FieldError from '@/components/forms/FieldError';
+import { Link } from 'react-router-dom';
+import { downloadSchoolExport } from '@/lib/account/schoolExport';
+import { ACCOUNT_DELETION_PATH, ACCOUNT_DELETION_TITLE } from '@/lib/account/accountDeletion';
 
 const PENDING_CHANGE_ENTITY = 'PendingChange';
 // The "plantillas de rol" grid and the tenant "Danger Zone" spec table that
@@ -496,20 +499,9 @@ export default function PermisosRoles() {
   const handleExportSchoolData = async () => {
     setIsExporting(true);
     try {
-      // invokeFunction unwraps the axios response to the export body.
       // Export has to work in read-only mode — it is the half of "solo
       // lectura" that promises nothing is held hostage.
-      const payload = await invokeFunction(base44, 'exportSchoolData', {});
-      if (!payload?.ok) throw new Error(payload?.error || 'export failed');
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `liuma-${userProfile.school_id}-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      await downloadSchoolExport(userProfile.school_id);
       toast.success('Descarga iniciada');
     } catch {
       toast.error('No se pudo generar la exportación');
@@ -693,6 +685,15 @@ export default function PermisosRoles() {
             <FieldError id="deletion-error" message={errors.deletion} />
             <Button variant="destructive" onClick={handleRequestSchoolDeletion} disabled={isRequestingDeletion}>
               {isRequestingDeletion ? 'Enviando...' : 'Solicitar eliminación de la escuela'}
+            </Button>
+          </div>
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">{ACCOUNT_DELETION_TITLE}</p>
+            <p className="text-xs text-muted-foreground">
+              Elimina sólo tu cuenta personal; la escuela y sus datos siguen. Si eres la única persona de la dirección, primero hay que nombrar a otra o solicitar la eliminación de la escuela.
+            </p>
+            <Button asChild variant="outline">
+              <Link to={ACCOUNT_DELETION_PATH}>{ACCOUNT_DELETION_TITLE}</Link>
             </Button>
           </div>
         </div>

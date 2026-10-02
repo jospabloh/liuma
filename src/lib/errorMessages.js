@@ -58,6 +58,11 @@ const CODE_MESSAGES = {
   // Base44's app-wide rate limit (v1.8.3). Reads were already retried by the
   // time anyone sees this; a write never is.
   RATE_LIMITED: 'Hay mucha actividad en este momento. Espera unos segundos e inténtalo de nuevo.',
+  // Consent and account deletion (v1.9.0). CONSENT_REQUIRED only reaches a
+  // screen when a request raced the consent screen; recargar la muestra.
+  CONSENT_REQUIRED: 'Antes de continuar, acepta la versión vigente del Aviso de Privacidad y los Términos. Recarga la página.',
+  CONSENT_VERSION_MISMATCH: 'El Aviso de Privacidad se actualizó mientras lo leías. Recarga la página para ver la versión vigente.',
+  ACCOUNT_DELETED: 'Esta cuenta se eliminó. Si quieres volver a LIUMA, escribe a soporte@acaciaco.com.mx.',
 };
 
 const STATUS_MESSAGES = {

@@ -34,7 +34,19 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 const MAX_MEMBERS = 5000;
 const DIRECTORY_ROLES = ['ADMIN', 'TEACHER'];
 
-type Profile = { user_id?: string; school_id?: string; app_role?: string; status?: string };
+type Profile = { user_id?: string; school_id?: string; app_role?: string; status?: string; consent_notice_version?: string; consent_terms_version?: string };
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
+
 type DirectoryUser = { id: string; full_name: string; email: string };
 
 function bad(status: number, code: string, message: string): Response {
@@ -72,6 +84,7 @@ Deno.serve(async (req) => {
         (p) => p.status === 'ACTIVE' && DIRECTORY_ROLES.includes(String(p.app_role)),
       );
       if (!callerProfile) return bad(403, 'FORBIDDEN', 'Requires an active ADMIN or TEACHER profile in this school');
+      if (!profileConsentIsCurrent(callerProfile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
       callerRole = String(callerProfile.app_role);
     }
 

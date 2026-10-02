@@ -18,9 +18,14 @@
 // distinguishable from one given to the next. Consents recorded before this
 // date pin the 2026-09-29 version string (the unreviewed draft).
 //
-// MIRROR: base44/functions/provisionOnboardingProfile/entry.ts rejects a
-// consent for any other version (a cached client with the old notice), and
-// tests/unit/legal-final.test.js fails if the two copies drift.
+// MIRROR: base44/functions/provisionOnboardingProfile/entry.ts and
+// myConsent/_consent.ts reject a consent for any other version (a cached
+// client with the old notice); schoolRead/_scope.ts (x3),
+// guardedEntityWrite/_policy.ts, guardedFamilyWrite/_policy.ts,
+// listSchoolMembers, approveProfile and governRoleChange refuse a profile
+// whose stamp is not this version. tests/unit/legal-final.test.js and
+// tests/unit/consent-gate.test.js fail if any copy drifts. Bumping a version
+// sends EVERY user back to the consent screen on their next request.
 export const PRIVACY_NOTICE_VERSION = '2026-10-02';
 
 /** The published legal texts are final ('vigente'). */
@@ -44,6 +49,21 @@ export const CONSENT_SCOPES = {
   GENERAL: 'general_privacy_notice', // acceptance of the Aviso de Privacidad
   SENSITIVE_MINOR: 'sensitive_minor_data', // express consent for minors' sensitive data
 };
+
+/**
+ * Has this UserProfile accepted the texts in force? The stamp
+ * (consent_notice_version / consent_terms_version) is written only by the
+ * server — provisionOnboardingProfile and myConsent, right after the
+ * ConsentRecord that proves it. Mirrors profileConsentIsCurrent in
+ * base44/functions/schoolRead/_scope.ts, which makes every data function
+ * answer CONSENT_REQUIRED without it: the consent screen
+ * (src/components/consent/ConsentGate.jsx) is the UI half of that rule.
+ */
+export function profileConsentIsCurrent(profile) {
+  return Boolean(profile)
+    && profile.consent_notice_version === PRIVACY_NOTICE_VERSION
+    && profile.consent_terms_version === SERVICE_TERMS_VERSION;
+}
 
 /** Both acceptances are required to finish onboarding. */
 export function consentIsComplete(acceptances = {}) {

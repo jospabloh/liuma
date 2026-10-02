@@ -425,7 +425,7 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                     <Checkbox
                       checked={consent.general}
                       onCheckedChange={(value) => setConsent((c) => ({ ...c, general: value === true }))}
-                      className="mt-0.5"
+                      className="mt-0.5 relative after:absolute after:-inset-[15px]"
                       aria-label="Acepto el Aviso de Privacidad y los Términos del servicio"
                     />
                     <span className="text-sm text-muted-foreground">
@@ -455,7 +455,7 @@ export default function Onboarding({ user, onComplete, onCancel }) {
                     <Checkbox
                       checked={consent.sensitive}
                       onCheckedChange={(value) => setConsent((c) => ({ ...c, sensitive: value === true }))}
-                      className="mt-0.5"
+                      className="mt-0.5 relative after:absolute after:-inset-[15px]"
                       aria-label="Consentimiento expreso de datos sensibles"
                     />
                     <span className="text-sm text-muted-foreground">{sensitiveConsentLabel(formData.role)}</span>

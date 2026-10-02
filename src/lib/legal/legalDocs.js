@@ -85,7 +85,18 @@ export const LIFECYCLE_GRACE_DAYS = {
 
 // Days ACACIA takes to purge data from the active database once it is due
 // (end of contract + download window, or an account deletion request).
+// MIRRORED in base44/functions/deleteMyAccount/_deletion.ts (the e-mail that
+// reminds ACACIA of the purge); tests/unit/account-deletion.test.js checks it.
 export const PURGE_DAYS = 30;
+
+// Lumi conversations. Until 2026-10-02 the notice promised they were deleted
+// with the account. They cannot be, by LIUMA: the SDK's agents module has no
+// delete, and Base44's platform API only lists and reads conversations
+// (checked in its API catalog). The consent package (v1.9.0) changed the
+// text to what is true — ACACIA asks Base44 — before any user accepted this
+// version (production had only 2026-09-29 draft consents that day), so the
+// version string did not need a bump.
+const LUMI_CONVERSATIONS_PARAGRAPH = 'Las conversaciones con Lumi se guardan en tu cuenta para que puedas retomarlas; nadie de tu escuela puede verlas. Base44 las almacena y no ofrece a LIUMA una forma de borrarlas por sí misma: cuando eliminas tu cuenta, ACACIA solicita a Base44 su supresión.';
 
 // ── Base44 and AI training ───────────────────────────────────────────────────
 // docs.base44.com/Community-and-support/Privacy-and-security (read 2026-10-02):
@@ -171,9 +182,15 @@ export const RETENTION_TABLE = [
     basis: 'LFPDPPP arts. 10 y 12; la escuela, como responsable, conserva por su cuenta los expedientes que la autoridad educativa o fiscal le exija.',
   },
   {
-    data: 'Cuenta de una persona usuaria: nombre, correo, teléfono, fotografía, rol, perfil de madre, padre o tutor, y sus conversaciones con Lumi',
-    period: 'Mientras la cuenta exista. Si la persona usa "' + ACCOUNT_DELETION_LABEL + '", se suprime de la base de datos activa dentro de ' + PURGE_DAYS + ' días.',
+    data: 'Cuenta de una persona usuaria: nombre, correo, teléfono, fotografía, rol y perfil de madre, padre o tutor',
+    period: 'Mientras la cuenta exista. Si la persona usa "' + ACCOUNT_DELETION_LABEL + '", su acceso se cierra de inmediato y la cuenta se suprime de la base de datos activa dentro de ' + PURGE_DAYS + ' días.',
     days: PURGE_DAYS,
+    basis: 'LFPDPPP arts. 10 y 24.',
+  },
+  {
+    data: 'Conversaciones con Lumi',
+    period: 'Mientras la cuenta exista. Al eliminarla, ACACIA solicita a Base44 su supresión dentro de los ' + PURGE_DAYS + ' días siguientes: Base44 las almacena y no ofrece a LIUMA una forma de borrarlas por sí misma, así que el plazo en que desaparecen depende de Base44.',
+    days: null,
     basis: 'LFPDPPP arts. 10 y 24.',
   },
   {
@@ -336,7 +353,7 @@ export const PRIVACY_NOTICE = {
       heading: '5. Asistente de inteligencia artificial (Lumi)',
       paragraphs: [
         'LIUMA incluye un asistente, Lumi, que pueden usar familias, maestros y dirección, y funciones de redacción asistida para el personal. Cuando los usas, el texto de tu solicitud y la información de la escuela necesaria para responderla (que puede incluir datos del alumno, incluidos sus datos de salud si la pregunta trata de ellos) se envían, a través de Base44, a un modelo de inteligencia artificial para generar la respuesta. Base44 elige el modelo en cada mensaje; los proveedores de modelos que publica son ' + aiProviderNames() + '. ' + GLM_DISCLOSURE + ' Lumi sólo consulta lo que tu rol te permite ver en LIUMA.',
-        'Las conversaciones con Lumi se guardan en tu cuenta para que puedas retomarlas, y se suprimen con ella.',
+        LUMI_CONVERSATIONS_PARAGRAPH,
         trainingParagraph(),
         'Lumi no toma decisiones por ti ni sobre ti: sus respuestas son de apoyo y no sustituyen el criterio médico, los protocolos de emergencia de la escuela ni la información oficial que publica la escuela (art. 26, fracción II de la Ley).',
       ],
@@ -394,7 +411,8 @@ export const PRIVACY_NOTICE = {
       heading: '10. Revocar tu consentimiento y eliminar tu cuenta',
       paragraphs: [
         'Puedes revocar en cualquier momento tu consentimiento, sin efectos retroactivos (art. 7 de la Ley), por los mismos medios de la sección 9.',
-        'Dentro de LIUMA puedes usar la opción "' + ACCOUNT_DELETION_LABEL + '" de tu cuenta. Al usarla, tu acceso se cierra de inmediato y tu cuenta, tu perfil, tus datos de contacto y tus conversaciones con Lumi se suprimen de la base de datos activa dentro de ' + PURGE_DAYS + ' días. Los registros escolares de tus hijos (asistencia, bitácora, cargos) pertenecen al expediente que lleva la escuela como responsable: para que también se cancelen, solicítalo a la escuela conforme a la sección 9. La constancia de tu consentimiento se conserva bloqueada en los términos de la sección 8.',
+        'Dentro de LIUMA puedes usar la opción "' + ACCOUNT_DELETION_LABEL + '" de tu cuenta. Al usarla, tu acceso se cierra de inmediato; tu cuenta, tu perfil y tus datos de contacto se suprimen de la base de datos activa dentro de ' + PURGE_DAYS + ' días; tus vínculos con tus hijos se revocan, y tus solicitudes que la escuela aún no atendía (ausencias y pedidos de uniforme) se cancelan. Los registros escolares de tus hijos (asistencia, bitácora, cargos y pagos) y lo que publicaste como personal de la escuela (avisos, tareas, bitácoras) pertenecen al expediente que lleva la escuela como responsable: se quedan con la escuela sin tu nombre y, para que también se cancelen, solicítalo a la escuela conforme a la sección 9. Tus conversaciones con Lumi las almacena Base44, que no ofrece a LIUMA una forma de borrarlas por sí misma: ACACIA solicita a Base44 su supresión en el mismo plazo. La constancia de tu consentimiento y de su retiro se conserva bloqueada en los términos de la sección 8.',
+        'Si eres la única persona de la dirección de tu escuela, no puedes eliminar tu cuenta: la escuela se quedaría sin quien la represente. Desde la misma opción puedes solicitar la eliminación de la escuela, o pedir a ACACIA que nombre a otra persona de la dirección.',
         'Aceptar este aviso es obligatorio para usar LIUMA. Revocar el consentimiento sobre los datos sensibles de tu hijo implica que la escuela deje de tratarlos en LIUMA y puede impedir que siga ofreciéndote el servicio por este medio.',
       ],
     },
@@ -508,7 +526,7 @@ export const SERVICE_TERMS = {
       paragraphs: [
         'La escuela puede cancelar cuando quiera escribiendo a ' + ID.email + '. La cancelación aplica al terminar el periodo pagado; no hay reembolsos por periodos ya cobrados salvo error imputable a ACACIA.',
         'La escuela puede descargar todos sus datos en cualquier momento desde Permisos y roles → Descargar datos de la escuela, y solicitar la eliminación de la escuela desde la misma pantalla. Al terminar el contrato tiene ' + LIFECYCLE_GRACE_DAYS.toDeletionEligible + ' días para descargarlos; después, ACACIA los suprime en los plazos del Aviso de Privacidad.',
-        'Cada persona usuaria puede eliminar su propia cuenta con la opción "' + ACCOUNT_DELETION_LABEL + '".',
+        'Cada persona usuaria puede eliminar su propia cuenta con la opción "' + ACCOUNT_DELETION_LABEL + '", salvo la única persona de la dirección de una escuela, que primero debe pedir que se nombre a otra o solicitar la eliminación de la escuela.',
       ],
     },
     {

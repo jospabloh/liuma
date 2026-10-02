@@ -34,6 +34,7 @@ change `routeAccess.js`, change the row here in the same commit.
 | /ConfiguracionInicial | ✓ | — | — | Initial school setup checklist |
 | /ContactosEmergencia | — | — | ✓ | Emergency contacts per child (drill-down from Mis hijos). ADMIN grant removed 2026-09-29: no entry point, page scopes by the caller's ParentStudent links |
 | /CrearBitacora | — | ✓ | — | Create diary entry (4-step wizard) |
+| /EliminarCuenta | ✓ | ✓ | ✓ | "Eliminar mi cuenta y mis datos" (v1.9.0): what is deleted and kept, typed confirmation, deleteMyAccount derives everything from the caller. Also rendered without the Layout from the consent screen ("No acepto") |
 | /EventosParaPadres | — | — | ✓ | School events: RSVP (accepting a paid event creates a ChargeItem) |
 | /GestionAlumno | ✓ | ✓ | — | Student detail + linked guardians ("Vincular"). ADMIN reaches it from Gestión de escuela (added 2026-09-29) |
 | /GestionAusencias | ✓ | — | — | Absence review (approve/reject) — school-wide; TEACHER grant removed 2026-09-29 (no entry point) |

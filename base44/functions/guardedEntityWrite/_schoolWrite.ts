@@ -37,6 +37,7 @@ import {
   decideCreateTargets,
   decideSchoolRecord,
   effectiveLicenseIsReadOnly,
+  consentExempt,
   licenseExempt,
   licenseExemptPatch,
   planNoticeDeliveries,
@@ -230,8 +231,11 @@ export async function runSchoolWrite(args: { sr: Db; user: Caller; body: Record<
 
   const isPlatformOwner = user.role === 'admin';
   const { profile, problem } = await resolveCallerProfile(sr, user);
-  if (!isPlatformOwner && problem) return fail(403, problem, 'No active profile');
-  const usableProfile = problem ? null : profile;
+  // A ticket is the one write that does not wait for the current consent
+  // (consentExempt): every other check below still applies to it.
+  const consentWaived = problem === 'CONSENT_REQUIRED' && consentExempt(entity, operation);
+  if (!isPlatformOwner && problem && !consentWaived) return fail(403, problem, 'No active profile');
+  const usableProfile = problem && !consentWaived ? null : profile;
 
   // WHERE — never from the body for a school user.
   let schoolId = '';

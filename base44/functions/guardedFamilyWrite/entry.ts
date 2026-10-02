@@ -32,11 +32,11 @@
 //
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { FAMILY_OPERATIONS, absenceRaceLoser, callerDisplayName, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
+import { FAMILY_OPERATIONS, absenceRaceLoser, profileConsentIsCurrent, callerDisplayName, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
 
-type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string };
+type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string; consent_notice_version?: string; consent_terms_version?: string };
 
 function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
@@ -110,6 +110,7 @@ Deno.serve(async (req) => {
       const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
       const profile = profiles.find((p) => p.status === 'ACTIVE') || null;
       if (!profile) return bad(403, 'NO_PROFILE', 'No active profile in this school');
+      if (!profileConsentIsCurrent(profile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
       isAdmin = profile.app_role === 'ADMIN';
       if (!isAdmin) {
         const links: Array<{ school_id?: string }> = await sr.entities.ParentStudent.filter({

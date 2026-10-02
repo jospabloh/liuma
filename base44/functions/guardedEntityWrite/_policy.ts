@@ -902,6 +902,8 @@ export type CallerProfile = {
   app_role?: string;
   status?: string;
   onboarding_completed?: boolean;
+  consent_notice_version?: string;
+  consent_terms_version?: string;
   created_date?: string;
 };
 
@@ -915,13 +917,35 @@ export function selectCurrentProfile(profiles: CallerProfile[] = []): CallerProf
   return eligible[0] || sorted[0] || null;
 }
 
+// MIRRORS schoolRead/_scope.ts (CONSENT_*_VERSION, profileConsentIsCurrent)
+// and src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js
+// checks every copy.
+export const CONSENT_NOTICE_VERSION = '2026-10-02';
+export const CONSENT_TERMS_VERSION = '2026-10-02';
+
+export function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
+
 // MIRRORS schoolRead/_scope.ts#profileProblem.
 export function profileProblem(profile: CallerProfile | null): string | null {
   if (!profile) return 'NO_PROFILE';
   if (profile.status !== 'ACTIVE') return 'INACTIVE_PROFILE';
   if (!profile.school_id) return 'NO_SCHOOL';
   if (!['ADMIN', 'TEACHER', 'PARENT'].includes(String(profile.app_role))) return 'INVALID_ROLE';
+  if (!profileConsentIsCurrent(profile)) return 'CONSENT_REQUIRED';
   return null;
+}
+
+// The one write a caller who has NOT accepted the current texts may still
+// make: opening a support ticket. It is how the sole director of a school asks
+// ACACIA to delete the school from the account-deletion screen (they cannot
+// delete their own account and orphan the school), and asking for help is the
+// way out, the same reason tickets ignore a read-only license.
+export function consentExempt(entity: string, operation: string): boolean {
+  return entity === 'SupportTicket' && operation === 'create';
 }
 
 export const READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];

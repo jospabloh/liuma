@@ -110,7 +110,7 @@ test('every functions.invoke in src/ goes through invokeFunction', () => {
     ['src/lib/notifications/service.js', 'sendBulkNotification'],
     ['src/lib/support/tickets.js', 'postTicketMessage'],
     ['src/hooks/useSubscription.js', 'getMySubscription'],
-    ['src/pages/PermisosRoles.jsx', 'exportSchoolData'],
+    ['src/lib/account/schoolExport.js', 'exportSchoolData'], // shared by PermisosRoles and EliminarCuenta (v1.9.0)
   ]) {
     assert.match(read(file), new RegExp(`invokeFunction\\(base44, '${fn}'`), `${file} → ${fn}`);
   }

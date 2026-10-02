@@ -48,6 +48,9 @@ export const ROUTE_ACCESS = {
   HistorialCambios: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
   // In-app user manual (standard module 21). No tenant data: static content.
   Ayuda: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
+  // Account deletion (v1.9.0): every role, and the consent screen links here
+  // before any consent is given (ConsentGate renders it without the Layout).
+  EliminarCuenta: [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT],
   // School admins see their own read-only "Mi Licencia"; the ACACIA platform
   // owner gets the full cross-tenant panel via the owner override in GuardedRoute.
   LicenseAdmin: [ROLES.ADMIN],

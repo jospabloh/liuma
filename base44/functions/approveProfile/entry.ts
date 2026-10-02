@@ -39,7 +39,19 @@ const DECISIONS: Record<string, { status: string; action: string }> = {
 
 const APP_ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 
-type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string };
+type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string; consent_notice_version?: string; consent_terms_version?: string };
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
+
 
 function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
@@ -76,6 +88,7 @@ Deno.serve(async (req) => {
       );
       callerProfile = callerProfiles.find((p) => p.app_role === 'ADMIN' && p.status === 'ACTIVE') || null;
       if (!callerProfile) return bad(403, 'NOT_ADMIN', 'Requires an active ADMIN profile in the target\'s school');
+      if (!profileConsentIsCurrent(callerProfile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
     }
 
     // Activating an ADMIN is a role grant, and role grants to ADMIN need a

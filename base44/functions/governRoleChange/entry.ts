@@ -31,7 +31,21 @@ type Profile = {
   school_id?: string;
   app_role?: string;
   status?: string;
+  consent_notice_version?: string;
+  consent_terms_version?: string;
 };
+
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
 
 type PendingChange = {
   id: string;
@@ -92,6 +106,7 @@ Deno.serve(async (req) => {
     const callerProfiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id }, '-created_date');
     const callerProfile = callerProfiles.find((p) => p.app_role === 'ADMIN' && p.status === 'ACTIVE') || null;
     if (!callerProfile) return bad(403, 'NOT_ADMIN', 'Requires an active ADMIN profile');
+    if (!profileConsentIsCurrent(callerProfile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
     const schoolId = callerProfile.school_id;
 
     const schoolProfiles: Profile[] = await sr.entities.UserProfile.filter({ school_id: schoolId });

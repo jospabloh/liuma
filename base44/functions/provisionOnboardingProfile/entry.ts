@@ -17,7 +17,9 @@
 //             admin must approve.
 //   Everyone → consent must be complete and for the CURRENT notice version,
 //             and a ConsentRecord is written before the profile. If it
-//             cannot be written, onboarding fails.
+//             cannot be written, onboarding fails. The profile carries the
+//             consent stamp (consent_notice_version/terms_version) that
+//             schoolRead and the write paths check (v1.9.0).
 //
 // The UserProfile is written LAST: it is the commit point (Home.jsx shows
 // onboarding until a profile exists). Every earlier step is idempotent on
@@ -53,6 +55,13 @@ class ProvisionError extends Error {
     this.status = status;
     this.code = code;
   }
+}
+
+// MIRRORS src/lib/account/accountDeletion.js#accountDeletedAt.
+function accountDeletedAt(user: unknown): string {
+  const u = (user ?? {}) as { account_deleted_at?: unknown; data?: { account_deleted_at?: unknown } | null };
+  const v = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return typeof v === 'string' ? v : '';
 }
 
 function bad(status: number, code: string, message: string): Response {
@@ -143,6 +152,11 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
+    // deleteMyAccount marks the User before trying to remove it; if the
+    // removal did not go through, the account must not come back to life by
+    // onboarding again. ACACIA removes the User within the purge window
+    // (CLAUDE.md, "Consentimiento obligatorio y baja de cuenta").
+    if (accountDeletedAt(user)) return bad(410, 'ACCOUNT_DELETED', 'This account was deleted');
 
     const body = await req.json().catch(() => ({}));
     const role = String(body?.role || '');
@@ -222,12 +236,21 @@ Deno.serve(async (req) => {
       source: 'onboarding',
     });
 
+    // The consent stamp travels with the profile: schoolRead and the write
+    // paths refuse a profile without the CURRENT one (CONSENT_REQUIRED), and
+    // the ConsentRecord above is what proves it.
+    const consentStamp = {
+      consent_notice_version: PRIVACY_NOTICE_VERSION,
+      consent_terms_version: TERMS_VERSION,
+      consent_accepted_at: now.toISOString(),
+    };
+
     // On an existing profile never rewrite app_role/status (governance-controlled).
     const existing = myProfiles.find((p) => p.school_id === schoolId) || null;
     let profileId: string | null = null;
     let resolvedStatus = status;
     if (existing) {
-      await sr.entities.UserProfile.update(existing.id, { phone, onboarding_completed: true });
+      await sr.entities.UserProfile.update(existing.id, { phone, onboarding_completed: true, ...consentStamp });
       profileId = existing.id;
       resolvedStatus = existing.status || status;
     } else {
@@ -238,6 +261,7 @@ Deno.serve(async (req) => {
         status,
         phone,
         onboarding_completed: true,
+        ...consentStamp,
       });
       profileId = created?.id || null;
     }

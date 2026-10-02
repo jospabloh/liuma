@@ -48,7 +48,9 @@ test('joining with a code only ever provisions a PENDING profile', () => {
   assert.ok(src.indexOf("status = 'ACTIVE'") > src.indexOf("if (role === 'ADMIN') {\n      const schoolAdmins"));
   assert.match(src, /!isFounder \|\| otherActiveAdminExists/);
   // An existing profile never has app_role/status rewritten.
-  assert.match(src, /UserProfile\.update\(existing\.id, \{ phone, onboarding_completed: true \}\)/);
+  // (Plus the consent stamp, v1.9.0 — never app_role or status.)
+  assert.match(src, /UserProfile\.update\(existing\.id, \{ phone, onboarding_completed: true, \.\.\.consentStamp \}\)/);
+  assert.doesNotMatch(src.match(/const consentStamp = \{[\s\S]*?\};/)[0], /app_role|status/);
 });
 
 test('UserProfile is service-role only to create and update', () => {

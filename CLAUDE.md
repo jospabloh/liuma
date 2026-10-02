@@ -2208,10 +2208,133 @@ sin sesión ya no muestra BORRADOR.
 
 **Sigue abierto:**
 
-- El paquete de consentimiento (re-aceptación + borrado de cuenta).
+- ~~El paquete de consentimiento~~: hecho, ver «Consentimiento obligatorio y
+  baja de cuenta» abajo.
 - Los cuatro pendientes de server-minor:
   - el cupo de alumnos por plan sólo se aplica en la UI;
   - `schoolRead` no tiene límite por usuario;
   - `Core.UploadFile` se sigue llamando desde el navegador;
   - un código de confirmación de `lumiWrite` se puede reutilizar.
 - Nada de esto corrió contra Base44 en vivo.
+
+## Consentimiento obligatorio y baja de cuenta (v1.9.0, 2026-10-02)
+
+Pedido del dueño: los usuarios de antes no tienen `ConsentRecord`; si no lo
+tienen, lo firman obligatoriamente, y si declinan se les lleva a borrar su
+cuenta y sus datos, con la opción de retractarse o confirmar. Medido en
+producción ese día: **10 perfiles, 4 `ConsentRecord`**, los cuatro del
+borrador `2026-09-29-borrador`. Ninguno vale para la versión vigente, así que
+**las diez cuentas verán la pantalla** en cuanto esto se despliegue.
+
+**La marca vive en el perfil y la prueba en `ConsentRecord`.**
+`UserProfile.consent_notice_version` / `consent_terms_version` /
+`consent_accepted_at` las escriben sólo `provisionOnboardingProfile` y la
+función nueva `myConsent`, **después** del `ConsentRecord` que lo prueba. Así
+el servidor exige el consentimiento sin una lectura más: `profileProblem`
+(`_scope.ts` ×3 y `guardedEntityWrite/_policy.ts`) responde
+`CONSENT_REQUIRED` si la marca no es la vigente, y lo mismo
+`guardedFamilyWrite`, `listSchoolMembers`, `approveProfile` y
+`governRoleChange`. Sin eso, la pantalla sería un aviso que un bundle viejo o
+una llamada directa se saltan. **Quedan abiertos a propósito:** crear un ticket
+(`consentExempt`, la vía de la dirección única para pedir la baja de la
+escuela) y `exportSchoolData` (los datos son de la escuela y salen con ella;
+Términos § 6). Lo demás (`getMySubscription`, `markWelcomeShown`,
+`recordAuditEvent`, `postTicketMessage`, las de correo y `aiAssist`) no
+devuelve datos de la escuela por sí mismo y no se tocó.
+
+**Cambiar la versión manda a TODOS a la pantalla.** La versión está copiada en
+`privacyNotice.js` y en diez archivos de `base44/functions/`;
+`tests/unit/consent-gate.test.js` recorre todo `base44/functions/` y falla si
+uno difiere.
+
+**La pantalla** (`src/components/consent/ConsentGate.jsx`) envuelve todas las
+rutas con sesión en `App.jsx`. Decide `src/lib/consent/consentGate.js` (puro,
+probado): sin marca vigente nunca se pinta la app; se pregunta a `myConsent`
+(`status`, que además repara la marca si existe un `ConsentRecord` vigente) y,
+mientras tanto, spinner. Las páginas legales quedan fuera (App las monta antes)
+y `/EliminarCuenta` se pinta **sin el Layout**, porque el menú y los avisos
+llaman funciones que ya responden `CONSENT_REQUIRED`. Sin perfil no hay
+pantalla: el onboarding registra su propio consentimiento y marca el perfil.
+
+**«Eliminar mi cuenta y mis datos»** (`src/pages/EliminarCuenta.jsx`, menú
+«Mi cuenta» de los tres roles, Permisos y roles, y «No acepto»).
+`deleteMyAccount` deriva todo de quien llama — el cuerpo sólo trae la palabra
+`ELIMINAR` — y en este orden: `ConsentRecord` `WITHDRAWN` por escuela (primero:
+sin prueba no se borra nada) y se vacía la marca; vínculos `REVOKED` y
+asignaciones inactivas; se borran las ausencias, pedidos y cambios de rol
+**pendientes**; el nombre sellado en registros que se quedan con la escuela
+pasa a «Cuenta eliminada»; el correo sale de las llaves de envío
+(`notified_parent_emails`, `pending_notification_recipients`,
+`escalation_notified_recipients`); se borran `ParentProfile`, bandeja,
+excepciones y perfiles; las sesiones quedan revocadas; el `User` se marca
+`account_deleted_at` y luego se quita. Cargos y pagos no se tocan. Todo paso
+es idempotente: un fallo a medias se reintenta sin duplicar el retiro. La
+lógica está en `deleteMyAccount/_deletion.ts` (pura) y
+`tests/unit/account-deletion.test.js` la corre contra una base en memoria
+(`tests/fixtures/fake-mongo-db.js`, con `updateMany`/`deleteMany`).
+
+**No pueden:** la cuenta dueña de la plataforma (`PLATFORM_OWNER`) y **la
+única persona ACTIVE de la dirección** (`SOLE_ADMIN`: la escuela se quedaría
+sin quien la represente). A esta la página le ofrece descargar los datos y dos
+tickets: pedir que se nombre a otra persona o solicitar la eliminación de la
+escuela (módulo 7).
+
+**Lo que el código no puede hacer, y el texto legal ya no promete:**
+
+- **Conversaciones con Lumi.** El SDK no tiene `delete` para conversaciones y
+  la API de plataforma de Base44 sólo las lista y lee (catálogo consultado el
+  2026-10-02). El aviso decía que se suprimían con la cuenta; ahora dice que
+  ACACIA lo solicita a Base44. Se cambió sin subir la versión porque nadie
+  había aceptado aún `2026-10-02` (producción sólo tenía consentimientos del
+  borrador ese día). Un test falla si el SDK gana un `delete` de agentes, para
+  usarlo y volver a prometerlo.
+- **Papelera de Base44.** Lo borrado puede quedar en la papelera; la purga
+  definitiva dentro de los 30 días es de ACACIA.
+- **Quitar el `User`.** Base44 documenta «Remove app user» (`DELETE
+  /entities/User/{id}`, el mismo que llama `entities.User.delete`) para llaves
+  de editor; que lo acepte el service role de una función **no está
+  documentado ni probado**. Si lo rechaza, la cuenta queda marcada: la app
+  muestra «Esta cuenta se eliminó» y `provisionOnboardingProfile`/`myConsent`
+  responden 410 `ACCOUNT_DELETED` hasta que ACACIA la quite en el panel.
+
+Para esos tres pasos `deleteMyAccount` deja `ACCOUNT_DELETED` en `AuditLog`
+con `manual_steps` y escribe a `soporte@acaciaco.com.mx` (sólo el id del
+usuario, no su correo). **Esos correos son trabajo pendiente de ACACIA.**
+
+**Desplegar, en este orden:**
+
+1. `npm run deploy:entities`: `ConsentRecord` (`event`, `withdrawn_at`,
+   `accepted_at` deja de ser obligatorio), `UserProfile` (las tres marcas),
+   `User` (`account_deleted_at`) y `AuditLog` (dos acciones nuevas). Antes que
+   las funciones: escriben esos campos.
+2. `npm run deploy`: nuevas `myConsent` y `deleteMyAccount` (22 de 40), más
+   `schoolRead`, `lumiQuery`, `lumiWrite`, `guardedEntityWrite`,
+   `guardedFamilyWrite`, `listSchoolMembers`, `approveProfile`,
+   `governRoleChange`, `provisionOnboardingProfile` y `recordAuditEvent`.
+3. `npm run deploy:site` **en la misma ventana**. Entre 2 y 3 el sitio viejo
+   recibe `CONSENT_REQUIRED` y su mensaje dice «recarga la página»; al revés,
+   el sitio nuevo no encuentra `myConsent` y muestra «No pudimos comprobar» con
+   Reintentar. Ningún orden evita la ventana; las funciones primero la hacen
+   legible.
+4. Sin cambio en `lumi.jsonc`: no hace falta `agents push`.
+
+**Comprobar por comportamiento:** una cuenta QA ve «Antes de continuar» en
+cualquier ruta; `schoolRead` con ella responde 403 `CONSENT_REQUIRED`; al
+aceptar queda un `ConsentRecord` con `source: 'reacceptance'` y la app abre.
+La primera baja real debe hacerse con una cuenta QA desechable (decisión del
+dueño) para ver si `User.delete` funciona desde la función: la respuesta trae
+`userRemoved`.
+
+**Verificado aquí:** lint, typecheck, build, test (909), test:permissions,
+validate:rls (34), validate:tenant-roles, release:gate, `deno check` y
+`deno lint` de todo `base44/functions/`, `npm run test:load` (sin cambio:
+167 → 93) y, en Chromium con el backend simulado de
+`scripts/touch-targets-scan.mjs` (que ahora incluye una cuenta sin
+consentimiento y `/EliminarCuenta` de los tres roles): la pantalla aparece en
+un enlace profundo sin menú, «Aceptar» sólo con las dos casillas, «No acepto»
+→ baja → «Volver y aceptar» → aceptar → Inicio, botón de baja deshabilitado
+hasta escribir la palabra, claro y oscuro a 390 px, y todo objetivo táctil
+≥ 44 px a 320 y 390 px (las casillas de consentimiento, también en el
+onboarding, crecen con `::after`). **No verificado:** nada contra Base44 en
+vivo — ni las funciones, ni `updateMany`/`deleteMany` con `$pull` en su motor,
+ni `User.delete` desde service role, ni el correo a soporte.

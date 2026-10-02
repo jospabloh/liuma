@@ -29,12 +29,38 @@ Lumi reply filter, final legal texts, real names and 44px touch targets.
 - **Touch targets measured at 44px** on phones: theme switcher, toast close,
   footer link, Reportes "Ver detalle", Ayuda links, calendar days.
 
+### Added (consent package)
+
+- **Mandatory consent for existing accounts.** A profile without the
+  current acceptance (stamp `UserProfile.consent_notice_version` /
+  `consent_terms_version`, written only by the server after a
+  `ConsentRecord`) sees a blocking screen (`ConsentGate`) before any app
+  screen: both documents, both acceptances, Aceptar / No acepto. New
+  function `myConsent` (status / accept). The server enforces it too:
+  `schoolRead`, `guardedEntityWrite`, `guardedFamilyWrite`, Lumi,
+  `listSchoolMembers`, `approveProfile` and `governRoleChange` answer
+  `CONSENT_REQUIRED`. Support tickets and the school export stay open.
+- **"Eliminar mi cuenta y mis datos"** (`/EliminarCuenta`, every role, and
+  "No acepto"). New function `deleteMyAccount` (preview / delete, typed
+  `ELIMINAR`): withdrawal `ConsentRecord` first, then revokes links and
+  assignments, cancels pending requests, anonymizes the person's name on
+  school records, removes account data and profiles, marks and removes the
+  User. The only active director gets "Solicitar eliminación de la
+  escuela" instead.
+
+### Changed (consent package)
+
+- **Legal text, Lumi conversations:** the notice promised they were deleted
+  with the account; neither the SDK nor Base44's API can delete an agent
+  conversation, so it now says ACACIA asks Base44 for it. Changed before any
+  user accepted version `2026-10-02`.
+- `ConsentRecord` gains `event` (ACCEPTED / WITHDRAWN) and `withdrawn_at`;
+  `accepted_at` is no longer required. `User.account_deleted_at`,
+  `AuditLog` actions `PRIVACY_CONSENT_WITHDRAWN` and `ACCOUNT_DELETED`.
+
 ### Not included
 
-- The consent package (re-acceptance for existing accounts and
-  "Eliminar mi cuenta y mis datos") and the server-minor package were not
-  built. The legal text already describes the account-deletion option, so it
-  must not be deployed before that exists.
+- The server-minor package was not built.
 
 ## [1.8.5] - 2026-10-01
 

@@ -181,5 +181,21 @@ test('the refusal reads as Spanish in the app, and the browser warning is no lon
   assert.match(hook, /export const STUDENT_QUOTA_ALWAYS_GATED = true;/);
   // A server refusal the pre-check missed (stale count) lands on the same upgrade path.
   const page = read('src/pages/GestionEscuela.jsx');
-  assert.match(page, /if \(functionErrorCode\(error\) === 'STUDENT_QUOTA'\) \{[\s\S]{0,200}setShowUpgrade\(true\)/);
+  assert.match(page, /if \(functionErrorCode\(error\) === 'STUDENT_QUOTA'\) \{[\s\S]{0,500}setShowUpgrade\(true\)/);
+  // …and that dialog names the cap the SERVER refused at: this tab's own
+  // subscription may be minutes old (another plan, or none — "hasta null").
+  assert.match(page, /setServerQuotaLimit\(/);
+  assert.match(page, /reason=\{studentQuotaReason\(serverQuotaLimit \?\? studentQuota\.limit\)\}/);
+  assert.doesNotMatch(page, /hasta \$\{studentQuota\.limit\} alumnos/);
+});
+
+test('the browser counts every active student up to the hard cap, not schoolRead\'s default 200', () => {
+  // Growth's hard cap is 440. At the server's default page (200) a school at
+  // the cap read as 200: no warning, and the upgrade dialog showed 200.
+  const hook = read('src/hooks/useStudentQuota.js');
+  const match = /schoolRead\('Student', \{ school_id: schoolId, is_active: true \}, undefined, (\d+)\)/.exec(hook);
+  assert.ok(match, 'useStudentQuota passes an explicit limit');
+  const maxHard = Math.max(...Object.keys(STUDENT_PLAN_LIMITS)
+    .map((tier) => studentHardLimit({ license_tier: tier, subscription_status: 'active' }) || 0));
+  assert.ok(Number(match[1]) > maxHard, `limit ${match[1]} must exceed the largest hard cap (${maxHard})`);
 });

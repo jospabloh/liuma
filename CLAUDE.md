@@ -2243,7 +2243,12 @@ corre las dos sobre la misma rejilla. Decisiones:
   alumno creado, o restaura los campos del parche) y responde `STUDENT_QUOTA`.
   En el peor caso los dos deshacen y un reintento entra; nunca queda por encima.
 - `GestionEscuela` abre el mismo diálogo de mejora cuando el rechazo viene del
-  servidor.
+  servidor, con el `limit` que **el servidor** nombró (la licencia del
+  navegador puede tener hasta 5 min; antes el diálogo podía decir «hasta null
+  alumnos»).
+- `useStudentQuota` cuenta con `limit` 1000: el `schoolRead` por defecto
+  devuelve 200 filas, menos que el tope duro de Growth (440), y una escuela en
+  el tope se leía como 200 — sin aviso y con la cifra equivocada en el diálogo.
 
 **2. Límite por usuario en `schoolRead`.** Un cubo de fichas por usuario
 (`schoolRead/_userLimit.ts`), gastado en `entry.ts` **antes** de cualquier
@@ -2285,7 +2290,11 @@ deja quién subió qué). `src/lib/uploads/uploadRules.js` es el espejo del
 cliente para avisar antes (con prueba de igualdad); el formulario de
 documentos ya avisa de un PDF de más de 10 MB y el onboarding de un logo que no
 es imagen, con botón «Quitar logo». Un logo rechazado no crea nada y dice por
-qué. `upload-school-file.test.js` falla si `src/` vuelve a llamar a cualquier
+qué. Un archivo **sin extensión** en el nombre (un selector de nube o la
+galería del teléfono pueden dar «documento» o «IMG_2041») sube con la
+extensión de su tipo MIME (`withTypedName`): antes `isPdfFile` lo aceptaba por
+MIME y la regla de subida lo rechazaba por nombre. El servidor sigue
+comprobando los bytes, así que un MIME falso no gana nada. `upload-school-file.test.js` falla si `src/` vuelve a llamar a cualquier
 `integrations.Core.*`.
 
 **4. Códigos de confirmación de `lumiWrite`: un solo uso, 10 minutos.** El

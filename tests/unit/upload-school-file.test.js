@@ -19,7 +19,7 @@ import {
 } from '../../base44/functions/uploadSchoolFile/_upload.ts';
 import { selectCurrentProfile as readSelect, profileProblem as readProblem } from '../../base44/functions/schoolRead/_scope.ts';
 import { effectiveLicenseIsReadOnly as writeReadOnly } from '../../base44/functions/guardedEntityWrite/_policy.ts';
-import { UPLOAD_PURPOSES, UPLOAD_EXTENSIONS, uploadProblem } from '../../src/lib/uploads/uploadRules.js';
+import { UPLOAD_PURPOSES, UPLOAD_EXTENSIONS, uploadProblem, typedFileName, withTypedName } from '../../src/lib/uploads/uploadRules.js';
 import { uploadSchoolFile, UploadRejectedError } from '../../src/lib/uploads/uploadSchoolFile.js';
 import { humanizeError } from '../../src/lib/errorMessages.js';
 import { completeOnboardingTenantCreation, mapOnboardingError } from '../../src/lib/onboardingTenantCreation.js';
@@ -159,6 +159,33 @@ test('the browser warns in Spanish before uploading a file the server would refu
   assert.match(uploadProblem('setup_document', { name: 'a.exe', size: 100 }), /PDF, Word \(\.doc\), Word \(\.docx\), JPG o PNG/);
   assert.match(uploadProblem('school_logo', { name: 'a.png', size: 6 * MB }), /más de 5 MB/);
   assert.match(uploadProblem('school_logo', { name: 'a.png', size: 0 }), /vacío/);
+});
+
+test('a file whose name has no extension goes up named after what the browser says it is', async () => {
+  // A phone gallery or a cloud picker can hand over "IMG_2041" or "documento".
+  // The server goes by extension + bytes, so without this a real PDF read as
+  // "El archivo debe ser PDF" — while isPdfFile (by MIME) had just said yes.
+  assert.equal(typedFileName({ name: 'documento', type: 'application/pdf' }), 'documento.pdf');
+  assert.equal(typedFileName({ name: 'IMG_2041', type: 'image/jpeg' }), 'IMG_2041.jpg');
+  assert.equal(typedFileName({ name: 'a.pdf', type: 'image/png' }), 'a.pdf', 'a known extension is never rewritten');
+  assert.equal(typedFileName({ name: 'notas', type: 'text/html' }), 'notas', 'an unlisted MIME type adds nothing');
+  assert.equal(uploadProblem('official_document', { name: 'documento', type: 'application/pdf', size: 10 }), null);
+  assert.match(uploadProblem('official_document', { name: 'documento', size: 10 }), /debe ser PDF/);
+
+  const original = new File([SAMPLES.pdf], 'documento', { type: 'application/pdf' });
+  const renamed = withTypedName(original);
+  assert.equal(renamed.name, 'documento.pdf');
+  assert.equal(renamed.size, original.size, 'same bytes');
+  const named = new File([SAMPLES.pdf], 'a.pdf', { type: 'application/pdf' });
+  assert.equal(withTypedName(named), named, 'nothing to fix: the same object');
+
+  const calls = [];
+  const client = { functions: { async invoke(name, payload) { calls.push(payload); return { data: { ok: true, file_url: 'https://cdn.test/d.pdf' }, status: 200, headers: {} }; } } };
+  await uploadSchoolFile(client, { purpose: 'official_document', file: original });
+  assert.equal(calls[0].file.name, 'documento.pdf');
+  // And the server accepts exactly that name for those bytes.
+  const bytes = new Uint8Array(await calls[0].file.arrayBuffer());
+  assert.equal(checkFile('official_document', { name: calls[0].file.name, size: bytes.length, bytes }).ok, true);
 });
 
 test('uploadSchoolFile (client) sends purpose + File to the function and returns the URL; never Core.UploadFile', async () => {

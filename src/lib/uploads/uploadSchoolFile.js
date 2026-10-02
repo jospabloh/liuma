@@ -6,7 +6,7 @@
 // (SDK functions.js), which is what the function parses.
 
 import { invokeFunction } from '../functionResponse.js';
-import { uploadProblem } from './uploadRules.js';
+import { uploadProblem, withTypedName } from './uploadRules.js';
 
 /** An upload the browser already knows the server would refuse. */
 export class UploadRejectedError extends Error {
@@ -24,7 +24,9 @@ export class UploadRejectedError extends Error {
  * (with a Spanish `.message`) before any request when the file is certainly
  * wrong, or the function's refusal (code → Spanish via humanizeError).
  */
-export async function uploadSchoolFile(base44, { purpose, file }) {
+export async function uploadSchoolFile(base44, { purpose, file: chosen }) {
+  // "IMG_2041" with type image/jpeg goes up as "IMG_2041.jpg" (uploadRules.js).
+  const file = withTypedName(chosen);
   const problem = uploadProblem(purpose, file);
   if (problem) throw new UploadRejectedError(problem);
   // A write: never retried automatically (functionRetry.js).

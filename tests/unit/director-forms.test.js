@@ -226,7 +226,11 @@ test('classroom and document validation name the field, in Spanish', () => {
   // The server's upload rule (uploadSchoolFile, v1.9.0), surfaced on the field.
   assert.match(validateDocumentForm(base, { ...pdf, size: 11 * 1024 * 1024 }).file, /más de 10 MB/);
   assert.match(validateDocumentForm(base, { ...pdf, size: 0 }).file, /vacío/);
-  assert.equal(validateDocumentForm(base, { name: 'menu', type: 'application/pdf', size: 10 }).file, 'El archivo debe ser PDF.');
+  // A PDF whose name has no extension (a cloud picker's "menu") is uploaded
+  // as "menu.pdf" (uploadRules.js#withTypedName): accepted, not the
+  // contradiction "isPdfFile says yes, the upload rule says no".
+  assert.equal(validateDocumentForm(base, { name: 'menu', type: 'application/pdf', size: 10 }).file, undefined);
+  assert.equal(validateDocumentForm(base, { name: 'menu', type: '', size: 10 }).file, 'El archivo debe ser un PDF.');
 });
 
 test('the director forms no longer rely on a disabled button or the browser\'s own tooltip', () => {

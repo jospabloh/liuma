@@ -28,7 +28,11 @@ export function useStudentQuota() {
   const { data: activeStudentCount = 0, isLoading: countLoading } = useQuery({
     queryKey: ['activeStudentCount', schoolId],
     queryFn: async () => {
-      const students = await schoolRead('Student', { school_id: schoolId, is_active: true });
+      // schoolRead answers 200 rows by default, under Growth's hard cap (440):
+      // a school at the cap would read as 200 and never see the warning, and
+      // the upgrade dialog would show the wrong count. 1000 is the server's
+      // MAX_LIMIT and covers every capped plan.
+      const students = await schoolRead('Student', { school_id: schoolId, is_active: true }, undefined, 1000);
       return students.length;
     },
     enabled: !!schoolId,

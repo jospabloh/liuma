@@ -2029,6 +2029,12 @@ sobrevive aunque hable de un tema ajeno —«Los papás ven sus pagos en la
 pantalla Pagos» a una docente que lo preguntó es la respuesta—; nada con un
 dígito o `$` se quita (es dato, no menú); ni una oración con `**` desbalanceado
 ni el contenido de un bloque ```.
+«Con gusto / si quieres / si necesitas» sólo cuenta como oferta si no manda
+al usuario a otro lado: «Si quieres crear un evento, ve a Calendario» o «si
+necesitas registrar una falta, entra a Ausencias» es la respuesta a «¿cómo…?»,
+no Lumi ofreciendo una escritura. Y mencionar la sincronización no es
+especular: sólo se quita culparla («un problema de sincronización», «cuando se
+sincronice»).
 
 `HELPS_WITH_BY_ROLE` es espejo de `helpsWith()` de `_lumiCore.ts` y una prueba
 los compara; otra exige un patrón en `TOPIC_PATTERNS` para cada tema que algún

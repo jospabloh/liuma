@@ -149,6 +149,30 @@ test('a statement (not an offer) about another role\'s topic survives', () => {
   assert.equal(filterLumiReply(mixed, { role: 'TEACHER' }), mixed);
 });
 
+test('how-to answers that point the user to a screen or a person survive', () => {
+  // "Si quieres / si necesitas / con gusto" + "ve a / entra a / sigue estos
+  // pasos / pídeselo a" tells the USER how to do it: that answers their
+  // question, it is not Lumi offering a write it does not have.
+  const kept = [
+    ['ADMIN', 'Si quieres crear un evento, ve a **Calendario** y pulsa «Nuevo evento».'],
+    ['ADMIN', 'Con gusto, para publicar una tarea sigue estos pasos:\n1. Entra a **Tareas**.\n2. Pulsa **Nueva tarea**.'],
+    ['TEACHER', 'Para publicar una tarea, entra a **Tareas**. Si quieres mandar un aviso a las familias, ve a **Avisos**.'],
+    ['TEACHER', 'Si quieres ver los pagos de una familia, pídeselo a la dirección.'],
+    ['PARENT', 'Si necesitas registrar una falta de Ana, ve a **Ausencias**.'],
+  ];
+  for (const [role, reply] of kept) assert.equal(filterLumiReply(reply, { role }), reply, reply);
+  // Lumi offering to do it itself still goes.
+  assert.equal(filterLumiReply('¿Quieres que publique el aviso?', { role: 'ADMIN' }), LUMI_CLOSING);
+  assert.equal(filterLumiReply('Si quieres, puedo registrar la asistencia de Ana.', { role: 'PARENT' }), LUMI_CLOSING);
+  assert.equal(filterLumiReply('Si quieres, reviso los adeudos de tu salón.', { role: 'TEACHER' }), LUMI_CLOSING);
+});
+
+test('mentioning sync is not blaming it', () => {
+  const answer = 'No, LIUMA no se sincroniza con Google Calendar.';
+  assert.equal(filterLumiReply(answer, { role: 'PARENT' }), answer);
+  assert.equal(filterLumiReply('Hola. Espera a que se sincronice tu cuenta.', { role: 'TEACHER' }), `Hola.\n\n${LUMI_CLOSING}`);
+});
+
 test('an offer clause is cut, the rest of its sentence kept', () => {
   const out = filterLumiReply('No tengo acceso a eso, pero si quieres reviso los adeudos de tu salón.', { role: 'TEACHER' });
   assert.equal(out, `No tengo acceso a eso.\n\n${LUMI_CLOSING}`);

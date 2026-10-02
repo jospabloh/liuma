@@ -17,8 +17,9 @@
 // What it does, per sentence (or clause joined by ", pero" / ";") and per
 // list item:
 //   - drops an OFFER or a LIST of a topic outside the viewer's helps_with.
-//     An offer is Lumi offering help ("con gusto te ayudo", "si quieres",
-//     "puedo revisar…"); a list is ≥3 help topics in one clause; a list item
+//     An offer is Lumi offering help ("con gusto te ayudo", "puedo
+//     revisar…", or "si quieres…" that does not send the user to a screen or
+//     a person); a list is ≥3 help topics in one clause; a list item
 //     counts as an offer when the line that introduces its list is one;
 //   - drops role/sync speculation, and "Permisos y roles" to a non-ADMIN;
 //   - rewrites "su/tu maestra|maestro" (no name after it) as "su/tu docente";
@@ -89,13 +90,19 @@ const ANY_TOPIC = [
 ];
 const LIST_MIN_TOPICS = 3;
 
+// Lumi offering to do something itself.
 const OFFER = new RegExp([
   'te ayudo', 'te puedo ayudar', 'puedo ayudarte', 'puedo apoyarte', 'te puedo apoyar', 'te apoyo',
-  'con gusto', 'si quieres', 'si gustas', 'si necesitas', 'si tienes (alguna |una )?(duda|pregunta)',
   'quieres que', 'te gustaria que', 'lo que si puedo', 'tambien puedo', 'puedes pedirme', 'preguntame',
   'puedo (consultar|revisar|ver|buscar|darte|mostrarte|registrar|ayudar|apoyar|decirte|hacer|listar|sacar|preparar|publicar|mandar|enviar|crear)',
   'te puedo (consultar|revisar|mostrar|dar|registrar|decir|buscar)',
 ].map((p) => `\\b${p}\\b`).join('|'));
+// Politeness that is only an offer when it does not point the user somewhere
+// else: "Si quieres reviso los adeudos" offers, "Si quieres crear un evento,
+// ve a Calendario" / "Si necesitas registrar una falta, entra a Ausencias" /
+// "con gusto: sigue estos pasos" is the how-to answer to the user's question.
+const SOFT_OFFER = /\b(con gusto|si quieres|si gustas|si necesitas|si tienes (alguna |una )?(duda|pregunta))\b/;
+const REDIRECT = /\b(ve a|ve al|entra a|entra al|abre|pulsa|toca|selecciona|sigue (estos|los) pasos|pidele|pideselo|pidesela|preguntale|consultalo con|consulta con|habla con|acude a|acercate a|escribele)\b/;
 // "No puedo ayudarte con pagos" / "ni puedo listar adeudos" is the refusal,
 // not an offer.
 const NEGATED_OFFER = /\b(no|ni) (te )?(puedo|podria)( \w+)?/g;
@@ -106,7 +113,10 @@ const SPECULATION = [
   /\b(una vez que|cuando|en cuanto|apenas) (se )?(refleje|actualice|aplique|sincronice|vea reflejad)/,
   /\b(quiza|quizas|tal vez|puede que|es posible que|probablemente)\b[^.?!]*\b(no se (ha )?(actualiz|reflej|aplic|sincroniz)|aun no|todavia no)/,
   /\b(aun|todavia) no se (ha )?(actualizad|reflejad|aplicad|sincronizad|actualiza|refleja|aplica)/,
-  /\bsincroniz/,
+  // Blaming sync, not any mention of it: "LIUMA no se sincroniza con Google
+  // Calendar" answers a question.
+  /\b(problema|falla|error|retraso|tema|detalle|cuestion|desfase|falta)s? de (la )?sincroniz/,
+  /\b(se )?sincronice\b/,
 ];
 const PERMISSIONS_SCREEN = /\bpermisos y roles\b/;
 
@@ -180,7 +190,9 @@ function forbiddenTopicIn(folded, allowed) {
 }
 
 function isOffer(folded) {
-  if (OFFER.test(folded.replace(NEGATED_OFFER, ' '))) return true;
+  const positive = folded.replace(NEGATED_OFFER, ' ');
+  if (OFFER.test(positive)) return true;
+  if (SOFT_OFFER.test(positive) && !REDIRECT.test(positive)) return true;
   return ANY_TOPIC.filter((p) => p.test(folded)).length >= LIST_MIN_TOPICS;
 }
 

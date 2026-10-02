@@ -446,3 +446,33 @@ test('the page: typed confirmation, a way back, and the sole-director path witho
   // The login screen confirms the deletion once the session is gone.
   assert.match(read('src/pages/Login.jsx'), /sessionStorage\.getItem\(ACCOUNT_DELETED_FLAG_KEY\)/);
 });
+
+// ── Adversarial review (2026-10-02) ─────────────────────────────────────────
+
+test('every signed-in person can reach the deletion page, whatever their profile status', async () => {
+  // The texts promise the option "de tu cuenta" to every user. Before the
+  // review a PENDING person (already consented at onboarding) was denied the
+  // route (INACTIVE_PROFILE) and had no link to it.
+  const { getRouteAccessDecision, OWN_ACCOUNT_ROUTES } = await import('../../src/lib/authorization/routeAccess.js');
+  assert.deepEqual(OWN_ACCOUNT_ROUTES, ['EliminarCuenta']);
+  for (const profileStatus of ['PENDING', 'SUSPENDED', 'ACTIVE']) {
+    for (const role of ['ADMIN', 'TEACHER', 'PARENT']) {
+      assert.equal(getRouteAccessDecision({ role, routeName: 'EliminarCuenta', profileStatus }).allowed, true, `${role}/${profileStatus}`);
+    }
+  }
+  // No profile yet (onboarding): no role, no status.
+  assert.equal(getRouteAccessDecision({ routeName: 'EliminarCuenta' }).allowed, true, 'mid-onboarding');
+  // …and only that route: a PENDING profile still sees nothing else.
+  assert.equal(getRouteAccessDecision({ role: 'ADMIN', routeName: 'PagosAdmin', profileStatus: 'PENDING' }).allowed, false);
+  const fs = await import('node:fs');
+  const src = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8');
+  assert.match(src('src/components/ui/PendingApproval.jsx'), /<DeleteAccountLink \/>/);
+  const home = src('src/pages/Home.jsx');
+  assert.equal((home.match(/<DeleteAccountLink \/>/g) || []).length, 2, 'suspended + onboarding');
+  assert.match(src('src/components/account/DeleteAccountLink.jsx'), /min-h-11/);
+});
+
+test('someone with no role yet is not told about records "you published as staff"', () => {
+  assert.equal(keptItems(null).some((i) => /personal de la escuela/.test(i)), false);
+  assert.equal(keptItems('ADMIN').some((i) => /personal de la escuela/.test(i)), true);
+});

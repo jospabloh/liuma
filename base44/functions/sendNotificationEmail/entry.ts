@@ -49,6 +49,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
+
 // Events that fan out server-side in sendBulkNotification and must not be
 // sent one address at a time from here. emergency_alert / reminders stay
 // accepted for now: they are ADMIN-only and recipient-checked, and refusing
@@ -144,6 +156,9 @@ Deno.serve(async (req) => {
       const allowedStatuses = eventType === 'new_user_pending' ? ['PENDING'] : ['ACTIVE'];
       const callerProfile = profiles.find((p: { status?: string }) => allowedStatuses.includes(String(p.status))) || null;
       if (!callerProfile) return bad(403, 'NO_PROFILE', 'No qualifying profile in this school');
+      // new_user_pending comes right after onboarding, which stamps the
+      // profile; every event here mails other people's data (v1.9.0).
+      if (!profileConsentIsCurrent(callerProfile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
       callerProfileRecord = callerProfile as CallerProfileRecord;
 
       const allowedCallerRoles = CALLER_ROLES[eventType];

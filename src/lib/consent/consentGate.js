@@ -29,9 +29,12 @@ export function decideConsentGate({
   statusFailed = false,
   pathname = '/',
 } = {}) {
+  // `profileLoading` covers the user query too (useCurrentProfile): while the
+  // user is still loading there is no user yet, and passing then would render
+  // the app — and fire its reads — for a frame before the gate decides.
+  if (profileLoading) return 'loading';
   if (!user) return 'pass';
   if (accountDeletedAt(user)) return 'deleted';
-  if (profileLoading) return 'loading';
   if (profileFailed || !profile) return 'pass';
   if (profileConsentIsCurrent(profile)) return 'pass';
   if (statusLoading) return 'loading';

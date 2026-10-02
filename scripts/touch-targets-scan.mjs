@@ -37,8 +37,11 @@ const USERS = {
   // Signed up before v1.9.0: no consent to the texts in force. Sees only the
   // mandatory consent screen (and, after "No acepto", the deletion page).
   UNCONSENTED: { id: 'uU', email: 'madre@example.invalid', full_name: 'Mamá Prueba', display_name: 'Rosa', role: 'user' },
+  // Joined with a code (consented at onboarding), waiting for approval: has
+  // no menu, and must still reach "Eliminar mi cuenta y mis datos".
+  PENDING: { id: 'uW', email: 'tutor@example.invalid', full_name: 'Tutor Prueba', display_name: 'Luis', role: 'user' },
 };
-const ROLE_OF = { ADMIN: 'ADMIN', TEACHER: 'TEACHER', PARENT: 'PARENT', NAMELESS: 'PARENT', UNCONSENTED: 'PARENT' };
+const ROLE_OF = { ADMIN: 'ADMIN', TEACHER: 'TEACHER', PARENT: 'PARENT', NAMELESS: 'PARENT', UNCONSENTED: 'PARENT', PENDING: 'PARENT' };
 // MIRRORS src/lib/consent/privacyNotice.js (the stamp schoolRead checks).
 const CONSENT_STAMP = { consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02' };
 const kids = ['Ana', 'Bruno', 'Carla', 'Diego', 'Elena', 'Fernando', 'Gabriela', 'Hugo', 'Isabel'];
@@ -47,7 +50,7 @@ function fixtures() {
   return {
     School: [{ id: S, name: 'Escuela de prueba', join_code: 'ABCD-EFGH', created_date: C, settings: {} }],
     UserProfile: Object.entries(USERS).map(([k, u]) => ({
-      id: `up_${k}`, user_id: u.id, school_id: S, app_role: ROLE_OF[k], status: 'ACTIVE',
+      id: `up_${k}`, user_id: u.id, school_id: S, app_role: ROLE_OF[k], status: k === 'PENDING' ? 'PENDING' : 'ACTIVE',
       onboarding_completed: true, welcome_message_shown: true, created_date: C, full_name: u.full_name, email: u.email,
       ...(k === 'UNCONSENTED' ? {} : CONSENT_STAMP),
     })),
@@ -312,6 +315,20 @@ async function main() {
         await page.getByRole('button', { name: 'No acepto' }).click();
         await settle(page);
         record(width, 'UNCONSENT', 'deletion page (gated)', await measure(page, MIN), errors);
+        await ctx.close();
+      }
+      // Waiting for approval: the pending screen, and its way to the deletion
+      // page (OWN_ACCOUNT_ROUTES lets a PENDING profile open it).
+      {
+        const { ctx, page, errors } = await openContext(browser, width, 'PENDING');
+        await page.goto(`${base}/Home`);
+        await settle(page);
+        const pending = await page.getByRole('heading', { name: 'Solicitud enviada' }).count();
+        record(width, 'PENDING', `pending screen (${pending ? 'shown' : 'NOT SHOWN'})`, await measure(page, MIN), errors);
+        await page.getByRole('link', { name: 'Eliminar mi cuenta y mis datos' }).click();
+        await settle(page);
+        const reached = await page.getByRole('heading', { name: 'Confirmar la eliminación' }).count();
+        record(width, 'PENDING', `deletion page (${reached ? 'reached' : 'NOT REACHED'})`, await measure(page, MIN), errors);
         await ctx.close();
       }
       // The one-time "¿Cómo te llamas?" dialog.

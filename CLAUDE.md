@@ -2238,12 +2238,19 @@ el servidor exige el consentimiento sin una lectura más: `profileProblem`
 una llamada directa se saltan. **Quedan abiertos a propósito:** crear un ticket
 (`consentExempt`, la vía de la dirección única para pedir la baja de la
 escuela) y `exportSchoolData` (los datos son de la escuela y salen con ella;
-Términos § 6). Lo demás (`getMySubscription`, `markWelcomeShown`,
-`recordAuditEvent`, `postTicketMessage`, las de correo y `aiAssist`) no
-devuelve datos de la escuela por sí mismo y no se tocó.
+Términos § 6). **Lo que manda o procesa datos de otros también lo exige**
+(revisión adversarial del mismo día): `sendBulkNotification` (alerta,
+recordatorios de cobro y de evento), `notifyParents`, `sendNotificationEmail`
+y el borrador de bitácora de `aiAssist` (el nombre del alumno va al modelo).
+En tickets, la regla es la de `consentExempt`: quien **abrió** el ticket
+puede responderlo y avisarlo sin consentimiento (`postTicketMessage`, la
+escalación de `sendBulkNotification`, `aiAssist` `support_intake`), pero
+actuar **como personal** sobre el ticket de otro lo exige. Sin tocar, porque
+no devuelven datos de nadie: `getMySubscription` (licencia de la escuela),
+`markWelcomeShown`, `recordAuditEvent`.
 
 **Cambiar la versión manda a TODOS a la pantalla.** La versión está copiada en
-`privacyNotice.js` y en diez archivos de `base44/functions/`;
+`privacyNotice.js` y en quince archivos de `base44/functions/`;
 `tests/unit/consent-gate.test.js` recorre todo `base44/functions/` y falla si
 uno difiere.
 
@@ -2277,7 +2284,17 @@ lógica está en `deleteMyAccount/_deletion.ts` (pura) y
 única persona ACTIVE de la dirección** (`SOLE_ADMIN`: la escuela se quedaría
 sin quien la represente). A esta la página le ofrece descargar los datos y dos
 tickets: pedir que se nombre a otra persona o solicitar la eliminación de la
-escuela (módulo 7).
+escuela (módulo 7). Dos directores que se dan de baja **en el mismo segundo**
+pueden pasar los dos la comprobación y dejar la escuela sin dirección: no hay
+transacción en Base44 que lo impida. Es improbable y se arregla con un
+ticket; queda anotado, no resuelto.
+
+**La baja la puede pedir cualquiera con sesión**, no sólo un perfil ACTIVE:
+`/EliminarCuenta` está en `OWN_ACCOUNT_ROUTES` (`routeAccess.js`), abierta a
+PENDING, SUSPENDED y a quien no terminó el onboarding, y esas tres pantallas
+la enlazan (`DeleteAccountLink`). El aviso la promete «de tu cuenta», sin
+condición de estado; antes de la revisión, quien esperaba aprobación con el
+consentimiento vigente no tenía forma de llegar a ella.
 
 **Lo que el código no puede hacer, y el texto legal ya no promete:**
 
@@ -2310,7 +2327,9 @@ usuario, no su correo). **Esos correos son trabajo pendiente de ACACIA.**
 2. `npm run deploy`: nuevas `myConsent` y `deleteMyAccount` (22 de 40), más
    `schoolRead`, `lumiQuery`, `lumiWrite`, `guardedEntityWrite`,
    `guardedFamilyWrite`, `listSchoolMembers`, `approveProfile`,
-   `governRoleChange`, `provisionOnboardingProfile` y `recordAuditEvent`.
+   `governRoleChange`, `provisionOnboardingProfile`, `recordAuditEvent`,
+   `sendBulkNotification`, `notifyParents`, `sendNotificationEmail`,
+   `aiAssist` y `postTicketMessage`.
 3. `npm run deploy:site` **en la misma ventana**. Entre 2 y 3 el sitio viejo
    recibe `CONSENT_REQUIRED` y su mensaje dice «recarga la página»; al revés,
    el sitio nuevo no encuentra `myConsent` y muestra «No pudimos comprobar» con
@@ -2325,12 +2344,13 @@ La primera baja real debe hacerse con una cuenta QA desechable (decisión del
 dueño) para ver si `User.delete` funciona desde la función: la respuesta trae
 `userRemoved`.
 
-**Verificado aquí:** lint, typecheck, build, test (909), test:permissions,
+**Verificado aquí:** lint, typecheck, build, test (914), test:permissions,
 validate:rls (34), validate:tenant-roles, release:gate, `deno check` y
 `deno lint` de todo `base44/functions/`, `npm run test:load` (sin cambio:
 167 → 93) y, en Chromium con el backend simulado de
 `scripts/touch-targets-scan.mjs` (que ahora incluye una cuenta sin
-consentimiento y `/EliminarCuenta` de los tres roles): la pantalla aparece en
+consentimiento, `/EliminarCuenta` de los tres roles y, desde la revisión, un
+perfil PENDING que llega a la baja desde su pantalla): la pantalla aparece en
 un enlace profundo sin menú, «Aceptar» sólo con las dos casillas, «No acepto»
 → baja → «Volver y aceptar» → aceptar → Inicio, botón de baja deshabilitado
 hasta escribir la palabra, claro y oscuro a 390 px, y todo objetivo táctil

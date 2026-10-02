@@ -13,6 +13,7 @@ import SuspendedAccountModal from '@/components/subscription/SuspendedAccountMod
 import { selectCurrentUserProfile } from '@/lib/tenantSelection';
 import { useSubscription } from '@/hooks/useSubscription';
 import SignOutButton from '@/components/auth/SignOutButton';
+import DeleteAccountLink from '@/components/account/DeleteAccountLink';
 import { Ban } from 'lucide-react';
 
 export default function Home() {
@@ -90,6 +91,9 @@ export default function Home() {
           <SignOutButton />
         </div>
         <Onboarding user={user} onComplete={refetchProfiles} />
+        <div className="flex justify-center bg-muted px-4 pb-8">
+          <DeleteAccountLink />
+        </div>
       </div>
     );
   }
@@ -112,6 +116,9 @@ export default function Home() {
             Tu acceso a esta escuela está suspendido. Si crees que es un error, habla con la dirección de tu escuela.
           </p>
           <SignOutButton />
+          <div className="mt-4">
+            <DeleteAccountLink />
+          </div>
         </div>
       </div>
     );

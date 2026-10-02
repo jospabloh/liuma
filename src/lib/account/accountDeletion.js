@@ -62,7 +62,7 @@ export function keptItems(role) {
   const items = [];
   if (role === 'PARENT') {
     items.push('Los registros escolares de tus hijos (asistencia, bitácora, cargos y pagos) pertenecen al expediente que lleva la escuela: se quedan con ella sin tu nombre. Para que también se cancelen, solicítalo a la dirección de tu escuela.');
-  } else {
+  } else if (role) {
     items.push('Lo que publicaste como personal de la escuela (avisos, tareas, bitácoras, asistencia, documentos) pertenece al expediente de la escuela: se queda con ella sin tu nombre.');
   }
   items.push('La constancia de tu consentimiento y de su retiro se conserva bloqueada hasta 10 años, sólo para acreditar que se otorgó y que lo retiraste.');

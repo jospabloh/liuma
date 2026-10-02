@@ -16,6 +16,18 @@
 // user per day (DAILY_LIMITS).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
+
 const MAX_QUESTIONS = 6; // mirrors src/lib/support/aiIntake.js's MAX_QUESTIONS
 
 // Mirrors src/lib/support/aiIntake.js's APP_CONTEXT — duplicated, not
@@ -236,12 +248,14 @@ Deno.serve(async (req) => {
       if (!student) return bad(404, 'NOT_FOUND', 'Student not found');
 
       if (!isPlatformOwner) {
-        const profiles: Array<{ status?: string; app_role?: string }> = await sr.entities.UserProfile.filter({
+        const profiles: Array<{ status?: string; app_role?: string; consent_notice_version?: string; consent_terms_version?: string }> = await sr.entities.UserProfile.filter({
           user_id: user.id,
           school_id: student.school_id,
         });
         const profile = profiles.find((p) => p.status === 'ACTIVE' && ['TEACHER', 'ADMIN'].includes(String(p.app_role)));
         if (!profile) return bad(403, 'NO_PROFILE', 'Requires an active TEACHER or ADMIN profile in this school');
+        // A child's name goes to the model: not before the current consent (v1.9.0).
+        if (!profileConsentIsCurrent(profile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
       }
 
       // Sales-readiness audit 2026-09-29 (F31 / LUMI-10): the old prompt asked

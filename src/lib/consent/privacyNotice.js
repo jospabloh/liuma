@@ -22,8 +22,10 @@
 // myConsent/_consent.ts reject a consent for any other version (a cached
 // client with the old notice); schoolRead/_scope.ts (x3),
 // guardedEntityWrite/_policy.ts, guardedFamilyWrite/_policy.ts,
-// listSchoolMembers, approveProfile and governRoleChange refuse a profile
-// whose stamp is not this version. tests/unit/legal-final.test.js and
+// listSchoolMembers, approveProfile, governRoleChange and the functions that
+// mail or send other people's data (sendBulkNotification, notifyParents,
+// sendNotificationEmail, aiAssist, postTicketMessage as staff) refuse a
+// profile whose stamp is not this version. tests/unit/legal-final.test.js and
 // tests/unit/consent-gate.test.js fail if any copy drifts. Bumping a version
 // sends EVERY user back to the consent screen on their next request.
 export const PRIVACY_NOTICE_VERSION = '2026-10-02';

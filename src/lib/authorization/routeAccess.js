@@ -96,6 +96,16 @@ export const PLATFORM_OWNER_ROUTES = ['SeedTestData'];
  */
 export const INACTIVE_PROFILE_ROUTES = ['Home'];
 
+/**
+ * Routes about the signed-in person's OWN account, open to anyone signed in
+ * with a school role whatever their profile status, or with no profile yet. "Eliminar mi cuenta y mis
+ * datos" is promised to every user (Aviso § 10, Términos § 6) — including
+ * someone waiting for approval, suspended, or halfway through onboarding —
+ * and shows no school data (deleteMyAccount derives everything from the
+ * caller).
+ */
+export const OWN_ACCOUNT_ROUTES = ['EliminarCuenta'];
+
 export function getRouteAccessMatrix() {
   return ROUTE_ACCESS;
 }
@@ -123,7 +133,14 @@ export function getRouteAccessDecision({ role, routeName, ownerAccess, profileSt
       : { allowed: false, reason: DENIAL_REASON_CODES.FORBIDDEN_ACTION, reason_code: DENIAL_REASON_CODES.FORBIDDEN_ACTION, precedence: 'platform_owner_only' };
   }
 
-  if (profileStatus !== undefined && profileStatus !== 'ACTIVE' && !INACTIVE_PROFILE_ROUTES.includes(routeName)) {
+  const ownAccountRoute = OWN_ACCOUNT_ROUTES.includes(routeName);
+  // Someone halfway through onboarding has no profile (no role, no status) and
+  // still owns an account they may delete.
+  if (ownAccountRoute && !role && profileStatus === undefined) {
+    return { allowed: true, reason: 'own_account', precedence: 'own_account' };
+  }
+
+  if (profileStatus !== undefined && profileStatus !== 'ACTIVE' && !INACTIVE_PROFILE_ROUTES.includes(routeName) && !ownAccountRoute) {
     return {
       allowed: false,
       reason: DENIAL_REASON_CODES.INACTIVE_PROFILE,

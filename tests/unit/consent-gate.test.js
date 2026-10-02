@@ -308,3 +308,33 @@ test('the legal text promises re-acceptance on the next visit, which is what the
   assert.match(docs, /LIUMA te pedirá aceptar la nueva versión la siguiente vez que entres/);
   assert.match(docs, /La aceptación es obligatoria para usar el servicio/);
 });
+
+// ── Adversarial review (2026-10-02) ─────────────────────────────────────────
+
+test('the gate waits for the USER too: no frame of the app before it knows who is signed in', () => {
+  // useCurrentProfile's isLoading covers the user query; with the user still
+  // loading `user` is undefined, and checking it first rendered the app (and
+  // fired its reads, each answered CONSENT_REQUIRED) for a frame.
+  assert.equal(decideConsentGate({ user: undefined, profileLoading: true }), 'loading');
+  assert.equal(decideConsentGate({ user: null, profileLoading: false }), 'pass');
+});
+
+test('every function that mails or processes OTHER people\'s data requires the current consent', () => {
+  // Not only reads: an un-consented director calling these directly would
+  // e-mail families, or send a child's name to the model.
+  const bulk = read('base44/functions/sendBulkNotification/entry.ts');
+  assert.match(bulk, /if \(!profileConsentIsCurrent\(admin\)\) throw new HttpError\(403, 'CONSENT_REQUIRED'/, 'alert and reminders');
+  assert.match(read('base44/functions/notifyParents/entry.ts'), /if \(!profileConsentIsCurrent\(profile\)\) throw \{ status: 403, code: 'CONSENT_REQUIRED'/);
+  assert.match(read('base44/functions/sendNotificationEmail/entry.ts'), /if \(!profileConsentIsCurrent\(callerProfile\)\) return bad\(403, 'CONSENT_REQUIRED'/);
+  const ai = read('base44/functions/aiAssist/entry.ts');
+  const draft = ai.slice(ai.indexOf("task === 'diary_draft'"), ai.indexOf("task === 'support_intake'"));
+  assert.match(draft, /if \(!profileConsentIsCurrent\(profile\)\) return bad\(403, 'CONSENT_REQUIRED'/);
+  // The ticket rule (consentExempt): the requester's own ticket stays open;
+  // STAFF standing on someone else's ticket needs consent.
+  for (const fn of ['postTicketMessage', 'sendBulkNotification']) {
+    assert.match(read(`base44/functions/${fn}/entry.ts`),
+      /isSchoolAdmin = profiles\.some\(\(p\) => p\.app_role === 'ADMIN' && p\.status === 'ACTIVE' && profileConsentIsCurrent\(p\)\)/, fn);
+  }
+  const intake = ai.slice(ai.indexOf("task === 'support_intake'"));
+  assert.doesNotMatch(intake.slice(0, 800), /CONSENT_REQUIRED/, 'support intake is part of asking for help');
+});

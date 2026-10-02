@@ -446,6 +446,64 @@ function latestBySchool(rows: ConsentRow[]): Record<string, ConsentRow> {
   return out;
 }
 
+type SweepCounts = {
+  revokedLinks: number;
+  closedAssignments: number;
+  canceledRequests: number;
+  anonymized: number;
+  emailsRemoved: number;
+  deletedAccountData: number;
+};
+
+/**
+ * Steps 2–6: everything of the person's that is revoked, cancelled,
+ * anonymized or deleted. Idempotent (every query skips what it already
+ * changed), so runAccountDeletion runs it TWICE: once in order, and once
+ * more right before marking the account deleted — the final sweep that
+ * catches a write which landed between passes (Codex review of PR #197,
+ * round 8; the functions' _deletionGuard.ts compensates the rest).
+ */
+async function sweepUserData(sr: Db, userId: string, emails: string[], profileIds: string[]): Promise<SweepCounts> {
+  // 2. What grants access to children's and classrooms' data.
+  const revokedLinks = await updateAll(sr, 'ParentStudent', { parent_id: userId, status: { $ne: 'REVOKED' } }, { $set: { status: 'REVOKED' } });
+  const closedAssignments = await updateAll(sr, 'TeacherClassroom', { teacher_id: userId, is_active: true }, { $set: { is_active: false } });
+
+  // 3. Requests the school had not attended yet.
+  let canceledRequests = 0;
+  canceledRequests += await deleteAll(sr, 'AbsenceNotification', { parent_id: userId, status: 'PENDING' });
+  canceledRequests += await deleteAll(sr, 'UniformOrder', { parent_id: userId, status: 'PENDING' });
+  canceledRequests += await deleteAll(sr, 'PendingChange', { requester_user_id: userId, status: { $in: OPEN_CHANGE_STATUSES } });
+  if (profileIds.length) {
+    canceledRequests += await deleteAll(sr, 'PendingChange', { target_profile_id: { $in: profileIds }, status: { $in: OPEN_CHANGE_STATUSES } });
+  }
+
+  // 4. Records that stay with the school, without the person's name.
+  let anonymized = 0;
+  for (const [entity, idField, nameField] of ANONYMIZE) {
+    anonymized += await updateAll(sr, entity, { [idField]: userId, [nameField]: { $ne: ANONYMIZED_NAME } }, { $set: { [nameField]: ANONYMIZED_NAME } });
+  }
+
+  // 5. The address wherever a server wrote it as a delivery key.
+  let emailsRemoved = 0;
+  if (emails.length) {
+    emailsRemoved += await updateAll(sr, 'DiaryEntry', { notified_parent_emails: { $in: emails } }, { $pull: { notified_parent_emails: { $in: emails } } });
+    emailsRemoved += await updateAll(sr, 'UserProfile', { pending_notification_recipients: { $in: emails } }, { $pull: { pending_notification_recipients: { $in: emails } } });
+    const keys = ESCALATION_TIERS.flatMap((tier) => emails.map((e) => `${tier}:${e}`));
+    emailsRemoved += await updateAll(sr, 'SupportTicket', { escalation_notified_recipients: { $in: keys } }, { $pull: { escalation_notified_recipients: { $in: keys } } });
+  }
+
+  // 6. The person's own account data.
+  let deletedAccountData = 0;
+  deletedAccountData += await deleteAll(sr, 'NoticeDelivery', { recipient_user_id: userId });
+  deletedAccountData += await deleteAll(sr, 'NoticeRead', { user_id: userId });
+  deletedAccountData += await deleteAll(sr, 'ParentProfile', { user_id: userId });
+  if (profileIds.length) {
+    deletedAccountData += await deleteAll(sr, 'PermissionOverride', { user_profile_id: { $in: profileIds } });
+  }
+
+  return { revokedLinks, closedAssignments, canceledRequests, anonymized, emailsRemoved, deletedAccountData };
+}
+
 export type DeletionReport = {
   schools: string[];
   withdrawals: number;
@@ -615,47 +673,24 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
     }
   }
 
-  // 2. What grants access to children's and classrooms' data.
-  const revokedLinks = await updateAll(sr, 'ParentStudent', { parent_id: userId, status: { $ne: 'REVOKED' } }, { $set: { status: 'REVOKED' } });
-  const closedAssignments = await updateAll(sr, 'TeacherClassroom', { teacher_id: userId, is_active: true }, { $set: { is_active: false } });
-
-  // 3. Requests the school had not attended yet.
-  let canceledRequests = 0;
-  canceledRequests += await deleteAll(sr, 'AbsenceNotification', { parent_id: userId, status: 'PENDING' });
-  canceledRequests += await deleteAll(sr, 'UniformOrder', { parent_id: userId, status: 'PENDING' });
-  canceledRequests += await deleteAll(sr, 'PendingChange', { requester_user_id: userId, status: { $in: OPEN_CHANGE_STATUSES } });
-  if (profileIds.length) {
-    canceledRequests += await deleteAll(sr, 'PendingChange', { target_profile_id: { $in: profileIds }, status: { $in: OPEN_CHANGE_STATUSES } });
-  }
-
-  // 4. Records that stay with the school, without the person's name.
-  let anonymized = 0;
-  for (const [entity, idField, nameField] of ANONYMIZE) {
-    anonymized += await updateAll(sr, entity, { [idField]: userId, [nameField]: { $ne: ANONYMIZED_NAME } }, { $set: { [nameField]: ANONYMIZED_NAME } });
-  }
-
-  // 5. The address wherever a server wrote it as a delivery key.
-  let emailsRemoved = 0;
-  if (emails.length) {
-    emailsRemoved += await updateAll(sr, 'DiaryEntry', { notified_parent_emails: { $in: emails } }, { $pull: { notified_parent_emails: { $in: emails } } });
-    emailsRemoved += await updateAll(sr, 'UserProfile', { pending_notification_recipients: { $in: emails } }, { $pull: { pending_notification_recipients: { $in: emails } } });
-    const keys = ESCALATION_TIERS.flatMap((tier) => emails.map((e) => `${tier}:${e}`));
-    emailsRemoved += await updateAll(sr, 'SupportTicket', { escalation_notified_recipients: { $in: keys } }, { $pull: { escalation_notified_recipients: { $in: keys } } });
-  }
-
-  // 6. The person's own account data.
-  let deletedAccountData = 0;
-  deletedAccountData += await deleteAll(sr, 'NoticeDelivery', { recipient_user_id: userId });
-  deletedAccountData += await deleteAll(sr, 'NoticeRead', { user_id: userId });
-  deletedAccountData += await deleteAll(sr, 'ParentProfile', { user_id: userId });
-  if (profileIds.length) {
-    deletedAccountData += await deleteAll(sr, 'PermissionOverride', { user_profile_id: { $in: profileIds } });
-  }
+  // 2–6. Revoke, cancel, anonymize, delete (sweepUserData).
+  const swept = await sweepUserData(sr, userId, emails, profileIds);
 
   // 7. Sessions: kept for the audit window (retention table), but closed.
   const revokedSessions = emails.length
     ? await updateAll(sr, 'AppSession', { user_email: { $in: emails }, revoked_by: { $ne: 'account_deleted' } }, { $set: { revoked_at: nowIso, revoked_by: 'account_deleted' } })
     : 0;
+
+  // 7b. The final sweep: anything written between the passes above (a
+  //     straggler the functions' guard could not compensate) gets the same
+  //     treatment before the account is marked deleted.
+  const finalSweep = await sweepUserData(sr, userId, emails, profileIds);
+  const revokedLinks = swept.revokedLinks + finalSweep.revokedLinks;
+  const closedAssignments = swept.closedAssignments + finalSweep.closedAssignments;
+  const canceledRequests = swept.canceledRequests + finalSweep.canceledRequests;
+  const anonymized = swept.anonymized + finalSweep.anonymized;
+  const emailsRemoved = swept.emailsRemoved + finalSweep.emailsRemoved;
+  const deletedAccountData = swept.deletedAccountData + finalSweep.deletedAccountData;
 
   // 8. The durable mark BEFORE the profiles go: provisionOnboardingProfile and
   //    myConsent refuse a marked User. If the mark fails, the profiles stay
@@ -673,7 +708,16 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   const userMarked = true;
 
   // 9. The commit point: without a profile nothing in LIUMA answers.
-  const deletedProfiles = await deleteAll(sr, 'UserProfile', { user_id: userId });
+  let deletedProfiles = await deleteAll(sr, 'UserProfile', { user_id: userId });
+  // 9b. And once more: a profile an onboarding wrote in that instant and could
+  //     not undo (provisionOnboardingProfile compensates, but its delete can
+  //     fail) does not outlive the account.
+  const lateProfiles = await myProfiles(sr, userId);
+  for (const p of lateProfiles) {
+    if (!p.id) continue;
+    await sr.entities.UserProfile.delete(String(p.id));
+    deletedProfiles += 1;
+  }
 
   // 10. Remove the User. Best-effort now: the mark above already makes the
   //     account deleted for LIUMA; ACACIA removes it from the panel if not.

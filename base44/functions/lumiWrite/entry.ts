@@ -37,6 +37,7 @@
 // it again on functions.invoke. Either one missing makes this fail closed
 // (UNAUTHENTICATED / WRITE_FAILED), never write as someone else.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 import {
   type Profile, type Scope,
   selectCurrentProfile, profileProblem, canWriteKind, WRITE_KINDS,
@@ -67,7 +68,7 @@ function invokeError(e: any): Row {
   return e?.response?.data || e?.data || { code: 'WRITE_FAILED' };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -83,7 +84,8 @@ Deno.serve(async (req) => {
     if (!WRITE_KINDS[kind]) return fail(400, 'UNKNOWN_KIND');
     if (action !== 'preview' && action !== 'commit') return fail(400, 'UNKNOWN_INTENT');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id });
     const profile = selectCurrentProfile(profiles);
     const problem = profileProblem(profile);
@@ -225,7 +227,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', message: errorMessage('INTERNAL'), error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

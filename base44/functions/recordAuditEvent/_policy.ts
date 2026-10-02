@@ -64,6 +64,11 @@ export const ACTION_TIER: Record<string, string> = {
   // forging the evidence of a withdrawal.
   PRIVACY_CONSENT_WITHDRAWN: 'SERVER',
   ACCOUNT_DELETED: 'SERVER',
+  // A write that landed during a deletion and could not be compensated
+  // (_deletionGuard.ts), and an onboarding that raced a deletion and could
+  // not undo itself (provisionOnboardingProfile): for the owner to fix.
+  DELETION_STRAGGLER_UNRESOLVED: 'SERVER',
+  ONBOARDING_COMPENSATION_UNRESOLVED: 'SERVER',
 };
 
 export const MAX_DETAILS_CHARS = 16000;

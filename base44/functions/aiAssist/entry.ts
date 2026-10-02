@@ -15,6 +15,7 @@
 // never from a client-supplied prompt string. Both tasks are also capped per
 // user per day (DAILY_LIMITS).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 
 // Accepting the current Aviso de Privacidad and Términos is mandatory to use
 // LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
@@ -229,7 +230,7 @@ function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -241,7 +242,8 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const task = String(body?.task || '');
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const isPlatformOwner = user.role === 'admin';
 
     if (task === 'diary_draft') {
@@ -348,7 +350,7 @@ Responde SOLO el JSON del esquema.`;
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

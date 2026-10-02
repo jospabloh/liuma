@@ -343,6 +343,17 @@ async function storedDeletionState(sr: any, userId: string): Promise<'none' | 'm
   return accountDeletionBlocked(row) ? 'marked' : 'none';
 }
 
+// MIRRORS onboardingProvision.js#PROFILE_NEUTRALIZED: no access, no personal data.
+const PROFILE_NEUTRALIZED = {
+  status: 'SUSPENDED',
+  phone: '',
+  photo_url: '',
+  pending_notification_recipients: [],
+  consent_notice_version: '',
+  consent_terms_version: '',
+  consent_accepted_at: '',
+};
+
 async function provisionTryTwice(fn: () => Promise<unknown>): Promise<boolean> {
   for (let i = 0; i < 2; i += 1) {
     try { await fn(); return true; } catch { /* retried once */ }
@@ -355,13 +366,16 @@ async function compensateOnboarding(
   sr: any, { userId, schoolId, role, written, now }: { userId: string; schoolId: string; role: string; written: Written; now: Date },
 ): Promise<string[]> {
   const failed: string[] = [];
+  // Layered: a profile that cannot be deleted is SUSPENDED and emptied; what
+  // is still unresolved is persisted (ONBOARDING_COMPENSATION_UNRESOLVED).
+  const neutralize = (id: string) => provisionTryTwice(() => sr.entities.UserProfile.update(id, PROFILE_NEUTRALIZED));
   if (written.createdProfileId) {
     const id = written.createdProfileId;
-    if (!await provisionTryTwice(() => sr.entities.UserProfile.delete(id))) failed.push(`UserProfile ${id}`);
+    if (!await provisionTryTwice(() => sr.entities.UserProfile.delete(id)) && !await neutralize(id)) failed.push(`UserProfile ${id}`);
   }
   if (written.stampedProfileId) {
     const id = written.stampedProfileId;
-    if (!await provisionTryTwice(() => sr.entities.UserProfile.update(id, { consent_notice_version: '', consent_terms_version: '' }))) failed.push(`UserProfile stamp ${id}`);
+    if (!await provisionTryTwice(() => sr.entities.UserProfile.update(id, { consent_notice_version: '', consent_terms_version: '' })) && !await neutralize(id)) failed.push(`UserProfile stamp ${id}`);
   }
   if (written.consentWritten) {
     const withdrawnAt = new Date(Math.max(Date.now(), now.getTime() + 1)).toISOString();
@@ -389,7 +403,18 @@ async function compensateOnboarding(
       failed.push(`School ${schoolId2} (members unreadable)`);
     }
   }
-  if (failed.length) console.error('provisionOnboardingProfile: compensation incomplete', userId, failed.join('; '));
+  if (failed.length) {
+    console.error('provisionOnboardingProfile: compensation incomplete', userId, failed.join('; '));
+    const recorded = await provisionTryTwice(() => sr.entities.AuditLog.create({
+      school_id: schoolId || 'unknown',
+      user_id: userId,
+      action: 'ONBOARDING_COMPENSATION_UNRESOLVED',
+      target_type: 'UserProfile',
+      target_id: String(written.createdProfileId || written.stampedProfileId || ''),
+      details: { unresolved: failed, school_created: written.createdSchoolId || null, subscription_created: written.createdSubId || null },
+    }));
+    if (!recorded) console.error('provisionOnboardingProfile: unresolved compensation not recorded', userId, failed.join('; '));
+  }
   return failed;
 }
 

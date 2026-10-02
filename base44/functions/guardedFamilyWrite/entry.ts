@@ -32,6 +32,7 @@
 //
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 import { FAMILY_OPERATIONS, absenceRaceLoser, profileConsentIsCurrent, callerDisplayName, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
@@ -65,7 +66,7 @@ function isRateLimitError(e: unknown): boolean {
   return err?.status === 429 || /rate limit/i.test(String(err?.message ?? ''));
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -82,7 +83,8 @@ Deno.serve(async (req) => {
     if (!FAMILY_OPERATIONS[entity]) return bad(400, 'UNKNOWN_ENTITY', 'Unsupported entity');
     if (!FAMILY_OPERATIONS[entity].includes(operation)) return bad(400, 'BAD_OPERATION', 'Unsupported operation');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
 
     // The student decides the school. On update/delete it comes from the
     // STORED record, so a client can't re-point an existing record.
@@ -269,7 +271,7 @@ Deno.serve(async (req) => {
     }
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

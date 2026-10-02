@@ -14,6 +14,7 @@
 //     parent can't log 'USER_APPROVED', nobody can log the server's own
 //     RECORD_* actions.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 import { boundDetails, decideAuditWrite } from './_policy.ts';
 
 function bad(status: number, code: string, message: string): Response {
@@ -25,7 +26,7 @@ function short(value: unknown, max = 300): string | null {
   return String(value).slice(0, max);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -41,7 +42,8 @@ Deno.serve(async (req) => {
     if (!schoolId) return bad(400, 'MISSING_SCHOOL', 'schoolId is required');
     if (!action) return bad(400, 'MISSING_ACTION', 'action is required');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const isPlatformOwner = user.role === 'admin';
     const profiles: Array<{ app_role?: string; status?: string }> = await sr.entities.UserProfile.filter({
       user_id: user.id,
@@ -77,7 +79,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

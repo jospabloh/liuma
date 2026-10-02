@@ -11,6 +11,7 @@
 //     the ticket's school;
 //   - derives author_role from which of those the caller is (./_policy.ts).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 import { MAX_BODY, decideTicketAuthor } from './_policy.ts';
 
 // Accepting the current Aviso de Privacidad and Términos is mandatory to use
@@ -29,7 +30,7 @@ function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -47,7 +48,8 @@ Deno.serve(async (req) => {
     if (!text) return bad(400, 'EMPTY_BODY', 'body is required');
     if (text.length > MAX_BODY) return bad(400, 'BODY_TOO_LONG', `body exceeds ${MAX_BODY} characters`);
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const ticket: Record<string, unknown> | null = await sr.entities.SupportTicket.get(ticketId).catch(() => null);
     if (!ticket) return bad(404, 'NOT_FOUND', 'Ticket not found');
     const schoolId = String(ticket.school_id || '');
@@ -97,7 +99,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

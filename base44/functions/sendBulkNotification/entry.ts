@@ -44,6 +44,7 @@
 //   blocks the second alert of a real emergency is worse than the spam it
 //   would prevent.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import {
   claimChargeReminder,
@@ -638,7 +639,7 @@ async function deliver(sr: Any, user: Any, plan: Plan): Promise<Summary> {
   return summary;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -653,7 +654,8 @@ Deno.serve(async (req) => {
     const planner = PLANNERS[eventType];
     if (!planner) return bad(400, 'UNKNOWN_EVENT', 'Unknown eventType');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const plan = await planner(sr, user, body);
     if ('skipped' in plan) return Response.json({ ok: true, eventType, skipped: true, reason: plan.skipped, total: 0, reached: 0 });
 
@@ -670,7 +672,7 @@ Deno.serve(async (req) => {
     if (e instanceof IncompleteReadError) return bad(e.status, e.code, e.message);
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

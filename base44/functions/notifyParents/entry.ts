@@ -15,6 +15,7 @@
 // `parent_notified` (or no longer `absent`) is a no-op instead of a resend —
 // a caller retrying the same recordId can't multiply the credit spend.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 
 const MAX_RECIPIENTS = 20;
 
@@ -91,7 +92,7 @@ function appButton(): string {
       <p style="margin: 0 0 16px; color: #64748b; font-size: 12px;">O entra a liuma.acaciaco.com.mx</p>`;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -107,7 +108,8 @@ Deno.serve(async (req) => {
     if (kind !== 'absence' && kind !== 'diary') return bad(400, 'BAD_KIND', 'kind must be absence or diary');
     if (!recordId) return bad(400, 'MISSING_RECORD', 'recordId is required');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const isPlatformOwner = user.role === 'admin';
     const userId = user.id;
 
@@ -260,7 +262,7 @@ Deno.serve(async (req) => {
     }
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

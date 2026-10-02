@@ -20,6 +20,7 @@
 // says so and nothing is half-saved, since the record is only written after
 // the URL comes back.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 import {
   type Profile,
   accountDeletedAt,
@@ -36,7 +37,7 @@ function fail(status: number, code: string): Response {
   return Response.json({ ok: false, code, error: code }, { status });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -58,7 +59,8 @@ Deno.serve(async (req) => {
     const file = form.get('file');
     if (!(file instanceof File)) return fail(400, 'FILE_MISSING');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     // The caller's OWN rows, pinned to user.id (never a school from the body).
     const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id }, '-created_date', 50);
     const mine = (profiles || []).filter((p) => String(p.user_id || '') === String(user.id));
@@ -114,7 +116,7 @@ Deno.serve(async (req) => {
     console.error('uploadSchoolFile failed', (e as Error)?.message);
     return fail(500, 'INTERNAL');
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

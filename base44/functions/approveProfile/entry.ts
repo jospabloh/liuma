@@ -31,6 +31,7 @@
 //      step exists to prevent.
 // The write and its AuditLog row both happen with the service role.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 
 const DECISIONS: Record<string, { status: string; action: string }> = {
   approve: { status: 'ACTIVE', action: 'USER_APPROVED' },
@@ -57,7 +58,7 @@ function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -77,7 +78,8 @@ Deno.serve(async (req) => {
       return bad(400, 'INVALID_ROLE', 'role must be ADMIN, TEACHER or PARENT');
     }
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const target: Profile | null = await sr.entities.UserProfile.get(profileId).catch(() => null);
     if (!target?.school_id) return bad(404, 'NOT_FOUND', 'Profile not found');
     if (target.status !== 'PENDING') return bad(409, 'NOT_PENDING', 'Only a PENDING profile can be approved or rejected');
@@ -142,7 +144,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

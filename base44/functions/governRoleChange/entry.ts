@@ -21,6 +21,7 @@
 // function. That schema change is staged for owner review/deploy — see
 // docs/security-role-governance-remediation.md.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 
 const APP_ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 const OPEN_STATUSES = ['PENDING_ADMIN_APPROVAL', 'PENDING_SECOND_ADMIN_APPROVAL'];
@@ -80,7 +81,7 @@ function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
 
@@ -97,7 +98,8 @@ Deno.serve(async (req) => {
       return bad(400, 'BAD_ACTION', 'action must be "request" or "decide"');
     }
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
 
     // Establish the caller's authority from the backend, not from the request.
     // The caller must hold an ACTIVE ADMIN profile; that profile's school is the
@@ -217,7 +219,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
-});
+}));
 
 // MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
 // Identical in every consent-gated function; tests/unit/account-deletion.test.js

@@ -1996,3 +1996,49 @@ Sólo frontend: `npm run deploy:site`.
 
 Deploy: `npm run deploy` (lumiQuery, lumiWrite) → `npx base44 agents push` →
 `npm run deploy:site`.
+
+## Filtro de respuestas de Lumi (2026-10-02)
+
+Tres intentos sólo de prompt no bastaron en vivo (QA r8): a una docente que
+pidió adeudos de «todas las escuelas» Lumi le ofreció «consultar los cargos
+pendientes» (LM09b), a una docente le ofreció «Publicar la tarea» y «Mandar un
+aviso» —escrituras que Lumi no tiene— (LM06), y a una familia que dijo haber
+sido promovida le contestó «Si de verdad te promovieron… Permisos y roles»
+(LP10b). Decisión del dueño: un filtro determinista.
+
+`src/lib/lumi/replyFilter.js` (`filterLumiReply`, sin imports) se aplica a
+**toda** respuesta del asistente justo antes de pintarla en `LumiChat`. Es
+**sólo de presentación**: lo que Lumi puede leer o escribir lo decide el
+servidor. Por oración (o cláusula unida por «, pero» / «;») y por renglón de
+lista:
+
+- quita una **oferta** o una **lista** (≥3 temas) de un tema fuera del
+  `helps_with` del rol; un renglón de lista cuenta como oferta si la línea que
+  la presenta lo es. «Publicar/mandar/crear…» tareas, avisos, eventos, pagos
+  no está en el `helps_with` de nadie;
+- quita la especulación de rol o de sincronización («si de verdad te
+  promovieron», «una vez que se refleje», «quizá aún no se actualiza») y
+  «Permisos y roles» para quien no es ADMIN;
+- «su/tu maestra|maestro» sin nombre detrás → «su/tu docente»;
+- si quitó algo y la respuesta ya no termina en pregunta, añade «¿Te ayudo con
+  algo de tu escuela?». Si no quitó nada, sale byte por byte.
+
+**Conservador a propósito** (cada caso tiene prueba en
+`tests/unit/lumi-reply-filter.test.js`): una afirmación que no ofrece nada
+sobrevive aunque hable de un tema ajeno —«Los papás ven sus pagos en la
+pantalla Pagos» a una docente que lo preguntó es la respuesta—; nada con un
+dígito o `$` se quita (es dato, no menú); ni una oración con `**` desbalanceado
+ni el contenido de un bloque ```.
+
+`HELPS_WITH_BY_ROLE` es espejo de `helpsWith()` de `_lumiCore.ts` y una prueba
+los compara; otra exige un patrón en `TOPIC_PATTERNS` para cada tema que algún
+rol no tenga. **Agregar un intent o una escritura en `_lumiCore.ts` obliga a
+tocar los dos.** Si la conversación trae la respuesta `my_context` del
+servidor, su `helps_with` manda (sabe de licencia en solo lectura y de
+overrides). `LumiChat` es la única superficie que pinta respuestas de Lumi; una
+prueba falla si aparece otra sin el filtro (`aiAssist` no es el chat: su
+salida es un borrador que el usuario edita).
+
+Sólo frontend: `npm run deploy:site`. **No verificado:** en vivo contra
+respuestas nuevas del modelo; el filtro sólo conoce las formas vistas en QA y
+sus variantes cercanas, el prompt sigue siendo la primera línea.

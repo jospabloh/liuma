@@ -1,6 +1,6 @@
 import { base44 } from '@/api/base44Client';
 import { invokeFunction } from '@/lib/functionResponse';
-import { exportCompleteness } from './schoolExportStatus';
+import { exportCompleteness, runExportRounds } from './schoolExportStatus';
 
 /**
  * "Descargar datos de la escuela": asks exportSchoolData (ACTIVE ADMIN only,
@@ -15,8 +15,9 @@ import { exportCompleteness } from './schoolExportStatus';
  * still downloaded, but callers must say it is not a full backup.
  */
 export async function downloadSchoolExport(schoolId) {
-  const payload = await invokeFunction(base44, 'exportSchoolData', {});
-  if (!payload?.ok) throw new Error(payload?.error || 'export failed');
+  // Several calls when the server runs out of time (it answers `resume`),
+  // merged into one file; complete only if every entity finished.
+  const payload = await runExportRounds((body) => invokeFunction(base44, 'exportSchoolData', body));
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

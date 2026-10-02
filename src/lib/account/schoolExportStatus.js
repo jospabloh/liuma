@@ -61,3 +61,43 @@ export function incompleteExportMessage(result) {
 export function schoolDeletionRequestAllowed({ backup, acknowledged }) {
   return backup?.complete === true || acknowledged === true;
 }
+
+/** How many times downloadSchoolExport asks again from a `resume` token. */
+export const EXPORT_MAX_ROUNDS = 6;
+export const EXPORT_ROUND_PAUSE_MS = 2000;
+
+/**
+ * Ask exportSchoolData until it stops answering `resume` (it does when its
+ * time budget runs out, e.g. after waiting out Base44's rate limit), merging
+ * the rounds into one payload. `invoke(body)` returns the function's JSON.
+ * Complete only if every entity finished: no round named one incomplete and
+ * the last round left nothing to resume.
+ */
+export async function runExportRounds(invoke, { maxRounds = EXPORT_MAX_ROUNDS, pauseMs = EXPORT_ROUND_PAUSE_MS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  let merged = null;
+  let resume = null;
+  let last = null;
+  for (let round = 0; round < maxRounds; round += 1) {
+    if (round > 0) await sleep(pauseMs);
+    const payload = await invoke(resume ? { resume } : {});
+    if (!payload?.ok) throw new Error(payload?.error || 'export failed');
+    last = payload;
+    if (!merged) {
+      merged = { ...payload, data: {}, errors: {}, incomplete: [] };
+    }
+    for (const [name, rows] of Object.entries(payload.data || {})) {
+      merged.data[name] = [...(merged.data[name] || []), ...(Array.isArray(rows) ? rows : [])];
+    }
+    Object.assign(merged.errors, payload.errors || {});
+    for (const name of payload.incomplete || []) if (!merged.incomplete.includes(name)) merged.incomplete.push(name);
+    resume = payload.resume || null;
+    merged.rounds = round + 1;
+    if (!resume) break;
+  }
+  if (resume && !merged.incomplete.includes(resume.entity)) merged.incomplete.push(resume.entity);
+  merged.resume = resume;
+  // An older server (no `complete` flag) cut every list: never complete.
+  merged.complete = last?.complete === true && !resume && merged.incomplete.length === 0;
+  if (!Object.keys(merged.errors).length) delete merged.errors;
+  return merged;
+}

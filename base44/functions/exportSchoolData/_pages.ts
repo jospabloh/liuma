@@ -35,6 +35,11 @@ export class IncompleteReadError extends Error {
   }
 }
 
+/** The page of `query` at or after `since` (keyset on created_date; null = the first page). */
+export function keysetQuery(query: Record<string, unknown>, since: string | null): Record<string, unknown> {
+  return since === null ? query : { ...query, created_date: { $gte: since } };
+}
+
 /**
  * Every row of `query`, or as many as the bound allows with complete:false.
  *
@@ -58,7 +63,7 @@ export async function readAllPages(
   const seen = new Set<string>();
   let since: string | null = null;
   for (let page = 0; page < maxPages; page += 1) {
-    const q = since === null ? query : { ...query, created_date: { $gte: since } };
+    const q = keysetQuery(query, since);
     const batch: Row[] = (await handler.filter(q, 'created_date', pageSize)) || [];
     let added = 0;
     for (const r of batch) {

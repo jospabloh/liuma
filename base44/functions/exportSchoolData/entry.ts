@@ -15,7 +15,7 @@
 // exportFamilyData). A failure on any single entity doesn't fail the whole
 // export.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { finalExportGate, readSchoolExport } from './_exportGate.ts';
+import { finalExportGate, parseResume, readSchoolExport } from './_exportGate.ts';
 
 const EXPORTED_ENTITIES = [
   'Student', 'Classroom', 'TeacherClassroom', 'ParentStudent', 'ParentProfile',
@@ -61,7 +61,12 @@ Deno.serve(async (req) => {
     const school = await sr.entities.School.get(schoolId).catch(() => null);
 
     // Every row, paged; what could not be read whole is named, not hidden.
-    const exported = await readSchoolExport(sr, schoolId, EXPORTED_ENTITIES);
+    // A call that runs out of time answers `resume`, and the client asks
+    // again from there (src/lib/account/schoolExport.js).
+    const body = await req.json().catch(() => ({}));
+    const exported = await readSchoolExport(sr, schoolId, EXPORTED_ENTITIES, {
+      resume: parseResume(body?.resume, EXPORTED_ENTITIES),
+    });
 
     // The deletion may have started while the school was being read.
     const gate = await finalExportGate(sr, String(user.id));
@@ -74,6 +79,7 @@ Deno.serve(async (req) => {
       data: exported.data,
       complete: exported.complete,
       incomplete: exported.incomplete,
+      resume: exported.resume,
       errors: Object.keys(exported.errors).length ? exported.errors : undefined,
     });
   } catch (e) {

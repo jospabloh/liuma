@@ -214,15 +214,46 @@ export function deletionReservedAt(user: unknown): string {
  * marker, so both retries skipped the check and the school lost both). The
  * token's copy first; the stored User otherwise.
  */
-async function deletionReserved(sr: Db, user: Caller): Promise<boolean> {
-  if (deletionReservedAt(user) || accountDeletedAt(user)) return true;
+async function deletionState(sr: Db, user: Caller): Promise<{ reserved: boolean; started: boolean }> {
+  let row: unknown = null;
   try {
-    const row = await sr.entities.User.get(String(user.id));
-    return Boolean(deletionReservedAt(row) || accountDeletedAt(row));
+    row = await sr.entities.User.get(String(user.id));
   } catch (e) {
-    if (isNotFound(e)) return false;
-    throw e;
+    if (!isNotFound(e)) throw e;
   }
+  const reserved = Boolean(deletionReservedAt(user) || accountDeletedAt(user) || deletionReservedAt(row) || accountDeletedAt(row));
+  // The stored row wins over the token for the marker: a cancel clears it.
+  const started = row ? Boolean(deletionStartedAt(row)) : Boolean(deletionStartedAt(user));
+  return { reserved, started };
+}
+
+/**
+ * Undo a deletion that started but never reserved. Started-but-not-reserved
+ * means NOTHING irreversible happened: every step before the reservation is
+ * the marker and the seat claims — the consent stamps, links, records and
+ * profiles are only touched after it. Own claims first (so other directors
+ * stop counting this one as leaving), then the started marker (so the person
+ * can use the app again). Both retried. Returns whether the marker is gone;
+ * if not, the next call tries again.
+ */
+async function cancelStartedDeletion(sr: Db, userId: string): Promise<boolean> {
+  await tryTwice(() => sr.entities.AuditLog.deleteMany({ target_type: DELETION_CLAIM_TARGET, user_id: userId }));
+  return await tryTwice(() => sr.entities.User.update(userId, { account_deletion_started_at: '' }));
+}
+
+/**
+ * { action: 'cancel' } — "Cancelar la baja y volver". Only for a deletion
+ * that has not reserved (nothing irreversible done); idempotent.
+ */
+export async function cancelDeletion(sr: Db, user: Caller): Promise<Result> {
+  if (!user?.id) return fail(401, 'UNAUTHENTICATED', 'Unauthorized');
+  const state = await deletionState(sr, user);
+  if (state.reserved) {
+    return fail(409, 'DELETION_RESERVED', 'This deletion already passed its point of no return; finish it');
+  }
+  const unblocked = await cancelStartedDeletion(sr, String(user.id));
+  if (!unblocked) return fail(503, 'CANCEL_FAILED', 'The deletion could not be cancelled yet; retry', { blocked: true });
+  return { status: 200, body: { ok: true, cancelled: true } };
 }
 
 // --- The director seat (claim pattern, like resolvePaymentRace) ------------
@@ -316,8 +347,7 @@ async function reserveDirectorSeats(sr: Db, userId: string, profiles: Profile[])
   // be cleared leaves the person blocked, and the answer says so.
   for (const id of myClaims) await tryTwice(() => sr.entities.AuditLog.delete(id));
   // …and any claim an earlier, unfinished attempt kept (see step 0b).
-  await tryTwice(() => sr.entities.AuditLog.deleteMany({ target_type: DELETION_CLAIM_TARGET, user_id: userId }));
-  const unblocked = await tryTwice(() => sr.entities.User.update(userId, { account_deletion_started_at: '' }));
+  const unblocked = await cancelStartedDeletion(sr, userId);
   if (unreadable && !lost.length) {
     return fail(503, 'DELETION_NOT_STARTED', 'The directors of your school could not be checked; nothing was changed, retry', { blocked: !unblocked });
   }
@@ -329,11 +359,22 @@ export async function previewDeletion(sr: Db, user: Caller): Promise<Result> {
   if (!user?.id) return fail(401, 'UNAUTHENTICATED', 'Unauthorized');
   const userId = String(user.id);
   if (user.role === 'admin') {
-    return { status: 200, body: { ok: true, platformOwner: true, soleAdmin: false, soleAdminSchools: [], hasProfile: false, role: null, resume: false } };
+    return { status: 200, body: { ok: true, platformOwner: true, soleAdmin: false, soleAdminSchools: [], hasProfile: false, role: null, resume: false, cancellable: false, cancelled: false, blocked: false } };
   }
   const profiles = await myProfiles(sr, userId);
-  const resume = await deletionReserved(sr, user);
+  const state = await deletionState(sr, user);
+  const resume = state.reserved;
   const sole = resume ? [] : await soleAdminSchools(sr, profiles, userId);
+  // Started, never reserved, and it can no longer go ahead (the person is now
+  // the only director — e.g. lost the seat, could not clear the marker, then
+  // the other director left): cancel it, so the school keeps a usable
+  // director (Codex review of PR #197, round 6).
+  let cancelled = false;
+  let blocked = false;
+  if (state.started && !resume && sole.length) {
+    cancelled = await cancelStartedDeletion(sr, userId);
+    blocked = !cancelled;
+  }
   return {
     status: 200,
     body: {
@@ -345,6 +386,10 @@ export async function previewDeletion(sr: Db, user: Caller): Promise<Result> {
       soleAdminSchools: sole,
       // The page then always offers "finish the deletion".
       resume,
+      // Started but not reserved: the page offers "Cancelar la baja y volver".
+      cancellable: state.started && !resume && !cancelled,
+      cancelled,
+      blocked,
     },
   };
 }
@@ -437,12 +482,16 @@ export async function runAccountDeletion({ sr, user, body, now, userAgent = '' }
   // A deletion that already RESERVED its director seat is finished, not
   // re-judged: refusing now (another director left meanwhile) would strand
   // the person, whose access is already closed.
-  const reserved = await deletionReserved(sr, user);
+  const state = await deletionState(sr, user);
+  const reserved = state.reserved;
   // The cheap read-only pre-check: a lone director is refused with nothing
   // written. It is not the decision — reserveDirectorSeats below is.
   const sole = reserved ? [] : await soleAdminSchools(sr, profiles, userId);
   if (sole.length) {
-    return fail(409, 'SOLE_ADMIN', 'You are the only active director of your school', { soleAdminSchools: sole });
+    // A deletion that started and can no longer go ahead is cancelled, not
+    // left blocking the school's only director (round 6).
+    const blocked = state.started ? !(await cancelStartedDeletion(sr, userId)) : false;
+    return fail(409, 'SOLE_ADMIN', 'You are the only active director of your school', { soleAdminSchools: sole, blocked });
   }
 
   const nowIso = now.toISOString();

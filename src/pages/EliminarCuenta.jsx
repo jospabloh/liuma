@@ -23,7 +23,7 @@ import {
   deletionPageMode,
   keptItems,
 } from '@/lib/account/accountDeletion';
-import { DELETION_PREVIEW_QUERY_KEY, deleteMyAccount, previewAccountDeletion } from '@/lib/consent/consentApi';
+import { CONSENT_STATUS_QUERY_KEY, DELETION_PREVIEW_QUERY_KEY, cancelAccountDeletion, deleteMyAccount, previewAccountDeletion } from '@/lib/consent/consentApi';
 import { downloadSchoolExport } from '@/lib/account/schoolExport';
 import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
@@ -85,6 +85,42 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
   const [exporting, setExporting] = React.useState(false);
 
   const goBack = () => navigate(gated ? '/' : createPageUrl('Home'));
+
+  // "Cancelar la baja y volver" (Codex review of PR #197, round 6): a
+  // deletion that started but never reserved its director seat has done
+  // nothing irreversible, and the server cancels it on request — or by
+  // itself when the person is now the school's only director. Then the
+  // user, profile and consent are re-read, and ConsentGate decides again
+  // from scratch: the app if the stamps are current, the consent screen if
+  // not.
+  const [cancelling, setCancelling] = React.useState(false);
+  const backToTheApp = React.useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] }),
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] }),
+      queryClient.invalidateQueries({ queryKey: [CONSENT_STATUS_QUERY_KEY] }),
+    ]);
+    navigate('/');
+  }, [queryClient, navigate]);
+  const cancellable = Boolean(preview?.cancellable);
+  const handleCancel = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    setDeleteError('');
+    try {
+      await cancelAccountDeletion();
+      await backToTheApp();
+    } catch (e) {
+      const code = functionErrorCode(e);
+      setDeleteError(code ? deletionErrorMessage(code, { blocked: functionErrorBody(e)?.blocked === true }) : humanizeError(e));
+    } finally {
+      setCancelling(false);
+    }
+  };
+  const autoCancelled = preview?.cancelled === true;
+  React.useEffect(() => {
+    if (autoCancelled) backToTheApp();
+  }, [autoCancelled, backToTheApp]);
 
   const handleDelete = async () => {
     if (!confirmationMatches(confirmText) || deleting) return;
@@ -164,6 +200,17 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
       )}
 
       <div className="mx-auto max-w-2xl px-4 sm:px-6 py-4 pb-24 space-y-4">
+        {cancellable ? (
+          <Card className="p-5 space-y-3" role="note">
+            <p className="text-sm text-foreground">
+              La baja de tu cuenta todavía no avanzó: no se ha borrado nada. Puedes cancelarla y volver a LIUMA.
+            </p>
+            <Button type="button" className="min-h-11 w-full sm:w-auto" onClick={handleCancel} disabled={cancelling}>
+              {cancelling ? 'Cancelando…' : 'Cancelar la baja y volver'}
+            </Button>
+          </Card>
+        ) : null}
+
         {gated && !finishing ? (
           <Button type="button" className="min-h-11 w-full sm:w-auto bg-brand text-white hover:bg-brand/90" onClick={goBack}>
             Volver y aceptar

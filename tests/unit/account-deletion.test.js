@@ -7,6 +7,7 @@ import {
   ANONYMIZE,
   ANONYMIZED_NAME,
   CONFIRMATION_WORD as SERVER_WORD,
+  cancelDeletion,
   DeletionIncompleteError,
   MAX_UPDATE_BATCHES,
   PURGE_DAYS as SERVER_PURGE_DAYS,
@@ -731,6 +732,99 @@ test('the reservation cannot be read back: the claim is KEPT (the other director
   const retry = await del(makeFakeMongoDb(tables, { idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.admin, ...me });
   assert.equal(retry.status, 200, JSON.stringify(retry.body));
   assert.equal(tables.UserProfile.filter((p) => p.school_id === 'sA' && p.app_role === 'ADMIN' && p.status === 'ACTIVE').length, 1);
+});
+
+// Codex review of PR #197, round 6: the losing director cleared its claims
+// but not its marker (both attempts failed); the winner then left. The loser
+// was the school's only director, blocked by the marker, and every retry
+// stopped at the sole-director pre-check without clearing it.
+async function strandedLoser() {
+  const { tables } = twoDirectors();
+  // u-admin claimed first.
+  tables.AuditLog.push({ id: 'claim-1', target_type: 'AccountDeletionClaim', target_id: 'sA', user_id: 'u-admin', school_id: 'sA', created_date: '2026-10-02T11:00:00.000Z' });
+  const loserDb = makeFakeMongoDb(tables, { idPrefix: 'l', failOn: [2, 3].map((nth) => ({ entity: 'User', op: 'update', nth, message: 'Forbidden', status: 403 })) });
+  const lost = await del(loserDb, USERS.admin2);
+  assert.deepEqual([lost.body.code, lost.body.blocked], ['SOLE_ADMIN', true]);
+  const winner = await del(makeFakeMongoDb(tables, { idPrefix: 'w', integrations: { Core: { SendEmail: async () => {} } } }), USERS.admin);
+  assert.equal(winner.status, 200, JSON.stringify(winner.body));
+  const loser = tables.User.find((u) => u.id === 'u-admin2');
+  assert.ok(loser.account_deletion_started_at, 'stranded: the marker is still there');
+  return { tables, loser };
+}
+
+async function assertUsableDirector(tables) {
+  const loser = tables.User.find((u) => u.id === 'u-admin2');
+  assert.equal(loser.account_deletion_started_at, '', 'marker cleared');
+  assert.equal(tables.AuditLog.some((x) => x.target_type === 'AccountDeletionClaim' && x.user_id === 'u-admin2'), false);
+  const profile = tables.UserProfile.find((p) => p.user_id === 'u-admin2');
+  assert.deepEqual([profile.app_role, profile.status], ['ADMIN', 'ACTIVE']);
+  // Nothing irreversible had happened before the reservation: the consent
+  // stamp is intact, so the gates pass without even re-consenting.
+  assert.equal(serverStampIsCurrent(profile), true);
+  const status = await consentStatus(makeFakeMongoDb(tables), { ...USERS.admin2, ...loser });
+  assert.deepEqual([status.body.required, status.body.deletionInProgress], [false, undefined]);
+  assert.equal(decideConsentGate({ user: { ...USERS.admin2, ...loser }, profile }), 'pass');
+  const schoolRead = read('base44/functions/schoolRead/entry.ts');
+  const helper = schoolRead.match(/\nfunction accountDeletionBlocked[\s\S]*?\n}\n/)[0];
+  const blocked = new Function(`${helper.replace(/: unknown|: boolean|\bas \{[\s\S]*?\};/g, (m) => (m.startsWith('as') ? ';' : ''))} return accountDeletionBlocked;`)();
+  assert.equal(blocked(loser), false, 'every function gate lets them in');
+}
+
+test('a stranded losing director: the next PREVIEW cancels the started deletion and leaves a usable director', async () => {
+  const { tables, loser } = await strandedLoser();
+  const preview = await previewDeletion(makeFakeMongoDb(tables, { idPrefix: 'p' }), { ...USERS.admin2, ...loser });
+  assert.deepEqual([preview.body.cancelled, preview.body.blocked, preview.body.soleAdmin], [true, false, true]);
+  await assertUsableDirector(tables);
+});
+
+test('a stranded losing director: the next CONFIRM cancels instead of refusing as-is', async () => {
+  const { tables, loser } = await strandedLoser();
+  const r = await del(makeFakeMongoDb(tables, { idPrefix: 'c' }), { ...USERS.admin2, ...loser });
+  assert.deepEqual([r.status, r.body.code, r.body.blocked], [409, 'SOLE_ADMIN', false]);
+  await assertUsableDirector(tables);
+});
+
+test('a stranded losing director: the explicit cancel works, is idempotent, and retries a failed clear', async () => {
+  const { tables, loser } = await strandedLoser();
+  // The clear fails again: blocked, and the next cancel tries again.
+  const failing = await cancelDeletion(makeFakeMongoDb(tables, { idPrefix: 'f', failOn: { entity: 'User', op: 'update', message: 'Forbidden', status: 403 } }), { ...USERS.admin2, ...loser });
+  assert.deepEqual([failing.status, failing.body.code, failing.body.blocked], [503, 'CANCEL_FAILED', true]);
+  const ok = await cancelDeletion(makeFakeMongoDb(tables, { idPrefix: 'k' }), { ...USERS.admin2, ...loser });
+  assert.deepEqual([ok.status, ok.body.cancelled], [200, true]);
+  const again = await cancelDeletion(makeFakeMongoDb(tables, { idPrefix: 'k2' }), USERS.admin2);
+  assert.equal(again.status, 200, 'idempotent');
+  await assertUsableDirector(tables);
+});
+
+test('cancel is refused once the reservation exists (or the account is marked deleted)', async () => {
+  const { tables } = twoDirectors();
+  const me = tables.User.find((u) => u.id === 'u-admin');
+  Object.assign(me, { account_deletion_started_at: NOW.toISOString(), account_deletion_reserved_at: NOW.toISOString() });
+  const r = await cancelDeletion(makeFakeMongoDb(tables), USERS.admin);
+  assert.deepEqual([r.status, r.body.code], [409, 'DELETION_RESERVED']);
+  assert.equal(me.account_deletion_started_at, NOW.toISOString(), 'nothing undone');
+  const deleted = await cancelDeletion(makeFakeMongoDb(tables), { ...USERS.parent, account_deleted_at: NOW.toISOString() });
+  assert.equal(deleted.body.code, 'DELETION_RESERVED');
+  assert.match(deletionErrorMessage('DELETION_RESERVED'), /ya pasó el punto/);
+});
+
+test('before the reservation a deletion writes only its marker and its seat claims — which is why it can be cancelled', async () => {
+  const { tables } = twoDirectors();
+  const db = makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } });
+  const r = await del(db, USERS.admin);
+  assert.equal(r.status, 200);
+  const reservedAt = db.writes.findIndex((w) => w.entity === 'User' && w.data && 'account_deletion_reserved_at' in w.data);
+  assert.ok(reservedAt > 0);
+  for (const w of db.writes.slice(0, reservedAt)) {
+    const ok = (w.entity === 'User' && Object.keys(w.data).join() === 'account_deletion_started_at')
+      || (w.entity === 'AuditLog' && w.op === 'create' && w.data.target_type === 'AccountDeletionClaim');
+    assert.ok(ok, `irreversible write before the reservation: ${JSON.stringify(w).slice(0, 200)}`);
+  }
+  const page = read('src/pages/EliminarCuenta.jsx');
+  assert.match(page, /Cancelar la baja y volver/);
+  assert.match(page, /await cancelAccountDeletion\(\);\s*await backToTheApp\(\);/);
+  assert.match(page, /invalidateQueries\(\{ queryKey: \['currentUser'\] \}\)/, 'ConsentGate decides again from a fresh user');
+  assert.match(read('base44/functions/deleteMyAccount/entry.ts'), /action === 'cancel'[\s\S]*?cancelDeletion\(sr, user\)/);
 });
 
 test('only the RESERVATION skips the director check on a retry, not the started mark', async () => {

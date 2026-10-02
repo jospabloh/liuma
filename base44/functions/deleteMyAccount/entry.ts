@@ -3,6 +3,8 @@
 //   { action: 'preview' }                    → { platformOwner, hasProfile,
 //                                                soleAdmin, soleAdminSchools }
 //   { action: 'delete', confirm: 'ELIMINAR' } → deletes the CALLER's account
+//   { action: 'cancel' }                     → undoes a deletion that started
+//                                              but never reserved
 //
 // Service role, and everything derives from the authenticated caller: there is
 // no target in the body, so nobody can delete anyone else. What is deleted,
@@ -14,7 +16,7 @@
 // The page is src/pages/EliminarCuenta.jsx; it is reachable from the consent
 // screen ("No acepto") and from every role's menu.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { DeletionIncompleteError, previewDeletion, runAccountDeletion } from './_deletion.ts';
+import { DeletionIncompleteError, cancelDeletion, previewDeletion, runAccountDeletion } from './_deletion.ts';
 
 // Same test as schoolRead/_answer.ts#isRateLimitError (functions cannot
 // import across directories; tests/unit/rate-limit-resilience.test.js keeps
@@ -44,8 +46,12 @@ Deno.serve(async (req) => {
         now: new Date(),
         userAgent: String(req.headers.get('user-agent') || ''),
       });
+    } else if (action === 'cancel') {
+      // "Cancelar la baja y volver": only before the reservation (see
+      // cancelDeletion in ./_deletion.ts).
+      result = await cancelDeletion(sr, user);
     } else {
-      return Response.json({ ok: false, code: 'BAD_ACTION', error: 'action must be preview or delete' }, { status: 400 });
+      return Response.json({ ok: false, code: 'BAD_ACTION', error: 'action must be preview, delete or cancel' }, { status: 400 });
     }
     return Response.json(result.body, { status: result.status });
   } catch (e) {

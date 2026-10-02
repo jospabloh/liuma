@@ -33,6 +33,14 @@ export function previewAccountDeletion() {
   return invokeFunction(base44, 'deleteMyAccount', { action: 'preview' }, { idempotent: true });
 }
 
+/**
+ * "Cancelar la baja y volver": undoes a deletion that started but never
+ * reserved its director seat (nothing irreversible done). Idempotent.
+ */
+export function cancelAccountDeletion() {
+  return invokeFunction(base44, 'deleteMyAccount', { action: 'cancel' });
+}
+
 /** Deletes the caller's own account. The server re-checks the word. */
 export function deleteMyAccount(confirm) {
   return invokeFunction(base44, 'deleteMyAccount', { action: 'delete', confirm });

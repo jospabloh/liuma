@@ -105,6 +105,10 @@ const ERROR_MESSAGES = {
   UNAUTHENTICATED: 'Tu sesión expiró. Vuelve a iniciar sesión e inténtalo de nuevo.',
   // A bulk step had rows left; the account was not marked deleted yet.
   DELETION_INCOMPLETE: 'La eliminación de tu cuenta quedó a medias porque hay muchos registros que actualizar. Vuelve a intentarlo para continuar donde se quedó.',
+  // action:'cancel' after the point of no return, and a cancel that could
+  // not clear the marker yet.
+  DELETION_RESERVED: 'La eliminación de tu cuenta ya pasó el punto en que se puede cancelar. Confírmala para terminarla.',
+  CANCEL_FAILED: `No se pudo cancelar la baja todavía. Inténtalo de nuevo en un momento o escribe a ${ACACIA_SUPPORT_EMAIL}.`,
   // The deletion-in-progress marker could not be written: nothing changed.
   DELETION_NOT_STARTED: `No se pudo iniciar la eliminación de tu cuenta. No se cambió nada; inténtalo de nuevo o escribe a ${ACACIA_SUPPORT_EMAIL}.`,
   // deleteMyAccount could not mark the account as deleted, so it kept the

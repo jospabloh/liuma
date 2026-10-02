@@ -58,6 +58,10 @@ const CODE_MESSAGES = {
   // guardedEntityWrite: the plan's student cap, enforced server-side (v1.9.0).
   STUDENT_QUOTA: 'Tu escuela llegó al máximo de alumnos activos de su plan (con el margen incluido). Da de baja a los alumnos que ya no asisten o mejora tu licencia para agregar más.',
   // The over-cap write could not be undone (guardedEntityWrite/_schoolWrite.ts).
+  // sendBulkNotification / listSchoolMembers: a list too large to read whole
+  // is refused rather than acted on in part (the emergency alert excepted).
+  RECIPIENTS_INCOMPLETE: 'La lista de destinatarios es demasiado grande para leerla completa; no se envió nada. Escribe a soporte@acaciaco.com.mx.',
+  TOO_MANY_RECIPIENTS: 'Son demasiados destinatarios para un solo envío; no se envió nada. Escribe a soporte@acaciaco.com.mx.',
   STUDENT_QUOTA_UNRESOLVED: 'Tu escuela llegó al máximo de alumnos y no se pudo deshacer el último cambio. Revisa la lista de alumnos y da de baja al que sobra.',
   // uploadSchoolFile (v1.9.0): every file goes through the server.
   UPLOAD_PURPOSE_INVALID: 'No se reconoce el tipo de archivo que intentas subir. Recarga la página.',

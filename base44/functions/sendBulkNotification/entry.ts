@@ -61,6 +61,7 @@ import {
   selectNonResponders,
   spanishDate,
 } from './_fanout.ts';
+import { IncompleteReadError, readAllByIds, readAllOrFail, readAllPages } from './_pages.ts';
 
 const SUPPORT_EMAIL = 'soporte@acaciaco.com.mx';
 const CONCURRENCY = 8;
@@ -120,8 +121,6 @@ type Plan = {
 };
 type Summary = {
   total: number; reached: number; emailed: number; emailFailed: number; noChannel: number;
-  // Recipients past MAX_RECIPIENTS: counted in `total`, never "reached".
-  notAttempted: number;
 };
 
 class HttpError extends Error {
@@ -143,13 +142,15 @@ async function requireActiveAdmin(sr: Any, user: Any, schoolId: string) {
   return admin;
 }
 
-async function usersByIds(sr: Any, ids: string[]): Promise<Map<string, Any>> {
-  const unique = [...new Set(ids.filter(Boolean))];
-  const byId = new Map<string, Any>();
-  if (unique.length === 0) return byId;
-  const rows: Any[] = await sr.entities.User.filter({ id: { $in: unique } }, undefined, MAX_RECIPIENTS).catch(() => []);
-  for (const u of rows || []) if (u?.id) byId.set(String(u.id), u);
-  return byId;
+// Every recipient's User, paged (./_pages.ts). `strict` (every plan but the
+// emergency alert) refuses a list it could not read whole; the alert uses
+// what it read and reports `complete: false`.
+async function usersByIds(sr: Any, ids: string[], { strict = true } = {}): Promise<{ users: Map<string, Any>; complete: boolean }> {
+  const read = await readAllByIds(sr.entities.User, 'id', ids);
+  if (strict && !read.complete) throw new IncompleteReadError('recipient users');
+  const users = new Map<string, Any>();
+  for (const u of read.rows) if (u?.id) users.set(String(u.id), u);
+  return { users, complete: read.complete };
 }
 
 async function withRetry(fn: () => Promise<unknown>): Promise<void> {
@@ -196,10 +197,36 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
     sent_at: sentAt.toISOString(),
   });
 
-  const profiles: Any[] = await sr.entities.UserProfile.filter({ school_id: schoolId, status: 'ACTIVE' }, undefined, MAX_RECIPIENTS);
+  // EMERGENCY: partial delivery beats none. Every read below is paged to
+  // the end (./_pages.ts); if one hits its bound, the alert still goes to
+  // everyone read so far — refusing would leave EVERY family unwarned — and
+  // says so: `recipientsIncomplete` in the response and an audit row.
+  // Every other plan refuses an incomplete list instead (nothing sent).
+  const profilesRead = await readAllPages(sr.entities.UserProfile, { school_id: schoolId, status: 'ACTIVE' });
+  const profiles: Any[] = profilesRead.rows;
   const targets = profiles.filter((p) => ['PARENT', 'TEACHER'].includes(String(p.app_role)));
   const inApp = await fanOutEmergencyDeliveries(sr, notice, schoolId, profiles, sentAt);
-  const users = await usersByIds(sr, targets.map((p) => String(p.user_id)));
+  const usersRead = await usersByIds(sr, targets.map((p) => String(p.user_id)), { strict: false });
+  const users = usersRead.users;
+  const recipientsIncomplete = !profilesRead.complete || !usersRead.complete || inApp.incomplete === true;
+  if (recipientsIncomplete) {
+    console.error('sendBulkNotification: emergency recipients incomplete', schoolId);
+    await sr.entities.AuditLog.create({
+      school_id: schoolId,
+      user_id: user.id,
+      user_email: user.email,
+      action: 'NOTIFICATION_DELIVERY_FAILED',
+      target_type: 'emergency_alert',
+      target_id: String(notice?.id || ''),
+      details: {
+        reason: 'recipients_incomplete',
+        profiles_complete: profilesRead.complete,
+        users_complete: usersRead.complete,
+        in_app_complete: inApp.incomplete !== true,
+        profiles_read: profiles.length,
+      },
+    }).catch(() => null);
+  }
   const ctx: Ctx = { schoolName: String(school.name || ''), message };
   const seen = new Set<string>();
   const recipients: Recipient[] = [];
@@ -219,7 +246,7 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
     // that ignores preferences.
     forceOn: true,
     recipients,
-    extra: { inAppRecipients: inApp.recipients, inAppFailed: inApp.failed ? 1 : 0 },
+    extra: { inAppRecipients: inApp.recipients, inAppFailed: inApp.failed ? 1 : 0, recipientsIncomplete: recipientsIncomplete ? 1 : 0 },
     finalize: async (_delivered, summary) => {
       await sr.entities.AuditLog.create({
         school_id: schoolId,
@@ -236,6 +263,7 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
           in_app_recipients: inApp.recipients,
           in_app_rows: inApp.rows,
           in_app_error: inApp.failed || undefined,
+          recipients_incomplete: recipientsIncomplete || undefined,
         },
       }).catch(() => null);
     },
@@ -249,16 +277,20 @@ async function planEmergency(sr: Any, user: Any, body: Any): Promise<Plan> {
 // + audit), never thrown.
 async function fanOutEmergencyDeliveries(
   sr: Any, notice: Any, schoolId: string, profiles: Any[], now: Date,
-): Promise<{ rows: number; recipients: number; failed?: string }> {
+): Promise<{ rows: number; recipients: number; failed?: string; incomplete?: boolean }> {
   try {
     if (!notice?.id) return { rows: 0, recipients: 0, failed: 'notice_without_id' };
-    const [links, students, existing] = await Promise.all([
-      sr.entities.ParentStudent.filter({ school_id: schoolId, status: 'ACTIVE' }, undefined, 5000),
-      // Every student of the school; the planner drops the inactive ones (a
-      // legacy row with no is_active is active, as in planNoticeDeliveries).
-      sr.entities.Student.filter({ school_id: schoolId }, undefined, 5000),
-      sr.entities.NoticeDelivery.filter({ notice_id: String(notice.id) }, undefined, 5000),
-    ]);
+    // Paged and sequential (rate limit); an incomplete read still writes the
+    // copies it can — same emergency rule as the e-mails above.
+    const linksRead = await readAllPages(sr.entities.ParentStudent, { school_id: schoolId, status: 'ACTIVE' });
+    // Every student of the school; the planner drops the inactive ones (a
+    // legacy row with no is_active is active, as in planNoticeDeliveries).
+    const studentsRead = await readAllPages(sr.entities.Student, { school_id: schoolId });
+    const existingRead = await readAllPages(sr.entities.NoticeDelivery, { notice_id: String(notice.id) });
+    const links = linksRead.rows;
+    const students = studentsRead.rows;
+    const existing = existingRead.rows;
+    const incomplete = !linksRead.complete || !studentsRead.complete || !existingRead.complete;
     const rows = planEmergencyDeliveries({ notice, schoolId, now, profiles, links, students, existing });
     const handler = sr.entities.NoticeDelivery;
     for (let i = 0; i < rows.length; i += DELIVERY_CHUNK) {
@@ -266,19 +298,17 @@ async function fanOutEmergencyDeliveries(
       if (typeof handler.bulkCreate === 'function') await handler.bulkCreate(chunk);
       else for (const row of chunk) await handler.create(row);
     }
-    return { rows: rows.length, recipients: distinctRecipients(rows) };
+    return { rows: rows.length, recipients: distinctRecipients(rows), incomplete };
   } catch (error) {
     return { rows: 0, recipients: 0, failed: String((error as Error)?.message || error).slice(0, 300) };
   }
 }
 
 async function parentRecipientsForStudent(sr: Any, schoolId: string, studentId: string, ctx: Ctx): Promise<Recipient[]> {
-  const links: Any[] = await sr.entities.ParentStudent.filter({ school_id: schoolId, student_id: studentId, status: 'ACTIVE' });
+  const links: Any[] = await readAllOrFail(sr.entities.ParentStudent, { school_id: schoolId, student_id: studentId, status: 'ACTIVE' }, 'parent links');
   const parentIds = [...new Set(links.map((l) => String(l.parent_id || '')).filter(Boolean))];
-  const users = await usersByIds(sr, parentIds);
-  const profiles: Any[] = parentIds.length
-    ? await sr.entities.UserProfile.filter({ school_id: schoolId, user_id: { $in: parentIds } }).catch(() => [])
-    : [];
+  const { users } = await usersByIds(sr, parentIds);
+  const profiles: Any[] = (await readAllByIds(sr.entities.UserProfile, 'user_id', parentIds, { school_id: schoolId })).rows;
   return parentIds.map((id) => {
     const u = users.get(id);
     const profile = profiles.find((p) => String(p.user_id) === id);
@@ -382,26 +412,29 @@ async function planEventReminder(sr: Any, user: Any, body: Any): Promise<Plan | 
   if (!event.requires_confirmation) return { skipped: 'no_confirmation' };
   if (event.reminder_sent) return { skipped: 'already_sent' };
 
+  // Every read paged to the end; a list it cannot read whole is refused
+  // (nothing sent, RECIPIENTS_INCOMPLETE) rather than reminding some
+  // families and calling it done.
   const students: Any[] = event.scope === 'CLASSROOM'
     ? (event.classroom_id
-      ? await sr.entities.Student.filter({ classroom_id: event.classroom_id, school_id: event.school_id, is_active: true }, undefined, MAX_RECIPIENTS)
+      ? await readAllOrFail(sr.entities.Student, { classroom_id: event.classroom_id, school_id: event.school_id, is_active: true }, 'event students')
       : [])
-    : await sr.entities.Student.filter({ school_id: event.school_id, is_active: true }, undefined, MAX_RECIPIENTS);
+    : await readAllOrFail(sr.entities.Student, { school_id: event.school_id, is_active: true }, 'event students');
   const studentById = new Map(students.map((s) => [String(s.id), s]));
   const studentIds = [...studentById.keys()];
-  const links: Any[] = studentIds.length
-    ? await sr.entities.ParentStudent.filter({ school_id: event.school_id, student_id: { $in: studentIds }, status: 'ACTIVE' }, undefined, MAX_RECIPIENTS)
-    : [];
-  const responses: Any[] = await sr.entities.EventResponse.filter({ event_id: event.id }, undefined, MAX_RECIPIENTS);
+  const linksRead = await readAllByIds(sr.entities.ParentStudent, 'student_id', studentIds, { school_id: event.school_id, status: 'ACTIVE' });
+  if (!linksRead.complete) throw new IncompleteReadError('event parent links');
+  const links: Any[] = linksRead.rows;
+  const responses: Any[] = await readAllOrFail(sr.entities.EventResponse, { event_id: event.id }, 'event responses');
   const pending = selectNonResponders(
     links.map((l) => ({ parentId: String(l.parent_id || ''), studentId: String(l.student_id || '') })),
     responses,
   );
   const parentIds = pending.map((p) => p.parentId);
-  const users = await usersByIds(sr, parentIds);
-  const profiles: Any[] = parentIds.length
-    ? await sr.entities.UserProfile.filter({ school_id: event.school_id, user_id: { $in: [...new Set(parentIds)] } }).catch(() => [])
-    : [];
+  const { users } = await usersByIds(sr, parentIds);
+  const profilesRead = await readAllByIds(sr.entities.UserProfile, 'user_id', parentIds, { school_id: event.school_id });
+  if (!profilesRead.complete) throw new IncompleteReadError('event parent profiles');
+  const profiles: Any[] = profilesRead.rows;
   const school: Any = await sr.entities.School.get(event.school_id).catch(() => null);
 
   const base = {
@@ -494,9 +527,9 @@ async function planEscalation(sr: Any, user: Any, body: Any): Promise<Plan | { s
   };
 
   const assigneeProfiles: Any[] = tier === 'PLATFORM'
-    ? await sr.entities.UserProfile.filter({ is_super_admin: true })
-    : await sr.entities.UserProfile.filter({ school_id: ticket.school_id, app_role: 'ADMIN', status: 'ACTIVE' });
-  const users = await usersByIds(sr, assigneeProfiles.map((p) => String(p.user_id)));
+    ? await readAllOrFail(sr.entities.UserProfile, { is_super_admin: true }, 'platform owners')
+    : await readAllOrFail(sr.entities.UserProfile, { school_id: ticket.school_id, app_role: 'ADMIN', status: 'ACTIVE' }, 'school directors');
+  const { users } = await usersByIds(sr, assigneeProfiles.map((p) => String(p.user_id)));
   const seen = new Set<string>();
   const recipients: Recipient[] = [];
   for (const p of assigneeProfiles) {
@@ -537,7 +570,14 @@ const PLANNERS: Record<string, (sr: Any, user: Any, body: Any) => Promise<Plan |
 
 async function deliver(sr: Any, user: Any, plan: Plan): Promise<Summary> {
   const emailTemplate = NOTIFICATION_TEMPLATES[plan.eventType];
-  const recipients = plan.recipients.slice(0, MAX_RECIPIENTS);
+  // The emergency alert goes to everyone it read, however many. Any other
+  // plan past MAX_RECIPIENTS is refused before a single e-mail goes out:
+  // never "sent to the first 2,000" without saying so.
+  const isEmergency = plan.eventType === 'emergency_alert';
+  if (!isEmergency && plan.recipients.length > MAX_RECIPIENTS) {
+    throw new HttpError(413, 'TOO_MANY_RECIPIENTS', `${plan.recipients.length} recipients exceed ${MAX_RECIPIENTS}`);
+  }
+  const recipients = plan.recipients;
 
   // Email is the only per-recipient channel. (Reviewer fix, 2026-09-29: the
   // first draft also created one `Notice` per recipient with scope 'USER' and
@@ -568,13 +608,9 @@ async function deliver(sr: Any, user: Any, plan: Plan): Promise<Summary> {
     }
   });
 
-  // `total` is everyone the plan named, not the slice attempted: a cut list
-  // reads "Enviado a 2000 de 2300", never "2000 de 2000" (Codex review of
-  // PR #197 — a bounded step must not report the remainder as done).
-  const summary: Summary = {
-    total: plan.recipients.length, reached: 0, emailed: 0, emailFailed: 0, noChannel: 0,
-    notAttempted: plan.recipients.length - recipients.length,
-  };
+  // `total` is everyone the plan named — nothing is sliced off any more
+  // (Codex review of PR #197): "Enviado a X de Y" counts the whole list.
+  const summary: Summary = { total: plan.recipients.length, reached: 0, emailed: 0, emailFailed: 0, noChannel: 0 };
   const delivered: Recipient[] = [];
   const failures: Array<{ key: string; error: string }> = [];
   results.forEach((res, i) => {
@@ -631,6 +667,7 @@ Deno.serve(async (req) => {
     return Response.json({ ok: true, eventType, ...(plan.extra || {}), ...summary });
   } catch (e) {
     if (e instanceof HttpError) return bad(e.status, e.code, e.message);
+    if (e instanceof IncompleteReadError) return bad(e.status, e.code, e.message);
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
   }
 });

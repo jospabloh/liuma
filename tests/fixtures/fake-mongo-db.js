@@ -77,7 +77,7 @@ export function makeFakeMongoDb(tables, { failOn = null, integrations = null, id
     return tables[name];
   };
   const handler = (name) => ({
-    async filter(query, sort = '-created_date', limit = 5000) {
+    async filter(query, sort = '-created_date', limit = 5000, skip = 0) {
       calls.push({ entity: name, op: 'filter', query });
       maybeFail(name, 'filter');
       const desc = String(sort || '').startsWith('-');
@@ -88,7 +88,7 @@ export function makeFakeMongoDb(tables, { failOn = null, integrations = null, id
           const bv = String(b[key] ?? '');
           return desc ? bv.localeCompare(av) : av.localeCompare(bv);
         })
-        .slice(0, limit)
+        .slice(skip, skip + limit)
         .map((r) => structuredClone(r));
     },
     async get(id) {

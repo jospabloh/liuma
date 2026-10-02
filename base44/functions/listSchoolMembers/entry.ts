@@ -28,10 +28,10 @@
 //      preferences or anything else from User — the client already has the
 //      profile rows it needs for those.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { IncompleteReadError, readAllByIds, readAllOrFail } from './_pages.ts';
 
 // A school directory bigger than this is not a real school; the cap only
 // exists so a bug can't turn one call into an unbounded scan.
-const MAX_MEMBERS = 5000;
 const DIRECTORY_ROLES = ['ADMIN', 'TEACHER'];
 
 type Profile = { user_id?: string; school_id?: string; app_role?: string; status?: string; consent_notice_version?: string; consent_terms_version?: string };
@@ -92,11 +92,9 @@ Deno.serve(async (req) => {
       callerRole = String(callerProfile.app_role);
     }
 
-    const schoolProfiles: Profile[] = await sr.entities.UserProfile.filter(
-      { school_id: schoolId },
-      '-created_date',
-      MAX_MEMBERS,
-    );
+    // Every profile, paged (./_pages.ts). A directory missing members would
+    // be a wrong answer, so a school past the bound is refused, not cut.
+    const schoolProfiles: Profile[] = await readAllOrFail(sr.entities.UserProfile, { school_id: schoolId }, 'school profiles');
     const visibleProfiles = callerRole === 'ADMIN'
       ? schoolProfiles
       : schoolProfiles.filter((p) => p.status === 'ACTIVE');
@@ -104,8 +102,9 @@ Deno.serve(async (req) => {
     const userIds = [...new Set(visibleProfiles.map((p) => p.user_id).filter(Boolean) as string[])];
     if (userIds.length === 0) return Response.json({ ok: true, users: [] });
 
-    // deno-lint-ignore no-explicit-any
-    const rows: any[] = await sr.entities.User.filter({ id: { $in: userIds } }, undefined, MAX_MEMBERS);
+    const usersRead = await readAllByIds(sr.entities.User, 'id', userIds);
+    if (!usersRead.complete) throw new IncompleteReadError('directory users');
+    const rows = usersRead.rows;
     const users: DirectoryUser[] = (rows || [])
       .filter((u) => u?.id && userIds.includes(u.id))
       // full_name carries the name the member chose in LIUMA (User.display_name)
@@ -121,6 +120,10 @@ Deno.serve(async (req) => {
   } catch (e) {
     // Base44's rate limit is a 429, not a 500 (v1.8.3): this is a read, so
     // the client retries it with backoff (src/lib/functionRetry.js).
+    if (e instanceof IncompleteReadError) {
+      console.error('listSchoolMembers incomplete', e.message);
+      return Response.json({ ok: false, code: e.code, error: e.code }, { status: e.status });
+    }
     if (isRateLimitError(e)) {
       console.warn('listSchoolMembers rate limited');
       return Response.json(

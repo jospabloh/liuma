@@ -117,7 +117,7 @@ test('planEmergency writes the copies server-side, best-effort, after the banner
   assert.match(planner, /fanOutEmergencyDeliveries\(sr, notice, schoolId, profiles, sentAt\)/);
   assert.ok(planner.indexOf('Notice.create') < planner.indexOf('fanOutEmergencyDeliveries'), 'banner first');
   const fanOut = src.slice(src.indexOf('async function fanOutEmergencyDeliveries'), src.indexOf('async function parentRecipientsForStudent'));
-  assert.match(fanOut, /NoticeDelivery\.filter\(\{ notice_id: String\(notice\.id\) \}/, 'existing copies are read (idempotent)');
+  assert.match(fanOut, /readAllPages\(sr\.entities\.NoticeDelivery, \{ notice_id: String\(notice\.id\) \}\)/, 'existing copies are read (idempotent), all of them');
   assert.match(fanOut, /catch \(error\)/, 'a failure is reported, never thrown (the emails must still go out)');
   // The in-app count is reported apart from the email count.
   assert.match(src, /\.\.\.\(plan\.extra \|\| \{\}\), \.\.\.summary/);

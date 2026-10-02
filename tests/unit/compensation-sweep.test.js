@@ -22,9 +22,9 @@ test('a duplicate absence that cannot be deleted is retried, then REJECTED (not 
   assert.match(read('base44/entities/AbsenceNotification.jsonc'), /"REJECTED"/);
 });
 
-test('a bulk send cut at MAX_RECIPIENTS reports the whole list as its total, never the slice', () => {
+test('a bulk send is never cut at MAX_RECIPIENTS: refused before sending, except the emergency alert', () => {
   const src = read('base44/functions/sendBulkNotification/entry.ts');
   assert.match(src, /total: plan\.recipients\.length, reached: 0/);
-  assert.match(src, /notAttempted: plan\.recipients\.length - recipients\.length/);
-  assert.doesNotMatch(src, /total: recipients\.length/);
+  assert.doesNotMatch(src, /recipients\.slice\(0, MAX_RECIPIENTS\)/);
+  assert.match(src, /if \(!isEmergency && plan\.recipients\.length > MAX_RECIPIENTS\) \{\s*throw new HttpError\(413, 'TOO_MANY_RECIPIENTS'/);
 });

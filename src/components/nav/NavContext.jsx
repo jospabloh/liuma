@@ -4,7 +4,8 @@ import { base44 } from '@/api/base44Client';
 import CommandPalette from './CommandPalette.jsx';
 import DisplayNameDialog from '@/components/account/DisplayNameDialog';
 import { selectCurrentUserProfile } from '@/lib/tenantSelection';
-import { shouldPromptForName } from '@/lib/userDisplayName';
+import { shouldPromptForName, welcomeMayStillShow } from '@/lib/userDisplayName';
+import { useSubscription } from '@/hooks/useSubscription';
 
 /**
  * Shared navigation state so the command palette can be opened from anywhere —
@@ -53,13 +54,17 @@ export function NavProvider({ children }) {
   const openNameDialog = useCallback(() => setNameDialog('edit'), []);
   // At most once per page load; "Ahora no" is also stored per user.
   const askedForName = useRef(false);
+  // Same query TenantThemeRuntime already runs on every screen (no extra
+  // request): the trial welcome goes first, the name question after it.
+  const { subscription, effectiveStatus, isLoading: subscriptionLoading } = useSubscription();
+  const welcomePending = welcomeMayStillShow({ profile, subscriptionLoading, subscription, effectiveStatus });
   useEffect(() => {
-    if (askedForName.current || !role || nameDialog !== null) return;
+    if (askedForName.current || !role || nameDialog !== null || welcomePending) return;
     if (shouldPromptForName(user)) {
       askedForName.current = true;
       setNameDialog('prompt');
     }
-  }, [role, user, nameDialog]);
+  }, [role, user, nameDialog, welcomePending]);
 
   // ⌘K / Ctrl+K toggles the palette from anywhere.
   useEffect(() => {

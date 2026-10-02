@@ -18,7 +18,9 @@ export function callerDisplayName(user: unknown): string {
   const u = (user ?? {}) as { display_name?: unknown; full_name?: unknown; data?: { display_name?: unknown } | null };
   const raw = typeof u.display_name === 'string' ? u.display_name : typeof u.data?.display_name === 'string' ? u.data.display_name : '';
   const chosen = raw.replace(/\s+/g, ' ').trim().slice(0, 60);
-  return chosen || String(u.full_name || '');
+  // The field is self-written with updateMe, so the dialog's validation can be
+  // skipped: an address there is not a name (same rule as emergencyAuthorName).
+  return chosen && !chosen.includes('@') ? chosen : String(u.full_name || '');
 }
 
 export const POLICY_WRITE: Record<string, string[]> = {

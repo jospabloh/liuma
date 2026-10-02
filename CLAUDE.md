@@ -2018,6 +2018,13 @@ funciones sellan ese nombre como autor: `callerDisplayName` (idéntica en
 `guardedEntityWrite/_policy.ts` y `guardedFamilyWrite/_policy.ts`),
 `emergencyAuthorName`, `lumiQuery` (`user_name`) y `listSchoolMembers`
 (`full_name` del directorio). Sin `display_name`, todo sale igual que antes.
+Como el campo lo escribe el propio usuario, la validación del diálogo se puede
+saltar: el servidor ignora un `display_name` con `@` y sella `full_name`.
+**La pregunta espera a la bienvenida de prueba:** un fundador recién llegado
+tiene las dos (`WelcomeTrialModal` en `Home`), y abrir una encima de la otra
+apilaba dos diálogos modales. `welcomeMayStillShow` la difiere mientras la
+licencia carga o es prueba con `welcome_message_shown` en falso; al cerrar la
+bienvenida el perfil se refresca y la pregunta sale.
 
 **44 px, medidos.** `node scripts/touch-targets-scan.mjs [--width 320,390]`
 levanta Vite, simula todo `/api/` (nada llega a Base44) y, con puntero táctil,

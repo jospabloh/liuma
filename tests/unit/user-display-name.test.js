@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   DISPLAY_NAME_MAX, dismissNamePrompt, greetingFor, isHandleLikeName, namePromptDismissed,
-  shouldPromptForName, userDisplayName, userFirstName, validateDisplayName,
+  shouldPromptForName, userDisplayName, userFirstName, validateDisplayName, welcomeMayStillShow,
 } from '../../src/lib/userDisplayName.js';
 // The REAL server code (Node 22 strips the TS types).
 import { displayUserName } from '../../base44/functions/lumiQuery/_lumiCore.ts';
@@ -143,6 +143,7 @@ test('the dialog saves display_name through updateMe — never full_name', () =>
 
   const nav = read('src/components/nav/NavContext.jsx');
   assert.match(nav, /shouldPromptForName\(user\)/);
+  assert.match(nav, /welcomePending\) return;/, 'never stacked on the trial welcome');
   assert.match(nav, /<DisplayNameDialog/);
   assert.match(nav, /openNameDialog/);
   // Editable afterwards: SideNav footer (desktop) and the palette (phone).
@@ -172,6 +173,8 @@ test('the server stamps the chosen name as author, full_name as before without o
     [{ full_name: 'Laura Gómez' }, 'Laura Gómez'],
     [{ full_name: 'Laura Gómez', display_name: '   ' }, 'Laura Gómez'],
     [{ display_name: 'B'.repeat(80) }, 'B'.repeat(60)],
+    // Self-written with updateMe: an address that skipped the dialog is not a name.
+    [{ full_name: 'Laura Gómez', display_name: 'laura@example.com' }, 'Laura Gómez'],
     [{}, ''],
     [null, ''],
   ];
@@ -187,9 +190,21 @@ test('the server stamps the chosen name as author, full_name as before without o
   assert.match(read('base44/functions/guardedEntityWrite/entry.ts'), /data\[attribution\.name\] = callerDisplayName\(user\);/);
   assert.match(read('base44/functions/guardedEntityWrite/_schoolWrite.ts'), /userName: callerDisplayName\(user\),/);
   assert.match(read('base44/functions/guardedFamilyWrite/entry.ts'), /userName: callerDisplayName\(user\),/);
-  assert.match(read('base44/functions/lumiQuery/entry.ts'), /user_name: displayUserName\(user\.display_name \|\| user\.data\?\.display_name \|\| user\.full_name, user\.email\)/);
+  assert.match(read('base44/functions/lumiQuery/entry.ts'), /user_name: displayUserName\(user\.display_name \|\| user\.data\?\.display_name, user\.email\) \|\| displayUserName\(user\.full_name, user\.email\)/);
   assert.match(read('base44/functions/listSchoolMembers/entry.ts'), /full_name: String\(u\.display_name \|\| u\.data\?\.display_name \|\| u\.full_name \|\| ''\)/);
 
   assert.equal(emergencyAuthorName({ full_name: 'h.josepablo+qa-director@gmail.com', display_name: 'Laura' }), 'Laura');
   assert.equal(emergencyAuthorName({ full_name: 'Laura Gómez', display_name: '' }), 'Laura Gómez');
+});
+
+test('the name question waits for the trial welcome instead of stacking on it', () => {
+  const founder = { app_role: 'ADMIN', welcome_message_shown: false };
+  assert.equal(welcomeMayStillShow({ profile: founder, subscriptionLoading: true }), true, 'license still loading');
+  assert.equal(welcomeMayStillShow({ profile: founder, subscription: { id: 's' }, effectiveStatus: 'trial' }), true);
+  // The welcome only renders for a trial: anything else must not hold the question forever.
+  assert.equal(welcomeMayStillShow({ profile: founder, subscription: { id: 's' }, effectiveStatus: 'active' }), false);
+  assert.equal(welcomeMayStillShow({ profile: founder, subscription: null, effectiveStatus: 'view_only' }), false);
+  assert.equal(welcomeMayStillShow({ profile: { ...founder, welcome_message_shown: true }, subscription: { id: 's' }, effectiveStatus: 'trial' }), false);
+  assert.equal(welcomeMayStillShow({ profile: { app_role: 'PARENT' }, subscriptionLoading: true }), false);
+  assert.equal(welcomeMayStillShow(), false);
 });

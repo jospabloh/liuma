@@ -273,7 +273,7 @@ test('Lumi never greets by an email handle (LP12)', () => {
   const src = read('base44/functions/lumiQuery/entry.ts');
   // v1.9.0: the name the user chose in LIUMA (User.display_name) first; the
   // handle rule still applies to whatever is left.
-  assert.match(src, /user_name: displayUserName\(user\.display_name \|\| user\.data\?\.display_name \|\| user\.full_name, user\.email\)/);
+  assert.match(src, /user_name: displayUserName\(user\.display_name \|\| user\.data\?\.display_name, user\.email\) \|\| displayUserName\(user\.full_name, user\.email\)/);
 });
 
 test('dirección\'s uniform list says it is open orders only (LD04)', () => {

@@ -106,3 +106,17 @@ export function shouldPromptForName(user, storage = globalThis.localStorage) {
   if (userDisplayName(user)) return false;
   return !namePromptDismissed(user.id, storage);
 }
+
+/**
+ * A new school's founder meets two dialogs on first sign-in: this one and the
+ * trial welcome (Home.jsx → WelcomeTrialModal, ADMIN, `welcome_message_shown`
+ * still false, trial license). Both are modal, so opening the name question
+ * on top of the welcome stacks two dialogs at once. While the welcome may
+ * still show (license still loading, or a trial), the question waits; closing
+ * the welcome sets `welcome_message_shown` and the question follows.
+ */
+export function welcomeMayStillShow({ profile, subscriptionLoading, subscription, effectiveStatus } = {}) {
+  if (profile?.app_role !== 'ADMIN' || profile?.welcome_message_shown) return false;
+  if (subscriptionLoading) return true;
+  return Boolean(subscription) && effectiveStatus === 'trial';
+}

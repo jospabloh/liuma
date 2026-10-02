@@ -39,6 +39,8 @@ import { humanizeError } from '@/lib/errorMessages';
 import FieldError from '@/components/forms/FieldError';
 import { Link } from 'react-router-dom';
 import { downloadSchoolExport } from '@/lib/account/schoolExport';
+import { incompleteExportMessage, schoolDeletionRequestAllowed } from '@/lib/account/schoolExportStatus';
+import SchoolBackupStatus from '@/components/account/SchoolBackupStatus';
 import { ACCOUNT_DELETION_PATH, ACCOUNT_DELETION_TITLE } from '@/lib/account/accountDeletion';
 
 const PENDING_CHANGE_ENTITY = 'PendingChange';
@@ -91,6 +93,11 @@ export default function PermisosRoles() {
   const [rollbackOverrideId, setRollbackOverrideId] = React.useState('');
   const [isApplyingRollback, setIsApplyingRollback] = React.useState(false);
   const [isExporting, setIsExporting] = React.useState(false);
+  // What the last export held, and the "continuar sin respaldo completo"
+  // acknowledgement (SchoolBackupStatus).
+  const [backup, setBackup] = React.useState(null);
+  const [backupAcknowledged, setBackupAcknowledged] = React.useState(false);
+  const deletionAllowed = schoolDeletionRequestAllowed({ backup, acknowledged: backupAcknowledged });
   const [isRequestingDeletion, setIsRequestingDeletion] = React.useState(false);
   const [deletionReason, setDeletionReason] = React.useState('');
 
@@ -501,8 +508,10 @@ export default function PermisosRoles() {
     try {
       // Export has to work in read-only mode — it is the half of "solo
       // lectura" that promises nothing is held hostage.
-      await downloadSchoolExport(userProfile.school_id);
-      toast.success('Descarga iniciada');
+      const result = await downloadSchoolExport(userProfile.school_id);
+      setBackup(result);
+      if (result.complete) toast.success('Respaldo completo descargado');
+      else toast.warning(incompleteExportMessage(result), { duration: 15000 });
     } catch {
       toast.error('No se pudo generar la exportación');
     } finally {
@@ -518,6 +527,7 @@ export default function PermisosRoles() {
   // an instant, irreversible self-service action -- same principle as every
   // other tenant-wide deletion in this portfolio going through a human.
   const handleRequestSchoolDeletion = async () => {
+    if (!deletionAllowed) return;
     if (!deletionReason.trim()) {
       showError('deletion', 'Describe el motivo de la solicitud.');
       return;
@@ -683,7 +693,8 @@ export default function PermisosRoles() {
               className={errors.deletion ? 'border-red-500 dark:border-red-400' : undefined}
             />
             <FieldError id="deletion-error" message={errors.deletion} />
-            <Button variant="destructive" onClick={handleRequestSchoolDeletion} disabled={isRequestingDeletion}>
+            <SchoolBackupStatus backup={backup} acknowledged={backupAcknowledged} onAcknowledge={setBackupAcknowledged} idPrefix="permisos-backup" />
+            <Button variant="destructive" onClick={handleRequestSchoolDeletion} disabled={isRequestingDeletion || !deletionAllowed}>
               {isRequestingDeletion ? 'Enviando...' : 'Solicitar eliminación de la escuela'}
             </Button>
           </div>

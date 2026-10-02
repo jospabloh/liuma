@@ -66,6 +66,7 @@ export type WriteResult = { status: number; body: Record<string, unknown> };
 
 const OPERATIONS: Op[] = ['create', 'update', 'delete'];
 const MAX_FANOUT = 2000;
+const FANOUT_READ_LIMIT = 5000;
 const BULK_CHUNK = 100;
 
 function fail(status: number, code: string, message: string): WriteResult {
@@ -220,6 +221,12 @@ async function fanOutNoticeDeliveries(args: {
     .map((p) => String(p.user_id || ''))
     .filter(Boolean);
   const existing = await sr.entities.NoticeDelivery.filter({ notice_id: noticeId }, '-created_date', 5000);
+  // A full page may hide rows: recipients would be missed, or copies already
+  // made written again. Refuse instead of fanning out on a partial read
+  // (Codex review of PR #197, round 10). Far above MAX_FANOUT anyway.
+  if ([students, links, parents, existing].some((list) => (list || []).length >= FANOUT_READ_LIMIT)) {
+    return fail(503, 'RECIPIENTS_INCOMPLETE', 'Too many rows to plan this notice from one read');
+  }
   const rows = planNoticeDeliveries({
     notice, students: students || [], links: links || [], existing: existing || [], schoolId, now, activeParentIds,
   });

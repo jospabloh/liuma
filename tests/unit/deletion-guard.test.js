@@ -197,7 +197,7 @@ test('the school export is discarded if the deletion started while it was read, 
   assert.deepEqual(await finalExportGate(broken, T), { ok: false, status: 503, code: 'DELETION_STATE_UNVERIFIED' });
   // Checked right before the export is returned, after the reads.
   const src = read('base44/functions/exportSchoolData/entry.ts');
-  const reads = src.lastIndexOf('entity.filter(');
+  const reads = src.lastIndexOf('await readSchoolExport(');
   const gate = src.indexOf('await finalExportGate(sr, String(user.id))');
   const answer = src.indexOf('exported_at:');
   assert.ok(reads > 0 && gate > reads && answer > gate);

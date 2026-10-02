@@ -22,6 +22,7 @@
 // docs/security-role-governance-remediation.md.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 import { withDeletionGuard } from './_deletionGuard.ts';
+import { readAllPages } from './_pages.ts';
 
 const APP_ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 const OPEN_STATUSES = ['PENDING_ADMIN_APPROVAL', 'PENDING_SECOND_ADMIN_APPROVAL'];
@@ -115,7 +116,12 @@ Deno.serve(withDeletionGuard(async (req, guarded) => {
     if (!profileConsentIsCurrent(callerProfile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
     const schoolId = callerProfile.school_id;
 
-    const schoolProfiles: Profile[] = await sr.entities.UserProfile.filter({ school_id: schoolId });
+    // Every profile of the school, paged (./_pages.ts): the target lookup and
+    // the "another ACTIVE ADMIN exists" check must see all of them, not the
+    // SDK's default first page (Codex review of PR #197, round 10).
+    const profilesRead = await readAllPages(sr.entities.UserProfile, { school_id: schoolId });
+    if (!profilesRead.complete) return bad(503, 'RECIPIENTS_INCOMPLETE', 'Too many profiles to read at once');
+    const schoolProfiles = profilesRead.rows as Profile[];
 
     if (action === 'request') {
       const targetProfileId = String(body?.targetProfileId || '');

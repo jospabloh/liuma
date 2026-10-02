@@ -25,6 +25,8 @@ import {
 } from '@/lib/account/accountDeletion';
 import { CONSENT_STATUS_QUERY_KEY, DELETION_PREVIEW_QUERY_KEY, cancelAccountDeletion, deleteMyAccount, previewAccountDeletion } from '@/lib/consent/consentApi';
 import { downloadSchoolExport } from '@/lib/account/schoolExport';
+import { incompleteExportMessage, schoolDeletionRequestAllowed } from '@/lib/account/schoolExportStatus';
+import SchoolBackupStatus from '@/components/account/SchoolBackupStatus';
 import { createSupportTicket } from '@/lib/support/tickets';
 import { SUPPORT_CATEGORIES, SUPPORT_PRIORITIES } from '@/lib/support/constants';
 import { functionErrorBody, functionErrorCode } from '@/lib/functionResponse';
@@ -83,6 +85,11 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
   const [requesting, setRequesting] = React.useState('');
   const [requestSent, setRequestSent] = React.useState('');
   const [exporting, setExporting] = React.useState(false);
+  // The pre-deletion backup: what it held, and the explicit acknowledgement
+  // when it is not complete (SchoolBackupStatus).
+  const [backup, setBackup] = React.useState(null);
+  const [backupAcknowledged, setBackupAcknowledged] = React.useState(false);
+  const schoolDeletionAllowed = schoolDeletionRequestAllowed({ backup, acknowledged: backupAcknowledged });
 
   const goBack = () => navigate(gated ? '/' : createPageUrl('Home'));
 
@@ -142,6 +149,8 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
   };
 
   const handleSchoolRequest = async (kind) => {
+    // The school's deletion needs a complete backup or the acknowledgement.
+    if (kind === 'school' && !schoolDeletionAllowed) return;
     const reason = requestReason.trim();
     if (!reason) {
       setRequestError('Escribe el motivo de la solicitud.');
@@ -172,8 +181,11 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
   const handleExport = async () => {
     setExporting(true);
     try {
-      await downloadSchoolExport(userProfile?.school_id);
-      toast.success('Descarga iniciada');
+      const result = await downloadSchoolExport(userProfile?.school_id);
+      setBackup(result);
+      // Never "Descarga iniciada" as if it were a full backup.
+      if (result.complete) toast.success('Respaldo completo descargado');
+      else toast.warning(incompleteExportMessage(result), { duration: 15000 });
     } catch {
       toast.error('No se pudo generar la exportación');
     } finally {
@@ -268,6 +280,7 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
             <Button type="button" variant="outline" className="min-h-11" onClick={handleExport} disabled={exporting}>
               {exporting ? 'Generando…' : 'Descargar datos de la escuela'}
             </Button>
+            <SchoolBackupStatus backup={backup} acknowledged={backupAcknowledged} onAcknowledge={setBackupAcknowledged} idPrefix="sole-admin-backup" />
             <div className="space-y-2">
               <label htmlFor="sole-admin-reason" className="text-sm font-medium text-foreground">Motivo de la solicitud (obligatorio)</label>
               <Textarea
@@ -287,7 +300,7 @@ export default function EliminarCuenta({ gated = false, resume = false }) {
                 <Button type="button" variant="outline" className="min-h-11 h-auto whitespace-normal py-2 text-center" onClick={() => handleSchoolRequest('director')} disabled={Boolean(requesting)}>
                   {requesting === 'director' ? 'Enviando…' : SOLE_ADMIN_REQUESTS.director.button}
                 </Button>
-                <Button type="button" variant="destructive" className="min-h-11 h-auto whitespace-normal py-2 text-center" onClick={() => handleSchoolRequest('school')} disabled={Boolean(requesting)}>
+                <Button type="button" variant="destructive" className="min-h-11 h-auto whitespace-normal py-2 text-center" onClick={() => handleSchoolRequest('school')} disabled={Boolean(requesting) || !schoolDeletionAllowed}>
                   {requesting === 'school' ? 'Enviando…' : SOLE_ADMIN_REQUESTS.school.button}
                 </Button>
               </div>

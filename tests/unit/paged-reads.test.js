@@ -41,8 +41,11 @@ function watched(db, entity) {
   };
 }
 
-test('the two copies of the paging helper are the same file', () => {
-  assert.equal(read('base44/functions/sendBulkNotification/_pages.ts'), read('base44/functions/listSchoolMembers/_pages.ts'));
+test('every copy of the paging helper is the same file', () => {
+  const reference = read('base44/functions/sendBulkNotification/_pages.ts');
+  for (const dir of ['listSchoolMembers', 'exportSchoolData', 'governRoleChange']) {
+    assert.equal(read(`base44/functions/${dir}/_pages.ts`), reference, dir);
+  }
   assert.ok(PAGE_SIZE >= 500 && PAGE_SIZE <= 1000, 'page size within what the rate limit affords');
 });
 

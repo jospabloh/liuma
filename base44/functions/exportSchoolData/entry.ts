@@ -15,7 +15,7 @@
 // exportFamilyData). A failure on any single entity doesn't fail the whole
 // export.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { finalExportGate } from './_exportGate.ts';
+import { finalExportGate, readSchoolExport } from './_exportGate.ts';
 
 const EXPORTED_ENTITIES = [
   'Student', 'Classroom', 'TeacherClassroom', 'ParentStudent', 'ParentProfile',
@@ -60,17 +60,8 @@ Deno.serve(async (req) => {
 
     const school = await sr.entities.School.get(schoolId).catch(() => null);
 
-    const data: Record<string, unknown> = {};
-    const errors: Record<string, string> = {};
-
-    await Promise.all(EXPORTED_ENTITIES.map(async (entityName) => {
-      try {
-        const entity = (sr.entities as unknown as Record<string, { filter(q: Record<string, unknown>): Promise<unknown> }>)[entityName];
-        data[entityName] = await entity.filter({ school_id: schoolId });
-      } catch (e) {
-        errors[entityName] = (e as Error).message;
-      }
-    }));
+    // Every row, paged; what could not be read whole is named, not hidden.
+    const exported = await readSchoolExport(sr, schoolId, EXPORTED_ENTITIES);
 
     // The deletion may have started while the school was being read.
     const gate = await finalExportGate(sr, String(user.id));
@@ -80,8 +71,10 @@ Deno.serve(async (req) => {
       ok: true,
       exported_at: new Date().toISOString(),
       school,
-      data,
-      errors: Object.keys(errors).length ? errors : undefined,
+      data: exported.data,
+      complete: exported.complete,
+      incomplete: exported.incomplete,
+      errors: Object.keys(exported.errors).length ? exported.errors : undefined,
     });
   } catch (e) {
     return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });

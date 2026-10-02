@@ -1,5 +1,6 @@
 import { base44 } from '@/api/base44Client';
 import { invokeFunction } from '@/lib/functionResponse';
+import { exportCompleteness } from './schoolExportStatus';
 
 /**
  * "Descargar datos de la escuela": asks exportSchoolData (ACTIVE ADMIN only,
@@ -10,6 +11,8 @@ import { invokeFunction } from '@/lib/functionResponse';
  * school takes its data with it ("nothing is held hostage"), and the sole
  * director who declines the new texts is exactly who needs it before asking
  * for the school to be deleted. Throws on failure; callers show the toast.
+ * Returns { complete, missing } (exportCompleteness): an incomplete file is
+ * still downloaded, but callers must say it is not a full backup.
  */
 export async function downloadSchoolExport(schoolId) {
   const payload = await invokeFunction(base44, 'exportSchoolData', {});
@@ -23,4 +26,5 @@ export async function downloadSchoolExport(schoolId) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+  return exportCompleteness(payload);
 }

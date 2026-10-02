@@ -199,8 +199,8 @@ Buen Gobierno.
 | Entidad | Wix.com Ltd. y filiales operan Base44; términos bajo ley de Nueva York | [Términos](https://base44.com/terms-of-service), [DPA](https://base44.com/dpa) |
 | Rol | «Company shall be considered your processor, and in no event shall be considered as the controller of the data.» | [DPA](https://base44.com/dpa) |
 | Subencargados | MongoDB (US, almacenamiento), SendGrid (US, correo), Render (US, servidores), Google Cloud (US, analítica), OpenAI (US, LLM), Anthropic (US, LLM), Wix.com Ltd. (Israel), Supabase (US, archivos), Datadog (US, registros) | [DPA Exhibit C](https://base44.com/dpa/exhibitc) |
-| Más subencargados | Langfuse (Alemania, «LLM logging») | [Seguridad](https://base44.com/security) |
-| Modelos de IA para agentes | «Automatic» (por defecto), Google Gemini, OpenAI GPT, Anthropic Claude, GLM | [Agentes de IA](https://docs.base44.com/Building-your-app/AI-agents-for-apps) |
+| Más subencargados | Langfuse (DE, «LLM logging») y Logfire (UK, «General logging purposes»): la página de seguridad los lista y el Exhibit C no | [Seguridad](https://base44.com/security) |
+| Modelos de IA para agentes | «Automatic» (por defecto; «picks a fast, general-purpose model for each message»), Google Gemini, OpenAI GPT, Anthropic Claude, GLM (modelo de Z.ai). No publica qué modelo elige «Automatic» ni quién ejecuta GLM ni dónde | [Agentes de IA](https://docs.base44.com/Building-your-app/AI-agents-for-apps) |
 | Región | «Base44 stores your app data in the US by default»; servidores en EE. UU. | [Seguridad](https://base44.com/security), [Privacidad y seguridad](https://docs.base44.com/Community-and-support/Privacy-and-security) |
 | Certificaciones | SOC 2 Type II e ISO 27001 | [Seguridad](https://base44.com/security); también lo dice el sitio de ACACIA |
 | Cifrado | TLS 1.2+ en tránsito, AES-256 en reposo, incluidos respaldos | [Seguridad](https://base44.com/security) |
@@ -214,8 +214,11 @@ grabación de sesiones de la app LIUMA (`696e967c430ceb6a2232ffd8`) está
 **apagada** (`enabled: false`). El aviso dice que LIUMA no graba sesiones. En
 el repo, Lumi corre con `"model": "automatic"` (`base44/agents/lumi.jsonc`), así
 que Base44 elige el proveedor en cada mensaje: el aviso nombra a los tres que
-Base44 publica para agentes (Anthropic, Google, OpenAI). El kit de Base44
-(`@base44/sdk`, módulo `analytics`) envía métricas de sesión y guarda
+Base44 publica para agentes (Anthropic, Google, OpenAI) y menciona aparte GLM
+(Z.ai), sin atribuirle país, porque Base44 no publica quién lo ejecuta ni dónde.
+El kit de Base44
+(`@base44/sdk`, módulo `analytics`) envía métricas de sesión (incluida la ruta de cada pantalla y la página de
+procedencia) y guarda
 `base44_analytics_session_id` en el navegador; el aviso lo declara.
 
 **Consecuencia para el texto.** El borrador prometía que el proveedor no
@@ -266,3 +269,36 @@ exclusión por escrito de Base44).
    responsable. La página pública no puede mostrar los de cada escuela (no hay
    sesión); los Términos obligan a la escuela a poner el aviso a disposición con
    su nombre y domicilio.
+
+## Revisión adversarial (2026-10-02)
+
+Se releyó cada artículo citado contra el texto vigente de la Cámara de
+Diputados (LFPDPPP, CCF, CCom, LFPC, CFF) y las páginas de Base44. Cambió:
+
+- **Art. 36 (transferencias sin consentimiento).** El aviso ponía como ejemplo
+  «una autoridad competente con orden fundada y motivada», que es el art. 9
+  fr. VII (excepciones al *consentimiento*), no un supuesto del art. 36. Ahora
+  cita los del art. 36: ley o tratado del que México sea parte (I), atención
+  médica (II), procuración o administración de justicia (V) y defensa de un
+  derecho en juicio (VI).
+- **Art. 35.** El receptor asume las obligaciones «que correspondan al
+  responsable que transfirió los datos», no «las de este aviso».
+- **Logfire (Reino Unido)** está en la lista de subencargados de
+  [base44.com/security](https://base44.com/security) y faltaba; el Reino Unido
+  se suma a los países de transferencia.
+- **GLM (Z.ai)** está entre los modelos que Base44 ofrece para agentes y el
+  aviso lo omitía. Como Base44 no publica qué modelo elige «Automatic» ni quién
+  ejecuta GLM ni dónde, el aviso lo dice así, sin inventar un país.
+- Almacenamiento del navegador: faltaba el identificador de la conversación
+  abierta con Lumi (`sessionStorage`); métricas del kit: la página de
+  procedencia (`document.referrer`).
+
+Se confirmó sin cambios: arts. 2 (III, VI, VIII, XII, XV, XX), 7, 8, 9 IV, 10,
+11, 12, 15, 16 II, 18, 19, 20, 24, 26 II, 28, 31, 34, 40, 53, 59 y 61 de la
+LFPDPPP; CCF 425, 1159, 1916, 1934, 2106, 2110, 2111 y 2117; CCom 1047 y 1093;
+LFPC 2 fr. I y 90; CFF 30. Los plazos del ciclo de licencia (8 / 15 / 45 días)
+coinciden con `liuma.lifecycle` de Mission Control, que excluye las pruebas
+(por eso «no se borra nada por vencer la prueba» es correcto). Los Términos
+dicen que una renovación impagada «pasa a solo lectura» sin mencionar los 8
+días de gracia que Mission Control sí da: promete menos de lo que la app hace,
+que es la dirección segura, y se dejó así.

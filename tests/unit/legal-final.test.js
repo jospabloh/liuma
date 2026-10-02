@@ -209,3 +209,20 @@ test('Mexican law and the courts of Aguascalientes, Ags.', () => {
   assert.match(clause, /tribunales competentes de la ciudad de Aguascalientes, Aguascalientes/);
   assert.match(clause, /Código de Comercio, art\. 1093/);
 });
+
+// ── Adversarial review (2026-10-02): what the first final text got wrong ─────
+
+test('every subprocessor country and model option Base44 publishes is disclosed', () => {
+  // base44.com/security lists Logfire (UK) next to Langfuse (DE); the agent
+  // docs list GLM next to Claude, Gemini and GPT.
+  assert.match(aviso, /Logfire/);
+  assert.match(aviso, /Reino Unido/);
+  assert.match(aviso, /GLM/);
+});
+
+test('art. 36 examples are art. 36 cases, not the art. 9 consent exceptions', () => {
+  const transfers = PRIVACY_NOTICE.sections.find((s) => s.id === 'remisiones').items.join('\n');
+  assert.doesNotMatch(transfers, /orden fundada y motivada/, 'that is art. 9 fr. VII, not art. 36');
+  assert.match(transfers, /art\. 36 de la Ley/);
+  assert.match(transfers, /procuración o administración de justicia/);
+});

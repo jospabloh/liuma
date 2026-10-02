@@ -102,12 +102,20 @@ export const BASE44_AI_TRAINING_EXCLUDED = false;
 // with model "automatic" (base44/agents/lumi.jsonc), so Base44 — not LIUMA —
 // picks the model per message. Anthropic and OpenAI are in Base44's DPA
 // sub-processor list (base44.com/dpa/exhibitc); Google Gemini is a model
-// option in its agent docs. Base44 also lists "GLM" as an agent model option.
+// option in its agent docs. Base44 also lists "GLM" (Z.ai's model) as an agent
+// model option, but does not say who runs it, where, or whether "Automatic"
+// ever picks it — so the notice names GLM in a sentence (GLM_DISCLOSURE)
+// instead of claiming a provider and a country it cannot source.
 export const AI_MODEL_PROVIDERS = [
   { name: 'Anthropic', models: 'Claude', location: 'Estados Unidos' },
   { name: 'Google', models: 'Gemini', location: 'Estados Unidos' },
   { name: 'OpenAI', models: 'GPT', location: 'Estados Unidos' },
 ];
+
+// docs.base44.com/Building-your-app/AI-agents-for-apps (read 2026-10-02):
+// "Automatic […] picks a fast, general-purpose model for each message"; the
+// options listed include GLM next to the Claude, Gemini and GPT models.
+const GLM_DISCLOSURE = 'Base44 ofrece además el modelo GLM (desarrollado por Z.ai) entre sus opciones, y no publica qué modelo elige en cada mensaje ni, en el caso de GLM, qué empresa lo ejecuta ni en qué país.';
 
 function aiProviderNames() {
   return AI_MODEL_PROVIDERS.map((p) => p.name + ' (' + p.models + ')').join(', ');
@@ -120,8 +128,8 @@ function aiProviderNames() {
 export const DATA_PROCESSORS = [
   {
     name: 'Base44',
-    role: 'Plataforma en la nube (operada por Wix.com Ltd. y sus filiales) donde se ejecuta LIUMA: aloja la base de datos y los archivos, ejecuta las funciones del servidor, envía los correos y da acceso a los modelos de inteligencia artificial. Certificaciones publicadas: SOC 2 Tipo II e ISO/IEC 27001. Sus propios subencargados, según su lista pública: MongoDB (almacenamiento de datos), Render (servidores), Supabase (archivos y fotografías), SendGrid (envío de correo), Google Cloud (analítica), Datadog (registros técnicos), Langfuse (registros de solicitudes a modelos de IA, Alemania), Anthropic y OpenAI (modelos de IA) y Wix.com Ltd. (Israel).',
-    location: 'Estados Unidos (servidores); Israel y Alemania (algunos subencargados)',
+    role: 'Plataforma en la nube (operada por Wix.com Ltd. y sus filiales) donde se ejecuta LIUMA: aloja la base de datos y los archivos, ejecuta las funciones del servidor, envía los correos y da acceso a los modelos de inteligencia artificial. Certificaciones publicadas: SOC 2 Tipo II e ISO/IEC 27001. Sus propios subencargados, según su lista pública: MongoDB (almacenamiento de datos), Render (servidores), Supabase (archivos y fotografías), SendGrid (envío de correo), Google Cloud (analítica), Datadog (registros técnicos), Logfire (registros técnicos, Reino Unido), Langfuse (registros de solicitudes a modelos de IA, Alemania), Anthropic y OpenAI (modelos de IA) y Wix.com Ltd. (Israel).',
+    location: 'Estados Unidos (servidores); Israel, Alemania y Reino Unido (algunos subencargados)',
   },
   {
     name: 'Anthropic',
@@ -294,7 +302,7 @@ export const PRIVACY_NOTICE = {
         'Personal de la escuela: además de su cuenta, salones asignados, permisos individuales, cambios de rol pendientes de aprobación y las tareas, avisos y documentos que publica.',
         'Datos de la escuela: nombre, domicilio, teléfono, correo, logotipo, código para unirse, licencia de la escuela, menú semanal, conceptos de cobro, documentos oficiales y su guía de configuración.',
         'Uso de la app: avisos y sus entregas de avisos y confirmaciones de lectura, respuestas a eventos, tickets de soporte y sus mensajes, y lo que escribes a Lumi.',
-        'Datos técnicos: sesiones activas (tipo de navegador y sistema operativo), métricas de uso que el kit de Base44 registra (inicio y duración de la sesión, pantallas visitadas, sin su contenido), la bitácora de auditoría de acciones sensibles (que puede incluir la dirección IP), la constancia de tu consentimiento y, cuando abres un ticket de soporte, un diagnóstico técnico (pantalla, versión de la app, navegador y eventos recientes). LIUMA no graba las sesiones ni la pantalla.',
+        'Datos técnicos: sesiones activas (tipo de navegador y sistema operativo), métricas de uso que el kit de Base44 registra (inicio y duración de la sesión, pantallas visitadas y página de procedencia, sin su contenido), la bitácora de auditoría de acciones sensibles (que puede incluir la dirección IP), la constancia de tu consentimiento y, cuando abres un ticket de soporte, un diagnóstico técnico (pantalla, versión de la app, navegador y eventos recientes). LIUMA no graba las sesiones ni la pantalla.',
         'Datos patrimoniales: los cargos y pagos escolares (montos, fechas, forma de pago y referencia) son datos patrimoniales de la familia. La escuela los trata para cumplir la relación que tiene con la familia, que no requiere un consentimiento adicional (arts. 7 y 9, fracción IV de la Ley). LIUMA no guarda números de tarjeta ni de cuenta bancaria.',
       ],
     },
@@ -327,7 +335,7 @@ export const PRIVACY_NOTICE = {
       id: 'ia',
       heading: '5. Asistente de inteligencia artificial (Lumi)',
       paragraphs: [
-        'LIUMA incluye un asistente, Lumi, que pueden usar familias, maestros y dirección, y funciones de redacción asistida para el personal. Cuando los usas, el texto de tu solicitud y la información de la escuela necesaria para responderla (que puede incluir datos del alumno, incluidos sus datos de salud si la pregunta trata de ellos) se envían, a través de Base44, a un modelo de inteligencia artificial para generar la respuesta. Base44 elige el modelo en cada mensaje entre los proveedores que publica: ' + aiProviderNames() + '. Lumi sólo consulta lo que tu rol te permite ver en LIUMA.',
+        'LIUMA incluye un asistente, Lumi, que pueden usar familias, maestros y dirección, y funciones de redacción asistida para el personal. Cuando los usas, el texto de tu solicitud y la información de la escuela necesaria para responderla (que puede incluir datos del alumno, incluidos sus datos de salud si la pregunta trata de ellos) se envían, a través de Base44, a un modelo de inteligencia artificial para generar la respuesta. Base44 elige el modelo en cada mensaje; los proveedores de modelos que publica son ' + aiProviderNames() + '. ' + GLM_DISCLOSURE + ' Lumi sólo consulta lo que tu rol te permite ver en LIUMA.',
         'Las conversaciones con Lumi se guardan en tu cuenta para que puedas retomarlas, y se suprimen con ella.',
         trainingParagraph(),
         'Lumi no toma decisiones por ti ni sobre ti: sus respuestas son de apoyo y no sustituyen el criterio médico, los protocolos de emergencia de la escuela ni la información oficial que publica la escuela (art. 26, fracción II de la Ley).',
@@ -341,8 +349,8 @@ export const PRIVACY_NOTICE = {
       ],
       processors: true,
       items: [
-        'Transferencias internacionales: los servidores de Base44 están en Estados Unidos; algunos subencargados de Base44 operan desde Israel (Wix.com Ltd.) y Alemania (Langfuse). Los datos de LIUMA se almacenan y procesan en esos países con las medidas descritas en la sección 11.',
-        'Transferencias a terceros: los datos sólo se transfieren sin tu consentimiento en los casos del art. 36 de la Ley, por ejemplo cuando lo exige una ley o un tratado, una autoridad competente con orden fundada y motivada, o cuando es necesario para la atención médica de un alumno en una emergencia. Quien reciba los datos asume las mismas obligaciones que este aviso (art. 35 de la Ley).',
+        'Transferencias internacionales: los servidores de Base44 están en Estados Unidos; algunos subencargados de Base44 operan desde Israel (Wix.com Ltd.), Alemania (Langfuse) y el Reino Unido (Logfire). Los datos de LIUMA se almacenan y procesan en esos países con las medidas descritas en la sección 11.',
+        'Transferencias a terceros: los datos sólo se transfieren sin tu consentimiento en los casos del art. 36 de la Ley, por ejemplo cuando la prevé una ley o un tratado del que México sea parte, cuando es necesaria para la atención médica de un alumno, para la procuración o administración de justicia, o para la defensa de un derecho en un proceso judicial. Quien reciba los datos asume las mismas obligaciones que corresponden a quien se los transfirió (art. 35 de la Ley).',
       ],
       closing: 'La escuela y ACACIA no transfieren datos a terceros para fines propios de esos terceros.',
     },
@@ -403,7 +411,7 @@ export const PRIVACY_NOTICE = {
       id: 'cookies',
       heading: '12. Almacenamiento en tu navegador',
       paragraphs: [
-        'LIUMA guarda en tu navegador (almacenamiento local y de sesión) sólo lo necesario para funcionar: tu sesión, un identificador de sesión para las métricas técnicas de Base44, tu preferencia de tema (claro, oscuro o del sistema), la última cuenta con la que entraste, el código de escuela de una invitación mientras te registras, por unos minutos la licencia de tu escuela, y una marca técnica para recargar la app después de una actualización. No usa cookies de publicidad ni de rastreo de terceros. Puedes borrarlo desde la configuración de tu navegador; tendrás que volver a iniciar sesión.',
+        'LIUMA guarda en tu navegador (almacenamiento local y de sesión) sólo lo necesario para funcionar: tu sesión, un identificador de sesión para las métricas técnicas de Base44, el identificador de la conversación abierta con Lumi, tu preferencia de tema (claro, oscuro o del sistema), la última cuenta con la que entraste, el código de escuela de una invitación mientras te registras, por unos minutos la licencia de tu escuela, y una marca técnica para recargar la app después de una actualización. No usa cookies de publicidad ni de rastreo de terceros. Puedes borrarlo desde la configuración de tu navegador; tendrás que volver a iniciar sesión.',
       ],
     },
     {

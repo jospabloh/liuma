@@ -13,6 +13,14 @@
         "write": false
       }
     },
+    "account_deleted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "La persona eliminó su cuenta («Eliminar mi cuenta y mis datos», deleteMyAccount, v1.9.0). La función la marca ANTES de intentar quitar al usuario de la app; si Base44 no lo quita, esta marca hace que la app muestre «Cuenta eliminada» y que provisionOnboardingProfile/myConsent respondan ACCOUNT_DELETED hasta que ACACIA lo quite en el panel. write:false: sólo el service role la escribe.",
+      "rls": {
+        "write": false
+      }
+    },
     "app_role": {
       "type": "string",
       "description": "Rol de app del usuario (ADMIN/TEACHER/PARENT), leído por RLS como user_condition data.app_role (SchoolSubscription.read). Nadie lo escribe hoy: el rol vive en UserProfile. write:false para que nadie se dé ADMIN a sí mismo con updateMe (módulo 24 del estándar).",

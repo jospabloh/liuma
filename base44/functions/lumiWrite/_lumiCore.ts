@@ -525,6 +525,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   INACTIVE_PROFILE: 'Tu perfil en la escuela todavía no está activo; la dirección debe aprobarlo.',
   NO_SCHOOL: 'Tu perfil no está ligado a una escuela.',
   INVALID_ROLE: 'Tu perfil no tiene un rol válido.',
+  CONSENT_REQUIRED: 'Antes de seguir, acepta la versión vigente del Aviso de Privacidad y los Términos: cierra este chat y recarga LIUMA.',
   NOT_ALLOWED_FOR_ROLE: 'Esa consulta no está disponible para tu rol.',
   UNKNOWN_INTENT: 'No conozco esa consulta.',
   UNKNOWN_KIND: 'Sólo puedo registrar asistencia o bitácoras.',

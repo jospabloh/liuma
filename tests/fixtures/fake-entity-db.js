@@ -33,7 +33,24 @@ function matches(row, query) {
   });
 }
 
+// The world these fixtures model is one where every member has accepted the
+// CURRENT Aviso de Privacidad and Términos (v1.9.0): schoolRead and the write
+// paths refuse a profile without that stamp (CONSENT_REQUIRED). A UserProfile
+// row that does not mention the stamp gets it; a test about the consent rule
+// itself sets `consent_notice_version` explicitly (even to undefined) and is
+// left alone. The versions come from the one client source.
+import { PRIVACY_NOTICE_VERSION, SERVICE_TERMS_VERSION } from '../../src/lib/consent/privacyNotice.js';
+
+export function withConsentStamp(profile) {
+  if (!profile || typeof profile !== 'object' || 'consent_notice_version' in profile) return profile;
+  return { ...profile, consent_notice_version: PRIVACY_NOTICE_VERSION, consent_terms_version: SERVICE_TERMS_VERSION };
+}
+
 export function makeFakeDb(tables) {
+  if (Array.isArray(tables?.UserProfile)) {
+    // In place: a test may hold the very row objects it seeded.
+    for (const row of tables.UserProfile) Object.assign(row, withConsentStamp(row));
+  }
   const calls = [];
   // Every create/update/delete, in order (P10b write-path tests).
   const writes = [];

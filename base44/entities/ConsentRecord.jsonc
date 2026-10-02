@@ -53,18 +53,35 @@
     },
     "source": {
       "type": "string",
-      "description": "Dónde se capturó (hoy siempre 'onboarding')."
+      "description": "Dónde se capturó: 'onboarding' (provisionOnboardingProfile), 'reacceptance' (pantalla de consentimiento obligatoria, myConsent) o 'account_deletion' (retiro al eliminar la cuenta, deleteMyAccount)."
+    },
+    "event": {
+      "type": "string",
+      "enum": [
+        "ACCEPTED",
+        "WITHDRAWN"
+      ],
+      "description": "ACCEPTED = otorgó el consentimiento (los registros anteriores a v1.9.0 no traen el campo y son aceptaciones); WITHDRAWN = lo retiró al eliminar su cuenta. Lo vigente es el registro más reciente por usuario y escuela."
+    },
+    "withdrawn_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Momento del retiro (event WITHDRAWN), con el reloj del SERVIDOR."
     }
   },
+  // accepted_at dejó de ser obligatorio en v1.9.0: un retiro (WITHDRAWN) lleva
+  // withdrawn_at y no una aceptación. Las funciones que escriben ACCEPTED lo
+  // siguen poniendo siempre.
   "required": [
     "user_id",
     "school_id",
-    "notice_version",
-    "accepted_at"
+    "notice_version"
   ],
   // Append-only prueba de consentimiento (LFPDPPP, solicitudes ARCO / autoridad).
-  // Sólo provisionOnboardingProfile lo escribe, con service role (que no pasa
-  // por RLS), y el onboarding FALLA si no se pudo guardar — sin registro no hay
+  // Lo escriben sólo funciones con service role (que no pasa por RLS):
+  // provisionOnboardingProfile (el onboarding FALLA si no se pudo guardar),
+  // myConsent (la re-aceptación; sin registro no se marca el perfil) y
+  // deleteMyAccount (el retiro, ANTES de borrar nada). Sin registro no hay
   // consentimiento que acreditar. Nadie lo edita ni lo borra: el centinela
   // __service_role_only__ no lo tiene ningún usuario (módulo 24 del estándar).
   // Lectura: la plataforma, y cada usuario sus propios registros (derecho de

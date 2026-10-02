@@ -60,6 +60,10 @@ export const ACTION_TIER: Record<string, string> = {
   RECORD_CREATED: 'SERVER',
   RECORD_UPDATED: 'SERVER',
   RECORD_DELETED: 'SERVER',
+  // deleteMyAccount writes these (v1.9.0); a client claiming them would be
+  // forging the evidence of a withdrawal.
+  PRIVACY_CONSENT_WITHDRAWN: 'SERVER',
+  ACCOUNT_DELETED: 'SERVER',
 };
 
 export const MAX_DETAILS_CHARS = 16000;

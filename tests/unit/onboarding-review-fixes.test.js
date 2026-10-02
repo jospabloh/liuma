@@ -30,7 +30,7 @@ test('functions.invoke resolves to the axios response: call sites read the body 
   for (const [file, fn] of [
     ['src/hooks/useSubscription.js', 'getMySubscription'],
     ['src/lib/onboardingTenantCreation.js', 'provisionOnboardingProfile'],
-    ['src/pages/PermisosRoles.jsx', 'exportSchoolData'],
+    ['src/lib/account/schoolExport.js', 'exportSchoolData'], // shared by PermisosRoles and EliminarCuenta (v1.9.0)
   ]) {
     // Since integration: invokeFunction (src/lib/functionResponse.js) is the one wrapper.
     assert.match(code(file), new RegExp(`invokeFunction\\(base44, '${fn}'`), `${file} unwraps ${fn}`);

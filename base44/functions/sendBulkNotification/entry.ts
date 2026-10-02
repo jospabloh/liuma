@@ -66,6 +66,18 @@ const SUPPORT_EMAIL = 'soporte@acaciaco.com.mx';
 const CONCURRENCY = 8;
 const SEND_ATTEMPTS = 2;
 const MAX_RECIPIENTS = 2000;
+
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
 const MAX_MESSAGE_LEN = 2000;
 const MAX_DESCRIPTION_LEN = 4000;
 const DELIVERY_CHUNK = 100;
@@ -123,6 +135,9 @@ async function requireActiveAdmin(sr: Any, user: Any, schoolId: string) {
   const profiles: Any[] = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId }, '-created_date');
   const admin = profiles.find((p) => p.app_role === 'ADMIN' && p.status === 'ACTIVE');
   if (!admin) throw new HttpError(403, 'NOT_ADMIN', 'Requires an active ADMIN profile in this school');
+  // Mailing a school's families is processing their data: not before the
+  // director accepted the texts in force (v1.9.0).
+  if (!profileConsentIsCurrent(admin)) throw new HttpError(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
   return admin;
 }
 
@@ -434,7 +449,10 @@ async function planEscalation(sr: Any, user: Any, body: Any): Promise<Plan | { s
   let isSchoolAdmin = false;
   if (!isOwner) {
     const profiles: Any[] = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: ticket.school_id });
-    isSchoolAdmin = profiles.some((p) => p.app_role === 'ADMIN' && p.status === 'ACTIVE');
+    // Staff standing needs the current consent (v1.9.0); the requester of the
+    // ticket does not — a ticket is how someone who declined asks for help
+    // (guardedEntityWrite/_policy.ts#consentExempt).
+    isSchoolAdmin = profiles.some((p) => p.app_role === 'ADMIN' && p.status === 'ACTIVE' && profileConsentIsCurrent(p));
     const isActiveRequester = isRequester && profiles.some((p) => p.status === 'ACTIVE');
     if (!isSchoolAdmin && !isActiveRequester) {
       throw new HttpError(403, 'FORBIDDEN', 'Only the requester or an admin of the ticket\'s school may notify it');

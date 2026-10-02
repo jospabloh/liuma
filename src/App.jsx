@@ -18,6 +18,7 @@ import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import Login from '@/pages/Login';
+import ConsentGate from '@/components/consent/ConsentGate';
 import { PRIVACY_NOTICE, SERVICE_TERMS } from '@/lib/legal/legalDocs';
 
 const LegalDocumentPage = React.lazy(() => import('@/components/legal/LegalDocumentPage'));
@@ -106,8 +107,11 @@ const AuthenticatedApp = () => {
     }
   }
 
-  // Render the main app
+  // Render the main app — behind the mandatory consent screen (v1.9.0): a
+  // profile without the current Aviso/Términos acceptance sees ConsentGate's
+  // screen (or the account-deletion page it leads to) and nothing else.
   return (
+    <ConsentGate>
     <Routes>
       <Route path="/" element={
         <LayoutWrapper currentPageName={mainPageKey}>
@@ -137,6 +141,7 @@ const AuthenticatedApp = () => {
       ))}
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    </ConsentGate>
   );
 };
 

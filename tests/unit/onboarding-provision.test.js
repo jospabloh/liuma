@@ -47,7 +47,8 @@ test('invalid role and missing school are rejected', () => {
 });
 
 test('upsert creates a full profile for a new user and never sets is_super_admin', () => {
-  const upsert = buildOnboardingUpsert({ user: founder, schoolId: 's1', phone: '555', appRole: 'ADMIN', status: 'ACTIVE', existingProfile: null });
+  const now = new Date('2026-10-02T15:00:00.000Z');
+  const upsert = buildOnboardingUpsert({ user: founder, schoolId: 's1', phone: '555', appRole: 'ADMIN', status: 'ACTIVE', existingProfile: null, now });
   assert.equal(upsert.action, 'create');
   assert.deepEqual(upsert.payload, {
     user_id: 'u-founder',
@@ -56,6 +57,10 @@ test('upsert creates a full profile for a new user and never sets is_super_admin
     status: 'ACTIVE',
     phone: '555',
     onboarding_completed: true,
+    // v1.9.0: the consent the server just recorded, stamped on the profile.
+    consent_notice_version: '2026-10-02',
+    consent_terms_version: '2026-10-02',
+    consent_accepted_at: '2026-10-02T15:00:00.000Z',
   });
   assert.equal('is_super_admin' in upsert.payload, false);
 });
@@ -68,10 +73,17 @@ test('upsert on an existing profile never rewrites app_role or status', () => {
     appRole: 'PARENT',
     status: 'PENDING',
     existingProfile: { id: 'p-existing', app_role: 'ADMIN', status: 'ACTIVE' },
+    now: new Date('2026-10-02T15:00:00.000Z'),
   });
   assert.equal(upsert.action, 'update');
   assert.equal(upsert.id, 'p-existing');
-  assert.deepEqual(upsert.payload, { phone: '', onboarding_completed: true });
+  assert.deepEqual(upsert.payload, {
+    phone: '',
+    onboarding_completed: true,
+    consent_notice_version: '2026-10-02',
+    consent_terms_version: '2026-10-02',
+    consent_accepted_at: '2026-10-02T15:00:00.000Z',
+  });
   assert.equal('app_role' in upsert.payload, false);
   assert.equal('status' in upsert.payload, false);
 });

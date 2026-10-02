@@ -432,7 +432,7 @@ test('a rate limit leaves every read function as 429 RATE_LIMITED with Retry-Aft
   assert.match(entry, /isRateLimitError\(e\)/);
   assert.match(entry, /status: 429, headers: \{ 'Retry-After'/);
   const canonical = read('base44/functions/schoolRead/_answer.ts').match(/export function isRateLimitError[\s\S]*?\n\}/)[0].replace('export ', '');
-  for (const fn of ['getMySubscription', 'guardedEntityWrite', 'guardedFamilyWrite', 'listSchoolMembers']) {
+  for (const fn of ['getMySubscription', 'guardedEntityWrite', 'guardedFamilyWrite', 'listSchoolMembers', 'myConsent', 'deleteMyAccount']) {
     const source = read(`base44/functions/${fn}/entry.ts`);
     assert.ok(source.includes(canonical), `${fn}: isRateLimitError drifted from schoolRead/_answer.ts`);
     assert.match(source, /code: 'RATE_LIMITED'[\s\S]*?status: 429/, fn);

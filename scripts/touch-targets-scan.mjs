@@ -34,16 +34,25 @@ const USERS = {
   // full_name is the email handle and there is no display_name: the
   // "¿Cómo te llamas?" dialog opens by itself for this one.
   NAMELESS: { id: 'uN', email: 'h.prueba+qa-padre@example.invalid', full_name: 'h.prueba+qa-padre', role: 'user' },
+  // Signed up before v1.9.0: no consent to the texts in force. Sees only the
+  // mandatory consent screen (and, after "No acepto", the deletion page).
+  UNCONSENTED: { id: 'uU', email: 'madre@example.invalid', full_name: 'Mamá Prueba', display_name: 'Rosa', role: 'user' },
+  // Joined with a code (consented at onboarding), waiting for approval: has
+  // no menu, and must still reach "Eliminar mi cuenta y mis datos".
+  PENDING: { id: 'uW', email: 'tutor@example.invalid', full_name: 'Tutor Prueba', display_name: 'Luis', role: 'user' },
 };
-const ROLE_OF = { ADMIN: 'ADMIN', TEACHER: 'TEACHER', PARENT: 'PARENT', NAMELESS: 'PARENT' };
+const ROLE_OF = { ADMIN: 'ADMIN', TEACHER: 'TEACHER', PARENT: 'PARENT', NAMELESS: 'PARENT', UNCONSENTED: 'PARENT', PENDING: 'PARENT' };
+// MIRRORS src/lib/consent/privacyNotice.js (the stamp schoolRead checks).
+const CONSENT_STAMP = { consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02' };
 const kids = ['Ana', 'Bruno', 'Carla', 'Diego', 'Elena', 'Fernando', 'Gabriela', 'Hugo', 'Isabel'];
 
 function fixtures() {
   return {
     School: [{ id: S, name: 'Escuela de prueba', join_code: 'ABCD-EFGH', created_date: C, settings: {} }],
     UserProfile: Object.entries(USERS).map(([k, u]) => ({
-      id: `up_${k}`, user_id: u.id, school_id: S, app_role: ROLE_OF[k], status: 'ACTIVE',
+      id: `up_${k}`, user_id: u.id, school_id: S, app_role: ROLE_OF[k], status: k === 'PENDING' ? 'PENDING' : 'ACTIVE',
       onboarding_completed: true, welcome_message_shown: true, created_date: C, full_name: u.full_name, email: u.email,
+      ...(k === 'UNCONSENTED' ? {} : CONSENT_STAMP),
     })),
     Classroom: [
       { id: 'c1', school_id: S, name: 'Salón 1', grade: 'Kínder 2', is_active: true, created_date: C },
@@ -129,6 +138,17 @@ async function mockBackend(ctx, who) {
       if (fn === 'getMySubscription') return json({ ok: true, subscription: db.SchoolSubscription[0], effective: { status: 'trial', isReadOnly: false, reason: 'trial' }, school: db.School[0] });
       if (fn === 'listSchoolMembers') return json({ ok: true, users: Object.values(USERS).map((u) => ({ id: u.id, full_name: u.display_name || u.full_name, email: u.email })) });
       if (fn === 'guardedEntityWrite' || fn === 'guardedFamilyWrite') return json({ ok: true, record: { id: `mock_${Date.now()}`, ...(body.data || {}) } });
+      if (fn === 'myConsent') {
+        const mine = db.UserProfile.find((x) => x.user_id === me.id);
+        if (body.action === 'accept') Object.assign(mine, CONSENT_STAMP);
+        const current = mine?.consent_notice_version === CONSENT_STAMP.consent_notice_version;
+        return json({ ok: true, required: !current, hasProfile: Boolean(mine), role, noticeVersion: '2026-10-02', termsVersion: '2026-10-02', acceptedVersion: mine?.consent_notice_version || null });
+      }
+      if (fn === 'deleteMyAccount') {
+        // The fixture school has one director: the ADMIN is its only one.
+        const sole = role === 'ADMIN';
+        return json({ ok: true, platformOwner: false, hasProfile: true, role, soleAdmin: sole, soleAdminSchools: sole ? [{ id: S, name: db.School[0].name }] : [] });
+      }
       return json({ ok: true, sent: 0, total: 0 });
     }
     if (/\/agents\/conversations/.test(p)) return json(req.method() === 'GET' && /conversations\/?$/.test(p) ? [] : { id: 'conv1', messages: [] });
@@ -142,6 +162,8 @@ const SCREENS = {
   TEACHER: ['Home', 'Asistencia', 'CrearBitacora', 'BitacorasMaestro', 'TareaMaestro', 'AvisosMaestro', 'GestionSalon', 'CalendarioEscolar', 'Soporte'],
   PARENT: ['Home', 'MisHijos', 'Avisos', 'Tarea', 'Bitacora', 'Asistencia', 'Pagos', 'SolicitarAusencia', 'EventosParaPadres', 'PedidosUniformes', 'ContactosEmergencia', 'CalendarioEscolar', 'Soporte'],
 };
+// Every role reaches "Eliminar mi cuenta y mis datos" from its menu (v1.9.0).
+for (const list of Object.values(SCREENS)) list.push('EliminarCuenta');
 
 // Runs in the page. Returns every interactive element under MIN x MIN that a
 // finger cannot hit across a MIN x MIN square.
@@ -280,6 +302,33 @@ async function main() {
           await page.waitForTimeout(500);
           record(width, who, 'toast', await measure(page, MIN), []);
         }
+        await ctx.close();
+      }
+      // The mandatory consent screen (v1.9.0) and, after "No acepto", the
+      // deletion page it leads to — both without the Layout.
+      {
+        const { ctx, page, errors } = await openContext(browser, width, 'UNCONSENTED');
+        await page.goto(`${base}/Home`);
+        await settle(page);
+        const gated = await page.getByRole('heading', { name: 'Antes de continuar' }).count();
+        record(width, 'UNCONSENT', `consent screen (${gated ? 'shown' : 'NOT SHOWN'})`, await measure(page, MIN), errors);
+        await page.getByRole('button', { name: 'No acepto' }).click();
+        await settle(page);
+        record(width, 'UNCONSENT', 'deletion page (gated)', await measure(page, MIN), errors);
+        await ctx.close();
+      }
+      // Waiting for approval: the pending screen, and its way to the deletion
+      // page (OWN_ACCOUNT_ROUTES lets a PENDING profile open it).
+      {
+        const { ctx, page, errors } = await openContext(browser, width, 'PENDING');
+        await page.goto(`${base}/Home`);
+        await settle(page);
+        const pending = await page.getByRole('heading', { name: 'Solicitud enviada' }).count();
+        record(width, 'PENDING', `pending screen (${pending ? 'shown' : 'NOT SHOWN'})`, await measure(page, MIN), errors);
+        await page.getByRole('link', { name: 'Eliminar mi cuenta y mis datos' }).click();
+        await settle(page);
+        const reached = await page.getByRole('heading', { name: 'Confirmar la eliminación' }).count();
+        record(width, 'PENDING', `deletion page (${reached ? 'reached' : 'NOT REACHED'})`, await measure(page, MIN), errors);
         await ctx.close();
       }
       // The one-time "¿Cómo te llamas?" dialog.

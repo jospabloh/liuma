@@ -18,6 +18,8 @@ const CHANGES = [
       'Lumi ya no te ofrece cosas que tu rol no puede hacer ni especula sobre cambios de rol.',
       'El Aviso de Privacidad y los Términos ya son definitivos: dicen quién es responsable de tus datos, qué se guarda, por cuánto tiempo y con qué proveedores.',
       'En el teléfono, los botones pequeños (tema, cerrar avisos, enlaces, días del calendario) ahora son más fáciles de tocar.',
+      'La próxima vez que entres, LIUMA te pedirá aceptar el Aviso de Privacidad y los Términos vigentes. Es obligatorio para seguir usando la app.',
+      'Nueva opción «Eliminar mi cuenta y mis datos», en el menú de todos: explica qué se elimina y qué conserva la escuela, y pide escribir ELIMINAR para confirmar.',
     ],
   },
   {

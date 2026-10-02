@@ -17,6 +17,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
 
 const MAX_RECIPIENTS = 20;
+
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
 const MONTHS_ES = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
@@ -97,9 +109,10 @@ Deno.serve(async (req) => {
 
     const assertCallerCanNotify = async (schoolId: string) => {
       if (isPlatformOwner) return;
-      const profiles: Array<{ status?: string; app_role?: string }> = await sr.entities.UserProfile.filter({ user_id: userId, school_id: schoolId });
+      const profiles: Array<{ status?: string; app_role?: string; consent_notice_version?: string; consent_terms_version?: string }> = await sr.entities.UserProfile.filter({ user_id: userId, school_id: schoolId });
       const profile = profiles.find((p) => p.status === 'ACTIVE' && ['TEACHER', 'ADMIN'].includes(String(p.app_role)));
       if (!profile) throw { status: 403, code: 'NO_PROFILE', message: 'Requires an active TEACHER or ADMIN profile in this school' };
+      if (!profileConsentIsCurrent(profile)) throw { status: 403, code: 'CONSENT_REQUIRED', message: 'Accept the current privacy notice first' };
     };
 
     // Base44 security scan, 2026-09-28 (confirmed): assertCallerCanNotify

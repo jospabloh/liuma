@@ -49,7 +49,10 @@ test('an unusable profile is a denial, including for the platform owner', () => 
   assert.equal(profileProblem({ status: 'PENDING', school_id: 'A', app_role: 'ADMIN' }), 'INACTIVE_PROFILE');
   assert.equal(profileProblem({ status: 'ACTIVE', app_role: 'ADMIN' }), 'NO_SCHOOL');
   assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'admin' }), 'INVALID_ROLE');
-  assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'PARENT' }), null);
+  // v1.9.0: a usable profile also carries the CURRENT consent stamp.
+  assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'PARENT' }), 'CONSENT_REQUIRED');
+  assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'PARENT', consent_notice_version: '2026-09-29-borrador', consent_terms_version: '2026-09-29-borrador' }), 'CONSENT_REQUIRED');
+  assert.equal(profileProblem({ status: 'ACTIVE', school_id: 'A', app_role: 'PARENT', consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02' }), null);
 });
 
 test('parents can never write through Lumi; teachers cannot see charges or setup', () => {

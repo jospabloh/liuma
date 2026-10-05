@@ -348,7 +348,9 @@ Responde SOLO el JSON del esquema.`;
 
     return bad(400, 'BAD_TASK', 'Unknown task');
   } catch (e) {
-    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK/model error can name entities, ids or prompts.
+    console.error('aiAssist failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
 }));
 

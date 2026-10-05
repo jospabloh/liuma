@@ -2552,3 +2552,78 @@ todo objetivo ≥ 44 px).
   exacto, no un error.
 - Fuera de este paquete: la escuela y cuentas demo, y el dominio de correo
   propio.
+
+## Auditoría completa 2026-10-05 — sin deriva de deploy, dos CVEs de dependencia cerrados, scan de Base44 confirma tres hallazgos previos ya resueltos y cierra dos nuevos
+
+Pase programado (automatizado, dueño h.josepablo@gmail.com). Detalle completo
+en `docs/security-audit-2026-10-05.md`; resumen aquí. Bump a v1.9.1 (patch,
+seguridad).
+
+**Despliegue, por primera vez sin deriva.** El checkpoint vivo
+(`git_commit_hash: 236d087…`, desplegado 2026-10-02T19:53Z) ya coincidía con
+`main` al iniciar el pase — nada que desplegar.
+
+**`npm audit`: 9 nuevas (1 baja, 8 altas), cerradas por lockfile.** `axios`
+(transitiva de `@base44/sdk`, producción — varios CVE de prototype pollution,
+ReDoS, SSRF por redirect) y `dompurify` (transitiva de `jspdf`, XSS en modo
+`IN_PLACE`) se cerraron con `npm audit fix`, sin tocar `package.json`. Queda
+sin cerrar la cadena `braces`/`chokidar`/`tailwindcss` — sin versión corregida
+publicada para `braces` y sólo herramienta de build, mismo patrón que cada
+pase anterior documenta para este tipo de hallazgo.
+
+**El scan de seguridad de Base44 llevaba cinco semanas sin correr** (último
+`scanned_at`: 2026-09-28, marcado `out_of_date`). Los tres `static_code_findings`
+y la `rls_recommendation` que ese scan dejó pendientes —y que
+`docs/security-audit-2026-09-28.md` documentó explícitamente como diferidos—
+ya estaban resueltos al releer el código actual: la RLS de `UserProfile` ya es
+sólo de plataforma, `ContactosEmergencia.jsx` y `tickets.js` ya pasan por
+`guardedFamilyWrite`/`postTicketMessage`, y `guardedEntityWrite` ya corre
+`decideModifyExisting` en cada update/delete — los tres, del commit `c125635`
+("fix(security): cerrar las rutas de escritura directa (P7)") y su
+continuación P10b, ya en `main` antes de este pase. Se disparó un scan nuevo
+para que el propio panel de Base44 deje de listarlos como abiertos: confirmó
+los cuatro resueltos y encontró dos hallazgos nuevos, ambos de severidad baja.
+
+**Cerrado:** 15 funciones de backend devolvían el mensaje crudo de la
+excepción al cliente en un 500 (`error: (e as Error).message`), a diferencia
+de `schoolRead`/`getMySubscription`/`markWelcomeShown`, que ya registraban el
+detalle sólo en el log. Las 15 (`guardedEntityWrite`, `lumiQuery`,
+`lumiWrite`, `guardedFamilyWrite`, `sendBulkNotification`,
+`sendNotificationEmail`, `notifyParents`, `notifyTicketCreated`, `aiAssist`,
+`approveProfile`, `governRoleChange`, `exportSchoolData`,
+`listSchoolMembers`, `postTicketMessage`, `recordAuditEvent`,
+`acaciaControl`) ahora siguen el mismo patrón.
+
+**Cerrado a medias:** el scan marcó que `SessionHeartbeat.jsx` crea su propia
+fila `AppSession` con `user_email`/`user_name` tomados del cliente, lo que
+permite que un usuario autenticado se haga pasar por otro en el panel de
+"sesiones activas" de Mission Control. Al leer la RLS de la entidad apareció
+algo peor con la misma causa: `AppSession.update` no tenía candado de campo
+sobre `revoked_at`/`revoked_by`, así que un usuario podía des-revocar su
+propia sesión con una llamada directa al SDK y evadir el cierre forzado.
+**Arreglado:** `revoked_at`/`revoked_by` ahora sólo los escribe el service
+role (confirmado por grep: sólo `deleteMyAccount/_deletion.ts` y
+`acaciaControl/entry.ts` los tocan, ambos ya con service role — el cliente
+nunca los escribe). **No arreglado, documentado con su fingerprint
+(`203124ba…`) en `base44/entities/AppSession.jsonc`:** la suplantación de
+`user_email`/`user_name` en sí. Los dos campos son `required`, así que
+bloquearlos exige mover la creación de la fila a una función nueva que derive
+la identidad de `auth.me()` — trabajo real, no un cambio de esquema del mismo
+día, la misma categoría que esta app ya diria correctamente el 2026-09-28
+(`EmergencyContact`/`SupportTicketMessage`, cerrados nueve días después en
+P7) en vez de apresurar un cambio no verificable (sin `deno` en este sandbox)
+sobre un camino que corre en cada carga de página.
+
+**Verificado, antes y después de cada arreglo:** `npm run lint` (incl.
+`validate:functions`, 23/40), `npm run typecheck`, `npm run build`,
+`npm test` (1037/1037), `npm run test:permissions` (23/23),
+`npm run validate:rls` (34 entidades), `npm run validate:tenant-roles`,
+`npm run release:gate` — todos en verde. Comprobación visual con Playwright
+(Chromium, 390×844, claro/oscuro) contra `/aviso-de-privacidad`, `/terminos`
+y una ruta 404: sin errores de consola más allá del ruido esperado del SDK de
+Base44 sin backend alcanzable en este sandbox.
+
+**No verificado:** ninguna pantalla autenticada (sin sesión Base44 real en
+este sandbox); `deno lint`/`deno check` sobre los 16 archivos de funciones
+tocados ni sobre el cambio de RLS de `AppSession` — cada edición se mantuvo
+mecánica y se revisó a mano, pero el primer chequeo real es el CI de este PR.

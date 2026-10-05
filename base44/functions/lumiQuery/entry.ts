@@ -434,7 +434,9 @@ Deno.serve(async (req) => {
 
     return fail(400, 'UNKNOWN_INTENT');
   } catch (e) {
-    return Response.json({ ok: false, code: 'INTERNAL', message: errorMessage('INTERNAL'), error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('lumiQuery failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', message: errorMessage('INTERNAL'), error: 'INTERNAL' }, { status: 500 });
   }
 });
 

@@ -670,7 +670,9 @@ Deno.serve(withDeletionGuard(async (req, guarded) => {
   } catch (e) {
     if (e instanceof HttpError) return bad(e.status, e.code, e.message);
     if (e instanceof IncompleteReadError) return bad(e.status, e.code, e.message);
-    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('sendBulkNotification failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
 }));
 

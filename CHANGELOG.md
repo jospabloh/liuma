@@ -5,6 +5,36 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.9.1] - 2026-10-05
+
+Scheduled security audit. No user-facing change — a dependency patch and a
+server-side hardening pass. See `docs/security-audit-2026-10-05.md`.
+
+### Fixed
+
+- **`axios`/`dompurify` dependency advisories** closed via `npm audit fix`
+  (lockfile only). `axios` is a transitive production dependency of
+  `@base44/sdk`; the fix closed several high-severity advisories (prototype
+  pollution, SSRF, header injection).
+- **Backend functions no longer echo raw internal error messages** to the
+  client on an unexpected failure. 15 functions now log the detail
+  server-side and return a generic code, matching the pattern three other
+  functions already used.
+- **A signed-in user could clear their own forced logout.** `AppSession`'s
+  `revoked_at`/`revoked_by` fields — set by Mission Control to force a
+  device's session to end — had no field-level write lock, so a direct SDK
+  call could un-revoke a session Mission Control had just closed. Locked to
+  service-role-only.
+
+### Known issue (not fixed this release, tracked)
+
+- A signed-in user can still set an arbitrary `user_email`/`user_name` on
+  their own session-tracking row, which can misrepresent who is shown as
+  "active" in Mission Control's internal sessions panel. This does not
+  expose any user's data and does not bypass any access control. Fixing it
+  requires moving session-row creation through a new backend function;
+  tracked in `base44/entities/AppSession.jsonc`.
+
 ## [1.9.0] - 2026-10-02
 
 Mandatory consent and account deletion, final legal texts, the four open

@@ -9,6 +9,18 @@
   // RLS: service role (role:admin) has full access so the bridge can list/revoke;
   // an end user only touches THEIR OWN rows, scoped by the built-in created_by_id
   // (Base44 sets it on create — cannot be spoofed by a forged data.user_id).
+  //
+  // Deferred (2026-10-05, Base44 scan fingerprint 203124ba, severity low,
+  // verdict plausible): user_email/user_name are still free-form client input
+  // on create (SessionHeartbeat.jsx), so a signed-in user can spoof another
+  // member's name/email in Mission Control's "sesiones activas" panel. Locking
+  // those two fields the way revoked_at/revoked_by are locked below isn't
+  // enough on its own — they are `required`, so the client's direct
+  // AppSession.create() would then need the server to supply them, which
+  // means routing session-row creation through a backend function (deriving
+  // user_email/user_name from auth.me(), mirroring markWelcomeShown's shape)
+  // rather than a same-day entity-schema change. Flagged for whoever next
+  // touches AppSession or SessionHeartbeat.jsx.
   "name": "AppSession",
   "type": "object",
   "properties": {
@@ -17,8 +29,25 @@
     "device": { "type": "string", "description": "Etiqueta corta del navegador/dispositivo (p.ej. 'Chrome · macOS')" },
     "started_at": { "type": "string", "format": "date-time", "description": "Inicio de sesión" },
     "last_active_at": { "type": "string", "format": "date-time", "description": "Última actividad (movida por el latido)" },
-    "revoked_at": { "type": "string", "format": "date-time", "description": "Marcada por Mission Control para forzar el cierre de sesión" },
-    "revoked_by": { "type": "string", "description": "Operador que forzó el cierre (auditoría)" }
+    "revoked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Marcada por Mission Control para forzar el cierre de sesión. Bloqueado al service role: el RLS a nivel de entidad deja a cada usuario actualizar su propia fila entera, y sin este candado un cliente podía llamar AppSession.update(suPropioId, {revoked_at: null}) para des-revocarse y evadir el cierre forzado (hallazgo del scan de seguridad de Base44, 2026-10-05, fingerprint 203124ba).",
+      "rls": {
+        "write": {
+          "user_condition": { "role": "admin" }
+        }
+      }
+    },
+    "revoked_by": {
+      "type": "string",
+      "description": "Operador que forzó el cierre (auditoría). Mismo candado que revoked_at: el cliente nunca debe poder escribir esta columna de auditoría.",
+      "rls": {
+        "write": {
+          "user_condition": { "role": "admin" }
+        }
+      }
+    }
   },
   "required": ["user_email"],
   "rls": {

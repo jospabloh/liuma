@@ -87,7 +87,9 @@ Deno.serve(async (req) => {
     if (!resp.ok) return Response.json({ ok: false, status: resp.status, mc: out }, { status: 502 });
     return Response.json({ ok: true, mc: out });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK/fetch error can name entities, ids or URLs.
+    console.error('notifyTicketCreated failed', (e as Error)?.message);
+    return Response.json({ error: 'INTERNAL' }, { status: 500 });
   }
 });
 

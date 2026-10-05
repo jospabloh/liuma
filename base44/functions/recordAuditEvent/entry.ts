@@ -77,7 +77,9 @@ Deno.serve(withDeletionGuard(async (req, guarded) => {
     });
     return Response.json({ ok: true, id: row?.id || null });
   } catch (e) {
-    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('recordAuditEvent failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
 }));
 

@@ -1,0 +1,1133 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { makeFakeMongoDb } from '../fixtures/fake-mongo-db.js';
+// The real function code, loaded as-is (Node 22 strips the TS types).
+import {
+  ANONYMIZE,
+  ANONYMIZED_NAME,
+  CONFIRMATION_WORD as SERVER_WORD,
+  cancelDeletion,
+  DeletionIncompleteError,
+  MAX_UPDATE_BATCHES,
+  PURGE_DAYS as SERVER_PURGE_DAYS,
+  confirmationMatches as serverConfirms,
+  previewDeletion,
+  runAccountDeletion,
+  soleAdminSchoolIds,
+} from '../../base44/functions/deleteMyAccount/_deletion.ts';
+import { acceptConsent, consentStatus, profileConsentIsCurrent as serverStampIsCurrent } from '../../base44/functions/myConsent/_consent.ts';
+import { decideConsentGate } from '../../src/lib/consent/consentGate.js';
+import { ACTION_TIER } from '../../base44/functions/recordAuditEvent/_policy.ts';
+import {
+  ACCOUNT_DELETION_PAGE,
+  ACCOUNT_DELETION_PATH,
+  ACCOUNT_DELETION_TITLE,
+  CONFIRMATION_WORD,
+  accountDeletedAt,
+  confirmationMatches,
+  deletedItems,
+  deletionErrorMessage,
+  deletionPageMode,
+  keptItems,
+} from '../../src/lib/account/accountDeletion.js';
+import { ACCOUNT_DELETION_LABEL, PRIVACY_NOTICE, SERVICE_TERMS, PURGE_DAYS, RETENTION_TABLE } from '../../src/lib/legal/legalDocs.js';
+import { runOnboardingProvision } from '../../src/lib/authorization/onboardingProvision.js';
+import { getDestinations, ROLES } from '../../src/components/nav/navRegistry.js';
+import { ROUTE_ACCESS } from '../../src/lib/authorization/routeAccess.js';
+
+// "Eliminar mi cuenta y mis datos" (v1.9.0). The owner's request: a person who
+// declines the new legal texts is sent to "la página de borrar cuenta y sus
+// datos en la zona de peligro, con la posibilidad de retractarse o confirmar".
+// The legal texts promise exactly what is deleted and what the school keeps;
+// these tests run the real deletion (deleteMyAccount/_deletion.ts) against an
+// in-memory database and pin each promise, and pin who can NOT do it.
+
+const ROOT = new URL('../../', import.meta.url);
+const read = (rel) => fs.readFileSync(new URL(rel, ROOT), 'utf8');
+const readJsonc = (rel) => JSON.parse(read(rel).replace(/^\s*\/\/.*$/gm, ''));
+const NOW = new Date('2026-10-02T18:00:00.000Z');
+
+const USERS = {
+  parent: { id: 'u-parent', email: 'Mama@Ejemplo.mx', full_name: 'Mamá' },
+  otherParent: { id: 'u-other', email: 'otro@ejemplo.mx' },
+  teacher: { id: 'u-teacher', email: 'maestra@ejemplo.mx' },
+  admin: { id: 'u-admin', email: 'dir@ejemplo.mx' },
+  admin2: { id: 'u-admin2', email: 'dir2@ejemplo.mx' },
+  owner: { id: 'u-owner', role: 'admin', email: 'owner@liuma.mx' },
+};
+
+const profile = (id, userId, role, status = 'ACTIVE', schoolId = 'sA', extra = {}) => ({
+  id, user_id: userId, school_id: schoolId, app_role: role, status, onboarding_completed: true, created_date: '2026-09-01T00:00:00Z',
+  consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02', ...extra,
+});
+
+function world({ withSecondAdmin = false, pendingSecondAdmin = false } = {}) {
+  const sent = [];
+  const tables = {
+    User: [
+      { id: 'u-parent', email: 'Mama@Ejemplo.mx', display_name: 'Mamá Pérez' },
+      { id: 'u-other', email: 'otro@ejemplo.mx' },
+      { id: 'u-teacher', email: 'maestra@ejemplo.mx' },
+      { id: 'u-admin', email: 'dir@ejemplo.mx' },
+    ],
+    School: [{ id: 'sA', name: 'Colegio A' }, { id: 'sB', name: 'Colegio B' }],
+    UserProfile: [
+      profile('p-parent', 'u-parent', 'PARENT'),
+      profile('p-other', 'u-other', 'PARENT'),
+      profile('p-teacher', 'u-teacher', 'TEACHER'),
+      profile('p-admin', 'u-admin', 'ADMIN', 'ACTIVE', 'sA', { pending_notification_recipients: ['dir@ejemplo.mx'] }),
+      profile('p-adminB', 'u-adminB', 'ADMIN', 'ACTIVE', 'sB'),
+      ...(withSecondAdmin ? [profile('p-admin2', 'u-admin2', 'ADMIN')] : []),
+      ...(pendingSecondAdmin ? [profile('p-admin2', 'u-admin2', 'ADMIN', 'PENDING')] : []),
+      // A newcomer whose approval notice reached the parent's address? No —
+      // the director's: pending_notification_recipients holds ADMIN e-mails.
+      profile('p-new', 'u-new', 'TEACHER', 'PENDING', 'sA', { pending_notification_recipients: ['dir@ejemplo.mx', 'dir2@ejemplo.mx'] }),
+    ],
+    ParentProfile: [{ id: 'pp1', user_id: 'u-parent', school_id: 'sA', address: 'Calle 1', work_phone: '449' }, { id: 'pp2', user_id: 'u-other', school_id: 'sA', address: 'Calle 2' }],
+    ParentStudent: [
+      { id: 'ps1', school_id: 'sA', parent_id: 'u-parent', student_id: 'st1', status: 'ACTIVE' },
+      { id: 'ps2', school_id: 'sA', parent_id: 'u-other', student_id: 'st1', status: 'ACTIVE' },
+    ],
+    TeacherClassroom: [
+      { id: 'tc1', school_id: 'sA', teacher_id: 'u-teacher', classroom_id: 'c1', is_active: true },
+      { id: 'tc2', school_id: 'sA', teacher_id: 'u-x', classroom_id: 'c1', is_active: true },
+    ],
+    AbsenceNotification: [
+      { id: 'ab-pending', school_id: 'sA', parent_id: 'u-parent', parent_name: 'Mamá Pérez', status: 'PENDING' },
+      { id: 'ab-approved', school_id: 'sA', parent_id: 'u-parent', parent_name: 'Mamá Pérez', status: 'APPROVED' },
+      { id: 'ab-other', school_id: 'sA', parent_id: 'u-other', parent_name: 'Otro', status: 'PENDING' },
+    ],
+    UniformOrder: [
+      { id: 'uo-pending', school_id: 'sA', parent_id: 'u-parent', parent_name: 'Mamá Pérez', status: 'PENDING' },
+      { id: 'uo-delivered', school_id: 'sA', parent_id: 'u-parent', parent_name: 'Mamá Pérez', status: 'DELIVERED' },
+    ],
+    EventResponse: [{ id: 'er1', school_id: 'sA', parent_id: 'u-parent', parent_name: 'Mamá Pérez', response: 'YES' }],
+    ChargeItem: [{ id: 'ch1', school_id: 'sA', student_id: 'st1', amount: 1350, amount_paid: 400, status: 'PARTIAL' }],
+    PaymentRecord: [{ id: 'pr1', school_id: 'sA', charge_item_id: 'ch1', amount: 400, recorded_by: 'u-admin' }],
+    DiaryEntry: [
+      { id: 'd1', school_id: 'sA', teacher_id: 'u-teacher', teacher_name: 'Maestra Ana', notified_parent_emails: ['mama@ejemplo.mx', 'otro@ejemplo.mx'] },
+      { id: 'd2', school_id: 'sA', teacher_id: 'u-x', teacher_name: 'Otra maestra', notified_parent_emails: ['otro@ejemplo.mx'] },
+    ],
+    Homework: [{ id: 'h1', school_id: 'sA', teacher_id: 'u-teacher', teacher_name: 'Maestra Ana' }],
+    Notice: [{ id: 'n1', school_id: 'sA', author_id: 'u-teacher', author_name: 'Maestra Ana' }, { id: 'n2', school_id: 'sA', author_id: 'u-admin', author_name: 'Directora' }],
+    Attendance: [{ id: 'at1', school_id: 'sA', recorded_by: 'u-teacher', recorded_by_name: 'Maestra Ana' }],
+    OfficialDocument: [{ id: 'od1', school_id: 'sA', uploaded_by: 'u-admin', uploaded_by_name: 'Directora' }],
+    SupportTicket: [
+      { id: 't1', school_id: 'sA', requester_user_id: 'u-parent', requester_name: 'Mamá Pérez', escalation_notified_recipients: ['SCHOOL_ADMIN:dir@ejemplo.mx'] },
+    ],
+    NoticeDelivery: [{ id: 'nd1', school_id: 'sA', recipient_user_id: 'u-parent' }, { id: 'nd2', school_id: 'sA', recipient_user_id: 'u-other' }],
+    NoticeRead: [{ id: 'nr1', user_id: 'u-parent', notice_id: 'n1' }],
+    PermissionOverride: [{ id: 'po1', school_id: 'sA', user_profile_id: 'p-teacher', resource: 'Notice', action: 'write', effect: 'deny' }],
+    PendingChange: [
+      { id: 'pc-open', school_id: 'sA', target_profile_id: 'p-teacher', status: 'PENDING_SECOND_ADMIN_APPROVAL' },
+      { id: 'pc-done', school_id: 'sA', target_profile_id: 'p-teacher', status: 'APPROVED' },
+    ],
+    AppSession: [{ id: 'as1', user_email: 'Mama@Ejemplo.mx', user_name: 'Mamá' }],
+    ConsentRecord: [
+      { id: 'cr-old', user_id: 'u-parent', school_id: 'sA', notice_version: '2026-09-29-borrador', terms_version: '2026-09-29-borrador', accepted_general: true, accepted_sensitive_minor_data: true, accepted_at: '2026-09-30T10:00:00.000Z' },
+      { id: 'cr-new', user_id: 'u-parent', school_id: 'sA', event: 'ACCEPTED', notice_version: '2026-10-02', terms_version: '2026-10-02', accepted_general: true, accepted_sensitive_minor_data: true, accepted_at: '2026-10-02T09:00:00.000Z' },
+    ],
+    AuditLog: [],
+  };
+  const integrations = { Core: { SendEmail: async (msg) => { sent.push(msg); } } };
+  const db = makeFakeMongoDb(tables, { integrations });
+  return { db, tables, sent };
+}
+
+const del = (db, user, body = { confirm: 'ELIMINAR' }) =>
+  runAccountDeletion({ sr: db, user, body, now: NOW, userAgent: 'test-agent' });
+
+test('a parent deletes their account: access closed, account data gone, school records kept without the name', async () => {
+  const { db, tables, sent } = world();
+  const before = structuredClone({ ChargeItem: tables.ChargeItem, PaymentRecord: tables.PaymentRecord });
+  const r = await del(db, USERS.parent);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.ok, true);
+
+  // Access: no profile, links revoked, session closed, User marked AND removed.
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-parent'), false);
+  assert.equal(tables.ParentStudent.find((l) => l.id === 'ps1').status, 'REVOKED');
+  assert.equal(tables.AppSession[0].revoked_by, 'account_deleted');
+  assert.equal(tables.User.some((u) => u.id === 'u-parent'), false);
+  assert.equal(r.body.userRemoved, true);
+
+  // Account data.
+  assert.equal(tables.ParentProfile.some((p) => p.user_id === 'u-parent'), false);
+  assert.equal(tables.NoticeDelivery.some((d) => d.recipient_user_id === 'u-parent'), false);
+  assert.equal(tables.NoticeRead.length, 0);
+  // The address wherever a server wrote it (case-insensitively), and nobody else's.
+  assert.deepEqual(tables.DiaryEntry.find((d) => d.id === 'd1').notified_parent_emails, ['otro@ejemplo.mx']);
+  assert.deepEqual(tables.DiaryEntry.find((d) => d.id === 'd2').notified_parent_emails, ['otro@ejemplo.mx']);
+
+  // Requests the school had not attended: gone. Attended ones: kept, anonymous.
+  assert.equal(tables.AbsenceNotification.some((a) => a.id === 'ab-pending'), false);
+  assert.equal(tables.UniformOrder.some((a) => a.id === 'uo-pending'), false);
+  assert.equal(tables.AbsenceNotification.find((a) => a.id === 'ab-approved').parent_name, ANONYMIZED_NAME);
+  assert.equal(tables.UniformOrder.find((a) => a.id === 'uo-delivered').parent_name, ANONYMIZED_NAME);
+  assert.equal(tables.EventResponse[0].parent_name, ANONYMIZED_NAME);
+  assert.equal(tables.SupportTicket[0].requester_name, ANONYMIZED_NAME);
+
+  // Fiscal and patrimonial records are never touched.
+  assert.deepEqual({ ChargeItem: tables.ChargeItem, PaymentRecord: tables.PaymentRecord }, before);
+
+  // Nobody else's data moved.
+  assert.equal(tables.ParentStudent.find((l) => l.id === 'ps2').status, 'ACTIVE');
+  assert.equal(tables.AbsenceNotification.find((a) => a.id === 'ab-other').status, 'PENDING');
+  assert.ok(tables.ParentProfile.some((p) => p.user_id === 'u-other'));
+  assert.ok(tables.NoticeDelivery.some((d) => d.recipient_user_id === 'u-other'));
+  assert.ok(tables.UserProfile.some((p) => p.user_id === 'u-other'));
+
+  // ACACIA hears about the manual steps (Lumi, trash), by user id.
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'soporte@acaciaco.com.mx');
+  assert.match(sent[0].body, /u-parent/);
+  assert.match(sent[0].body, /Lumi/);
+  assert.doesNotMatch(sent[0].body, /Mama@Ejemplo\.mx/i, 'the e-mail to ACACIA carries the id, not the address');
+});
+
+test('evidence first: the withdrawal is recorded before anything is deleted, and consent records are never deleted', async () => {
+  const { db, tables } = world();
+  await del(db, USERS.parent);
+  // The deletion-in-progress marker is the very first write (Codex review of
+  // PR #197: it is what myConsent checks before and after stamping). Then
+  // the stamps fall, then the evidence, then the stamps again, then deletions.
+  // (A parent holds no director seat, so the reservation follows at once.)
+  const [markerWrite, reservedWrite, stampWrite, firstWrite, againWrite] = db.writes;
+  assert.deepEqual([markerWrite.entity, markerWrite.op, markerWrite.id], ['User', 'update', 'u-parent']);
+  assert.deepEqual(Object.keys(markerWrite.data), ['account_deletion_started_at']);
+  assert.deepEqual(Object.keys(reservedWrite.data), ['account_deletion_reserved_at']);
+  assert.deepEqual([stampWrite.entity, stampWrite.op], ['UserProfile', 'updateMany']);
+  assert.equal(stampWrite.data.$set.consent_notice_version, '');
+  assert.deepEqual([againWrite.entity, againWrite.op], ['UserProfile', 'updateMany']);
+  assert.equal(againWrite.data.$set.consent_notice_version, '');
+  const firstDeletion = db.writes.findIndex((w) => /delete/i.test(w.op));
+  assert.ok(firstDeletion > 3, 'nothing is deleted before the withdrawal is recorded');
+  assert.equal(firstWrite.entity, 'ConsentRecord');
+  assert.equal(firstWrite.op, 'create');
+  assert.equal(firstWrite.data.event, 'WITHDRAWN');
+  assert.equal(firstWrite.data.user_id, 'u-parent');
+  assert.equal(firstWrite.data.school_id, 'sA');
+  assert.equal(firstWrite.data.source, 'account_deletion');
+  assert.equal(firstWrite.data.notice_version, '2026-10-02', 'names the version being withdrawn');
+  assert.ok(tables.ConsentRecord.find((c) => c.id === 'cr-old'));
+  assert.ok(tables.ConsentRecord.find((c) => c.id === 'cr-new'));
+  assert.equal(db.writes.some((w) => w.entity === 'ConsentRecord' && w.op !== 'create'), false);
+  const actions = tables.AuditLog.map((a) => a.action);
+  assert.deepEqual(actions, ['PRIVACY_CONSENT_WITHDRAWN', 'ACCOUNT_DELETED']);
+  const deleted = tables.AuditLog.find((a) => a.action === 'ACCOUNT_DELETED');
+  assert.ok(deleted.details.manual_steps.some((s) => /Lumi/.test(s)));
+});
+
+test('everything comes from the caller: a body naming someone else deletes only the caller', async () => {
+  const { db, tables } = world();
+  const r = await del(db, USERS.parent, { confirm: 'ELIMINAR', userId: 'u-other', user_id: 'u-other', profileId: 'p-other', schoolId: 'sB' });
+  assert.equal(r.status, 200);
+  assert.ok(tables.UserProfile.some((p) => p.user_id === 'u-other'));
+  assert.ok(tables.User.some((u) => u.id === 'u-other'));
+  for (const w of db.writes) {
+    assert.ok(!JSON.stringify(w).includes('p-other'), `a write touched the named profile: ${JSON.stringify(w)}`);
+  }
+});
+
+test('no typed confirmation, no deletion — and nothing is written', async () => {
+  for (const confirm of [undefined, '', 'eliminar mi cuenta', 'BORRAR']) {
+    const { db } = world();
+    const r = await del(db, USERS.parent, { confirm });
+    assert.equal(r.status, 400);
+    assert.equal(r.body.code, 'CONFIRMATION_REQUIRED');
+    assert.equal(db.writes.length, 0);
+  }
+  // The same forgiveness on both sides of the wire.
+  for (const word of ['ELIMINAR', ' eliminar ', 'Eliminar']) {
+    assert.equal(serverConfirms(word), true);
+    assert.equal(confirmationMatches(word), true);
+  }
+  assert.equal(SERVER_WORD, CONFIRMATION_WORD);
+});
+
+test('the only ACTIVE director cannot delete their account (the school would be orphaned)', async () => {
+  const { db } = world();
+  const r = await del(db, USERS.admin);
+  assert.equal(r.status, 409);
+  assert.equal(r.body.code, 'SOLE_ADMIN');
+  assert.deepEqual(r.body.soleAdminSchools, [{ id: 'sA', name: 'Colegio A' }]);
+  assert.equal(db.writes.length, 0, 'refused before the first write');
+  const preview = await previewDeletion(db, USERS.admin);
+  assert.equal(preview.body.soleAdmin, true);
+  // A PENDING second director does not count.
+  const pending = world({ pendingSecondAdmin: true });
+  assert.equal((await del(pending.db, USERS.admin)).body.code, 'SOLE_ADMIN');
+  // An ACTIVE second director does: then the first may go.
+  const two = world({ withSecondAdmin: true });
+  const ok = await del(two.db, USERS.admin);
+  assert.equal(ok.status, 200);
+  assert.equal(two.tables.OfficialDocument[0].uploaded_by_name, ANONYMIZED_NAME);
+  assert.equal(two.tables.Notice.find((n) => n.id === 'n2').author_name, ANONYMIZED_NAME);
+  // Their address leaves the delivery keys of other profiles and tickets.
+  assert.deepEqual(two.tables.UserProfile.find((p) => p.id === 'p-new').pending_notification_recipients, ['dir2@ejemplo.mx']);
+  assert.deepEqual(two.tables.SupportTicket[0].escalation_notified_recipients, []);
+  assert.deepEqual(soleAdminSchoolIds([profile('x', 'u', 'ADMIN')], { sA: [profile('x', 'u', 'ADMIN')] }, 'u'), ['sA']);
+});
+
+test('the platform owner cannot delete itself from the app', async () => {
+  const { db } = world();
+  const r = await del(db, USERS.owner);
+  assert.equal(r.status, 403);
+  assert.equal(r.body.code, 'PLATFORM_OWNER');
+  assert.equal(db.writes.length, 0);
+  assert.equal((await previewDeletion(db, USERS.owner)).body.platformOwner, true);
+});
+
+test('a teacher: assignments closed, open role changes and personal exceptions gone, authored records anonymous', async () => {
+  const { db, tables } = world();
+  const r = await del(db, USERS.teacher);
+  assert.equal(r.status, 200);
+  assert.equal(tables.TeacherClassroom.find((t) => t.id === 'tc1').is_active, false);
+  assert.equal(tables.TeacherClassroom.find((t) => t.id === 'tc2').is_active, true);
+  for (const [entity, id] of [['DiaryEntry', 'd1'], ['Homework', 'h1'], ['Notice', 'n1'], ['Attendance', 'at1']]) {
+    const row = tables[entity].find((x) => x.id === id);
+    const nameField = ANONYMIZE.find(([e]) => e === entity)[2];
+    assert.equal(row[nameField], ANONYMIZED_NAME, `${entity}.${nameField}`);
+  }
+  assert.equal(tables.DiaryEntry.find((d) => d.id === 'd2').teacher_name, 'Otra maestra');
+  assert.equal(tables.PermissionOverride.length, 0);
+  assert.deepEqual(tables.PendingChange.map((p) => p.id), ['pc-done'], 'decided changes stay as history');
+});
+
+test('a retry after a failure part-way converges and does not stack a second withdrawal', async () => {
+  const { tables } = world();
+  const failing = makeFakeMongoDb(tables, { failOn: { entity: 'UserProfile', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } });
+  await assert.rejects(() => del(failing, USERS.parent), /Rate limit/);
+  // The withdrawal landed and cleared the consent stamp: the person is not
+  // left using the app on the acceptance they just withdrew.
+  const stillThere = tables.UserProfile.find((p) => p.user_id === 'u-parent');
+  assert.equal(stillThere.consent_notice_version, '');
+  const status = await consentStatus(makeFakeMongoDb(tables), USERS.parent);
+  assert.equal(status.body.required, true, 'the newest record is the withdrawal: nothing to repair from');
+
+  const retry = makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } });
+  const r = await del(retry, USERS.parent);
+  assert.equal(r.status, 200);
+  assert.equal(tables.ConsentRecord.filter((c) => c.event === 'WITHDRAWN').length, 1);
+  assert.equal(tables.AuditLog.filter((a) => a.action === 'PRIVACY_CONSENT_WITHDRAWN').length, 1);
+});
+
+test('a failing audit log never strands a deletion half-started (the ConsentRecord is the evidence)', async () => {
+  const { tables } = world();
+  const db = makeFakeMongoDb(tables, {
+    failOn: { entity: 'AuditLog', op: 'create', message: 'enum value not deployed' },
+    integrations: { Core: { SendEmail: async () => {} } },
+  });
+  const r = await del(db, USERS.parent);
+  assert.equal(r.status, 200);
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-parent'), false);
+  assert.equal(tables.ConsentRecord.filter((c) => c.event === 'WITHDRAWN').length, 1);
+});
+
+test('if Base44 refuses to remove the User, the account stays marked as deleted and ACACIA is told', async () => {
+  const { tables } = world();
+  const sent = [];
+  const db = makeFakeMongoDb(tables, {
+    failOn: { entity: 'User', op: 'delete', message: 'Forbidden', status: 403 },
+    integrations: { Core: { SendEmail: async (m) => { sent.push(m); } } },
+  });
+  const r = await del(db, USERS.parent);
+  assert.equal(r.status, 200, 'the deletion itself stands');
+  assert.equal(r.body.userRemoved, false);
+  assert.equal(r.body.userMarked, true);
+  const marked = tables.User.find((u) => u.id === 'u-parent');
+  assert.equal(marked.account_deleted_at, NOW.toISOString());
+  assert.equal(marked.display_name, '');
+  assert.match(sent[0].body, /Quitar al usuario u-parent/);
+  // The marked account cannot come back through onboarding or consent.
+  assert.equal(accountDeletedAt(marked), NOW.toISOString());
+  assert.equal((await consentStatus(makeFakeMongoDb(tables), marked)).body.accountDeleted, true);
+  await assert.rejects(
+    () => runOnboardingProvision({ user: marked, body: { role: 'PARENT' }, sr: { entities: {} } }),
+    (e) => e.code === 'ACCOUNT_DELETED' && e.status === 410,
+  );
+  const fn = read('base44/functions/provisionOnboardingProfile/entry.ts');
+  assert.match(fn, /if \(accountDeletedAt\(user\)\) return bad\(410, 'ACCOUNT_DELETED'/);
+});
+
+// The invariants a partial failure must never break (Codex review of PR #197):
+//  - withdrawn ⇒ no access: once a WITHDRAWN record exists, no profile of the
+//    person carries a consent stamp the server gates would accept, and
+//    myConsent does not repair one;
+//  - no profile ⇒ the User is marked (or removed): otherwise the account could
+//    onboard again with its data already gone.
+async function assertSafeAfterPartialFailure(tables, label) {
+  const withdrawn = tables.ConsentRecord.some((c) => c.user_id === 'u-parent' && c.event === 'WITHDRAWN');
+  const profiles = tables.UserProfile.filter((p) => p.user_id === 'u-parent');
+  if (withdrawn) {
+    for (const p of profiles) {
+      assert.equal(serverStampIsCurrent(p), false, `${label}: withdrawn but a profile still passes the server gates`);
+    }
+    const userRow = tables.User.find((u) => u.id === 'u-parent');
+    if (userRow && profiles.length) {
+      const status = await consentStatus(makeFakeMongoDb(tables), { ...USERS.parent, ...userRow });
+      assert.notEqual(status.body.repaired, true, `${label}: myConsent repaired the stamp after a withdrawal`);
+    }
+  }
+  if (!profiles.length) {
+    const userRow = tables.User.find((u) => u.id === 'u-parent');
+    assert.ok(!userRow || accountDeletedAt(userRow), `${label}: profiles gone but the User is neither marked nor removed`);
+  }
+}
+
+test('a failure at ANY write leaves no access after the withdrawal and no unmarked account without profiles; a retry completes', async () => {
+  // Every write a healthy run makes, as (entity, op, nth call).
+  const healthy = world();
+  await del(healthy.db, USERS.parent);
+  const seen = {};
+  const steps = healthy.db.writes.map((w) => {
+    const key = `${w.entity}.${w.op}`;
+    seen[key] = (seen[key] || 0) + 1;
+    return { entity: w.entity, op: w.op, nth: seen[key] };
+  });
+  assert.ok(steps.length > 10, 'the run makes the writes this test enumerates');
+  for (const step of steps) {
+    for (const status of [undefined, 429]) {
+      const label = `${step.entity}.${step.op}#${step.nth}${status ? ' (429)' : ''}`;
+      const { tables } = world();
+      const failing = makeFakeMongoDb(tables, {
+        failOn: { ...step, status, message: status ? 'Rate limit exceeded' : 'boom' },
+        integrations: { Core: { SendEmail: async () => {} } },
+      });
+      let r = null;
+      try { r = await del(failing, USERS.parent); } catch { r = null; }
+      if (r && r.status === 200) assert.equal(r.body.ok, true, label);
+      await assertSafeAfterPartialFailure(tables, label);
+
+      // A failed call is retried (the page offers it) on a healthy
+      // connection: it converges, without a second withdrawal. A call that
+      // already answered 200 has nothing left to retry.
+      if (!r || r.status !== 200) {
+        const userRow = tables.User.find((u) => u.id === 'u-parent');
+        const caller = userRow ? { ...USERS.parent, ...userRow } : USERS.parent;
+        const retry = await del(makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } }), caller);
+        assert.equal(retry.status, 200, `${label}: retry ${JSON.stringify(retry.body)}`);
+      }
+      assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-parent'), false, label);
+      assert.equal(tables.ConsentRecord.filter((c) => c.event === 'WITHDRAWN').length, 1, label);
+    }
+  }
+});
+
+test('a myConsent repair racing the withdrawal cannot leave a stamp behind, even if a later step fails', async () => {
+  const { tables } = world();
+  const db = makeFakeMongoDb(tables, { failOn: { entity: 'UserProfile', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } });
+  // A concurrent myConsent 'status' call read the (still newest) acceptance
+  // after the first clear and writes its repair just before the WITHDRAWN
+  // record lands.
+  const create = db.entities.ConsentRecord.create;
+  db.entities.ConsentRecord.create = async (data) => {
+    for (const p of tables.UserProfile.filter((x) => x.user_id === 'u-parent')) {
+      Object.assign(p, { consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02' });
+    }
+    return create(data);
+  };
+  await assert.rejects(() => del(db, USERS.parent), /Rate limit/);
+  const p = tables.UserProfile.find((x) => x.user_id === 'u-parent');
+  assert.ok(p, 'the failure came before the profiles were deleted');
+  assert.equal(serverStampIsCurrent(p), false, 'the second clear removed the raced repair');
+});
+
+test('if the User can be neither marked nor removed, the profiles stay and the call fails in Spanish — a retry finishes it', async () => {
+  const { tables } = world();
+  const sent = [];
+  const db = makeFakeMongoDb(tables, {
+    failOn: [
+      // The 3rd User.update is the account_deleted_at mark (the 1st is the
+      // deletion-in-progress marker, the 2nd the reservation).
+      { entity: 'User', op: 'update', nth: 3, message: 'Forbidden', status: 403 },
+      { entity: 'User', op: 'delete', message: 'Forbidden', status: 403 },
+    ],
+    integrations: { Core: { SendEmail: async (m) => { sent.push(m); } } },
+  });
+  const r = await del(db, USERS.parent);
+  assert.equal(r.status, 503);
+  assert.equal(r.body.ok, false, 'never reported as done');
+  assert.equal(r.body.code, 'ACCOUNT_NOT_MARKED');
+  // Profiles kept (so the account cannot onboard as a fresh one with its data
+  // gone), but already without access.
+  const kept = tables.UserProfile.filter((p) => p.user_id === 'u-parent');
+  assert.equal(kept.length, 1);
+  assert.equal(serverStampIsCurrent(kept[0]), false);
+  assert.equal(tables.ParentStudent.find((l) => l.id === 'ps1').status, 'REVOKED');
+  assert.equal(db.writes.some((w) => w.entity === 'User' && w.op !== 'update'), false);
+  assert.equal(accountDeletedAt(tables.User.find((u) => u.id === 'u-parent')), '', 'not marked deleted');
+  assert.ok(tables.User.find((u) => u.id === 'u-parent').account_deletion_started_at, 'but the deletion is known to have started');
+  assert.equal(sent.length, 0, 'ACACIA is not told a deletion happened that did not');
+  assert.match(deletionErrorMessage('ACCOUNT_NOT_MARKED'), /vuelve a intentarlo/);
+  assert.notEqual(deletionErrorMessage('ACCOUNT_NOT_MARKED'), deletionErrorMessage('SOMETHING_ELSE'));
+
+  const retry = await del(makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } }), USERS.parent);
+  assert.equal(retry.status, 200);
+  assert.equal(tables.User.some((u) => u.id === 'u-parent'), false);
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-parent'), false);
+});
+
+test('a marked account cannot onboard or join again, by role or by school code', async () => {
+  const marked = { id: 'u-gone', email: 'x@y.mx', account_deleted_at: NOW.toISOString() };
+  for (const body of [{ role: 'PARENT' }, { role: 'TEACHER', joinCode: 'ABCD-EFGH' }, { role: 'ADMIN', schoolName: 'Nueva' }]) {
+    await assert.rejects(
+      () => runOnboardingProvision({ user: marked, body, sr: { entities: {} } }),
+      (e) => e.code === 'ACCOUNT_DELETED' && e.status === 410,
+    );
+  }
+  // The function refuses before it reads the body, so no branch (found a
+  // school, join by code) runs for a marked User.
+  const fn = read('base44/functions/provisionOnboardingProfile/entry.ts');
+  const serve = fn.indexOf('Deno.serve');
+  const refuse = fn.indexOf("if (accountDeletedAt(user)) return bad(410, 'ACCOUNT_DELETED'", serve);
+  assert.ok(refuse > serve, 'the refusal is inside the handler');
+  assert.ok(refuse < fn.indexOf('req.json()', serve), 'and before the body is read');
+});
+
+// ---------------------------------------------------------------------------
+// The handshake between deleteMyAccount and myConsent (Codex review of PR
+// #197, second pass). Ordering alone could not stop a myConsent repair or
+// re-acceptance that read before the withdrawal from stamping after the last
+// clear. Now deleteMyAccount writes User.account_deletion_started_at first and
+// myConsent re-reads it after every stamp write. The harness below runs both
+// against the same tables and interleaves their database calls in every
+// order within the window where they meet.
+
+// Cooperative scheduler: each actor's DB call waits for its turn in
+// `schedule`; an actor that finished is skipped; past the end, all run free.
+function scheduler(schedule) {
+  let pos = 0;
+  const waiting = new Map();
+  const done = new Set();
+  const pump = () => {
+    while (pos < schedule.length && done.has(schedule[pos])) pos += 1;
+    const next = pos < schedule.length ? schedule[pos] : null;
+    for (const [actor, resolve] of [...waiting]) {
+      if (next === null || actor === next) {
+        waiting.delete(actor);
+        resolve();
+        if (next !== null) break;
+      }
+    }
+  };
+  return {
+    before: (actor) => new Promise((resolve) => { waiting.set(actor, resolve); pump(); }),
+    after: () => { pos += 1; pump(); },
+    finish: (actor) => { done.add(actor); pump(); },
+  };
+}
+
+function scheduledDb(tables, actor, sched, opts = {}) {
+  const db = makeFakeMongoDb(tables, { idPrefix: actor, integrations: { Core: { SendEmail: async () => {} } }, ...opts });
+  const entities = new Proxy({}, {
+    get(_, name) {
+      const handler = db.entities[name];
+      return new Proxy(handler, {
+        get(target, op) {
+          const fn = target[op];
+          if (typeof fn !== 'function') return fn;
+          return async (...args) => {
+            if (sched) await sched.before(actor);
+            try { return await fn.apply(target, args); } finally { if (sched) sched.after(actor); }
+          };
+        },
+      });
+    },
+  });
+  return { entities, integrations: db.integrations, writes: db.writes };
+}
+
+// Every way of placing k C's among the first n D's.
+function placements(n, k) {
+  const out = [];
+  const walk = (d, c, acc) => {
+    if (d === n && c === k) { out.push(acc); return; }
+    if (d < n) walk(d + 1, c, [...acc, 'D']);
+    if (c < k) walk(d, c + 1, [...acc, 'C']);
+  };
+  walk(0, 0, []);
+  return out;
+}
+
+const ACCEPT_BODY = { general: true, sensitive: true, noticeVersion: '2026-10-02', termsVersion: '2026-10-02' };
+const CONSENT_OPS = {
+  repair: (db) => consentStatus(db, USERS.parent),
+  accept: (db) => acceptConsent(db, USERS.parent, ACCEPT_BODY, NOW, 'test-agent'),
+};
+
+// The parent's stamp is missing (so a repair from cr-new, or a
+// re-acceptance, would write one), and the deletion stops short of deleting
+// the profiles (a 429), which is when a stamp left behind would mean access.
+function raceWorld() {
+  const w = world();
+  const p = w.tables.UserProfile.find((x) => x.id === 'p-parent');
+  Object.assign(p, { consent_notice_version: '', consent_terms_version: '' });
+  return w;
+}
+const DELETION_STOPS = { failOn: { entity: 'UserProfile', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } };
+
+async function opCount(run) {
+  const { tables } = raceWorld();
+  const db = scheduledDb(tables, 'X', null, run.opts);
+  let n = 0;
+  const counting = { ...db, entities: new Proxy({}, { get: (_, name) => new Proxy(db.entities[name], { get: (t, op) => (typeof t[op] === 'function' ? (...a) => { n += 1; return t[op](...a); } : t[op]) }) }) };
+  await run.fn(counting).catch(() => {});
+  return n;
+}
+
+for (const [kind, consentOp] of Object.entries(CONSENT_OPS)) {
+  test(`no consent stamp survives a started deletion, in every interleaving with a myConsent ${kind}; a retry converges`, async () => {
+    const k = await opCount({ fn: consentOp });
+    const n = 8; // the deletion's first calls: profiles, marker, clear, consent rows, withdrawal, clear, audit…
+    const schedules = placements(n, k);
+    // …and the myConsent call entirely after the deletion stopped.
+    schedules.push([...Array(60).fill('D'), ...Array(k).fill('C')]);
+    let stampedThenUndone = 0;
+    for (const schedule of schedules) {
+      const { tables } = raceWorld();
+      const sched = scheduler(schedule);
+      const d = scheduledDb(tables, 'D', sched, DELETION_STOPS);
+      const c = scheduledDb(tables, 'C', sched);
+      const [dr, cr] = await Promise.allSettled([
+        del(d, USERS.parent).finally(() => sched.finish('D')),
+        consentOp(c).finally(() => sched.finish('C')),
+      ]);
+      const label = schedule.join('');
+      assert.equal(dr.status, 'rejected', `${label}: the deletion stops at the profiles (429)`);
+      const profile = tables.UserProfile.find((x) => x.id === 'p-parent');
+      assert.ok(profile, label);
+      assert.equal(serverStampIsCurrent(profile), false, `${label}: a stamp survived the started deletion`);
+      if (c.writes.some((w) => w.entity === 'UserProfile' && w.data?.consent_notice_version === '2026-10-02')) stampedThenUndone += 1;
+      // If myConsent answered "all good", it did so before the deletion began.
+      if (cr.status === 'fulfilled' && cr.value.status === 200 && cr.value.body.required === false) {
+        assert.ok(c.writes.some((w) => w.entity === 'UserProfile'), `${label}: claimed consent without stamping`);
+      }
+
+      const retry = await del(scheduledDb(tables, 'R', null), { ...USERS.parent, ...tables.User.find((u) => u.id === 'u-parent') });
+      assert.equal(retry.status, 200, `${label}: retry ${JSON.stringify(retry.body)}`);
+      assert.equal(tables.UserProfile.some((x) => x.user_id === 'u-parent'), false, label);
+    }
+    assert.ok(stampedThenUndone > 0, 'the harness reaches the interleavings where myConsent stamped mid-deletion');
+  });
+}
+
+// Codex review of PR #197, round 4: two ACTIVE directors confirming at once
+// both passed the read-only sole-director check, and their retries skipped
+// it — the school lost both. Each director now claims its seat (a claim row
+// the server timestamps), re-reads, and only the RESERVATION skips the check
+// on a retry.
+function twoDirectors() {
+  const w = world({ withSecondAdmin: true });
+  w.tables.User.push({ id: 'u-admin2', email: 'dir2@ejemplo.mx' });
+  return w;
+}
+
+test('two directors deleting at once, in every interleaving: exactly one leaves, the school keeps a director', async () => {
+  const k = 6; // each one's claim phase: marker, claim, directors, claims, (school), reservation / give-back
+  const schedules = placements(k, k).map((p) => ['D', 'D', 'D', 'C', 'C', 'C', ...p]);
+  for (const schedule of schedules) {
+    const { tables } = twoDirectors();
+    let t = 0;
+    const clock = () => new Date(Date.UTC(2026, 9, 2, 12, 0, 0, t += 1)).toISOString();
+    const sched = scheduler(schedule);
+    const a = scheduledDb(tables, 'D', sched, { clock });
+    const b = scheduledDb(tables, 'C', sched, { clock });
+    const [ra, rb] = await Promise.all([
+      del(a, USERS.admin).finally(() => sched.finish('D')),
+      del(b, USERS.admin2).finally(() => sched.finish('C')),
+    ]);
+    const label = schedule.join('');
+    const codes = [ra, rb].map((r) => r.status === 200 ? 'ok' : r.body.code).sort();
+    assert.deepEqual(codes, ['SOLE_ADMIN', 'ok'], `${label}: ${JSON.stringify([ra.body, rb.body])}`);
+    const admins = tables.UserProfile.filter((p) => p.school_id === 'sA' && p.app_role === 'ADMIN' && p.status === 'ACTIVE');
+    assert.equal(admins.length, 1, `${label}: the school keeps one director`);
+    const loserId = admins[0].user_id;
+    const loser = tables.User.find((u) => u.id === loserId);
+    assert.equal(loser.account_deletion_started_at || '', '', `${label}: the loser can use the app again`);
+    assert.equal(loser.account_deletion_reserved_at, undefined, label);
+    assert.equal(tables.AuditLog.some((r) => r.target_type === 'AccountDeletionClaim' && r.user_id === loserId), false, `${label}: the loser's claim is gone`);
+    const loserResult = ra.status === 200 ? rb : ra;
+    assert.equal(loserResult.body.blocked, false, label);
+    // Its retry: now really the only director — refused, nothing written.
+    const again = makeFakeMongoDb(tables, { idPrefix: 'r' });
+    const retry = await del(again, { ...USERS.admin2, id: loserId, ...loser });
+    assert.equal(retry.body.code, 'SOLE_ADMIN', label);
+    assert.equal(again.writes.length, 0, label);
+  }
+});
+
+test('a director who loses the seat but cannot clear its own mark is told it is blocked, in Spanish', async () => {
+  const { tables } = twoDirectors();
+  // The other director already holds an earlier claim.
+  tables.AuditLog.push({ id: 'claim-1', target_type: 'AccountDeletionClaim', target_id: 'sA', user_id: 'u-admin', school_id: 'sA', created_date: '2026-10-02T11:00:00.000Z' });
+  // The give-back of the marker (2nd User.update) fails, and so does its retry.
+  const db = makeFakeMongoDb(tables, { failOn: [2, 3].map((nth) => ({ entity: 'User', op: 'update', nth, message: 'Forbidden', status: 403 })) });
+  const r = await del(db, USERS.admin2);
+  assert.deepEqual([r.status, r.body.code, r.body.blocked], [409, 'SOLE_ADMIN', true]);
+  assert.equal(tables.AuditLog.some((x) => x.user_id === 'u-admin2' && x.target_type === 'AccountDeletionClaim'), false, 'its claim is given back');
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-admin2'), true, 'nothing destructive happened');
+  assert.match(deletionErrorMessage('SOLE_ADMIN', { blocked: true }), /bloqueada[\s\S]*soporte@acaciaco\.com\.mx/);
+  assert.match(read('src/pages/EliminarCuenta.jsx'), /deletionErrorMessage\(code, \{ blocked: functionErrorBody\(e\)\?\.blocked === true \}\)/);
+});
+
+// Codex review of PR #197, round 5: a failed write is not proof nothing was
+// written. The reservation write may commit and lose its answer; giving the
+// seat back then would let a retry skip the check while the other director
+// leaves too.
+function reservationWriteFails(tables, { commits, getFails = false }) {
+  const db = makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } });
+  const update = db.entities.User.update;
+  const get = db.entities.User.get;
+  let attempted = false;
+  db.entities.User.update = async (id, patch) => {
+    if ('account_deletion_reserved_at' in patch) {
+      attempted = true;
+      if (commits) await update(id, patch);
+      throw new Error('socket hang up');
+    }
+    return update(id, patch);
+  };
+  // The read-back after the failed write fails too (the earlier reads work).
+  db.entities.User.get = async (id) => {
+    if (getFails && attempted) throw new Error('socket hang up');
+    return get(id);
+  };
+  return db;
+}
+
+test('the reservation committed but its answer was lost: the deletion carries on, the seat stays taken', async () => {
+  const { tables } = twoDirectors();
+  const r = await del(reservationWriteFails(tables, { commits: true }), USERS.admin);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-admin'), false);
+  assert.equal(tables.UserProfile.filter((p) => p.school_id === 'sA' && p.app_role === 'ADMIN' && p.status === 'ACTIVE').length, 1);
+  // The other director cannot leave now.
+  const other = await del(makeFakeMongoDb(tables, { idPrefix: 'o' }), USERS.admin2);
+  assert.equal(other.body.code, 'SOLE_ADMIN');
+});
+
+test('the reservation provably absent: the seat and the mark are given back', async () => {
+  const { tables } = twoDirectors();
+  const r = await del(reservationWriteFails(tables, { commits: false }), USERS.admin);
+  assert.deepEqual([r.status, r.body.code], [503, 'DELETION_NOT_STARTED']);
+  const me = tables.User.find((u) => u.id === 'u-admin');
+  assert.equal(me.account_deletion_started_at, '');
+  assert.equal(me.account_deletion_reserved_at, undefined);
+  assert.equal(tables.AuditLog.some((x) => x.target_type === 'AccountDeletionClaim' && x.user_id === 'u-admin'), false);
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-admin'), true, 'nothing destructive');
+});
+
+test('the reservation cannot be read back: the claim is KEPT (the other director is refused), and a retry finishes', async () => {
+  const { tables } = twoDirectors();
+  const r = await del(reservationWriteFails(tables, { commits: true, getFails: true }), USERS.admin);
+  assert.deepEqual([r.status, r.body.code], [503, 'DELETION_NOT_STARTED']);
+  assert.ok(tables.AuditLog.some((x) => x.target_type === 'AccountDeletionClaim' && x.user_id === 'u-admin'), 'claim kept');
+  assert.equal(tables.UserProfile.some((p) => p.user_id === 'u-admin'), true, 'nothing destructive');
+  const other = await del(makeFakeMongoDb(tables, { idPrefix: 'o' }), USERS.admin2);
+  assert.equal(other.body.code, 'SOLE_ADMIN', 'the school is never left empty');
+  // Its own retry (the reservation was in fact stored) finishes.
+  const me = tables.User.find((u) => u.id === 'u-admin');
+  const retry = await del(makeFakeMongoDb(tables, { idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.admin, ...me });
+  assert.equal(retry.status, 200, JSON.stringify(retry.body));
+  assert.equal(tables.UserProfile.filter((p) => p.school_id === 'sA' && p.app_role === 'ADMIN' && p.status === 'ACTIVE').length, 1);
+});
+
+// Codex review of PR #197, round 6: the losing director cleared its claims
+// but not its marker (both attempts failed); the winner then left. The loser
+// was the school's only director, blocked by the marker, and every retry
+// stopped at the sole-director pre-check without clearing it.
+async function strandedLoser() {
+  const { tables } = twoDirectors();
+  // u-admin claimed first.
+  tables.AuditLog.push({ id: 'claim-1', target_type: 'AccountDeletionClaim', target_id: 'sA', user_id: 'u-admin', school_id: 'sA', created_date: '2026-10-02T11:00:00.000Z' });
+  const loserDb = makeFakeMongoDb(tables, { idPrefix: 'l', failOn: [2, 3].map((nth) => ({ entity: 'User', op: 'update', nth, message: 'Forbidden', status: 403 })) });
+  const lost = await del(loserDb, USERS.admin2);
+  assert.deepEqual([lost.body.code, lost.body.blocked], ['SOLE_ADMIN', true]);
+  const winner = await del(makeFakeMongoDb(tables, { idPrefix: 'w', integrations: { Core: { SendEmail: async () => {} } } }), USERS.admin);
+  assert.equal(winner.status, 200, JSON.stringify(winner.body));
+  const loser = tables.User.find((u) => u.id === 'u-admin2');
+  assert.ok(loser.account_deletion_started_at, 'stranded: the marker is still there');
+  return { tables, loser };
+}
+
+async function assertUsableDirector(tables) {
+  const loser = tables.User.find((u) => u.id === 'u-admin2');
+  assert.equal(loser.account_deletion_started_at, '', 'marker cleared');
+  assert.equal(tables.AuditLog.some((x) => x.target_type === 'AccountDeletionClaim' && x.user_id === 'u-admin2'), false);
+  const profile = tables.UserProfile.find((p) => p.user_id === 'u-admin2');
+  assert.deepEqual([profile.app_role, profile.status], ['ADMIN', 'ACTIVE']);
+  // Nothing irreversible had happened before the reservation: the consent
+  // stamp is intact, so the gates pass without even re-consenting.
+  assert.equal(serverStampIsCurrent(profile), true);
+  const status = await consentStatus(makeFakeMongoDb(tables), { ...USERS.admin2, ...loser });
+  assert.deepEqual([status.body.required, status.body.deletionInProgress], [false, undefined]);
+  assert.equal(decideConsentGate({ user: { ...USERS.admin2, ...loser }, profile }), 'pass');
+  const schoolRead = read('base44/functions/schoolRead/entry.ts');
+  const helper = schoolRead.match(/\nfunction accountDeletionBlocked[\s\S]*?\n}\n/)[0];
+  const blocked = new Function(`${helper.replace(/: unknown|: boolean|\bas \{[\s\S]*?\};/g, (m) => (m.startsWith('as') ? ';' : ''))} return accountDeletionBlocked;`)();
+  assert.equal(blocked(loser), false, 'every function gate lets them in');
+}
+
+test('a stranded losing director: the next PREVIEW cancels the started deletion and leaves a usable director', async () => {
+  const { tables, loser } = await strandedLoser();
+  const preview = await previewDeletion(makeFakeMongoDb(tables, { idPrefix: 'p' }), { ...USERS.admin2, ...loser });
+  assert.deepEqual([preview.body.cancelled, preview.body.blocked, preview.body.soleAdmin], [true, false, true]);
+  await assertUsableDirector(tables);
+});
+
+test('a stranded losing director: the next CONFIRM cancels instead of refusing as-is', async () => {
+  const { tables, loser } = await strandedLoser();
+  const r = await del(makeFakeMongoDb(tables, { idPrefix: 'c' }), { ...USERS.admin2, ...loser });
+  assert.deepEqual([r.status, r.body.code, r.body.blocked], [409, 'SOLE_ADMIN', false]);
+  await assertUsableDirector(tables);
+});
+
+test('a stranded losing director: the explicit cancel works, is idempotent, and retries a failed clear', async () => {
+  const { tables, loser } = await strandedLoser();
+  // The clear fails again: blocked, and the next cancel tries again.
+  const failing = await cancelDeletion(makeFakeMongoDb(tables, { idPrefix: 'f', failOn: { entity: 'User', op: 'update', message: 'Forbidden', status: 403 } }), { ...USERS.admin2, ...loser });
+  assert.deepEqual([failing.status, failing.body.code, failing.body.blocked], [503, 'CANCEL_FAILED', true]);
+  const ok = await cancelDeletion(makeFakeMongoDb(tables, { idPrefix: 'k' }), { ...USERS.admin2, ...loser });
+  assert.deepEqual([ok.status, ok.body.cancelled], [200, true]);
+  const again = await cancelDeletion(makeFakeMongoDb(tables, { idPrefix: 'k2' }), USERS.admin2);
+  assert.equal(again.status, 200, 'idempotent');
+  await assertUsableDirector(tables);
+});
+
+test('cancel is refused once the reservation exists (or the account is marked deleted)', async () => {
+  const { tables } = twoDirectors();
+  const me = tables.User.find((u) => u.id === 'u-admin');
+  Object.assign(me, { account_deletion_started_at: NOW.toISOString(), account_deletion_reserved_at: NOW.toISOString() });
+  const r = await cancelDeletion(makeFakeMongoDb(tables), USERS.admin);
+  assert.deepEqual([r.status, r.body.code], [409, 'DELETION_RESERVED']);
+  assert.equal(me.account_deletion_started_at, NOW.toISOString(), 'nothing undone');
+  const deleted = await cancelDeletion(makeFakeMongoDb(tables), { ...USERS.parent, account_deleted_at: NOW.toISOString() });
+  assert.equal(deleted.body.code, 'DELETION_RESERVED');
+  assert.match(deletionErrorMessage('DELETION_RESERVED'), /ya pasó el punto/);
+});
+
+test('before the reservation a deletion writes only its marker and its seat claims — which is why it can be cancelled', async () => {
+  const { tables } = twoDirectors();
+  const db = makeFakeMongoDb(tables, { integrations: { Core: { SendEmail: async () => {} } } });
+  const r = await del(db, USERS.admin);
+  assert.equal(r.status, 200);
+  const reservedAt = db.writes.findIndex((w) => w.entity === 'User' && w.data && 'account_deletion_reserved_at' in w.data);
+  assert.ok(reservedAt > 0);
+  for (const w of db.writes.slice(0, reservedAt)) {
+    const ok = (w.entity === 'User' && Object.keys(w.data).join() === 'account_deletion_started_at')
+      || (w.entity === 'AuditLog' && w.op === 'create' && w.data.target_type === 'AccountDeletionClaim');
+    assert.ok(ok, `irreversible write before the reservation: ${JSON.stringify(w).slice(0, 200)}`);
+  }
+  const page = read('src/pages/EliminarCuenta.jsx');
+  assert.match(page, /Cancelar la baja y volver/);
+  assert.match(page, /await cancelAccountDeletion\(\);\s*await backToTheApp\(\);/);
+  assert.match(page, /invalidateQueries\(\{ queryKey: \['currentUser'\] \}\)/, 'ConsentGate decides again from a fresh user');
+  assert.match(read('base44/functions/deleteMyAccount/entry.ts'), /action === 'cancel'[\s\S]*?cancelDeletion\(sr, user\)/);
+});
+
+test('only the RESERVATION skips the director check on a retry, not the started mark', async () => {
+  const { tables } = twoDirectors();
+  // Started but never reserved (its claim phase was cut short).
+  tables.User.find((u) => u.id === 'u-admin').account_deletion_started_at = NOW.toISOString();
+  tables.UserProfile = tables.UserProfile.filter((p) => p.user_id !== 'u-admin2');
+  const r = await del(makeFakeMongoDb(tables), { ...USERS.admin, account_deletion_started_at: NOW.toISOString() });
+  assert.equal(r.body.code, 'SOLE_ADMIN', 'still judged');
+  const preview = await previewDeletion(makeFakeMongoDb(tables), USERS.admin);
+  assert.deepEqual([preview.body.resume, preview.body.soleAdmin], [false, true]);
+});
+
+test('the deletion marker is written before anything else; if it fails, nothing changed and the person can still accept', async () => {
+  const { tables } = raceWorld();
+  const before = structuredClone(tables);
+  const db = makeFakeMongoDb(tables, { failOn: { entity: 'User', op: 'update', nth: 1, message: 'Forbidden', status: 403 } });
+  const r = await del(db, USERS.parent);
+  assert.deepEqual([r.status, r.body.code], [503, 'DELETION_NOT_STARTED']);
+  assert.deepEqual(tables, before, 'not one row changed');
+  assert.match(deletionErrorMessage('DELETION_NOT_STARTED'), /No se cambió nada/);
+  const accepted = await acceptConsent(makeFakeMongoDb(tables), USERS.parent, ACCEPT_BODY, NOW, 'x');
+  assert.equal(accepted.status, 200, 'nothing started, so nothing blocks the acceptance');
+});
+
+test('a started deletion blocks re-acceptance and repair, and the app shows the deletion page to finish it', async () => {
+  const { tables } = raceWorld();
+  // Stopped part-way, before the account is marked deleted.
+  const stopped = await del(makeFakeMongoDb(tables, { failOn: { entity: 'AbsenceNotification', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } }), USERS.parent).catch((e) => e);
+  assert.match(String(stopped?.message), /Rate limit/);
+  const userRow = tables.User.find((u) => u.id === 'u-parent');
+  assert.ok(userRow.account_deletion_started_at);
+  // The token may or may not carry the marker: the stored User decides.
+  for (const caller of [USERS.parent, { ...USERS.parent, ...userRow }]) {
+    const accept = await acceptConsent(makeFakeMongoDb(tables), caller, ACCEPT_BODY, NOW, 'x');
+    assert.deepEqual([accept.status, accept.body.code], [409, 'ACCOUNT_DELETION_IN_PROGRESS']);
+    const status = await consentStatus(makeFakeMongoDb(tables), caller);
+    assert.equal(status.body.deletionInProgress, true);
+    assert.notEqual(status.body.repaired, true);
+  }
+  assert.equal(tables.ConsentRecord.filter((c) => c.event === 'ACCEPTED' && c.source === 'reacceptance').length, 0);
+
+  const profile = tables.UserProfile.find((p) => p.id === 'p-parent');
+  const gate = (extra) => decideConsentGate({ user: { ...USERS.parent, ...userRow }, profile, pathname: '/', ...extra });
+  assert.equal(gate(), 'deletion_in_progress');
+  // Even with a stamp a race might have left: the marker wins.
+  assert.equal(decideConsentGate({ user: { ...USERS.parent, ...userRow }, profile: { ...profile, consent_notice_version: '2026-10-02', consent_terms_version: '2026-10-02' } }), 'deletion_in_progress');
+  // Marked deleted but a profile is still there (the profile delete failed): finish it too.
+  assert.equal(decideConsentGate({ user: { id: 'u', account_deleted_at: NOW.toISOString() }, profile }), 'deletion_in_progress');
+  assert.equal(decideConsentGate({ user: { id: 'u', account_deleted_at: NOW.toISOString() }, profile: null }), 'deleted');
+  // A token without the marker: the status answer routes the same way.
+  assert.equal(decideConsentGate({ user: USERS.parent, profile, status: { ok: true, required: true, deletionInProgress: true } }), 'deletion_in_progress');
+
+  const gateSrc = read('src/components/consent/ConsentGate.jsx');
+  assert.match(gateSrc, /decision === 'deletion_in_progress'[\s\S]*?<EliminarCuenta gated resume \/>/);
+  const page = read('src/pages/EliminarCuenta.jsx');
+  assert.match(page, /\{finishing \? null : \(/, 'no "Volver y aceptar" while finishing');
+
+  // The page's retry finishes it.
+  const retry = await del(makeFakeMongoDb(tables, { idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.parent, ...userRow });
+  assert.equal(retry.status, 200);
+  assert.equal(tables.User.find((u) => u.id === 'u-parent'), undefined);
+});
+
+test('a started deletion is finished even if the person became the only director meanwhile', async () => {
+  const two = world({ withSecondAdmin: true });
+  const stop = { failOn: { entity: 'AbsenceNotification', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } };
+  await assert.rejects(() => del(makeFakeMongoDb(two.tables, stop), USERS.admin), /Rate limit/);
+  // The other director leaves before the retry.
+  two.tables.UserProfile = two.tables.UserProfile.filter((p) => p.user_id !== 'u-admin2');
+  const userRow = two.tables.User.find((u) => u.id === 'u-admin');
+  const r = await del(makeFakeMongoDb(two.tables, { idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.admin, ...userRow });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  // Without a started deletion the same state is still refused.
+  assert.equal((await del(world().db, USERS.admin)).body.code, 'SOLE_ADMIN');
+});
+
+test('every function a signed-in person can call refuses a started deletion, right after authenticating', () => {
+  // The only two that must keep answering: the deletion itself (to finish
+  // it) and myConsent (to say "deletion in progress"; it refuses to stamp).
+  const EXEMPT = ['deleteMyAccount', 'myConsent'];
+  const helper = (src) => src.match(/\nfunction accountDeletionBlocked[\s\S]*?\n}\n/)?.[0];
+  const reference = helper(read('base44/functions/schoolRead/entry.ts'));
+  assert.ok(reference);
+  const blocked = new Function(`${reference.replace(/: unknown|: boolean|\bas \{[\s\S]*?\};/g, (m) => (m.startsWith('as') ? ';' : ''))} return accountDeletionBlocked;`)();
+  assert.equal(blocked({ account_deletion_started_at: NOW.toISOString() }), true);
+  assert.equal(blocked({ data: { account_deleted_at: NOW.toISOString() } }), true);
+  assert.equal(blocked({ account_deletion_started_at: '' }), false);
+  assert.equal(blocked({ id: 'u' }), false);
+  const gated = [];
+  for (const dir of fs.readdirSync(new URL('base44/functions/', ROOT))) {
+    let src = '';
+    try { src = read(`base44/functions/${dir}/entry.ts`); } catch { continue; }
+    const auth = src.search(/\n\s+const user = await base44\.auth\.me\(\)/);
+    if (auth < 0 || EXEMPT.includes(dir)) continue; // acaciaControl: HMAC, no user
+    gated.push(dir);
+    assert.equal(helper(src), reference, `${dir}: the helper is the same code`);
+    const gate = src.indexOf('if (accountDeletionBlocked(user)) return');
+    const firstEntity = src.indexOf('.entities.', auth);
+    const body = src.indexOf('req.json()', auth);
+    assert.ok(gate > auth && (firstEntity < 0 || gate < firstEntity) && (body < 0 || gate < body), `${dir}: refused right after auth.me(), before the body or any entity`);
+  }
+  // Including the ones Codex named: the consent-exempt export and onboarding,
+  // which writes consent and a profile.
+  for (const fn of ['exportSchoolData', 'provisionOnboardingProfile', 'getMySubscription', 'markWelcomeShown', 'schoolRead', 'guardedEntityWrite']) assert.ok(gated.includes(fn), fn);
+  const schema = readJsonc('base44/entities/User.jsonc').properties.account_deletion_started_at;
+  assert.deepEqual(schema?.rls, { write: false }, 'only the service role writes the marker');
+});
+
+test('onboarding refuses an account whose deletion started (it writes consent and a profile)', async () => {
+  const started = { id: 'u-x', email: 'x@y.mx', account_deletion_started_at: NOW.toISOString() };
+  await assert.rejects(
+    () => runOnboardingProvision({ user: started, body: { role: 'PARENT' }, sr: { entities: {} } }),
+    (e) => e.code === 'ACCOUNT_DELETION_IN_PROGRESS' && e.status === 403,
+  );
+});
+
+test('a bulk step that still has rows at its bound FAILS before the account is marked or removed; a retry finishes', async () => {
+  const { tables } = world();
+  const rows = MAX_UPDATE_BATCHES * 500 + 1; // one more than the bound can reach
+  tables.Attendance = Array.from({ length: rows }, (_, i) => ({ id: `at-${i}`, school_id: 'sA', recorded_by: 'u-teacher', recorded_by_name: 'Maestra Ana' }));
+  const db = makeFakeMongoDb(tables, { batchSize: 500, integrations: { Core: { SendEmail: async () => {} } } });
+  await assert.rejects(() => del(db, USERS.teacher), (e) => e instanceof DeletionIncompleteError && e.code === 'DELETION_INCOMPLETE' && e.status === 503);
+  const userRow = tables.User.find((u) => u.id === 'u-teacher');
+  assert.ok(userRow, 'not removed');
+  assert.equal(accountDeletedAt(userRow), '', 'not marked deleted');
+  assert.ok(tables.UserProfile.some((p) => p.user_id === 'u-teacher'), 'profiles kept');
+  assert.equal(tables.Attendance.filter((a) => a.recorded_by_name !== ANONYMIZED_NAME).length, 1);
+  assert.match(deletionErrorMessage('DELETION_INCOMPLETE'), /Vuelve a intentarlo/);
+  const entry = read('base44/functions/deleteMyAccount/entry.ts');
+  assert.match(entry, /e instanceof DeletionIncompleteError[\s\S]*?status: e\.status/);
+
+  const retry = await del(makeFakeMongoDb(tables, { batchSize: 500, idPrefix: 'r', integrations: { Core: { SendEmail: async () => {} } } }), { ...USERS.teacher, ...userRow });
+  assert.equal(retry.status, 200, JSON.stringify(retry.body));
+  assert.equal(tables.Attendance.every((a) => a.recorded_by_name === ANONYMIZED_NAME), true);
+  assert.equal(tables.User.some((u) => u.id === 'u-teacher'), false);
+});
+
+test('a started deletion previews as "finish it", never as the sole-director path, and the page always offers the button', async () => {
+  const two = world({ withSecondAdmin: true });
+  const stop = { failOn: { entity: 'AbsenceNotification', op: 'deleteMany', message: 'Rate limit exceeded', status: 429 } };
+  await assert.rejects(() => del(makeFakeMongoDb(two.tables, stop), USERS.admin), /Rate limit/);
+  two.tables.UserProfile = two.tables.UserProfile.filter((p) => p.user_id !== 'u-admin2');
+  // The token may or may not carry the marker: the stored User decides.
+  for (const caller of [USERS.admin, { ...USERS.admin, ...two.tables.User.find((u) => u.id === 'u-admin') }]) {
+    const preview = await previewDeletion(makeFakeMongoDb(two.tables), caller);
+    assert.equal(preview.body.soleAdmin, false);
+    assert.equal(preview.body.resume, true);
+    assert.equal(deletionPageMode({ preview: preview.body }), 'confirm');
+  }
+  // Not started: still the sole-director path.
+  const fresh = await previewDeletion(world().db, USERS.admin);
+  assert.deepEqual([fresh.body.soleAdmin, fresh.body.resume], [true, false]);
+  assert.equal(deletionPageMode({ preview: fresh.body }), 'sole_admin');
+  // The page: finishing never shows the sole-admin branch, even on an old answer.
+  assert.equal(deletionPageMode({ preview: fresh.body, resume: true }), 'confirm');
+  assert.equal(deletionPageMode({ preview: { platformOwner: true } }), 'owner');
+  const page = read('src/pages/EliminarCuenta.jsx');
+  assert.match(page, /const mode = deletionPageMode\(\{ preview, resume \}\);/);
+  assert.match(page, /mode === 'sole_admin' \? \(/);
+  assert.doesNotMatch(page, /preview\?\.soleAdmin \?/);
+});
+
+test('every entity and field the deletion writes exists in the schemas', () => {
+  for (const [entity, idField, nameField] of ANONYMIZE) {
+    const props = readJsonc(`base44/entities/${entity}.jsonc`).properties;
+    assert.ok(idField in props, `${entity}.${idField}`);
+    assert.ok(nameField in props, `${entity}.${nameField}`);
+  }
+  const p = (e) => readJsonc(`base44/entities/${e}.jsonc`).properties;
+  assert.ok(p('ParentStudent').status.enum.includes('REVOKED'));
+  assert.ok('is_active' in p('TeacherClassroom'));
+  assert.ok('revoked_at' in p('AppSession') && 'revoked_by' in p('AppSession'));
+  assert.ok(p('AbsenceNotification').status.enum.includes('PENDING'));
+  assert.ok(p('UniformOrder').status.enum.includes('PENDING'));
+  assert.ok('notified_parent_emails' in p('DiaryEntry'));
+  assert.ok('pending_notification_recipients' in p('UserProfile'));
+  assert.ok('escalation_notified_recipients' in p('SupportTicket'));
+  const user = p('User');
+  assert.equal(user.account_deleted_at.rls.write, false, 'only the service role marks an account deleted');
+  const consent = readJsonc('base44/entities/ConsentRecord.jsonc');
+  assert.deepEqual(consent.properties.event.enum, ['ACCEPTED', 'WITHDRAWN']);
+  assert.ok('withdrawn_at' in consent.properties);
+  assert.equal(consent.required.includes('accepted_at'), false, 'a withdrawal has no acceptance time');
+  // Append-only evidence: still nobody but the service role writes, nobody deletes.
+  for (const op of ['create', 'update', 'delete']) {
+    assert.deepEqual(consent.rls[op], { user_condition: { role: '__service_role_only__' } });
+  }
+  // The audit actions it writes are in the enum and nobody else may claim them.
+  const actions = readJsonc('base44/entities/AuditLog.jsonc').properties.action.enum;
+  for (const a of ['PRIVACY_CONSENT_WITHDRAWN', 'ACCOUNT_DELETED']) {
+    assert.ok(actions.includes(a), a);
+    assert.equal(ACTION_TIER[a], 'SERVER', `${a} is server-only in recordAuditEvent`);
+  }
+});
+
+// ── The legal text, the page and the function say the same thing ───────────
+
+const aviso = PRIVACY_NOTICE.sections.map((s) => [s.heading, ...(s.paragraphs || []), ...(s.items || []), s.closing || ''].join('\n')).join('\n');
+const terminos = SERVICE_TERMS.sections.map((s) => [s.heading, ...(s.paragraphs || []), ...(s.items || [])].join('\n')).join('\n');
+
+test('the page is the option the legal texts name, reachable by every role', () => {
+  assert.equal(ACCOUNT_DELETION_TITLE, ACCOUNT_DELETION_LABEL);
+  assert.ok(aviso.includes(`"${ACCOUNT_DELETION_LABEL}"`));
+  assert.ok(terminos.includes(`"${ACCOUNT_DELETION_LABEL}"`));
+  for (const role of [ROLES.ADMIN, ROLES.TEACHER, ROLES.PARENT]) {
+    assert.ok(getDestinations(role).some((d) => d.page === ACCOUNT_DELETION_PAGE), `${role} menu`);
+    assert.ok(ROUTE_ACCESS[ACCOUNT_DELETION_PAGE].includes(role), `${role} route`);
+  }
+  assert.equal(ACCOUNT_DELETION_PATH, '/EliminarCuenta');
+  assert.match(read('src/pages.config.js'), /"EliminarCuenta": EliminarCuenta/);
+  // The danger zone of Permisos y Roles leads there too.
+  assert.match(read('src/pages/PermisosRoles.jsx'), /<Link to=\{ACCOUNT_DELETION_PATH\}>/);
+});
+
+test('what the page promises matches the legal text and what the function does', () => {
+  const s10 = PRIVACY_NOTICE.sections.find((s) => s.id === 'revocacion').paragraphs.join('\n');
+  assert.match(s10, /tu acceso se cierra de inmediato/);
+  assert.match(s10, new RegExp(`dentro de ${PURGE_DAYS} días`));
+  assert.match(s10, /asistencia, bitácora, cargos y pagos/);
+  assert.match(s10, /sin tu nombre/);
+  assert.match(s10, /ausencias y pedidos de uniforme/);
+  assert.match(s10, /única persona de la dirección/);
+  assert.equal(SERVER_PURGE_DAYS, PURGE_DAYS);
+
+  const parent = deletedItems('PARENT').join('\n');
+  assert.match(parent, /de inmediato/);
+  assert.match(parent, new RegExp(`${PURGE_DAYS} días`));
+  assert.match(parent, /vínculos con tus hijos/);
+  assert.match(parent, /ausencias y pedidos de uniforme pendientes/);
+  assert.match(keptItems('PARENT').join('\n'), /asistencia, bitácora, cargos y pagos/);
+  assert.match(keptItems('TEACHER').join('\n'), /sin tu nombre/);
+  assert.match(deletedItems('TEACHER').join('\n'), /asignaciones de salón/);
+  for (const role of ['PARENT', 'TEACHER', 'ADMIN']) {
+    const kept = keptItems(role).join('\n');
+    assert.match(kept, /constancia de tu consentimiento y de su retiro/);
+    assert.match(kept, /Lumi/);
+  }
+  assert.match(deletionErrorMessage('SOLE_ADMIN'), /única persona/);
+  assert.match(deletionErrorMessage('WHATEVER'), /soporte@acaciaco\.com\.mx/);
+});
+
+test('no text promises what code cannot do: Lumi conversations are requested from Base44, not "deleted"', () => {
+  // Neither the SDK's agents module nor Base44's platform API can delete an
+  // agent conversation (checked 2026-10-02). The texts used to say they were
+  // deleted with the account.
+  const everything = aviso + terminos + RETENTION_TABLE.map((r) => r.data + r.period).join('\n') + keptItems('PARENT').join('\n');
+  assert.doesNotMatch(everything, /conversaciones con Lumi se suprimen/);
+  assert.doesNotMatch(everything, /se suprimen con ella/);
+  assert.match(aviso, /ACACIA solicita a Base44 su supresión/);
+  const lumiRow = RETENTION_TABLE.find((r) => /Lumi/.test(r.data));
+  assert.equal(lumiRow.days, null, 'the period depends on Base44, so no number is promised');
+  const agents = read('node_modules/@base44/sdk/dist/modules/agents.js');
+  assert.doesNotMatch(agents, /axios\.delete/, 'if the SDK gains a delete, use it in deleteMyAccount and restore the promise');
+});
+
+test('the page: typed confirmation, a way back, and the sole-director path without consent', () => {
+  const page = read('src/pages/EliminarCuenta.jsx');
+  assert.match(page, /disabled=\{deleting \|\| !confirmationMatches\(confirmText\)\}/);
+  assert.match(page, /Volver y aceptar/);
+  assert.match(page, /'Cancelar'/);
+  assert.match(page, /createSupportTicket\(\{/);
+  assert.match(page, /SUPPORT_CATEGORIES\.ACCOUNT/);
+  assert.match(page, /downloadSchoolExport/);
+  assert.match(page, /sessionStorage\.setItem\(ACCOUNT_DELETED_FLAG_KEY/);
+  assert.match(page, /logout\(\)/);
+  assert.doesNotMatch(page, /base44\.entities\./, 'the page writes nothing itself');
+  // 44px targets on every action, and dark-mode tokens rather than white.
+  assert.ok((page.match(/min-h-11/g) || []).length >= 6);
+  assert.doesNotMatch(page, /bg-white(?!\/)/);
+  // A support ticket is the one write a not-yet-consenting caller may make.
+  const policy = read('base44/functions/guardedEntityWrite/_policy.ts');
+  assert.match(policy, /return entity === 'SupportTicket' && operation === 'create';/);
+  // The login screen confirms the deletion once the session is gone.
+  assert.match(read('src/pages/Login.jsx'), /sessionStorage\.getItem\(ACCOUNT_DELETED_FLAG_KEY\)/);
+});
+
+// ── Adversarial review (2026-10-02) ─────────────────────────────────────────
+
+test('every signed-in person can reach the deletion page, whatever their profile status', async () => {
+  // The texts promise the option "de tu cuenta" to every user. Before the
+  // review a PENDING person (already consented at onboarding) was denied the
+  // route (INACTIVE_PROFILE) and had no link to it.
+  const { getRouteAccessDecision, OWN_ACCOUNT_ROUTES } = await import('../../src/lib/authorization/routeAccess.js');
+  assert.deepEqual(OWN_ACCOUNT_ROUTES, ['EliminarCuenta']);
+  for (const profileStatus of ['PENDING', 'SUSPENDED', 'ACTIVE']) {
+    for (const role of ['ADMIN', 'TEACHER', 'PARENT']) {
+      assert.equal(getRouteAccessDecision({ role, routeName: 'EliminarCuenta', profileStatus }).allowed, true, `${role}/${profileStatus}`);
+    }
+  }
+  // No profile yet (onboarding): no role, no status.
+  assert.equal(getRouteAccessDecision({ routeName: 'EliminarCuenta' }).allowed, true, 'mid-onboarding');
+  // …and only that route: a PENDING profile still sees nothing else.
+  assert.equal(getRouteAccessDecision({ role: 'ADMIN', routeName: 'PagosAdmin', profileStatus: 'PENDING' }).allowed, false);
+  const fs = await import('node:fs');
+  const src = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8');
+  assert.match(src('src/components/ui/PendingApproval.jsx'), /<DeleteAccountLink \/>/);
+  const home = src('src/pages/Home.jsx');
+  assert.equal((home.match(/<DeleteAccountLink \/>/g) || []).length, 2, 'suspended + onboarding');
+  assert.match(src('src/components/account/DeleteAccountLink.jsx'), /min-h-11/);
+});
+
+test('someone with no role yet is not told about records "you published as staff"', () => {
+  assert.equal(keptItems(null).some((i) => /personal de la escuela/.test(i)), false);
+  assert.equal(keptItems('ADMIN').some((i) => /personal de la escuela/.test(i)), true);
+});

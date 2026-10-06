@@ -10,6 +10,22 @@ import { APP_VERSION, RELEASE_DATE } from '@/lib/appConfig';
 // ChangeLog pages.
 const CHANGES = [
   {
+    date: '2026-10-02',
+    title: 'Versión 1.9.0: aviso de privacidad vigente, tu cuenta, tu nombre y archivos más seguros',
+    items: [
+      'LIUMA te pregunta cómo te llamas y usa ese nombre para saludarte y para firmar tus avisos y bitácoras. Puedes cambiarlo cuando quieras desde tu cuenta.',
+      'Ya no verás tu correo en lugar de tu nombre en el saludo.',
+      'Lumi ya no te ofrece cosas que tu rol no puede hacer ni especula sobre cambios de rol.',
+      'El Aviso de Privacidad y los Términos ya son definitivos: dicen quién es responsable de tus datos, qué se guarda, por cuánto tiempo y con qué proveedores.',
+      'En el teléfono, los botones pequeños (tema, cerrar avisos, enlaces, días del calendario) ahora son más fáciles de tocar.',
+      'La próxima vez que entres, LIUMA te pedirá aceptar el Aviso de Privacidad y los Términos vigentes. Es obligatorio para seguir usando la app.',
+      'Nueva opción «Eliminar mi cuenta y mis datos», en el menú de todos: explica qué se elimina y qué conserva la escuela, y pide escribir ELIMINAR para confirmar.',
+      'Los archivos que sube la dirección (logo, documentos oficiales y de configuración) ahora se revisan antes de guardarse: tipo, tamaño y contenido.',
+      'Al pedirle a Lumi que registre algo, el código de confirmación sirve una sola vez y vence a los 10 minutos.',
+      'Si tu escuela llega al máximo de alumnos de su plan, LIUMA te lo dice al intentar agregar uno más.',
+    ],
+  },
+  {
     date: '2026-10-01',
     title: 'Versión 1.8.5: Lumi más preciso y Reportes más claro',
     items: [

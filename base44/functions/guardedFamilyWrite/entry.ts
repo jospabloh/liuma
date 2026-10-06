@@ -32,11 +32,12 @@
 //
 // The pure rules live in ./_policy.ts (tested by node --test).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
-import { FAMILY_OPERATIONS, absenceRaceLoser, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
+import { withDeletionGuard } from './_deletionGuard.ts';
+import { FAMILY_OPERATIONS, absenceRaceLoser, profileConsentIsCurrent, callerDisplayName, buildFamilyPayload, decideFamilyAccess, isCalendarDate, mexicoToday } from './_policy.ts';
 import { NOTIFICATION_TEMPLATES } from './_templates.ts';
 import { notifyStatusChange, statusEventFor } from './_statusNotify.ts';
 
-type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string };
+type Profile = { id: string; user_id?: string; school_id?: string; app_role?: string; status?: string; consent_notice_version?: string; consent_terms_version?: string };
 
 function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
@@ -65,11 +66,15 @@ function isRateLimitError(e: unknown): boolean {
   return err?.status === 429 || /rate limit/i.test(String(err?.message ?? ''));
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const entity = String(body?.entity || '');
@@ -78,7 +83,8 @@ Deno.serve(async (req) => {
     if (!FAMILY_OPERATIONS[entity]) return bad(400, 'UNKNOWN_ENTITY', 'Unsupported entity');
     if (!FAMILY_OPERATIONS[entity].includes(operation)) return bad(400, 'BAD_OPERATION', 'Unsupported operation');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
 
     // The student decides the school. On update/delete it comes from the
     // STORED record, so a client can't re-point an existing record.
@@ -110,6 +116,7 @@ Deno.serve(async (req) => {
       const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id, school_id: schoolId });
       const profile = profiles.find((p) => p.status === 'ACTIVE') || null;
       if (!profile) return bad(403, 'NO_PROFILE', 'No active profile in this school');
+      if (!profileConsentIsCurrent(profile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
       isAdmin = profile.app_role === 'ADMIN';
       if (!isAdmin) {
         const links: Array<{ school_id?: string }> = await sr.entities.ParentStudent.filter({
@@ -186,7 +193,8 @@ Deno.serve(async (req) => {
     const built = buildFamilyPayload(entity, operation, input, {
       isAdmin,
       userId: String(user.id),
-      userName: String(user.full_name || ''),
+      // Past the checks above a non-admin writes as the child's linked parent.
+      userName: callerDisplayName(user, isAdmin ? 'ADMIN' : 'PARENT'),
       schoolId,
       studentId,
       existing,
@@ -208,11 +216,22 @@ Deno.serve(async (req) => {
         20,
       );
       if (absenceRaceLoser(after, { ...built.data, ...record })) {
-        try {
-          await sr.entities.AbsenceNotification.delete(String(record.id));
-        } catch (e) {
-          console.error('guardedFamilyWrite: duplicate absence could not be removed', record.id, (e as Error)?.message);
-          return bad(500, 'ABSENCE_CONFLICT_UNRESOLVED', `absence ${record.id} duplicates another request and could not be removed`);
+        // The undo is retried, and falls back to REJECTED — a rejected
+        // request is not "live" (checkAbsenceRequest), so the day keeps one
+        // live request even if the duplicate cannot be removed. Only if both
+        // fail is the conflict reported as unresolved.
+        const id = String(record.id);
+        const tryTwice = async (fn: () => Promise<unknown>): Promise<boolean> => {
+          for (let i = 0; i < 2; i += 1) {
+            try { await fn(); return true; } catch (e) {
+              console.error('guardedFamilyWrite: duplicate absence undo failed', id, (e as Error)?.message);
+            }
+          }
+          return false;
+        };
+        const removed = await tryTwice(() => sr.entities.AbsenceNotification.delete(id));
+        if (!removed && !await tryTwice(() => sr.entities.AbsenceNotification.update(id, { status: 'REJECTED', admin_notes: 'Duplicada: ya había una solicitud para ese día.' }))) {
+          return bad(500, 'ABSENCE_CONFLICT_UNRESOLVED', `absence ${id} duplicates another request and could not be removed`);
         }
         return bad(409, 'ABSENCE_DUPLICATE', 'there is already a request for that day');
       }
@@ -250,6 +269,22 @@ Deno.serve(async (req) => {
         { status: 429, headers: { 'Retry-After': '3' } },
       );
     }
-    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('guardedFamilyWrite failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
-});
+}));
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

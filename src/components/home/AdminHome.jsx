@@ -210,7 +210,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
                   <p className="text-sm text-muted-foreground">{stat.label}</p>
                 </>
               );
-              const base = 'block h-full bg-card rounded-xl p-4 border border-border';
+              const base = 'block h-full bg-card rounded-xl p-3 min-[360px]:p-4 border border-border';
               return stat.href ? (
                 <button
                   key={stat.key}
@@ -238,7 +238,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Personas y operación
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
               <BigTile
                 icon={UserCheck}
                 title="Aprobaciones"
@@ -283,7 +283,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Comunicación
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
               <BigTile
                 icon={Bell}
                 title="Avisos"
@@ -313,7 +313,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Finanzas y servicios
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
               <BigTile
                 icon={CreditCard}
                 title="Pagos"
@@ -350,7 +350,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Reportes y seguridad
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
               <BigTile
                 icon={BarChart3}
                 title="Reportes"
@@ -379,7 +379,7 @@ export default function AdminHome({ user, userProfile, subscription }) {
             <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Configuración y soporte
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
               <BigTile
                 icon={Settings}
                 title="Configuración inicial"

@@ -87,6 +87,10 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return fail(401, 'UNAUTHENTICATED');
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
 
     const body: Row = await req.json().catch(() => ({}));
     const intent = String(body?.intent || '');
@@ -139,7 +143,8 @@ Deno.serve(async (req) => {
           ...base,
           // '' when full_name is only the email handle: Lumi must not guess a
           // name out of it (QA r5, LP12).
-          user_name: displayUserName(user.full_name, user.email),
+          // The name the user chose in LIUMA (User.display_name) first.
+          user_name: displayUserName(user.display_name || user.data?.display_name, user.email) || displayUserName(user.full_name, user.email),
           // What to offer, from the server's own intent table (not recalled
           // by the model): a docente is never offered pagos or uniformes.
           helps_with: helpsWith(scope.role, writable),
@@ -429,6 +434,22 @@ Deno.serve(async (req) => {
 
     return fail(400, 'UNKNOWN_INTENT');
   } catch (e) {
-    return Response.json({ ok: false, code: 'INTERNAL', message: errorMessage('INTERNAL'), error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('lumiQuery failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', message: errorMessage('INTERNAL'), error: 'INTERNAL' }, { status: 500 });
   }
 });
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

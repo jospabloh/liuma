@@ -209,6 +209,25 @@ test('if the overflow cannot be deleted, the director is told to fix it by hand 
   assert.equal(r.code, 'PAYMENT_CONFLICT_UNRESOLVED');
 });
 
+test('the overflow delete is retried once before the conflict is called unresolved', async () => {
+  const db = chargeStore();
+  db.tables.PaymentRecord.push({ id: 'p1', school_id: 'sA', charge_id: 'ch1', amount: 600, created_date: '2026-09-30T12:00:00.001Z' });
+  const mine = { id: 'p2', school_id: 'sA', charge_id: 'ch1', amount: 600, created_date: '2026-09-30T12:00:00.002Z' };
+  db.tables.PaymentRecord.push(mine);
+  const del = db.entities.PaymentRecord.delete;
+  let calls = 0;
+  db.entities.PaymentRecord.delete = async (id) => { calls += 1; if (calls === 1) throw new Error('blip'); return del(id); };
+  const r = await resolvePaymentRace(db, mine, 'sA');
+  assert.deepEqual([r.status, r.code], [409, 'PAYMENT_CONFLICT']);
+  assert.equal(db.tables.PaymentRecord.some((p) => p.id === 'p2'), false);
+});
+
+test('a charge whose payments fill the read page is never settled on a partial sum', async () => {
+  const db = chargeStore();
+  for (let i = 0; i < 1000; i += 1) db.tables.PaymentRecord.push({ id: `x${i}`, school_id: 'sA', charge_id: 'ch1', amount: 0.01, created_date: '2026-09-30T12:00:00.001Z' });
+  await assert.rejects(() => settleCharge(db, 'ch1', 'sA', NOW), /partial read/);
+});
+
 test('classification is greedy over one fixed order, and depends only on what came before', () => {
   const rows = [
     { id: 'c', amount: 300, created_date: '2026-09-30T12:00:00.003Z' },

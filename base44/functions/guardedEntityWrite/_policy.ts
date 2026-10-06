@@ -6,6 +6,43 @@
 // Keep POLICY_WRITE in sync by hand with src/lib/authorization/policy.js's
 // POLICY (Deno functions can't import across directories).
 
+// The author name a write stamps (author_name, teacher_name, parent_name,
+// uploaded_by_name, requester_name). `display_name` is the name the person
+// chose in LIUMA ("¿Cómo te llamas?", a User custom field: the SDK's
+// auth.updateMe() cannot write full_name); `full_name` is whatever signup
+// left, often the email handle. A handle is never stamped as a name (Codex
+// review of PR #197): the same rule as the greeting (src/lib/userDisplayName.js
+// #isHandleLikeName) and Lumi (_lumiCore.ts#displayUserName) — empty, an
+// address, the email's local part, or one token with . + _ or digits. Both
+// fields are checked: display_name is self-written with updateMe, so the
+// dialog's validation can be skipped. Without a real name the stamp is the
+// caller's ROLE ('Dirección', 'Docente', 'Familia'), because these fields are
+// shown as the author in lists and e-mails, where a blank reads as a bug and
+// the role is what the reader needs; with no role, ''.
+// Identical in guardedEntityWrite/_policy.ts and guardedFamilyWrite/_policy.ts
+// (functions cannot import across directories), from this comment to the end
+// of callerDisplayName; tests/unit/user-display-name.test.js compares the
+// two and runs both on the same cases.
+export const AUTHOR_ROLE_LABELS: Record<string, string> = { ADMIN: 'Dirección', TEACHER: 'Docente', PARENT: 'Familia' };
+
+export function isHandleLikeName(name: unknown, email?: unknown): boolean {
+  const value = String(name ?? '').trim();
+  if (!value || value.includes('@')) return true;
+  const local = String(email ?? '').split('@')[0].trim().toLowerCase();
+  if (local && value.toLowerCase() === local) return true;
+  return !/\s/.test(value) && /[.+_\d]/.test(value);
+}
+
+export function callerDisplayName(user: unknown, role?: unknown): string {
+  const u = (user ?? {}) as { display_name?: unknown; full_name?: unknown; email?: unknown; data?: { display_name?: unknown } | null };
+  const raw = typeof u.display_name === 'string' ? u.display_name : typeof u.data?.display_name === 'string' ? u.data.display_name : '';
+  const chosen = raw.replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!isHandleLikeName(chosen, u.email)) return chosen;
+  const full = String(u.full_name ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!isHandleLikeName(full, u.email)) return full;
+  return AUTHOR_ROLE_LABELS[String(role ?? '')] || '';
+}
+
 export const POLICY_WRITE: Record<string, string[]> = {
   Notice: ['ADMIN', 'TEACHER'],
   Attendance: ['ADMIN', 'TEACHER'],
@@ -681,7 +718,8 @@ function stampServerFields(entity: string, operation: Op, data: Record<string, u
           requester_user_id: ctx.userId,
           requester_profile_id: ctx.profileId,
           requester_role: ctx.role,
-          requester_name: ctx.userName || ctx.userEmail || 'Usuario',
+          // Never the address: callerDisplayName already fell back to the role.
+          requester_name: ctx.userName || 'Usuario',
           category,
           priority,
           channel_origin: data.channel_origin || 'MANUAL',
@@ -885,6 +923,8 @@ export type CallerProfile = {
   app_role?: string;
   status?: string;
   onboarding_completed?: boolean;
+  consent_notice_version?: string;
+  consent_terms_version?: string;
   created_date?: string;
 };
 
@@ -898,13 +938,35 @@ export function selectCurrentProfile(profiles: CallerProfile[] = []): CallerProf
   return eligible[0] || sorted[0] || null;
 }
 
+// MIRRORS schoolRead/_scope.ts (CONSENT_*_VERSION, profileConsentIsCurrent)
+// and src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js
+// checks every copy.
+export const CONSENT_NOTICE_VERSION = '2026-10-02';
+export const CONSENT_TERMS_VERSION = '2026-10-02';
+
+export function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
+
 // MIRRORS schoolRead/_scope.ts#profileProblem.
 export function profileProblem(profile: CallerProfile | null): string | null {
   if (!profile) return 'NO_PROFILE';
   if (profile.status !== 'ACTIVE') return 'INACTIVE_PROFILE';
   if (!profile.school_id) return 'NO_SCHOOL';
   if (!['ADMIN', 'TEACHER', 'PARENT'].includes(String(profile.app_role))) return 'INVALID_ROLE';
+  if (!profileConsentIsCurrent(profile)) return 'CONSENT_REQUIRED';
   return null;
+}
+
+// The one write a caller who has NOT accepted the current texts may still
+// make: opening a support ticket. It is how the sole director of a school asks
+// ACACIA to delete the school from the account-deletion screen (they cannot
+// delete their own account and orphan the school), and asking for help is the
+// way out, the same reason tickets ignore a read-only license.
+export function consentExempt(entity: string, operation: string): boolean {
+  return entity === 'SupportTicket' && operation === 'create';
 }
 
 export const READ_ONLY_STATUSES = ['view_only', 'suspended', 'inactive', 'canceled'];
@@ -933,4 +995,91 @@ export function effectiveLicenseIsReadOnly(
   // Paid + past license_expires_at stays writable: Mission Control owns that
   // grace period and writes view_only when it ends.
   return false;
+}
+
+// --- Student quota per plan (v1.9.0, server-minor) ---------------------------
+//
+// WHY. The licensed student cap (Start 150, Growth 400, Plus/Fundador sin
+// límite, +10 % de margen) was only ever checked by GestionEscuela.jsx through
+// useStudentQuota — a browser check. Any ADMIN token could POST
+// guardedEntityWrite {entity:'Student', operation:'create'} past it, and a
+// cached or edited client never saw it at all. The cap is now decided here,
+// on every Student create and every re-activation (is_active false → true),
+// and the browser's copy only warns ahead of time.
+//
+// MIRRORS src/lib/license/licenseModel.js — PLAN_LIMITS, GRACE_BUFFER_RATIO,
+// effectiveStudentLimit, hardStudentLimit and evaluateStudentQuota().exceeded
+// (with gating on). tests/unit/student-quota-server.test.js runs both over the
+// same grid and fails if they part ways.
+//
+// The tier comes from license_tier, NOT licensed_student_limit: Mission
+// Control's set_plan writes only license_tier (planField in its
+// licenseControl.js), so licensed_student_limit goes stale on every plan
+// change — and the client already ignores it for the same reason.
+//
+// No flag. VITE_PAYWALL_GATING_ENABLED is a build variable of the browser
+// bundle; a cap that a build flag could switch off would be the same gap again.
+// The ACACIA platform owner (User.role 'admin') bypasses it, as in the client.
+export const STUDENT_PLAN_LIMITS: Record<string, number | null> = {
+  start: 150,
+  growth: 400,
+  plus: null,
+  founder: null,
+};
+export const STUDENT_GRACE_RATIO = 0.10;
+
+/**
+ * The licensed student cap for this subscription row, or null when the plan
+ * has none (trial previews the largest plan; founder and plus are unlimited).
+ */
+export function studentPlanLimit(
+  sub: { subscription_status?: string; license_tier?: string } | null,
+): number | null {
+  const status = String(sub?.subscription_status || 'trial');
+  const tier = String(sub?.license_tier || 'start');
+  if (status === 'trial') return null;
+  if (tier === 'founder') return null;
+  return Object.prototype.hasOwnProperty.call(STUDENT_PLAN_LIMITS, tier) ? STUDENT_PLAN_LIMITS[tier] : null;
+}
+
+/**
+ * Active students at or past which a NEW active student is refused: the cap
+ * plus the grace margin, or null when there is no cap.
+ */
+export function studentHardLimit(
+  sub: { subscription_status?: string; license_tier?: string } | null,
+): number | null {
+  const limit = studentPlanLimit(sub);
+  if (limit == null) return null;
+  // Same epsilon as the client: 400 * 1.1 is 440.00000000000006.
+  return Math.ceil(limit * (1 + STUDENT_GRACE_RATIO) - 1e-9);
+}
+
+/**
+ * Whether this Student write adds one to the school's ACTIVE count: a create
+ * (is_active defaults to true) unless it is explicitly inactive, or an update
+ * that switches a stored inactive (or never-set) student to active. Editing an
+ * already-active student, or retiring one, never counts.
+ */
+export function addsActiveStudent(
+  operation: string,
+  data: Record<string, unknown>,
+  existing: Record<string, unknown> | null,
+): boolean {
+  if (operation === 'create') return data.is_active !== false;
+  if (operation === 'update') return data.is_active === true && existing?.is_active !== true;
+  return false;
+}
+
+/** The refusal body for a write past the cap (Spanish text lives client-side, errorMessages.js). */
+export function studentQuotaRefusal(
+  limit: number | null, hardLimit: number, used: number,
+): { status: number; body: Record<string, unknown> } {
+  return {
+    status: 403,
+    body: {
+      ok: false, code: 'STUDENT_QUOTA', error: 'The school reached its plan\'s student limit',
+      limit, hard_limit: hardLimit, used,
+    },
+  };
 }

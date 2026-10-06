@@ -5,6 +5,120 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.9.1] - 2026-10-05
+
+Scheduled security audit. No user-facing change — a dependency patch and a
+server-side hardening pass. See `docs/security-audit-2026-10-05.md`.
+
+### Fixed
+
+- **`axios`/`dompurify` dependency advisories** closed via `npm audit fix`
+  (lockfile only). `axios` is a transitive production dependency of
+  `@base44/sdk`; the fix closed several high-severity advisories (prototype
+  pollution, SSRF, header injection).
+- **Backend functions no longer echo raw internal error messages** to the
+  client on an unexpected failure. 15 functions now log the detail
+  server-side and return a generic code, matching the pattern three other
+  functions already used.
+- **A signed-in user could clear their own forced logout.** `AppSession`'s
+  `revoked_at`/`revoked_by` fields — set by Mission Control to force a
+  device's session to end — had no field-level write lock, so a direct SDK
+  call could un-revoke a session Mission Control had just closed. Locked to
+  service-role-only.
+
+### Known issue (not fixed this release, tracked)
+
+- A signed-in user can still set an arbitrary `user_email`/`user_name` on
+  their own session-tracking row, which can misrepresent who is shown as
+  "active" in Mission Control's internal sessions panel. This does not
+  expose any user's data and does not bypass any access control. Fixing it
+  requires moving session-row creation through a new backend function;
+  tracked in `base44/entities/AppSession.jsonc`.
+
+## [1.9.0] - 2026-10-02
+
+Mandatory consent and account deletion, final legal texts, the four open
+server items (student cap, per-user read limit, server uploads, single-use
+Lumi codes), Lumi reply filter, real names and 44px touch targets.
+
+### Added
+
+- **Lumi reply filter** (`src/lib/lumi/replyFilter.js`). Every assistant
+  reply is filtered before it is shown: offers of things the role cannot do,
+  speculation about role changes or "sync", and "Permisos y roles" for
+  non-directors are dropped. Presentation only; the server still decides
+  what Lumi can read or write.
+- **"¿Cómo te llamas?"** A person can set the name LIUMA shows
+  (`User.display_name`); greetings, notices, diary entries and family
+  requests are signed with it. An email handle is never shown as a name.
+
+### Changed
+
+- **Aviso de Privacidad and Términos are final** (`vigente`, version
+  `2026-10-02`): the company's legal identity, every entity declared, the
+  Base44 AI-training disclosure and a retention table. Onboarding now
+  records version `2026-10-02` and rejects any other (409).
+- **Touch targets measured at 44px** on phones: theme switcher, toast close,
+  footer link, Reportes "Ver detalle", Ayuda links, calendar days.
+
+### Added (consent package)
+
+- **Mandatory consent for existing accounts.** A profile without the
+  current acceptance (stamp `UserProfile.consent_notice_version` /
+  `consent_terms_version`, written only by the server after a
+  `ConsentRecord`) sees a blocking screen (`ConsentGate`) before any app
+  screen: both documents, both acceptances, Aceptar / No acepto. New
+  function `myConsent` (status / accept). The server enforces it too:
+  `schoolRead`, `guardedEntityWrite`, `guardedFamilyWrite`, Lumi,
+  `listSchoolMembers`, `approveProfile` and `governRoleChange` answer
+  `CONSENT_REQUIRED`. Support tickets and the school export stay open.
+- **"Eliminar mi cuenta y mis datos"** (`/EliminarCuenta`, every role, and
+  "No acepto"). New function `deleteMyAccount` (preview / delete, typed
+  `ELIMINAR`): withdrawal `ConsentRecord` first, then revokes links and
+  assignments, cancels pending requests, anonymizes the person's name on
+  school records, removes account data and profiles, marks and removes the
+  User. The only active director gets "Solicitar eliminación de la
+  escuela" instead.
+
+### Changed (consent package)
+
+- **Legal text, Lumi conversations:** the notice promised they were deleted
+  with the account; neither the SDK nor Base44's API can delete an agent
+  conversation, so it now says ACACIA asks Base44 for it. Changed before any
+  user accepted version `2026-10-02`.
+- `ConsentRecord` gains `event` (ACCEPTED / WITHDRAWN) and `withdrawn_at`;
+  `accepted_at` is no longer required. `User.account_deleted_at`,
+  `AuditLog` actions `PRIVACY_CONSENT_WITHDRAWN` and `ACCOUNT_DELETED`.
+
+### Added (server-minor package)
+
+- **Student cap enforced on the server.** `guardedEntityWrite` refuses a
+  `Student` create or reactivation past the plan's hard limit (Start 150,
+  Growth 400, +10 %; Plus/Founder/trial unlimited) with `403 STUDENT_QUOTA`,
+  re-counting after the write so two creates cannot both take the last
+  seat. No build flag can turn it off; `GestionEscuela` shows the limit the
+  server named.
+- **Per-user limit on `schoolRead`:** a token bucket per user (24, refilled
+  at 12/min, per isolate) answers `429 RATE_LIMITED` with `Retry-After`
+  before any entity call, so one runaway session cannot spend the app-wide
+  Base44 budget of everyone else.
+- **Uploads go through the server.** New function `uploadSchoolFile`
+  (school logo, official documents, setup documents): who may upload, file
+  type by extension **and** magic bytes, size caps, a clean stored name and
+  60 uploads per user per day. No `integrations.Core.*` call is left in the
+  browser.
+- **Lumi confirmation codes are single-use and expire in 10 minutes**
+  (`409 CODE_USED`, `410 CODE_EXPIRED`): repeating a commit no longer
+  re-applies a change that was corrected in the meantime.
+
+### Integration
+
+- `uploadSchoolFile` follows the consent gate: a director without the
+  current acceptance gets `CONSENT_REQUIRED` (its `profileProblem` mirrors
+  `schoolRead`'s, under test), and a deleted account that the platform did
+  not remove gets `410 ACCOUNT_DELETED` instead of the founder's logo slot.
+- Functions: 23 of 40.
+
 ## [1.8.5] - 2026-10-01
 
 Minor issues from the live retest of v1.8.3.

@@ -31,6 +31,10 @@ Deno.serve(async (req) => {
 
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const ticketId = body?.ticketId;
@@ -83,6 +87,22 @@ Deno.serve(async (req) => {
     if (!resp.ok) return Response.json({ ok: false, status: resp.status, mc: out }, { status: 502 });
     return Response.json({ ok: true, mc: out });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK/fetch error can name entities, ids or URLs.
+    console.error('notifyTicketCreated failed', (e as Error)?.message);
+    return Response.json({ error: 'INTERNAL' }, { status: 500 });
   }
 });
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

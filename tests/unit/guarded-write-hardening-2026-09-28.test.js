@@ -22,9 +22,10 @@ test('guardedEntityWrite overrides attribution fields instead of trusting the cl
     assert.match(policy, new RegExp(`${entityName}: \\{ id: '`), `expected an ATTRIBUTION_FIELDS entry for ${entityName}`);
   }
   const source = read('base44/functions/guardedEntityWrite/entry.ts');
-  // create: the field is SET from user.id/user.full_name, never read from body.data.
+  // create: the field is SET from user.id and the caller's own name (the
+  // display_name they chose, else full_name — v1.9.0), never read from body.data.
   assert.match(source, /data\[attribution\.id\] = user\.id;/);
-  assert.match(source, /data\[attribution\.name\] = String\(user\.full_name \|\| ''\);/);
+  assert.match(source, /data\[attribution\.name\] = callerDisplayName\(user, profile\?\.app_role \|\| \(isPlatformOwner \? 'ADMIN' : ''\)\);/);
   // update: the field is DELETED from the patch, so an existing record's
   // attribution can't be reassigned to someone else after the fact.
   assert.match(source, /delete \(patch as Record<string, unknown>\)\[attribution\.id\];/);

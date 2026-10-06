@@ -16,10 +16,11 @@
  *   LIUMA Plus   $2,999 MXN/mes
  *   Activación inicial (cuando aplica): $7,990 MXN (única vez)
  *
- * NOTE on limits: the public pricing page does not publish hard student caps,
- * so the per-tier `studentLimit` values below are sensible operational defaults.
- * They only ever gate the product when VITE_PAYWALL_GATING_ENABLED is turned on
- * (off by default, exactly like FlowFin), so they are safe to tune later.
+ * NOTE on limits: the per-tier `studentLimit` values below are the caps the
+ * Términos publish (legalDocs.js). They are ENFORCED BY THE SERVER since v1.9.0
+ * (guardedEntityWrite/_policy.ts#STUDENT_PLAN_LIMITS, a hand copy — Deno cannot
+ * import src/), whatever VITE_PAYWALL_GATING_ENABLED says; change both together.
+ * tests/unit/student-quota-server.test.js fails if they drift.
  */
 
 // Trial length in natural days (matches the 30-day trial seeded at onboarding).

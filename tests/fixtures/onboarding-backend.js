@@ -50,6 +50,11 @@ export function createFakeEntity(seed = [], { name = 'Entity' } = {}) {
     async list() {
       return rows;
     },
+    async delete(id) {
+      const i = rows.findIndex((r) => r.id === id);
+      if (i < 0) throw Object.assign(new Error('not found'), { status: 404 });
+      rows.splice(i, 1);
+    },
   };
 }
 
@@ -67,12 +72,15 @@ export function createOnboardingBackend(seed = {}, actingUser, { now = new Date(
       SchoolSubscription: createFakeEntity(seed.subscriptions, { name: 'Sub' }),
       UserProfile: createFakeEntity(seed.profiles, { name: 'Profile' }),
       ConsentRecord: createFakeEntity(seed.consents, { name: 'Consent' }),
-      User: createFakeEntity(seed.users, { name: 'User' }),
+      // The acting user exists (provisioning re-reads it for deletion markers).
+      User: createFakeEntity(seed.users ?? (actingUser?.id ? [actingUser] : []), { name: 'User' }),
     },
   };
   const invokeCalls = [];
   const client = {
-    integrations: { Core: { UploadFile: async () => ({ file_url: 'https://cdn.test/logo.png' }) } },
+    // v1.9.0: the browser never calls Core.UploadFile; the logo goes through
+    // the uploadSchoolFile function (answered below).
+    integrations: { Core: { UploadFile: async () => { throw new Error('browser must not call Core.UploadFile'); } } },
     entities: {
       School: rlsDenied('School'),
       SchoolSubscription: rlsDenied('SchoolSubscription'),
@@ -84,6 +92,9 @@ export function createOnboardingBackend(seed = {}, actingUser, { now = new Date(
     functions: {
       async invoke(name, body) {
         invokeCalls.push({ name, body });
+        if (name === 'uploadSchoolFile') {
+          return { data: { ok: true, file_url: 'https://cdn.test/logo.png', content_type: 'image/png', size: 10 }, status: 200, headers: {} };
+        }
         if (name !== 'provisionOnboardingProfile') throw new Error(`unexpected function ${name}`);
         // Same shapes as the real SDK: its functions client does NOT unwrap
         // responses (interceptResponses: false), so success resolves to the

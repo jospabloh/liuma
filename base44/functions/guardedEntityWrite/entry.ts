@@ -43,9 +43,11 @@
 // from the caller's CURRENT UserProfile (resolveCallerProfile, the same rule
 // schoolRead uses) — never from the request body.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 import {
   ATTRIBUTION_FIELDS,
   CLASSROOM_BOUND_ENTITIES,
+  callerDisplayName,
   POLICY_WRITE,
   decideCreateTargets,
   decideModifyExisting,
@@ -172,11 +174,15 @@ function isRateLimitError(e: unknown): boolean {
   return err?.status === 429 || /rate limit/i.test(String(err?.message ?? ''));
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const now = new Date();
@@ -185,14 +191,15 @@ Deno.serve(async (req) => {
 
     // P10b: the school entities whose RLS is platform-owner only.
     if (schoolWriteRule(entity)) {
-      const result = await runSchoolWrite({ sr: base44.asServiceRole, user, body: body || {} });
+      const result = await runSchoolWrite({ sr: guarded(base44.asServiceRole, String(user.id)), user, body: body || {} });
       return Response.json(result.body, { status: result.status });
     }
 
     if (!ENTITIES.includes(entity)) return bad(400, 'UNKNOWN_ENTITY', 'Unsupported entity');
     if (!OPERATIONS.includes(operation)) return bad(400, 'BAD_OPERATION', 'operation must be create/update/delete');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const isPlatformOwner = user.role === 'admin';
 
     // WHO: the caller's current profile (P10b — the rule schoolRead uses).
@@ -336,7 +343,7 @@ Deno.serve(async (req) => {
       const attribution = ATTRIBUTION_FIELDS[entity];
       if (attribution) {
         data[attribution.id] = user.id;
-        if (attribution.name) data[attribution.name] = String(user.full_name || '');
+        if (attribution.name) data[attribution.name] = callerDisplayName(user, profile?.app_role || (isPlatformOwner ? 'ADMIN' : ''));
       }
 
       // Base44 security scan, 2026-09-28 (confirmed, found via notifyParents
@@ -494,6 +501,22 @@ Deno.serve(async (req) => {
         { status: 429, headers: { 'Retry-After': '3' } },
       );
     }
-    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('guardedEntityWrite failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
-});
+}));
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

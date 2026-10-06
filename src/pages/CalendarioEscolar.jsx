@@ -132,9 +132,9 @@ export default function CalendarioEscolar() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Calendar */}
         <div className="lg:col-span-2">
-          <Card className="bg-card text-card-foreground border border-border rounded-2xl shadow-sm p-2 sm:p-6">
+          <Card className="-mx-4 rounded-none border-x-0 border-y border-border bg-card text-card-foreground shadow-sm px-0.5 py-2 sm:mx-0 sm:rounded-2xl sm:border sm:p-6">
             {/* Month Navigation */}
-            <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center justify-between px-2 sm:px-0 mb-4 sm:mb-6">
               <Button
                 variant="outline"
                 size="icon"
@@ -161,11 +161,12 @@ export default function CalendarioEscolar() {
                 so below `sm` each day shows one dot per event instead and the
                 selected day's events are listed in full in "Agenda del día".
                 Chips with titles come back from `sm` up.
-                Tight gutters below `sm` (p-2 on the card, 2px between days)
-                buy the width back: a day is ≥44px wide from 375px up (it was
-                ~42px at 375 and 34px at 320). At 320 seven columns cannot
-                reach 44px with any gutter (~37px now); the cell is 48px tall. */}
-            <div className="grid grid-cols-7 gap-0.5 sm:gap-2">
+                Below `sm` the card bleeds to the screen edges (-mx-4 cancels
+                the page's px-4; 2px of padding, 1px between days) so seven
+                days are ≥44px wide even at 320px: (320 - 4 - 6) / 7 ≈ 44.3px.
+                With the page gutter and p-2 they were ~37px at 320 — under a
+                finger's 44px. The cell is 48px tall. */}
+            <div className="grid grid-cols-7 gap-px sm:gap-2">
               {/* Day Headers */}
               {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, i) => (
                 <div key={i} className="text-center text-sm font-medium text-muted-foreground py-2">

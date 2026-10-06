@@ -24,6 +24,9 @@
 //      action:'commit' only runs with the code that exact preview produced
 //      (a digest of who/what/when, see confirmationCode) — the model cannot
 //      skip the preview or commit something other than what was shown.
+//      Since v1.9.0 the code also expires after 10 minutes (410 CODE_EXPIRED)
+//      and commits once (409 CODE_USED): repeating a commit no longer
+//      re-applies it, e.g. reverting a correction made since in Asistencia.
 //   4. DELEGATES the write to guardedEntityWrite and the parent email to
 //      notifyParents, invoked with the caller's own token — the same two
 //      functions the Asistencia and CrearBitacora pages use. No write or
@@ -34,10 +37,13 @@
 // it again on functions.invoke. Either one missing makes this fail closed
 // (UNAUTHENTICATED / WRITE_FAILED), never write as someone else.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
 import {
   type Profile, type Scope,
   selectCurrentProfile, profileProblem, canWriteKind, WRITE_KINDS,
   mexicoToday, validateWrite, confirmationCode, describeWrite, fullName, errorMessage, label,
+  checkConfirmationCode, claimConfirmationCode, releaseConfirmationCode, CONFIRMATION_TTL_SECONDS,
+  writeRefusedBeforeWrite,
 } from './_lumiCore.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -62,11 +68,15 @@ function invokeError(e: any): Row {
   return e?.response?.data || e?.data || { code: 'WRITE_FAILED' };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return fail(401, 'UNAUTHENTICATED');
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
 
     const body: Row = await req.json().catch(() => ({}));
     const action = String(body?.action || 'preview');
@@ -74,7 +84,8 @@ Deno.serve(async (req) => {
     if (!WRITE_KINDS[kind]) return fail(400, 'UNKNOWN_KIND');
     if (action !== 'preview' && action !== 'commit') return fail(400, 'UNKNOWN_INTENT');
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
     const profiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id });
     const profile = selectCurrentProfile(profiles);
     const problem = profileProblem(profile);
@@ -106,7 +117,8 @@ Deno.serve(async (req) => {
     }
     const data = validation.data;
     const name = fullName(student);
-    const code = await confirmationCode({ userId: user.id, kind, studentId, data, day: today });
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const writeParts = { userId: String(user.id), kind, studentId, data };
 
     // Existing record for that student and day (attendance is updated in place;
     // a second bitácora the same day is refused, same as CrearBitacora).
@@ -116,6 +128,7 @@ Deno.serve(async (req) => {
     if (kind === 'diary' && existing) return fail(409, 'ALREADY_EXISTS');
 
     if (action === 'preview') {
+      const code = await confirmationCode({ ...writeParts, issuedAt: nowSeconds });
       return Response.json({
         ok: true,
         action: 'preview',
@@ -125,11 +138,21 @@ Deno.serve(async (req) => {
         // "hoy ya estaba como ausente".
         previous_status: kind === 'attendance' && existing ? label('attendance_status', existing.status) : '',
         confirmation_code: code,
-        next_step: 'Muestra el resumen y pregunta "¿Lo registro?". Sólo si la persona confirma, repite la llamada con action "commit", los mismos datos y este confirmation_code.',
+        confirmation_expires_in_minutes: CONFIRMATION_TTL_SECONDS / 60,
+        next_step: 'Muestra el resumen y pregunta "¿Lo registro?". Sólo si la persona confirma, repite la llamada con action "commit", los mismos datos y este confirmation_code. El código sirve una sola vez y caduca en 10 minutos.',
       });
     }
 
-    if (String(body?.confirmation_code || '') !== code) return fail(409, 'NEEDS_CONFIRMATION');
+    const codeState = await checkConfirmationCode(body?.confirmation_code, writeParts, nowSeconds);
+    if (codeState === 'NEEDS_CONFIRMATION') return fail(409, 'NEEDS_CONFIRMATION');
+    if (codeState === 'CODE_EXPIRED') return fail(410, 'CODE_EXPIRED');
+    // Single use: the claim is written before the write and re-read, so two
+    // commits with the same code cannot both get through.
+    const code = String(body.confirmation_code);
+    const claimId = await claimConfirmationCode(sr, {
+      code, userId: String(user.id), userEmail: user.email || '', schoolId, kind, studentId,
+    });
+    if (!claimId) return fail(409, 'CODE_USED');
 
     // --- commit: delegate to guardedEntityWrite with the caller's own token.
     let record: Row | null = null;
@@ -153,11 +176,19 @@ Deno.serve(async (req) => {
         record = unwrap(await base44.functions.invoke('guardedEntityWrite', payload)).record || null;
       }
     } catch (e) {
+      // Give the code back ONLY on a definite refusal before writing (a 4xx
+      // with an error code): then a retry within its 10 minutes works. Any
+      // other failure may have saved the record — the code stays used, and
+      // Lumi says to check the screen before asking again.
+      const verdict = writeRefusedBeforeWrite(e);
+      if (!verdict.refused) return fail(502, 'WRITE_UNCERTAIN');
+      await releaseConfirmationCode(sr, claimId);
       const err = invokeError(e);
       const denied = ['FORBIDDEN', 'WRITE_BLOCKED', 'STUDENT_NOT_IN_SCHOOL', 'NO_PROFILE'].includes(String(err.code));
       return fail(denied ? 403 : 502, err.code === 'WRITE_BLOCKED' || err.code === 'FORBIDDEN' ? err.code : 'WRITE_FAILED');
     }
-    if (!record?.id) return fail(502, 'WRITE_FAILED');
+    // An answer without the saved record: it may have been saved anyway.
+    if (!record?.id) return fail(502, 'WRITE_UNCERTAIN');
 
     // Parent email, same function and same conditions as the app's own pages:
     // an absence always notifies (notifyParents is idempotent per record), a
@@ -183,7 +214,7 @@ Deno.serve(async (req) => {
       action: 'AI_REQUEST_ALLOWED',
       target_type: kind === 'attendance' ? 'Attendance' : 'DiaryEntry',
       target_id: String(record.id),
-      details: { tool: 'lumiWrite', kind, updated_existing: !!existing, parents_notified: parentsNotified },
+      details: { tool: 'lumiWrite', kind, updated_existing: !!existing, parents_notified: parentsNotified, confirmation_code: code },
     }).catch(() => null);
 
     return Response.json({
@@ -194,6 +225,22 @@ Deno.serve(async (req) => {
       parents_notified: parentsNotified,
     });
   } catch (e) {
-    return Response.json({ ok: false, code: 'INTERNAL', message: errorMessage('INTERNAL'), error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('lumiWrite failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', message: errorMessage('INTERNAL'), error: 'INTERNAL' }, { status: 500 });
   }
-});
+}));
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

@@ -22,6 +22,7 @@ import ReadOnlyBanner from '@/components/subscription/ReadOnlyBanner';
 import { useCanWrite, guardWrite } from '@/hooks/useCanWrite';
 import { guardedCreate, guardedUpdate, guardedDelete } from '@/lib/authorization/guardedWrite';
 import { humanizeError } from '@/lib/errorMessages';
+import { uploadSchoolFile } from '@/lib/uploads/uploadSchoolFile';
 import FieldError from '@/components/forms/FieldError';
 import { cn } from '@/lib/utils';
 import {
@@ -61,9 +62,10 @@ export default function GestionDocumentos() {
 
   const uploadMutation = useMutation({
     mutationFn: async (data) => {
-      // First, upload the file
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: data.file });
-      
+      // First, upload the file — through the server, which checks it really
+      // is a PDF of a sane size before storing it (v1.9.0).
+      const file_url = await uploadSchoolFile(base44, { purpose: 'official_document', file: data.file });
+
       // Mark previous documents of same type as not current
       if (data.document_type === 'MENU' || data.document_type === 'UNIFORM_CATALOG') {
         const previousDocs = await schoolRead('OfficialDocument', {

@@ -72,6 +72,11 @@ async function sameSchoolRecord(sr: Db, entity: string, id: unknown, schoolId: s
 
 async function paymentsFor(sr: Db, chargeId: string, schoolId: string): Promise<Rec[]> {
   const rows: Rec[] = await sr.entities.PaymentRecord.filter({ school_id: schoolId, charge_id: chargeId }, '-created_date', MAX_PAYMENTS_PER_CHARGE);
+  // A full page may hide payments: a balance summed from it would be wrong,
+  // so refuse rather than settle on a partial sum (Codex review of PR #197).
+  if ((rows || []).length >= MAX_PAYMENTS_PER_CHARGE) {
+    throw new Error(`charge ${chargeId} has ${MAX_PAYMENTS_PER_CHARGE}+ payments; refusing to settle on a partial read`);
+  }
   return (rows || []).filter((p) => String(p.charge_id || '') === chargeId && String(p.school_id || '') === schoolId);
 }
 
@@ -322,10 +327,19 @@ export async function resolvePaymentRace(sr: Db, created: Rec, schoolId: string)
   const overflowIds = overflow.map((p) => String(p.id));
   if (!overflowIds.includes(createdId)) return { ok: true, overflowIds };
 
-  try {
-    await sr.entities.PaymentRecord.delete(createdId);
-  } catch (e) {
-    console.error('guardedEntityWrite: overflowing payment could not be removed', createdId, (e as Error)?.message);
+  // Retried once: a payment has no "does not count" state to fall back to,
+  // so if it still cannot be removed the answer says so (500, by id) and the
+  // charge is settled from the kept payments only (settleCharge keptOnly).
+  let removed = false;
+  for (let i = 0; i < 2 && !removed; i += 1) {
+    try {
+      await sr.entities.PaymentRecord.delete(createdId);
+      removed = true;
+    } catch (e) {
+      console.error('guardedEntityWrite: overflowing payment could not be removed', createdId, (e as Error)?.message);
+    }
+  }
+  if (!removed) {
     return {
       ok: false,
       status: 500,

@@ -60,7 +60,9 @@ export default function Layout({ children, currentPageName }) {
               href="https://acaciaco.com.mx"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-slate-700 hover:dark:text-slate-200 underline"
+              // Its own line, so not exempt as a link in running text: 44px
+              // tall for a finger (v1.9.0 touch scan), unchanged with a mouse.
+              className="inline-flex items-center coarse:min-h-11 coarse:px-2 hover:text-slate-700 hover:dark:text-slate-200 underline"
             >
               creado con cariño ❤ por ACACIA Consultoría
             </a>

@@ -59,6 +59,8 @@ const ADMIN_DESTINATIONS = [
   // The in-app manual (P11).
   { page: 'Ayuda', label: 'Ayuda', icon: 'HelpCircle', group: 'Soporte' },
   { page: 'HistorialCambios', label: 'Historial de cambios', icon: 'History', group: 'Soporte' },
+  // Every role (v1.9.0): the legal texts promise this option "de tu cuenta".
+  { page: 'EliminarCuenta', label: 'Eliminar mi cuenta y mis datos', icon: 'UserX', group: 'Mi cuenta' },
 ];
 
 const TEACHER_DESTINATIONS = [
@@ -71,6 +73,8 @@ const TEACHER_DESTINATIONS = [
   { page: 'Soporte', label: 'Soporte', icon: 'Headset', group: 'Soporte' },
   { page: 'Ayuda', label: 'Ayuda', icon: 'HelpCircle', group: 'Soporte' },
   { page: 'HistorialCambios', label: 'Historial de cambios', icon: 'History', group: 'Soporte' },
+  // Every role (v1.9.0): the legal texts promise this option "de tu cuenta".
+  { page: 'EliminarCuenta', label: 'Eliminar mi cuenta y mis datos', icon: 'UserX', group: 'Mi cuenta' },
 ];
 
 const PARENT_DESTINATIONS = [
@@ -90,6 +94,8 @@ const PARENT_DESTINATIONS = [
   { page: 'Soporte', label: 'Soporte', icon: 'Headset', group: 'Soporte' },
   { page: 'Ayuda', label: 'Ayuda', icon: 'HelpCircle', group: 'Soporte' },
   { page: 'HistorialCambios', label: 'Historial de cambios', icon: 'History', group: 'Soporte' },
+  // Every role (v1.9.0): the legal texts promise this option "de tu cuenta".
+  { page: 'EliminarCuenta', label: 'Eliminar mi cuenta y mis datos', icon: 'UserX', group: 'Mi cuenta' },
 ];
 
 const DESTINATIONS_BY_ROLE = {

@@ -63,6 +63,7 @@ const CalendarioEscolar = React.lazy(() => import('./pages/CalendarioEscolar'));
 const ConfiguracionInicial = React.lazy(() => import('./pages/ConfiguracionInicial'));
 const ContactosEmergencia = React.lazy(() => import('./pages/ContactosEmergencia'));
 const CrearBitacora = React.lazy(() => import('./pages/CrearBitacora'));
+const EliminarCuenta = React.lazy(() => import('./pages/EliminarCuenta'));
 const EventosParaPadres = React.lazy(() => import('./pages/EventosParaPadres'));
 const GestionAlumno = React.lazy(() => import('./pages/GestionAlumno'));
 const GestionAusencias = React.lazy(() => import('./pages/GestionAusencias'));
@@ -107,6 +108,7 @@ export const PAGES = {
     "ConfiguracionInicial": ConfiguracionInicial,
     "ContactosEmergencia": ContactosEmergencia,
     "CrearBitacora": CrearBitacora,
+    "EliminarCuenta": EliminarCuenta,
     "EventosParaPadres": EventosParaPadres,
     "GestionAlumno": GestionAlumno,
     "GestionAusencias": GestionAusencias,

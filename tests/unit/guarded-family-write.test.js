@@ -180,5 +180,5 @@ test('absence race: a REJECTED row or another day/child never makes the new one 
 test('guardedFamilyWrite removes its own row when it loses the absence race', () => {
   const src = read('base44/functions/guardedFamilyWrite/entry.ts');
   assert.match(src, /absenceRaceLoser\(after,/);
-  assert.match(src, /AbsenceNotification\.delete\(String\(record\.id\)\)/);
+  assert.match(src, /const id = String\(record\.id\);[\s\S]*?AbsenceNotification\.delete\(id\)/);
 });

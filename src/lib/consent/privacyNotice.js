@@ -10,34 +10,28 @@
  * Privacidad changes, so each consent record pins the version the user accepted.
  */
 
-// BORRADOR PENDIENTE DE REVISIÓN LEGAL (2026-09-29).
+// VIGENTE desde el 2 de octubre de 2026 (owner decision; research and sources
+// in docs/legal-research-2026-10.md). The texts these versions pin live in
+// src/lib/legal/legalDocs.js — the ONE source of both. When either text
+// changes, bump BOTH versions here and in the server mirror below; every
+// ConsentRecord pins the version string, so a consent given to one text stays
+// distinguishable from one given to the next. Consents recorded before this
+// date pin the 2026-09-29 version string (the unreviewed draft).
 //
-// The notice and terms these versions pin are drafts written by Claude from
-// the app's real data model (src/lib/legal/legalDocs.js — the ONE source of
-// both texts), published in-app so the consent checkbox finally points at a
-// page that exists (before this, PRIVACY_NOTICE_URL was a 404). They have NOT
-// been reviewed by a lawyer. When the reviewed text replaces them:
-//   1. edit src/lib/legal/legalDocs.js,
-//   2. bump PRIVACY_NOTICE_VERSION / SERVICE_TERMS_VERSION to the review date,
-//   3. set PRIVACY_NOTICE_STATUS to 'vigente' — that removes the BORRADOR
-//      banner on the page (the "-borrador" suffix in the version string is
-//      what onboarding shows next to the checkbox, so drop it too).
-// Every ConsentRecord pins the version string, so a consent given against the
-// draft stays distinguishable from one given against the reviewed text.
-//
-// MIRROR: base44/functions/provisionOnboardingProfile/entry.ts rejects a
-// consent for any other version (a cached client with the old notice), and
-// tests/unit/legal-consent.test.js fails if the two copies drift.
-export const PRIVACY_NOTICE_VERSION = '2026-09-29-borrador';
+// MIRROR: base44/functions/provisionOnboardingProfile/entry.ts and
+// myConsent/_consent.ts reject a consent for any other version (a cached
+// client with the old notice); schoolRead/_scope.ts (x3),
+// guardedEntityWrite/_policy.ts, guardedFamilyWrite/_policy.ts,
+// listSchoolMembers, approveProfile, governRoleChange and the functions that
+// mail or send other people's data (sendBulkNotification, notifyParents,
+// sendNotificationEmail, aiAssist, postTicketMessage as staff) refuse a
+// profile whose stamp is not this version. tests/unit/legal-final.test.js and
+// tests/unit/consent-gate.test.js fail if any copy drifts. Bumping a version
+// sends EVERY user back to the consent screen on their next request.
+export const PRIVACY_NOTICE_VERSION = '2026-10-02';
 
-/** 'borrador' until a lawyer signs off; then 'vigente'. */
-export const PRIVACY_NOTICE_STATUS = 'borrador';
-
-/** True while the published legal text is still an unreviewed draft. */
-export function legalTextIsDraft(status = PRIVACY_NOTICE_STATUS) {
-  return status !== 'vigente';
-}
-export const PRIVACY_NOTICE_IS_DRAFT = legalTextIsDraft();
+/** The published legal texts are final ('vigente'). */
+export const PRIVACY_NOTICE_STATUS = 'vigente';
 
 // Public in-app routes (src/App.jsx renders them before any auth or profile
 // gate, because the people who must read them — someone mid-onboarding, a
@@ -46,8 +40,8 @@ export const PRIVACY_NOTICE_IS_DRAFT = legalTextIsDraft();
 export const PRIVACY_NOTICE_PATH = '/aviso-de-privacidad';
 export const PRIVACY_NOTICE_URL = PRIVACY_NOTICE_PATH;
 
-// Terms of service / trial terms — same draft status, same public-route rule.
-export const SERVICE_TERMS_VERSION = '2026-09-29-borrador';
+// Terms of service / trial terms — same version and the same public-route rule.
+export const SERVICE_TERMS_VERSION = '2026-10-02';
 export const SERVICE_TERMS_PATH = '/terminos';
 // Aliases used by onboarding (P6).
 export const TERMS_VERSION = SERVICE_TERMS_VERSION;
@@ -57,6 +51,21 @@ export const CONSENT_SCOPES = {
   GENERAL: 'general_privacy_notice', // acceptance of the Aviso de Privacidad
   SENSITIVE_MINOR: 'sensitive_minor_data', // express consent for minors' sensitive data
 };
+
+/**
+ * Has this UserProfile accepted the texts in force? The stamp
+ * (consent_notice_version / consent_terms_version) is written only by the
+ * server — provisionOnboardingProfile and myConsent, right after the
+ * ConsentRecord that proves it. Mirrors profileConsentIsCurrent in
+ * base44/functions/schoolRead/_scope.ts, which makes every data function
+ * answer CONSENT_REQUIRED without it: the consent screen
+ * (src/components/consent/ConsentGate.jsx) is the UI half of that rule.
+ */
+export function profileConsentIsCurrent(profile) {
+  return Boolean(profile)
+    && profile.consent_notice_version === PRIVACY_NOTICE_VERSION
+    && profile.consent_terms_version === SERVICE_TERMS_VERSION;
+}
 
 /** Both acceptances are required to finish onboarding. */
 export function consentIsComplete(acceptances = {}) {

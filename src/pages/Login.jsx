@@ -10,6 +10,9 @@ import { getRememberedIdentity, clearRememberedIdentity } from "@/lib/lastIdenti
 import { describeLoginError, describeOtpError, describeResetRequestError, describeSignupError, errorStatus, humanizeError, isNetworkError, NETWORK_ERROR_MESSAGE } from "@/lib/errorMessages";
 import { LOGIN_PATH, MIN_PASSWORD_LENGTH, readResetToken } from "@/lib/authLinks";
 import { resetRequestedNotice, verifyEmailHint } from "@/lib/platformEmails";
+import { ACCOUNT_DELETED_FLAG_KEY } from "@/lib/account/accountDeletion";
+
+const ACCOUNT_DELETED_NOTICE = "Tu cuenta se eliminó. Gracias por haber usado LIUMA.";
 
 // Pantalla de inicio de sesión propia de LIUMA, en lugar de la página genérica
 // hospedada por Base44. Usa los métodos de correo+contraseña del SDK
@@ -70,7 +73,19 @@ export default function Login() {
   const [confirm, setConfirm] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  // After "Eliminar mi cuenta y mis datos" the session is gone, so the page
+  // that did it cannot say it worked: it leaves this one-shot flag instead.
+  const [notice, setNotice] = useState(() => {
+    try {
+      if (sessionStorage.getItem(ACCOUNT_DELETED_FLAG_KEY)) {
+        sessionStorage.removeItem(ACCOUNT_DELETED_FLAG_KEY);
+        return ACCOUNT_DELETED_NOTICE;
+      }
+    } catch {
+      // storage blocked: nothing to show
+    }
+    return "";
+  });
   const [loading, setLoading] = useState(false);
 
   const firstName = remembered?.name ? remembered.name.split(" ")[0] : null;

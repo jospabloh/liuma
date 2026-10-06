@@ -20,6 +20,17 @@ import { useThemeMode } from '@/lib/useThemeMode';
  *   :root { --theme-switcher-bottom: 1rem; --theme-switcher-right: 1rem; }
  *   @media (max-width: 767px) { :root { --theme-switcher-bottom: 5.5rem; } }
  *
+ * Size is a CSS variable too, and the defaults are the 44x44 px a finger needs
+ * (WCAG 2.5.5, Apple HIG): the resting circle is `--theme-switcher-size` and
+ * each slot of the open track is `--theme-switcher-slot`. They used to be a
+ * fixed 40 px circle with 34 px slots, which a phone audit flags on every
+ * screen of every app, since this control is on every screen. An app that
+ * wants the old, smaller look under a mouse opts in from its stylesheet:
+ *
+ *   @media (pointer: fine) {
+ *     :root { --theme-switcher-size: 40px; --theme-switcher-slot: 34px; }
+ *   }
+ *
  * Every colour here is one of the app's own semantic tokens, so the control
  * inherits each app's palette instead of importing a look of its own. Brand
  * colour appears in exactly one place: the sliding indicator.
@@ -31,7 +42,10 @@ const MODES = [
   { value: 'system', label: 'Sistema', hint: 'Seguir al dispositivo' },
 ];
 
-const SLOT = 34; // px — one slot in the expanded track
+// One slot of the expanded track, and the resting circle. CSS, not numbers:
+// each app may shrink them for fine pointers (see the header comment).
+const SLOT = 'var(--theme-switcher-slot, 44px)';
+const SIZE = 'var(--theme-switcher-size, 44px)';
 const PAD = 3; // px — track padding around the slots
 
 // The capsule's easing curve, applied through inline styles rather than a
@@ -170,16 +184,22 @@ export default function ThemeSwitcher() {
     >
       <div
         className={[
-          'relative flex h-10 items-center overflow-hidden rounded-full border border-border',
+          'relative flex items-center overflow-hidden rounded-full border border-border',
           'bg-card/80 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_30px_-12px_rgba(0,0,0,0.35)]',
           'backdrop-blur-md supports-[backdrop-filter]:bg-card/70',
-          'transition-[width,opacity] duration-300',
+          'transition-[width,height,opacity] duration-300',
           'motion-reduce:transition-none',
           open ? 'opacity-100' : 'opacity-70 hover:opacity-100 focus-within:opacity-100',
         ].join(' ')}
-        style={{ width: open ? MODES.length * SLOT + PAD * 2 : 40, transitionTimingFunction: EASE }}
+        style={{
+          width: open ? `calc(${MODES.length} * ${SLOT} + ${PAD * 2}px)` : SIZE,
+          height: open ? `calc(${SLOT} + ${PAD * 2}px)` : SIZE,
+          transitionTimingFunction: EASE,
+        }}
       >
-        {/* Collapsed: one button showing the mode in force. */}
+        {/* Collapsed: one button showing the mode in force. -inset-px puts
+            it over the 1px border too, so the button itself is the full
+            --theme-switcher-size (inset-0 left it 2px short of 44). */}
         <button
           ref={bubbleRef}
           type="button"
@@ -190,7 +210,7 @@ export default function ThemeSwitcher() {
           title={`Tema: ${active.label}`}
           tabIndex={open ? -1 : 0}
           className={[
-            'absolute inset-0 flex items-center justify-center rounded-full text-muted-foreground',
+            'absolute -inset-px flex items-center justify-center rounded-full text-muted-foreground',
             'transition-opacity duration-200 ease-out motion-reduce:transition-none',
             'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
             open ? 'pointer-events-none opacity-0' : 'opacity-100',
@@ -218,7 +238,7 @@ export default function ThemeSwitcher() {
               width: SLOT,
               height: SLOT,
               left: PAD,
-              transform: `translateX(${activeIndex * SLOT}px)`,
+              transform: `translateX(calc(${activeIndex} * ${SLOT}))`,
               transitionTimingFunction: EASE,
             }}
           />

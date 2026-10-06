@@ -1,6 +1,8 @@
 import { DEFAULT_THEME } from './tenantTheme.js';
 import { isLegacySchoolId, isValidJoinCode } from './onboarding/joinCode.js';
 import { invokeFunction } from './functionResponse.js';
+import { uploadSchoolFile } from './uploads/uploadSchoolFile.js';
+import { humanizeError } from './errorMessages.js';
 
 export const ONBOARDING_ERROR_CODES = {
   VALIDATION: 'validation_error',
@@ -10,6 +12,7 @@ export const ONBOARDING_ERROR_CODES = {
   CONSENT_REQUIRED: 'consent_required',
   CONSENT_STALE: 'consent_stale',
   ALREADY_ONBOARDED: 'already_onboarded',
+  LOGO_UPLOAD_FAILED: 'logo_upload_failed',
   UNKNOWN: 'unknown_error',
 };
 
@@ -21,6 +24,7 @@ export const ONBOARDING_ERROR_MESSAGES = {
   [ONBOARDING_ERROR_CODES.CONSENT_REQUIRED]: 'Para continuar, acepta el Aviso de Privacidad y el consentimiento de datos sensibles.',
   [ONBOARDING_ERROR_CODES.CONSENT_STALE]: 'El Aviso de Privacidad se actualizó. Recarga la página para leer la versión vigente y vuelve a aceptarlo.',
   [ONBOARDING_ERROR_CODES.ALREADY_ONBOARDED]: 'Tu cuenta ya pertenece a una escuela. Si necesitas cambiarte, escribe a soporte@acaciaco.com.mx.',
+  [ONBOARDING_ERROR_CODES.LOGO_UPLOAD_FAILED]: 'No pudimos subir el logo. Elige otra imagen (PNG, JPG, WEBP o GIF de hasta 5 MB) o quítalo: puedes crear tu escuela sin logo.',
   [ONBOARDING_ERROR_CODES.UNKNOWN]: 'No pudimos completar tu registro. Intenta de nuevo o escribe a soporte@acaciaco.com.mx.',
 };
 
@@ -122,6 +126,17 @@ function withField(result, field) {
 }
 
 export function mapOnboardingError(error) {
+  // The logo is checked and stored by uploadSchoolFile before the school
+  // exists; its refusal names the actual problem (too big, not an image…),
+  // and nothing was created yet, so the person can fix it and retry.
+  if (error?.code === ONBOARDING_ERROR_CODES.LOGO_UPLOAD_FAILED) {
+    return {
+      code: error.code,
+      message: error.reason
+        ? `No pudimos subir el logo: ${error.reason.charAt(0).toLowerCase()}${error.reason.slice(1)} También puedes quitarlo y crear tu escuela sin logo.`
+        : ONBOARDING_ERROR_MESSAGES[error.code],
+    };
+  }
   if (error?.code && ONBOARDING_ERROR_MESSAGES[error.code]) {
     return withField({ code: error.code, message: ONBOARDING_ERROR_MESSAGES[error.code] }, error.field);
   }
@@ -219,8 +234,17 @@ export async function completeOnboardingTenantCreation({
   if (formData.role === 'ADMIN') {
     let logoUrl = null;
     if (logoFile) {
-      const uploaded = await base44.integrations.Core.UploadFile({ file: logoFile });
-      logoUrl = uploaded?.file_url || null;
+      // Through the server (v1.9.0): it checks the file is really an image
+      // of a sane size before anything is stored.
+      try {
+        logoUrl = await uploadSchoolFile(base44, { purpose: 'school_logo', file: logoFile });
+      } catch (cause) {
+        const error = new Error('Logo upload failed');
+        error.code = ONBOARDING_ERROR_CODES.LOGO_UPLOAD_FAILED;
+        error.reason = humanizeError(cause);
+        error.cause = cause;
+        throw error;
+      }
     }
     request.newSchool = buildSchoolPayload({ formData, logoUrl, themePreview });
   } else {

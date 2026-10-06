@@ -57,10 +57,10 @@ export default function BigTile({
         <Icon className="h-6 w-6" />
       </div>
       <div className="min-w-0 flex-1">
-        <h3 className="font-display text-base font-semibold tracking-tight text-card-foreground">
+        <h3 className="break-words font-display text-base font-semibold tracking-tight text-card-foreground">
           {title}
         </h3>
-        {subtitle && <p className="mt-0.5 truncate text-sm text-muted-foreground">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {badge !== undefined && badge > 0 && (

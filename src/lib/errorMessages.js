@@ -55,9 +55,40 @@ const CODE_MESSAGES = {
   PAYMENT_CONFLICT: 'Otro pago se registró al mismo tiempo; revisa el saldo y vuelve a intentar.',
   PAYMENT_CONFLICT_UNRESOLVED: 'Otro pago se registró al mismo tiempo y este quedó de más. Revisa los pagos del cargo y borra el sobrante.',
   REMINDER_IN_PROGRESS: 'Ya se está enviando un recordatorio de este cargo. Espera un momento y recarga.',
+  // guardedEntityWrite: the plan's student cap, enforced server-side (v1.9.0).
+  STUDENT_QUOTA: 'Tu escuela llegó al máximo de alumnos activos de su plan (con el margen incluido). Da de baja a los alumnos que ya no asisten o mejora tu licencia para agregar más.',
+  // The over-cap write could not be undone (guardedEntityWrite/_schoolWrite.ts).
+  // sendBulkNotification / listSchoolMembers: a list too large to read whole
+  // is refused rather than acted on in part (the emergency alert excepted).
+  RECIPIENTS_INCOMPLETE: 'La lista de destinatarios es demasiado grande para leerla completa; no se envió nada. Escribe a soporte@acaciaco.com.mx.',
+  TOO_MANY_RECIPIENTS: 'Son demasiados destinatarios para un solo envío; no se envió nada. Escribe a soporte@acaciaco.com.mx.',
+  STUDENT_QUOTA_UNRESOLVED: 'Tu escuela llegó al máximo de alumnos y no se pudo deshacer el último cambio. Revisa la lista de alumnos y da de baja al que sobra.',
+  // uploadSchoolFile (v1.9.0): every file goes through the server.
+  UPLOAD_PURPOSE_INVALID: 'No se reconoce el tipo de archivo que intentas subir. Recarga la página.',
+  FILE_MISSING: 'No llegó ningún archivo. Elígelo de nuevo.',
+  FILE_TOO_LARGE: 'El archivo es demasiado grande. Elige uno más ligero.',
+  FILE_TYPE_NOT_ALLOWED: 'Ese tipo de archivo no se puede subir aquí.',
+  FILE_CONTENT_MISMATCH: 'El contenido del archivo no corresponde a su extensión. Ábrelo y guárdalo de nuevo en el formato correcto.',
+  UPLOAD_DAILY_LIMIT: 'Llegaste al límite de archivos que se pueden subir hoy. Inténtalo mañana.',
+  // The daily slot could not be reserved, so nothing was stored (fail closed).
+  UPLOAD_QUOTA_UNAVAILABLE: 'No se pudo preparar la subida del archivo. Inténtalo de nuevo en un momento.',
+  UPLOAD_FAILED: 'No se pudo guardar el archivo. Inténtalo de nuevo en un momento.',
+  NOT_ONBOARDING: 'Tu cuenta ya pertenece a una escuela; el logo lo cambia la dirección.',
   // Base44's app-wide rate limit (v1.8.3). Reads were already retried by the
   // time anyone sees this; a write never is.
   RATE_LIMITED: 'Hay mucha actividad en este momento. Espera unos segundos e inténtalo de nuevo.',
+  // Consent and account deletion (v1.9.0). CONSENT_REQUIRED only reaches a
+  // screen when a request raced the consent screen; recargar la muestra.
+  CONSENT_REQUIRED: 'Antes de continuar, acepta la versión vigente del Aviso de Privacidad y los Términos. Recarga la página.',
+  CONSENT_VERSION_MISMATCH: 'El Aviso de Privacidad se actualizó mientras lo leías. Recarga la página para ver la versión vigente.',
+  ACCOUNT_DELETED: 'Esta cuenta se eliminó. Si quieres volver a LIUMA, escribe a soporte@acaciaco.com.mx.',
+  // deleteMyAccount started and did not finish: the deletion page finishes it.
+  ACCOUNT_DELETION_IN_PROGRESS: 'La eliminación de tu cuenta está en curso. Recarga la página para terminarla.',
+  // _deletionGuard.ts / exportSchoolData could not confirm the account state.
+  DELETION_STATE_UNVERIFIED: 'No pudimos confirmar que el cambio se guardó correctamente. Recarga la página y revisa antes de intentarlo de nuevo.',
+  // provisionOnboardingProfile could not confirm the account was not being
+  // deleted, so it undid its writes: nothing was created, retry.
+  ONBOARDING_NOT_CONFIRMED: 'No pudimos confirmar tu registro y no se guardó nada. Inténtalo de nuevo en un momento.',
 };
 
 const STATUS_MESSAGES = {
@@ -113,6 +144,9 @@ export function needsEmailVerification(error) {
 /** One user-facing Spanish sentence for any thrown error. */
 export function humanizeError(error) {
   if (!error) return GENERIC_ERROR_MESSAGE;
+  // A refusal the browser decided itself, already worded for a person
+  // (src/lib/uploads/uploadSchoolFile.js#UploadRejectedError).
+  if (typeof error.userMessage === 'string' && error.userMessage) return error.userMessage;
   // A function's refusal body: Base44Error `.data`, or AxiosError
   // `.response.data` (functions.invoke rejects with the raw axios error).
   const code = functionErrorCode(error);

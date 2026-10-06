@@ -1,11 +1,11 @@
 // Consent is only worth something if (a) the notice it points to exists,
-// (b) the version recorded is the one shown, and (c) a draft is never passed
-// off as final (owner decision 2026-09-29; audit F26).
+// (b) the version recorded is the one shown, and (c) the text it records is the
+// final one, not the 2026-09-29 draft (owner decision 2026-10-02; audit F26).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  PRIVACY_NOTICE_IS_DRAFT,
+  PRIVACY_NOTICE_STATUS,
   PRIVACY_NOTICE_URL,
   PRIVACY_NOTICE_VERSION,
   TERMS_URL,
@@ -37,16 +37,15 @@ test('the consent links point at in-app routes that App.jsx actually registers, 
   assert.match(onboarding, /href=\{TERMS_URL\}/);
 });
 
-test('while the text is a draft, it says so on the page and in the code', () => {
-  assert.equal(PRIVACY_NOTICE_IS_DRAFT, true);
-  assert.match(PRIVACY_NOTICE_VERSION, /borrador/);
-  assert.match(TERMS_VERSION, /borrador/);
-  assert.match(read('src/lib/legal/legalDocs.js'), /BORRADOR PENDIENTE DE REVISIÓN LEGAL/);
-  assert.equal(AVISO_PRIVACIDAD.isDraft, true);
-  assert.equal(TERMINOS_SERVICIO.isDraft, true);
-  const page = read('src/components/legal/LegalDocumentPage.jsx');
-  assert.match(page, /doc\.isDraft && \(/);
-  assert.match(page, /BORRADOR pendiente de revisión legal/);
+test('the text is final: status vigente, a dated version, no draft banner', () => {
+  assert.equal(PRIVACY_NOTICE_STATUS, 'vigente');
+  assert.equal(PRIVACY_NOTICE_VERSION, '2026-10-02');
+  assert.equal(TERMS_VERSION, PRIVACY_NOTICE_VERSION);
+  for (const p of ['src/lib/legal/legalDocs.js', 'src/components/legal/LegalDocumentPage.jsx']) {
+    assert.doesNotMatch(read(p), /borrador/i, p);
+  }
+  assert.equal(AVISO_PRIVACIDAD.status, 'vigente');
+  assert.equal(TERMINOS_SERVICIO.status, 'vigente');
 });
 
 test('the aviso covers what the LFPDPPP requires for minors\' sensitive data', () => {

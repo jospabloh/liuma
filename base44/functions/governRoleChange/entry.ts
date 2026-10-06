@@ -21,6 +21,8 @@
 // function. That schema change is staged for owner review/deploy — see
 // docs/security-role-governance-remediation.md.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.35';
+import { withDeletionGuard } from './_deletionGuard.ts';
+import { readAllPages } from './_pages.ts';
 
 const APP_ROLES = ['ADMIN', 'TEACHER', 'PARENT'];
 const OPEN_STATUSES = ['PENDING_ADMIN_APPROVAL', 'PENDING_SECOND_ADMIN_APPROVAL'];
@@ -31,7 +33,21 @@ type Profile = {
   school_id?: string;
   app_role?: string;
   status?: string;
+  consent_notice_version?: string;
+  consent_terms_version?: string;
 };
+
+// Accepting the current Aviso de Privacidad and Términos is mandatory to use
+// LIUMA (v1.9.0). MIRRORS schoolRead/_scope.ts#profileConsentIsCurrent and
+// src/lib/consent/privacyNotice.js; tests/unit/consent-gate.test.js checks
+// every copy of the versions.
+const CONSENT_NOTICE_VERSION = '2026-10-02';
+const CONSENT_TERMS_VERSION = '2026-10-02';
+function profileConsentIsCurrent(profile: { consent_notice_version?: unknown; consent_terms_version?: unknown } | null): boolean {
+  return Boolean(profile)
+    && profile!.consent_notice_version === CONSENT_NOTICE_VERSION
+    && profile!.consent_terms_version === CONSENT_TERMS_VERSION;
+}
 
 type PendingChange = {
   id: string;
@@ -66,12 +82,16 @@ function bad(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, error: message }, { status });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
     const base44 = createClientFromRequest(req);
 
     const user = await base44.auth.me().catch(() => null);
     if (!user) return bad(401, 'UNAUTHENTICATED', 'Unauthorized');
+    // A deletion of this account started or finished (deleteMyAccount): no
+    // access here, whatever consent stamp a race may have left behind.
+    // auth.me() returns the User's custom fields, so this costs no read.
+    if (accountDeletionBlocked(user)) return Response.json({ ok: false, code: 'ACCOUNT_DELETION_IN_PROGRESS', error: 'ACCOUNT_DELETION_IN_PROGRESS' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const action = body?.action;
@@ -79,7 +99,8 @@ Deno.serve(async (req) => {
       return bad(400, 'BAD_ACTION', 'action must be "request" or "decide"');
     }
 
-    const sr = base44.asServiceRole;
+    // Every write checked against a concurrent deletion (./_deletionGuard.ts).
+    const sr = guarded(base44.asServiceRole, String(user.id));
 
     // Establish the caller's authority from the backend, not from the request.
     // The caller must hold an ACTIVE ADMIN profile; that profile's school is the
@@ -92,9 +113,15 @@ Deno.serve(async (req) => {
     const callerProfiles: Profile[] = await sr.entities.UserProfile.filter({ user_id: user.id }, '-created_date');
     const callerProfile = callerProfiles.find((p) => p.app_role === 'ADMIN' && p.status === 'ACTIVE') || null;
     if (!callerProfile) return bad(403, 'NOT_ADMIN', 'Requires an active ADMIN profile');
+    if (!profileConsentIsCurrent(callerProfile)) return bad(403, 'CONSENT_REQUIRED', 'Accept the current privacy notice first');
     const schoolId = callerProfile.school_id;
 
-    const schoolProfiles: Profile[] = await sr.entities.UserProfile.filter({ school_id: schoolId });
+    // Every profile of the school, paged (./_pages.ts): the target lookup and
+    // the "another ACTIVE ADMIN exists" check must see all of them, not the
+    // SDK's default first page (Codex review of PR #197, round 10).
+    const profilesRead = await readAllPages(sr.entities.UserProfile, { school_id: schoolId });
+    if (!profilesRead.complete) return bad(503, 'RECIPIENTS_INCOMPLETE', 'Too many profiles to read at once');
+    const schoolProfiles = profilesRead.rows as Profile[];
 
     if (action === 'request') {
       const targetProfileId = String(body?.targetProfileId || '');
@@ -196,6 +223,22 @@ Deno.serve(async (req) => {
 
     return Response.json({ ok: true, change: updatedChange, applied: appliedProfile });
   } catch (e) {
-    return Response.json({ ok: false, code: 'INTERNAL', error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('governRoleChange failed', (e as Error)?.message);
+    return Response.json({ ok: false, code: 'INTERNAL', error: 'INTERNAL' }, { status: 500 });
   }
-});
+}));
+
+// MIRRORS myConsent/_consent.ts#accountDeletionStartedAt/accountDeletedAt.
+// Identical in every consent-gated function; tests/unit/account-deletion.test.js
+// checks the copies and where each one is called.
+function accountDeletionBlocked(user: unknown): boolean {
+  const u = (user ?? {}) as {
+    account_deletion_started_at?: unknown;
+    account_deleted_at?: unknown;
+    data?: { account_deletion_started_at?: unknown; account_deleted_at?: unknown } | null;
+  };
+  const started = u.account_deletion_started_at ?? u.data?.account_deletion_started_at;
+  const deleted = u.account_deleted_at ?? u.data?.account_deleted_at;
+  return (typeof started === 'string' && started !== '') || (typeof deleted === 'string' && deleted !== '');
+}

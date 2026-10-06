@@ -74,7 +74,11 @@ test('lumiWrite delegates to guardedEntityWrite and notifyParents behind a confi
   const src = read('base44/functions/lumiWrite/entry.ts');
   assert.match(src, /functions\.invoke\('guardedEntityWrite'/);
   assert.match(src, /functions\.invoke\('notifyParents', \{ kind: notifyKind, recordId: record\.id \}\)/);
-  assert.match(src, /if \(String\(body\?\.confirmation_code \|\| ''\) !== code\) return fail\(409, 'NEEDS_CONFIRMATION'\)/);
+  // The commit runs only with this write's own, live, unused code (v1.9.0:
+  // checkConfirmationCode + claimConfirmationCode, see lumi-confirmation-code.test.js).
+  assert.match(src, /if \(codeState === 'NEEDS_CONFIRMATION'\) return fail\(409, 'NEEDS_CONFIRMATION'\)/);
+  assert.match(src, /if \(codeState === 'CODE_EXPIRED'\) return fail\(410, 'CODE_EXPIRED'\)/);
+  assert.match(src, /if \(!claimId\) return fail\(409, 'CODE_USED'\)/);
   // No direct entity writes: every write goes through the guarded path.
   assert.doesNotMatch(src, /entities\.(Attendance|DiaryEntry)\.(create|update)/);
   // A teacher may only write for students in their own classrooms.
@@ -117,6 +121,15 @@ test('the prompt closes the gaps QA r5 found in live answers', () => {
   assert.match(p, /No asumas el género de nadie/);
   // LM07: a twelve-line refusal.
   assert.match(p, /Al negarte a algo: máximo tres líneas/);
+  // Live check after #195: the conditional rule did not stop "pagos" in a
+  // docente's refusal (3/3 runs); refusals now never name topics at all.
+  assert.match(p, /Al negarte NUNCA enumeres lo que puedes hacer/);
+  // Codex on #196: the rule must not contradict the specific redirects that
+  // sections 7 and 8 prescribe (a family asking to record attendance is sent
+  // to "Solicitar ausencia"); it names them as the allowed exception.
+  assert.match(p, /Lo único que sí puedes nombrar es la pantalla o la persona que resuelve exactamente lo que pidieron/);
+  assert.match(p, /puede usar "Solicitar ausencia"/);
+  assert.doesNotMatch(p, /Al negarte NUNCA menciones temas/);
   // LP10: "si hubo un cambio de rol reciente, probablemente aún no se refleja".
   assert.match(p, /no especules con cambios de rol/);
   // Live QA of v1.8.3: still answered "si efectivamente fuiste promovido…".

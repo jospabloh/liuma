@@ -256,6 +256,8 @@ Deno.serve(async (req) => {
         return Response.json({ error: `unknown action: ${action}` }, { status: 400 });
     }
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 500 });
+    // The detail goes to the log; a raw SDK error can name entities or ids.
+    console.error('acaciaControl failed', (e as Error)?.message);
+    return Response.json({ error: 'INTERNAL' }, { status: 500 });
   }
 });

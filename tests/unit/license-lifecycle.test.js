@@ -114,7 +114,11 @@ test('the server write gate fails closed too — guardedEntityWrite and getMySub
   // by both write paths (entry.ts and _schoolWrite.ts); entry.ts applies it.
   const rule = read('base44/functions/guardedEntityWrite/_policy.ts');
   assert.match(gate, /effectiveLicenseIsReadOnly,/);
-  assert.match(read('base44/functions/guardedEntityWrite/_schoolWrite.ts'), /return effectiveLicenseIsReadOnly\(\(subs \|\| \[\]\)\[0\] \|\| null, now\);/);
+  // The newest row — or null, which fails closed (v1.9.0 split the read into
+  // readSubscription so the student cap reads the same row).
+  const schoolWrite = read('base44/functions/guardedEntityWrite/_schoolWrite.ts');
+  assert.match(schoolWrite, /return effectiveLicenseIsReadOnly\(await readSubscription\(sr, schoolId\), now\);/);
+  assert.match(schoolWrite, /SchoolSubscription\.filter\(\{ school_id: schoolId \}, '-created_date', 1\);\s+return \(subs \|\| \[\]\)\[0\] \|\| null;/);
   assert.doesNotMatch(gate + rule, /if \(sub && READ_ONLY_STATUSES/, 'the old gate skipped schools with no subscription');
   // The only carve-out is P7's ADMIN emergency Notice (child safety is not
   // gated on billing); everything else goes through the fail-closed rule.

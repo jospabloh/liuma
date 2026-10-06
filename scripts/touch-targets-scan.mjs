@@ -354,5 +354,5 @@ async function main() {
   process.exit(failing.length ? 1 : 0);
 }
 
-export { fixtures, mockBackend, openContext, settle, measure };
+export { fixtures, mockBackend, openContext, settle, measure, SCREENS };
 if (!process.env.TOUCH_SCAN_NO_MAIN) main().catch((e) => { console.error(e); process.exit(2); });

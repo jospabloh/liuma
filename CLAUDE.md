@@ -911,6 +911,20 @@ Después de `npm run deploy` + `npm run deploy:site`, vuelve a correr el scan.
 Prueba a mano: marcar una ausencia, crear una bitácora con envío a padres,
 «Generar con Lumi», el intake de soporte y una alerta de emergencia.
 
+**Cerrado el 2026-10-07.** Producción ya corría v1.9.1 (checkpoint
+`d9fd2d0`, desplegado el 2026-10-06), sin ninguna `integrations.Core.*` en
+`src/` (comprobado por grep en el sandbox de Base44; `UploadFile` también salió,
+vía `uploadSchoolFile` de v1.9.0). El scan marcaba
+`core_integration_recommendation: compatible`, así que se activó
+**`POST /api/apps/{app_id}/security/scan/core-integrations/protect`**
+(`{"protected": true}`): desde ahora el navegador **no puede** llamar a
+SendEmail/InvokeLLM directo, aunque lo intente con un token válido; sólo las
+funciones. Eso responde la duda de arriba: la puerta sí está cerrada en la
+plataforma, no sólo en nuestro código. **No se puede apagar desde la API.**
+Si algún día una pantalla vuelve a llamar `integrations.Core.*` desde el
+cliente, fallará en producción: va por una función. El scan nuevo
+(2026-10-07T02:27Z) ya no lista el hallazgo de créditos.
+
 ## Onboarding, licencia y consentimiento por el servidor (P6, 2026-09-29)
 
 El onboarding no podía funcionar para nadie más que el dueño de la plataforma:

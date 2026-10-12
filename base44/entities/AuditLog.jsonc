@@ -41,7 +41,8 @@
         "RECORD_UPDATED",
         "RECORD_DELETED",
         "DELETION_STRAGGLER_UNRESOLVED",
-        "ONBOARDING_COMPENSATION_UNRESOLVED"
+        "ONBOARDING_COMPENSATION_UNRESOLVED",
+        "SCHOOL_DATA_EXPORTED"
       ],
       "type": "string"
     },
@@ -78,17 +79,17 @@
         "role": "admin"
       }
     },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
     "read": {
       "user_condition": {
         "role": "admin"
       }
     },
     "update": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "delete": {
       "user_condition": {
         "role": "admin"
       }

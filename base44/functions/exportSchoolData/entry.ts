@@ -72,6 +72,29 @@ Deno.serve(async (req) => {
     const gate = await finalExportGate(sr, String(user.id));
     if (!gate.ok) return Response.json({ ok: false, code: gate.code, error: gate.code }, { status: gate.status });
 
+    // Security scan 2026-10-12: a full export of everything the school owns
+    // left no governance trail. Best-effort, and only once the export is
+    // actually COMPLETE (a resumed/partial call logs nothing — the call that
+    // finally finishes does) — never blocks the response, and never carries
+    // the exported data itself, just entity counts.
+    if (exported.complete) {
+      try {
+        await sr.entities.AuditLog.create({
+          school_id: schoolId,
+          user_id: user.id,
+          user_email: user.email,
+          action: 'SCHOOL_DATA_EXPORTED',
+          target_type: 'School',
+          target_id: schoolId,
+          details: {
+            entity_counts: Object.fromEntries(
+              Object.entries(exported.data).map(([name, rows]) => [name, Array.isArray(rows) ? rows.length : 0]),
+            ),
+          },
+        });
+      } catch { /* audit best-effort — the export already succeeded */ }
+    }
+
     return Response.json({
       ok: true,
       exported_at: new Date().toISOString(),

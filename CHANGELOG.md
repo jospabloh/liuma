@@ -5,6 +5,40 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.9.2] - 2026-10-12
+
+Scheduled security audit. No user-facing change — a dependency patch and a
+server-side hardening pass. See `docs/security-audit-2026-10-12.md`.
+
+### Fixed
+
+- **Production was ~6 days behind `main`** (a dependency bump plus two
+  docs-only commits). Synced and redeployed; no entity/RLS change was in the
+  gap.
+- **`source-map-js` dependency advisory** closed via `npm audit fix`
+  (lockfile only). The rest of the flagged chain (`tailwindcss`/`braces`/
+  `chokidar`) has no non-major fix published; same accepted build-tool-only
+  risk every prior pass has documented.
+- **A captured, signed request to the Mission Control admin bridge
+  (`acaciaControl`) could be replayed** for the rest of its 5-minute
+  freshness window, re-running a privileged action (a license write, an
+  email, a forced session revoke) each time. Added an in-memory
+  seen-signatures cache, additive to the existing signature check.
+- **The same bridge trusted a signed request's entity name outright** — a
+  valid signature could make it read or write any entity in the app, not
+  only the ones Mission Control's own configuration actually uses for LIUMA.
+  Restricted to an explicit allowlist per action, built from Mission
+  Control's own registry config.
+- **Lumi's write-confirmation code had no server secret**, so an
+  authenticated caller who knew a write's exact parameters could compute a
+  valid code directly instead of going through the preview step (not an
+  access-control bypass — every write still goes through `guardedEntityWrite`
+  — but it defeated the "the caller cannot skip the preview" guarantee).
+  The code is now HMAC-keyed by a new app secret.
+- **A full export of a school's data left no audit trail.** A completed
+  export now writes one `AuditLog` row (entity counts only, never the
+  exported data).
+
 ## [1.9.1] - 2026-10-05
 
 Scheduled security audit. No user-facing change — a dependency patch and a

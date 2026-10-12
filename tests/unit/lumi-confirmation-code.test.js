@@ -23,38 +23,52 @@ import {
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8');
 const T0 = 1_790_000_000; // seconds
 const parts = { userId: 'u-teacher', kind: 'attendance', studentId: 's1', data: { status: 'absent', date: '2026-10-02' } };
+const SECRET = 'test-lumi-confirm-secret';
 
 test('a fresh code for exactly this write is accepted; anything else needs a new preview', async () => {
-  const code = await confirmationCode({ ...parts, issuedAt: T0 });
-  assert.equal(await checkConfirmationCode(code, parts, T0 + 5), 'ok');
-  assert.equal(await checkConfirmationCode(code, { ...parts, studentId: 's2' }, T0 + 5), 'NEEDS_CONFIRMATION', 'another student');
-  assert.equal(await checkConfirmationCode(code, { ...parts, data: { ...parts.data, status: 'present' } }, T0 + 5), 'NEEDS_CONFIRMATION', 'other data');
-  assert.equal(await checkConfirmationCode(code, { ...parts, userId: 'u-other' }, T0 + 5), 'NEEDS_CONFIRMATION', 'another user');
-  assert.equal(await checkConfirmationCode(code, { ...parts, kind: 'diary' }, T0 + 5), 'NEEDS_CONFIRMATION', 'another kind');
+  const code = await confirmationCode({ ...parts, issuedAt: T0 }, SECRET);
+  assert.equal(await checkConfirmationCode(code, parts, T0 + 5, SECRET), 'ok');
+  assert.equal(await checkConfirmationCode(code, { ...parts, studentId: 's2' }, T0 + 5, SECRET), 'NEEDS_CONFIRMATION', 'another student');
+  assert.equal(await checkConfirmationCode(code, { ...parts, data: { ...parts.data, status: 'present' } }, T0 + 5, SECRET), 'NEEDS_CONFIRMATION', 'other data');
+  assert.equal(await checkConfirmationCode(code, { ...parts, userId: 'u-other' }, T0 + 5, SECRET), 'NEEDS_CONFIRMATION', 'another user');
+  assert.equal(await checkConfirmationCode(code, { ...parts, kind: 'diary' }, T0 + 5, SECRET), 'NEEDS_CONFIRMATION', 'another kind');
   for (const junk of [undefined, '', 'abc', code.toUpperCase(), `${code}x`]) {
-    assert.equal(await checkConfirmationCode(junk, parts, T0 + 5), 'NEEDS_CONFIRMATION', String(junk));
+    assert.equal(await checkConfirmationCode(junk, parts, T0 + 5, SECRET), 'NEEDS_CONFIRMATION', String(junk));
   }
 });
 
+test('a code is unforgeable without the server secret: brute-forcing issuedAt alone does not work', async () => {
+  // Security scan 2026-10-12: before, the digest had no secret, so anyone who
+  // knew the write's parameters could compute a valid code without calling
+  // 'preview' by trying every issuedAt in the TTL window. Now the digest is
+  // keyed, so the wrong secret never validates even for the exact parameters
+  // and the exact issuedAt a real preview would have used.
+  const code = await confirmationCode({ ...parts, issuedAt: T0 }, SECRET);
+  assert.equal(await checkConfirmationCode(code, parts, T0 + 5, 'a-different-secret'), 'NEEDS_CONFIRMATION');
+  const forgedWithWrongSecret = await confirmationCode({ ...parts, issuedAt: T0 }, 'a-different-secret');
+  assert.notEqual(forgedWithWrongSecret, code);
+  assert.equal(await checkConfirmationCode(forgedWithWrongSecret, parts, T0 + 5, SECRET), 'NEEDS_CONFIRMATION');
+});
+
 test('the code expires after 10 minutes, and its time cannot be edited to look fresh', async () => {
-  const code = await confirmationCode({ ...parts, issuedAt: T0 });
+  const code = await confirmationCode({ ...parts, issuedAt: T0 }, SECRET);
   assert.equal(CONFIRMATION_TTL_SECONDS, 600);
-  assert.equal(await checkConfirmationCode(code, parts, T0 + 600), 'ok');
-  assert.equal(await checkConfirmationCode(code, parts, T0 + 601), 'CODE_EXPIRED');
+  assert.equal(await checkConfirmationCode(code, parts, T0 + 600, SECRET), 'ok');
+  assert.equal(await checkConfirmationCode(code, parts, T0 + 601, SECRET), 'CODE_EXPIRED');
   // Moving the stamp forward breaks the digest: not "expired", simply not a code.
   const [, digest] = code.split('-');
   const forged = `${(T0 + 590).toString(36)}-${digest}`;
-  assert.equal(await checkConfirmationCode(forged, parts, T0 + 700), 'NEEDS_CONFIRMATION');
+  assert.equal(await checkConfirmationCode(forged, parts, T0 + 700, SECRET), 'NEEDS_CONFIRMATION');
   // A code stamped well in the future is not one this server issued.
-  const future = await confirmationCode({ ...parts, issuedAt: T0 + 3600 });
-  assert.equal(await checkConfirmationCode(future, parts, T0), 'NEEDS_CONFIRMATION');
+  const future = await confirmationCode({ ...parts, issuedAt: T0 + 3600 }, SECRET);
+  assert.equal(await checkConfirmationCode(future, parts, T0, SECRET), 'NEEDS_CONFIRMATION');
 });
 
 const claimArgs = (code) => ({ code, userId: 'u-teacher', userEmail: 't@a.mx', schoolId: 'sA', kind: 'attendance', studentId: 's1' });
 
 test('a code commits once: the second commit is CODE_USED', async () => {
   const db = makeFakeDb({ AuditLog: [] });
-  const code = await confirmationCode({ ...parts, issuedAt: T0 });
+  const code = await confirmationCode({ ...parts, issuedAt: T0 }, SECRET);
   const first = await claimConfirmationCode(db, claimArgs(code));
   assert.ok(first, 'the first commit claims the code');
   assert.equal(await claimConfirmationCode(db, claimArgs(code)), null, 'the second is refused');
@@ -66,7 +80,7 @@ test('a code commits once: the second commit is CODE_USED', async () => {
 
 test('two commits racing with the same code: exactly one gets through', async () => {
   const db = makeFakeDb({ AuditLog: [] });
-  const code = await confirmationCode({ ...parts, issuedAt: T0 });
+  const code = await confirmationCode({ ...parts, issuedAt: T0 }, SECRET);
   const results = await Promise.all([claimConfirmationCode(db, claimArgs(code)), claimConfirmationCode(db, claimArgs(code))]);
   assert.equal(results.filter(Boolean).length, 1);
   assert.equal(db.writes.filter((w) => w.entity === 'AuditLog' && w.op === 'create').length, 2, 'both passed the first look — a real race');
@@ -76,7 +90,7 @@ test('two commits racing with the same code: exactly one gets through', async ()
 
 test('a commit whose write failed gives the code back, so a retry works', async () => {
   const db = makeFakeDb({ AuditLog: [] });
-  const code = await confirmationCode({ ...parts, issuedAt: T0 });
+  const code = await confirmationCode({ ...parts, issuedAt: T0 }, SECRET);
   const claim = await claimConfirmationCode(db, claimArgs(code));
   await releaseConfirmationCode(db, claim);
   assert.ok(await claimConfirmationCode(db, claimArgs(code)));
@@ -84,7 +98,7 @@ test('a commit whose write failed gives the code back, so a retry works', async 
 
 test('another user\'s claim of the same string does not burn mine (claims are per user)', async () => {
   const db = makeFakeDb({ AuditLog: [] });
-  const code = await confirmationCode({ ...parts, issuedAt: T0 });
+  const code = await confirmationCode({ ...parts, issuedAt: T0 }, SECRET);
   assert.ok(await claimConfirmationCode(db, { ...claimArgs(code), userId: 'u-someone' }));
   assert.ok(await claimConfirmationCode(db, claimArgs(code)));
 });

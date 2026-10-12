@@ -476,12 +476,11 @@ export function stableStringify(value: unknown): string {
 }
 
 // A write only commits with the code its own preview returned. The code is a
-// digest of exactly what will be written, by whom, and WHEN THE PREVIEW WAS
-// MADE — so the model cannot skip the preview (it cannot compute SHA-256), a
-// preview for Juan cannot commit a write for Pedro, and a commit can be
-// checked against the preview's age. Whether the HUMAN said "sí" in between
-// is the prompt's job; this guarantees that what they were shown is what gets
-// written.
+// keyed digest of exactly what will be written, by whom, and WHEN THE
+// PREVIEW WAS MADE — so a preview for Juan cannot commit a write for Pedro,
+// and a commit can be checked against the preview's age. Whether the HUMAN
+// said "sí" in between is the prompt's job; this guarantees that what they
+// were shown is what gets written.
 //
 // v1.9.0 (server-minor): a code is also SINGLE-USE and EXPIRES. Before, the
 // digest was of (who, what, which day) only, so repeating the same commit the
@@ -497,20 +496,37 @@ export function stableStringify(value: unknown): string {
 //     the same code cannot both pass (claimConfirmationCode). A commit whose
 //     write then fails releases its claim, so the person can retry while the
 //     code is alive.
+//
+// Security scan 2026-10-12: the digest used to be plain SHA-256 with no
+// secret, so an authenticated caller who knew the write's exact parameters
+// could compute a valid code by brute-forcing ~600 issuedAt values in the
+// 10-minute window, without ever calling 'preview' — not an authorization
+// bypass (guardedEntityWrite still enforces every access rule on commit),
+// but it defeated the "the model/caller cannot skip the preview" guarantee
+// this scheme exists for. The code is now HMAC-SHA256 keyed by
+// LUMI_CONFIRM_SECRET (an app secret, entry.ts reads it and fails closed if
+// unset) — only this server, which issued the preview, can produce a valid
+// code for a given set of write parameters.
 export const CONFIRMATION_TTL_SECONDS = 10 * 60;
 export const CONFIRMATION_AUDIT_TARGET = 'lumiWrite:code';
 
 const CODE_SHAPE = /^([0-9a-z]{1,10})-([0-9a-f]{10})$/;
 
+async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+  return Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function confirmationCode(parts: {
   userId: string; kind: string; studentId: string; data: Record<string, unknown>; issuedAt: number;
-}): Promise<string> {
+}, secret: string): Promise<string> {
   const issuedAt = Math.floor(parts.issuedAt);
   const payload = { userId: parts.userId, kind: parts.kind, studentId: parts.studentId, data: parts.data, issuedAt };
-  const bytes = new TextEncoder().encode(`lumi.write.v2|${stableStringify(payload)}`);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  const hex = Array.from(new Uint8Array(digest)).slice(0, 5)
-    .map((b) => b.toString(16).padStart(2, '0')).join('');
+  const hex = (await hmacSha256Hex(secret, `lumi.write.v2|${stableStringify(payload)}`)).slice(0, 10);
   return `${issuedAt.toString(36)}-${hex}`;
 }
 
@@ -524,12 +540,13 @@ export async function checkConfirmationCode(
   code: unknown,
   parts: { userId: string; kind: string; studentId: string; data: Record<string, unknown> },
   nowSeconds: number,
+  secret: string,
 ): Promise<'ok' | 'NEEDS_CONFIRMATION' | 'CODE_EXPIRED'> {
   const match = CODE_SHAPE.exec(String(code || ''));
   if (!match) return 'NEEDS_CONFIRMATION';
   const issuedAt = parseInt(match[1], 36);
   if (!Number.isFinite(issuedAt)) return 'NEEDS_CONFIRMATION';
-  if (await confirmationCode({ ...parts, issuedAt }) !== code) return 'NEEDS_CONFIRMATION';
+  if (await confirmationCode({ ...parts, issuedAt }, secret) !== code) return 'NEEDS_CONFIRMATION';
   // A clock that moved backwards a little is tolerated; a code "from the future" is not ours.
   if (issuedAt > nowSeconds + 60) return 'NEEDS_CONFIRMATION';
   if (nowSeconds - issuedAt > CONFIRMATION_TTL_SECONDS) return 'CODE_EXPIRED';

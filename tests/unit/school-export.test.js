@@ -75,6 +75,20 @@ test('neither screen calls an incomplete export a success, and both gate the sch
   assert.match(read('src/lib/account/schoolExport.js'), /return exportCompleteness\(payload\);/);
 });
 
+// Security scan 2026-10-12: a full export of everything the school owns left
+// no governance trail. Logged once, only when the export actually finished.
+test('a completed export is logged to AuditLog; a resumed/partial call logs nothing', () => {
+  const src = read('base44/functions/exportSchoolData/entry.ts');
+  assert.match(src, /if \(exported\.complete\) \{/);
+  assert.match(src, /action: 'SCHOOL_DATA_EXPORTED',/);
+  assert.match(src, /target_type: 'School',/);
+  assert.match(src, /target_id: schoolId,/);
+  // Entity counts only — never the exported rows themselves.
+  assert.doesNotMatch(src, /details:\s*\{\s*data:/);
+  const schema = JSON.parse(read('base44/entities/AuditLog.jsonc').replace(/^\s*\/\/.*$/gm, ''));
+  assert.ok(schema.properties.action.enum.includes('SCHOOL_DATA_EXPORTED'));
+});
+
 test('other reads that feed decisions are complete or refuse', () => {
   const govern = read('base44/functions/governRoleChange/entry.ts');
   assert.match(govern, /readAllPages\(sr\.entities\.UserProfile, \{ school_id: schoolId \}\)/);

@@ -69,6 +69,10 @@ export const ACTION_TIER: Record<string, string> = {
   // not undo itself (provisionOnboardingProfile): for the owner to fix.
   DELETION_STRAGGLER_UNRESOLVED: 'SERVER',
   ONBOARDING_COMPENSATION_UNRESOLVED: 'SERVER',
+  // exportSchoolData writes this itself once a full export completes
+  // (security scan 2026-10-12) — a client claiming it would be forging
+  // evidence that a download happened.
+  SCHOOL_DATA_EXPORTED: 'SERVER',
 };
 
 export const MAX_DETAILS_CHARS = 16000;

@@ -75,6 +75,71 @@ test('neither screen calls an incomplete export a success, and both gate the sch
   assert.match(read('src/lib/account/schoolExport.js'), /return exportCompleteness\(payload\);/);
 });
 
+// Security scan 2026-10-12: a full export of everything the school owns left
+// no governance trail. Logged once, only when the export actually finished.
+test('a completed export is logged to AuditLog; a resumed/partial call logs nothing', () => {
+  const src = read('base44/functions/exportSchoolData/entry.ts');
+  assert.match(src, /if \(exported\.complete\) \{/);
+  assert.match(src, /action: 'SCHOOL_DATA_EXPORTED',/);
+  assert.match(src, /target_type: 'School',/);
+  assert.match(src, /target_id: schoolId,/);
+  // Entity counts only — never the exported rows themselves.
+  assert.doesNotMatch(src, /details:\s*\{\s*data:/);
+  const schema = JSON.parse(read('base44/entities/AuditLog.jsonc').replace(/^\s*\/\/.*$/gm, ''));
+  assert.ok(schema.properties.action.enum.includes('SCHOOL_DATA_EXPORTED'));
+});
+
+// Codex review of PR #202 (the SCHOOL_DATA_EXPORTED audit row above): each
+// call to readSchoolExport is stateless and only sees entities from its OWN
+// resume point onward. Without priorIncomplete/priorCounts carried through
+// the resume token, a round whose own slice reads clean would report
+// complete:true even though an EARLIER round had already given up on a
+// different entity that this round never revisits — and entry.ts would log
+// SCHOOL_DATA_EXPORTED for an export that was never actually complete.
+test('an entity that failed in an earlier round keeps the WHOLE export incomplete, even once a later round reads clean', async () => {
+  const db = makeFakeMongoDb(
+    { Student: rows(5), Classroom: rows(3), Attendance: rows(50), Homework: rows(7) },
+    { failOn: { entity: 'Student', op: 'filter', message: 'store down' } },
+  );
+  const entities = ['Student', 'Classroom', 'Attendance', 'Homework'];
+  let clock = 0;
+  // Attendance itself reads fine (fits in one page) but its filter bumps the
+  // clock past the budget AFTER returning — so Attendance finishes clean
+  // and counted, and the very next entity (Homework) is the one that gets
+  // deferred to round 2, untouched, rather than split mid-entity.
+  const attendanceFilter = db.entities.Attendance.filter;
+  db.entities.Attendance.filter = async (...a) => { const r = await attendanceFilter(...a); clock += 50_000; return r; };
+
+  const first = await readSchoolExport(db, 'sA', entities, { now: () => clock, ...instant });
+  assert.equal(first.complete, false);
+  assert.deepEqual(first.incomplete, ['Student'], 'Student failed and is remembered even though this round moved on');
+  assert.ok(first.resume, 'budget ran out before Homework could start');
+  assert.equal(first.resume.entity, 'Homework');
+  assert.equal(first.resume.since, null, 'Homework was never touched — deferred whole, not split mid-entity');
+  assert.deepEqual(first.resume.priorIncomplete, ['Student'], 'carried forward for the next round');
+  assert.deepEqual(first.resume.priorCounts, { Classroom: 3, Attendance: 50 }, 'entities fully done so far');
+
+  // Round 2: Homework now reads clean (fresh clock) — this round's OWN view
+  // has no errors at all.
+  clock = 0;
+  const second = await readSchoolExport(db, 'sA', entities, {
+    now: () => clock, ...instant, resume: parseResume(first.resume, entities),
+  });
+  // The bug this test guards: without the fix, `second.complete` would be
+  // `true` here (this round's own `incomplete` would be empty), even though
+  // Student was never actually read.
+  assert.equal(second.complete, false, 'Student is still missing — this export was never whole');
+  assert.deepEqual(second.incomplete, ['Student']);
+  assert.deepEqual(second.counts, { Classroom: 3, Attendance: 50, Homework: 7 }, 'counts accumulate across rounds too');
+  assert.equal(second.resume, null, 'no more rounds needed — this is the final answer');
+
+  // And the guard this fix protects: entry.ts only logs SCHOOL_DATA_EXPORTED
+  // when `exported.complete` is true.
+  const entry = read('base44/functions/exportSchoolData/entry.ts');
+  assert.match(entry, /if \(exported\.complete\) \{/);
+  assert.match(entry, /entity_counts: exported\.counts/);
+});
+
 test('other reads that feed decisions are complete or refuse', () => {
   const govern = read('base44/functions/governRoleChange/entry.ts');
   assert.match(govern, /readAllPages\(sr\.entities\.UserProfile, \{ school_id: schoolId \}\)/);

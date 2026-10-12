@@ -37,6 +37,7 @@ test('AuditLog action enum covers the security/governance actions the code emits
     'SUPPORT_TICKET_STATUS_CHANGE',
     'THEME_CREATED_OR_UPDATED',
     'NOTIFICATION_DELIVERY_FAILED',
+    'SCHOOL_DATA_EXPORTED',
   ];
 
   const missing = required.filter((a) => !allowed.has(a));

@@ -8,6 +8,7 @@
 // Same file deploys to every app.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { verifyAs } from './_acaciaSign.ts';
+import { entityAllowed, pruneAndCheckReplay } from './_bridgeGuard.ts';
 
 const MAX_SKEW_MS = 5 * 60 * 1000;
 const COUNT_CAP = 5000; // Base44 caps list at 5,000 — usage counts are capped here.
@@ -17,6 +18,12 @@ const COUNT_CAP = 5000; // Base44 caps list at 5,000 — usage counts are capped
 // _acaciaSign.ts owns all three now — a hand-kept mirror of a signing routine
 // is exactly the thing that drifts, and a drift here surfaces only as
 // "bad signature" at runtime.
+
+// Entity allowlist and replay-dedup logic live in ./_bridgeGuard.ts (plain
+// TS, no Deno globals) so they are exercised by real tests, not source-regex
+// matching. This Map is the one piece of state entry.ts itself owns — it has
+// to live across requests in the same warm isolate.
+const seenSignatures = new Map<string, number>(); // sig -> expiry (ms epoch)
 
 Deno.serve(async (req) => {
   try {
@@ -36,6 +43,9 @@ Deno.serve(async (req) => {
     if (!(await verifyAs(secret, slug, { ts, action, params, sig }))) {
       return Response.json({ error: 'bad signature' }, { status: 401 });
     }
+    if (action !== 'ping' && pruneAndCheckReplay(seenSignatures, String(sig), Date.now(), MAX_SKEW_MS)) {
+      return Response.json({ error: 'replayed signature' }, { status: 401 });
+    }
 
     const base44 = createClientFromRequest(req);
     const sr = base44.asServiceRole;
@@ -47,6 +57,7 @@ Deno.serve(async (req) => {
       case 'licenses.list': {
         const entity = params.entity;
         if (!entity) return Response.json({ error: 'params.entity required' }, { status: 400 });
+        if (!entityAllowed('licenses.list', entity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         const records = await sr.entities[entity].list('-created_date', COUNT_CAP);
         return Response.json({ ok: true, records });
       }
@@ -56,6 +67,7 @@ Deno.serve(async (req) => {
         const entities: string[] = Array.isArray(params.entities) ? params.entities : [];
         const counts: Record<string, number | null> = {};
         for (const e of entities) {
+          if (!entityAllowed('usage.summary', e)) { counts[e] = null; continue; }
           try {
             const rows = await sr.entities[e].list('-created_date', COUNT_CAP);
             counts[e] = rows.length;
@@ -69,10 +81,13 @@ Deno.serve(async (req) => {
       case 'emails.status': {
         // Read follow-up / lifecycle email history for one tenant from the app's
         // email log entity (apps that have one). Returns [] when absent. Read-only.
+        // liuma has no email_log config (see ENTITY_ALLOWLIST above), so every
+        // call here is rejected rather than trusting an arbitrary entity name.
         const logEntity = params.logEntity;
         const idField = params.idField;
         const id = params.id;
         if (!logEntity || !idField || !id) return Response.json({ error: 'params.logEntity/idField/id required' }, { status: 400 });
+        if (!entityAllowed('emails.status', logEntity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         try {
           const rows = await sr.entities[logEntity].filter({ [idField]: id });
           const records = (rows ?? []).map((r: Record<string, unknown>) => ({
@@ -94,9 +109,10 @@ Deno.serve(async (req) => {
         if (!entity || !id || !patch || typeof patch !== 'object') {
           return Response.json({ error: 'params.entity/id/patch required' }, { status: 400 });
         }
+        if (!entityAllowed('license.set', entity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         const updated = await sr.entities[entity].update(id, patch);
         const log = params.log;
-        if (log && log.entity && log.row && typeof log.row === 'object') {
+        if (log && log.entity && log.row && typeof log.row === 'object' && entityAllowed('license.set.log', log.entity)) {
           try { await sr.entities[log.entity].create(log.row); } catch { /* audit best-effort */ }
         }
         return Response.json({ ok: true, updated });
@@ -113,7 +129,7 @@ Deno.serve(async (req) => {
         await sr.integrations.Core.SendEmail({ to, subject, body: html, from_name: 'ACACIA' });
         const sent_at = new Date().toISOString();
         const log = params.log;
-        if (log && log.entity && log.row && typeof log.row === 'object') {
+        if (log && log.entity && log.row && typeof log.row === 'object' && entityAllowed('emails.sendFollowup.log', log.entity)) {
           try { await sr.entities[log.entity].create({ ...log.row, sent_at }); } catch { /* audit best-effort */ }
         }
         return Response.json({ ok: true, sent_at, recipient: to });
@@ -126,6 +142,7 @@ Deno.serve(async (req) => {
         const entity = params.entity;
         const r = params.recipient || {};
         if (!entity) return Response.json({ error: 'params.entity required' }, { status: 400 });
+        if (!entityAllowed('tenants.contacts', entity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         const records = await sr.entities[entity].list('-created_date', COUNT_CAP);
         const contacts = [];
         for (const rec of records) {
@@ -133,7 +150,7 @@ Deno.serve(async (req) => {
           if (Array.isArray(r.fields)) {
             for (const f of r.fields) { if (rec[f]) { email = String(rec[f]); break; } }
           }
-          if (!email && r.related && r.related.entity && r.related.keyField && r.related.emailField) {
+          if (!email && r.related && r.related.entity && r.related.keyField && r.related.emailField && entityAllowed('tenants.contacts.related', r.related.entity)) {
             try {
               const key = r.related.keyFromRecord ? rec[r.related.keyFromRecord] : rec.id;
               const rows = await sr.entities[r.related.entity].filter({ [r.related.keyField]: key });
@@ -159,6 +176,7 @@ Deno.serve(async (req) => {
         const entity = params.entity;
         const field = params.tenantField;
         if (!entity || !field) return Response.json({ error: 'params.entity/tenantField required' }, { status: 400 });
+        if (!entityAllowed('usage.byTenant', entity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         try {
           const rows = await sr.entities[entity].list('-created_date', COUNT_CAP);
           const counts: Record<string, number> = {};
@@ -181,6 +199,7 @@ Deno.serve(async (req) => {
         // mapping; this returns the raw records. Read-only.
         const entity = params.entity;
         if (!entity) return Response.json({ error: 'params.entity required' }, { status: 400 });
+        if (!entityAllowed('tickets.list', entity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         const records = await sr.entities[entity].list(params.order || '-created_date', COUNT_CAP);
         return Response.json({ ok: true, records });
       }
@@ -192,6 +211,7 @@ Deno.serve(async (req) => {
         const fkField = params.fkField;
         const ticketId = params.ticketId;
         if (!messageEntity || !fkField || !ticketId) return Response.json({ error: 'params.messageEntity/fkField/ticketId required' }, { status: 400 });
+        if (!entityAllowed('tickets.thread', messageEntity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         const records = await sr.entities[messageEntity].filter({ [fkField]: ticketId });
         return Response.json({ ok: true, records });
       }
@@ -204,7 +224,9 @@ Deno.serve(async (req) => {
         const entity = params.entity;
         const id = params.id;
         if (!entity || !id) return Response.json({ error: 'params.entity/id required' }, { status: 400 });
+        if (!entityAllowed('tickets.update', entity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         if (params.messageEntity && params.message && typeof params.message === 'object') {
+          if (!entityAllowed('tickets.update.message', params.messageEntity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
           await sr.entities[params.messageEntity].create(params.message);
         }
         const patch = (params.patch && typeof params.patch === 'object') ? { ...params.patch } : {};
@@ -230,6 +252,7 @@ Deno.serve(async (req) => {
         // rows, most-recently-active first. Read-only.
         const entity = params.entity;
         if (!entity) return Response.json({ error: 'params.entity required' }, { status: 400 });
+        if (!entityAllowed('sessions.list', entity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         const records = await sr.entities[entity].list('-last_active_at', COUNT_CAP);
         return Response.json({ ok: true, records });
       }
@@ -242,6 +265,7 @@ Deno.serve(async (req) => {
         const ids = Array.isArray(params.ids) ? params.ids : [];
         const revokedBy = typeof params.actorEmail === 'string' ? params.actorEmail : null;
         if (!entity || ids.length === 0) return Response.json({ error: 'params.entity/ids required' }, { status: 400 });
+        if (!entityAllowed('sessions.revoke', entity)) return Response.json({ error: 'entity not allowed for this action' }, { status: 400 });
         const revoked_at = new Date().toISOString();
         let revoked = 0;
         for (const id of ids) {

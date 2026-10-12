@@ -37,6 +37,12 @@ const EXEMPT = {
   myConsent: 'its own marker handshake (compensateStamp)',
   provisionOnboardingProfile: 'its own compensation (refuseIfDeleting)',
   lumiQuery: 'only reads; the confirmation-claim writers in the shared _lumiCore.ts are lumiWrite\'s',
+  // Security scan 2026-10-12: exportSchoolData now writes a best-effort
+  // AuditLog row (counts only, not user data) once a full export completes —
+  // but it already re-reads the User row via finalExportGate() and refuses
+  // right before that write if a deletion started mid-export, same shape as
+  // provisionOnboardingProfile's own handshake above.
+  exportSchoolData: 'finalExportGate() re-checks for a started deletion immediately before the one write it makes',
 };
 
 function writerDirs() {

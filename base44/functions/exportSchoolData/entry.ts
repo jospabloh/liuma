@@ -72,6 +72,33 @@ Deno.serve(async (req) => {
     const gate = await finalExportGate(sr, String(user.id));
     if (!gate.ok) return Response.json({ ok: false, code: gate.code, error: gate.code }, { status: gate.status });
 
+    // Security scan 2026-10-12: a full export of everything the school owns
+    // left no governance trail. Best-effort, and only once the export is
+    // actually COMPLETE (a resumed/partial call logs nothing — the call that
+    // finally finishes does) — never blocks the response, and never carries
+    // the exported data itself, just entity counts.
+    //
+    // Codex review of PR #202: `exported.complete`/`exported.counts` already
+    // carry forward what EARLIER rounds learned (_exportGate.ts's resume
+    // token), not just this one call's own slice — a round that itself reads
+    // clean no longer looks complete when an earlier round failed on a
+    // DIFFERENT entity. Reading `exported.data` directly here would have
+    // been wrong for exactly that reason (a resumed call's `data` only holds
+    // the entities it itself processed).
+    if (exported.complete) {
+      try {
+        await sr.entities.AuditLog.create({
+          school_id: schoolId,
+          user_id: user.id,
+          user_email: user.email,
+          action: 'SCHOOL_DATA_EXPORTED',
+          target_type: 'School',
+          target_id: schoolId,
+          details: { entity_counts: exported.counts },
+        });
+      } catch { /* audit best-effort — the export already succeeded */ }
+    }
+
     return Response.json({
       ok: true,
       exported_at: new Date().toISOString(),

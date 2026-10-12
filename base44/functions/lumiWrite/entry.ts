@@ -70,6 +70,13 @@ function invokeError(e: any): Row {
 
 Deno.serve(withDeletionGuard(async (req, guarded) => {
   try {
+    // Security scan 2026-10-12: the confirmation code must be unforgeable by
+    // an authenticated caller who only knows the write's parameters — see
+    // _lumiCore.ts. No secret, no codes; never fall back to the old unkeyed
+    // digest.
+    const confirmSecret = Deno.env.get('LUMI_CONFIRM_SECRET');
+    if (!confirmSecret) return fail(500, 'CONFIG_ERROR', { message: 'LUMI_CONFIRM_SECRET not set in app secrets' });
+
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return fail(401, 'UNAUTHENTICATED');
@@ -128,7 +135,7 @@ Deno.serve(withDeletionGuard(async (req, guarded) => {
     if (kind === 'diary' && existing) return fail(409, 'ALREADY_EXISTS');
 
     if (action === 'preview') {
-      const code = await confirmationCode({ ...writeParts, issuedAt: nowSeconds });
+      const code = await confirmationCode({ ...writeParts, issuedAt: nowSeconds }, confirmSecret);
       return Response.json({
         ok: true,
         action: 'preview',
@@ -143,7 +150,7 @@ Deno.serve(withDeletionGuard(async (req, guarded) => {
       });
     }
 
-    const codeState = await checkConfirmationCode(body?.confirmation_code, writeParts, nowSeconds);
+    const codeState = await checkConfirmationCode(body?.confirmation_code, writeParts, nowSeconds, confirmSecret);
     if (codeState === 'NEEDS_CONFIRMATION') return fail(409, 'NEEDS_CONFIRMATION');
     if (codeState === 'CODE_EXPIRED') return fail(410, 'CODE_EXPIRED');
     // Single use: the claim is written before the write and re-read, so two

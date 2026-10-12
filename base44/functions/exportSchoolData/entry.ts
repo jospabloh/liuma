@@ -77,6 +77,14 @@ Deno.serve(async (req) => {
     // actually COMPLETE (a resumed/partial call logs nothing — the call that
     // finally finishes does) — never blocks the response, and never carries
     // the exported data itself, just entity counts.
+    //
+    // Codex review of PR #202: `exported.complete`/`exported.counts` already
+    // carry forward what EARLIER rounds learned (_exportGate.ts's resume
+    // token), not just this one call's own slice — a round that itself reads
+    // clean no longer looks complete when an earlier round failed on a
+    // DIFFERENT entity. Reading `exported.data` directly here would have
+    // been wrong for exactly that reason (a resumed call's `data` only holds
+    // the entities it itself processed).
     if (exported.complete) {
       try {
         await sr.entities.AuditLog.create({
@@ -86,11 +94,7 @@ Deno.serve(async (req) => {
           action: 'SCHOOL_DATA_EXPORTED',
           target_type: 'School',
           target_id: schoolId,
-          details: {
-            entity_counts: Object.fromEntries(
-              Object.entries(exported.data).map(([name, rows]) => [name, Array.isArray(rows) ? rows.length : 0]),
-            ),
-          },
+          details: { entity_counts: exported.counts },
         });
       } catch { /* audit best-effort — the export already succeeded */ }
     }

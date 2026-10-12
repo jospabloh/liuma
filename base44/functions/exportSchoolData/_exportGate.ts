@@ -30,8 +30,27 @@ export const EXPORT_BUDGET_MS = 45_000;
 /** Waits after a rate-limit answer before retrying the same page. */
 export const RATE_LIMIT_BACKOFF_MS = [3000, 6000, 12000];
 
-/** Where the next call picks up: the entity, its keyset position, and the rows already sent at that position. */
-export type ExportResume = { entity: string; since: string | null; boundaryIds: string[] };
+/**
+ * Where the next call picks up: the entity, its keyset position, and the rows
+ * already sent at that position. `priorIncomplete`/`priorCounts` carry what
+ * EARLIER rounds already learned (Codex review of PR #202): each call is
+ * stateless and only sees the entities from its own resume point onward, so
+ * without these a round that itself finishes clean would report `complete:
+ * true` even though an entity before its own starting point failed in an
+ * earlier round — and the caller (exportSchoolData/entry.ts, deciding
+ * whether to log a completed export) would believe a partial export was
+ * whole. Round-tripped through the client like `since`/`boundaryIds`
+ * already were: a client could lie about them, but the worst case is a
+ * wrong entry in its OWN audit trail, not a cross-tenant or access-control
+ * issue, the same trust boundary this resume token already had.
+ */
+export type ExportResume = {
+  entity: string;
+  since: string | null;
+  boundaryIds: string[];
+  priorIncomplete: string[];
+  priorCounts: Record<string, number>;
+};
 
 export type SchoolExport = {
   data: Record<string, unknown[]>;
@@ -41,6 +60,8 @@ export type SchoolExport = {
   /** Set when the time budget ran out: call again with it. */
   resume: ExportResume | null;
   complete: boolean;
+  /** Row count per entity FULLY read so far, across this call and any it resumed from. */
+  counts: Record<string, number>;
 };
 
 function isRateLimit(e: unknown): boolean {
@@ -54,7 +75,16 @@ export function parseResume(input: unknown, entities: string[]): ExportResume | 
   if (!r || typeof r !== 'object' || !entities.includes(String(r.entity))) return null;
   const since = typeof r.since === 'string' ? r.since : null;
   const ids = Array.isArray(r.boundaryIds) ? r.boundaryIds.filter((x: unknown) => typeof x === 'string').slice(0, EXPORT_PAGE_SIZE) : [];
-  return { entity: String(r.entity), since, boundaryIds: ids };
+  const priorIncomplete = Array.isArray(r.priorIncomplete)
+    ? [...new Set(r.priorIncomplete.filter((x: unknown) => typeof x === 'string' && entities.includes(x)))]
+    : [];
+  const priorCounts: Record<string, number> = {};
+  if (r.priorCounts && typeof r.priorCounts === 'object') {
+    for (const [name, v] of Object.entries(r.priorCounts as Record<string, unknown>)) {
+      if (entities.includes(name) && typeof v === 'number' && Number.isInteger(v) && v >= 0) priorCounts[name] = v;
+    }
+  }
+  return { entity: String(r.entity), since, boundaryIds: ids, priorIncomplete, priorCounts };
 }
 
 /**
@@ -85,7 +115,11 @@ export async function readSchoolExport(sr: Db, schoolId: string, entities: strin
   const deadline = now() + (opts.budgetMs ?? EXPORT_BUDGET_MS);
   const data: Record<string, unknown[]> = {};
   const errors: Record<string, string> = {};
-  const incomplete: string[] = [];
+  // Seeded from the resume token: what EARLIER rounds already learned about
+  // entities before this round's own starting point (see ExportResume's doc
+  // comment — Codex review of PR #202).
+  const incomplete: string[] = [...(opts.resume?.priorIncomplete ?? [])];
+  const counts: Record<string, number> = { ...(opts.resume?.priorCounts ?? {}) };
   const startAt = opts.resume ? Math.max(0, entities.indexOf(opts.resume.entity)) : 0;
 
   for (let e = startAt; e < entities.length; e += 1) {
@@ -107,9 +141,12 @@ export async function readSchoolExport(sr: Db, schoolId: string, entities: strin
       let batch: Row[] | null = null;
       for (let attempt = 0; batch === null; attempt += 1) {
         if (now() >= deadline) {
-          // Out of time: hand back where this entity stands.
+          // Out of time: hand back where this entity stands, plus what's
+          // already known complete/incomplete so the next round (or the one
+          // after it) can tell the whole multi-round export apart from one
+          // that just happens to finish its own tail clean.
           const boundary = boundaryIds();
-          return { data, errors, incomplete, resume: { entity: name, since, boundaryIds: boundary }, complete: false };
+          return { data, errors, incomplete, counts, resume: { entity: name, since, boundaryIds: boundary, priorIncomplete: incomplete, priorCounts: counts }, complete: false };
         }
         try {
           batch = (await sr.entities[name].filter(keysetQuery({ school_id: schoolId }, since), 'created_date', pageSize)) || [];
@@ -121,7 +158,7 @@ export async function readSchoolExport(sr: Db, schoolId: string, entities: strin
           if (isRateLimit(err)) {
             // No time left to wait: stop here and resume on the next call.
             const boundary = boundaryIds();
-            return { data, errors, incomplete, resume: { entity: name, since, boundaryIds: boundary }, complete: false };
+            return { data, errors, incomplete, counts, resume: { entity: name, since, boundaryIds: boundary, priorIncomplete: incomplete, priorCounts: counts }, complete: false };
           }
           errors[name] = String((err as Error)?.message || err);
           incomplete.push(name);
@@ -138,7 +175,17 @@ export async function readSchoolExport(sr: Db, schoolId: string, entities: strin
         rows.push(r);
         added += 1;
       }
-      if (batch.length < pageSize) { done = true; break; }
+      if (batch.length < pageSize) {
+        done = true;
+        // This round's own rows for `name`. If `name` itself spanned more
+        // than one round (rare — a single entity large enough to blow the
+        // 45s budget by itself), this undercounts by the earlier rounds'
+        // portion: priorCounts only carries entities that were ALREADY
+        // fully done by a previous round, not one still in progress. Known
+        // limitation of an informational field, not of `complete` above.
+        counts[name] = rows.length;
+        break;
+      }
       const last = String(batch[batch.length - 1]?.created_date ?? '');
       if (added === 0 || !last) {
         errors[name] = 'more rows share one creation time than fit in a page';
@@ -153,7 +200,7 @@ export async function readSchoolExport(sr: Db, schoolId: string, entities: strin
       incomplete.push(name);
     }
   }
-  return { data, errors, incomplete, resume: null, complete: incomplete.length === 0 };
+  return { data, errors, incomplete, counts, resume: null, complete: incomplete.length === 0 };
 }
 
 export type ExportGate = { ok: true } | { ok: false; status: number; code: string };

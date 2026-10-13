@@ -69,6 +69,9 @@ export const ACTION_TIER: Record<string, string> = {
   // not undo itself (provisionOnboardingProfile): for the owner to fix.
   DELETION_STRAGGLER_UNRESOLVED: 'SERVER',
   ONBOARDING_COMPENSATION_UNRESOLVED: 'SERVER',
+  // Added to the AuditLog enum by Base44's builder (9f3571e) with no writer in
+  // this repo. SERVER so no client can forge an export record.
+  SCHOOL_DATA_EXPORTED: 'SERVER',
 };
 
 export const MAX_DETAILS_CHARS = 16000;

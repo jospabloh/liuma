@@ -17,6 +17,7 @@ import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import TenantThemeRuntime from '@/components/theme/TenantThemeRuntime';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
+import UpdateBanner from '@/components/UpdateBanner';
 import Login from '@/pages/Login';
 import ConsentGate from '@/components/consent/ConsentGate';
 import { PRIVACY_NOTICE, SERVICE_TERMS } from '@/lib/legal/legalDocs';
@@ -170,6 +171,7 @@ function App() {
           </Router>
           <Toaster />
           <ThemeSwitcher />
+          <UpdateBanner />
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>
